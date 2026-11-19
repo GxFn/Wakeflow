@@ -74,6 +74,11 @@ import {
   type TargetResultEvidenceResolution,
 } from "../../result/target-result-callback.js";
 import {
+  parseTargetSessionPromptObservation,
+  type TargetSessionPromptObservation,
+  TargetSessionPromptObservationError,
+} from "../../result/target-session-prompts.js";
+import {
   type ControllerProductDefectRemediationAuthorization,
   ControllerProductDefectRemediationAuthorizationError,
   parseControllerProductDefectRemediationAuthorization,
@@ -230,6 +235,11 @@ export interface TargetResultRecordedUncommittedEvent {
     readonly callback: Readonly<TargetResultCallbackRecord>;
     /** 证据定位符的解析收据（§13.87 D3）。 */
     readonly evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+    /**
+     * 导入那一刻 Wakeflow 对目标会话的观察（open-items H13，1.4 第 4 段）：落地到导入之间提交过的 prompt
+     * 的归类计数。事件数据版本 2 的可选成员；1.4 之前的事件没有它，读回即缺席（未观察过）。
+     */
+    readonly sessionPrompts?: Readonly<TargetSessionPromptObservation>;
   }>;
 }
 
@@ -405,6 +415,13 @@ const TARGET_RESULT_RECORDED_DATA_FIELDS = Object.freeze([
   "callback",
   "evidenceResolution",
   "result",
+] as const);
+/** 带着越级观察的同一事件：多一个可选成员。 */
+const TARGET_RESULT_RECORDED_OBSERVED_DATA_FIELDS = Object.freeze([
+  "callback",
+  "evidenceResolution",
+  "result",
+  "sessionPrompts",
 ] as const);
 const CALLBACK_REISSUED_DATA_FIELDS = Object.freeze(["reissue"] as const);
 const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"] as const);
@@ -748,7 +765,15 @@ function parseTargetResultRecordedEvent(
   record: Readonly<Record<string, unknown>>,
   { eventId, demandId, recordedAt }: Readonly<EventHeader>,
 ): Readonly<DemandUncommittedEvent> {
-  const data = exactRecord(record.data, TARGET_RESULT_RECORDED_DATA_FIELDS, "$/data");
+  const observed = hasOwnMember(record.data, "sessionPrompts");
+  const data = exactRecord(
+    record.data,
+    observed ? TARGET_RESULT_RECORDED_OBSERVED_DATA_FIELDS : TARGET_RESULT_RECORDED_DATA_FIELDS,
+    "$/data",
+  );
+  const sessionPrompts = observed
+    ? parseSessionPrompts(data.sessionPrompts, "$/data/sessionPrompts")
+    : undefined;
   let result: Readonly<TargetResult>;
   try {
     result = parseTargetResult(data.result);
@@ -775,6 +800,7 @@ function parseTargetResultRecordedEvent(
   if (
     result.demandId !== demandId ||
     result.report.reportedAt !== recordedAt ||
+    (sessionPrompts !== undefined && sessionPrompts.until !== recordedAt) ||
     targetResultRecordedEventIdFromResult(result) !== eventId ||
     callback.callbackId !== deriveTargetResultCallbackId(result.targetResultId)
   ) {
@@ -785,8 +811,30 @@ function parseTargetResultRecordedEvent(
     demandId,
     recordedAt,
     eventType: "result.target-result-recorded",
-    data: Object.freeze({ result, callback, evidenceResolution }),
+    data: Object.freeze({
+      result,
+      callback,
+      evidenceResolution,
+      ...(sessionPrompts === undefined ? {} : { sessionPrompts }),
+    }),
   });
+}
+
+function hasOwnMember(value: unknown, key: string): boolean {
+  return typeof value === "object" && value !== null && Object.hasOwn(value, key);
+}
+
+/** 越级观察的严格解析；它的终点必须就是结果导入的时刻，由调用处的关系检查保证。 */
+function parseSessionPrompts(
+  value: unknown,
+  path: string,
+): Readonly<TargetSessionPromptObservation> {
+  try {
+    return parseTargetSessionPromptObservation(value, path);
+  } catch (error: unknown) {
+    if (error instanceof TargetSessionPromptObservationError) fail("input", error.path, error);
+    throw error;
+  }
 }
 
 function parseCallbackReissuedEvent(

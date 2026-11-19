@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wakeflow:entrypoints:quick-demand-result:v1",
+  "x-wakeflow-runtime-export": "WAKEFLOW_QUICK_DEMAND_RESULT_SCHEMA",
+  "title": "WakeflowQuickDemandResultV1",
+  "description": "wakeflow_quick_demand result: the preview with the generated package, or what the four steps did.",
+  "type": "object",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/previewResult"
+    },
+    {
+      "$ref": "#/$defs/mutationResult"
+    }
+  ],
+  "$defs": {
+    "previewResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "blockers",
+        "planDigest",
+        "summary",
+        "next"
+      ],
+      "properties": {
+        "kind": {
+          "const": "WakeflowQuickDemandPreview"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_quick_demand"
+        },
+        "mode": {
+          "const": "preview"
+        },
+        "status": {
+          "enum": ["ready", "blocked"]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "planDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          ]
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "title",
+            "repositoryId",
+            "repositoryName",
+            "language",
+            "criteria",
+            "requirement",
+            "landing",
+            "steps"
+          ],
+          "properties": {
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "repositoryId": {
+              "type": "string",
+              "pattern": "^repository_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "repositoryName": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 256
+                }
+              ]
+            },
+            "language": {
+              "enum": ["en", "zh-Hans"]
+            },
+            "criteria": {
+              "type": "array",
+              "maxItems": 5,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["itemId", "text"],
+                "properties": {
+                  "itemId": {
+                    "type": "string",
+                    "pattern": "^ac-[1-5]$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            },
+            "requirement": {
+              "type": "string",
+              "maxLength": 16384
+            },
+            "landing": {
+              "type": "string",
+              "maxLength": 16384
+            },
+            "steps": {
+              "type": "array",
+              "items": {
+                "enum": ["publish", "claim", "plan", "prepare"]
+              }
+            }
+          }
+        },
+        "next": {
+          "$ref": "#/$defs/next"
+        }
+      }
+    },
+    "mutationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "tool",
+        "mode",
+        "status",
+        "stoppedAt",
+        "requirementId",
+        "demandId",
+        "targetTaskId",
+        "steps",
+        "next"
+      ],
+      "properties": {
+        "kind": {
+          "const": "WakeflowQuickDemandMutation"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "tool": {
+          "const": "wakeflow_quick_demand"
+        },
+        "mode": {
+          "const": "apply"
+        },
+        "status": {
+          "enum": ["prepared", "stopped"]
+        },
+        "stoppedAt": {
+          "enum": [null, "publish", "claim", "plan", "prepare"]
+        },
+        "requirementId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ]
+        },
+        "demandId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ]
+        },
+        "targetTaskId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/step"
+          }
+        },
+        "delivery": {
+          "type": "object",
+          "description": "The wakeflow_prepare_delivery result when status is prepared: its permit is what you send."
+        },
+        "next": {
+          "$ref": "#/$defs/next"
+        }
+      }
+    },
+    "next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frontier", "owner", "suggestedTool", "blockers"],
+      "description": "Next Controller responsibility derived from the route after this append.",
+      "properties": {
+        "subject": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["demandId", "streamRevision"],
+          "description": "Identifiers the suggested call needs, so the next step does not begin with another status read. Absent when no Demand route applies.",
+          "properties": {
+            "demandId": {
+              "type": "string",
+              "pattern": "^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "streamRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "targetTaskId": {
+              "type": "string",
+              "pattern": "^target-task_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            },
+            "deliveryId": {
+              "type": "string",
+              "pattern": "^target-delivery_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          }
+        },
+        "frontier": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "owner": {
+          "enum": ["controller", "target", "test", "user", "none"]
+        },
+        "suggestedTool": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "reason"],
+      "description": "The refusing tool's public error: its code and reason as that tool would have returned them.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "causeCode": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "causeReason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "operationId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "bindingAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "claimAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "eventAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "publicationAuthority": {
+          "type": "string",
+          "maxLength": 32
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "status"],
+      "properties": {
+        "step": {
+          "enum": ["publish", "claim", "plan", "prepare"]
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "error": {
+          "$ref": "#/$defs/refusal"
+        }
+      }
+    }
+  }
+}

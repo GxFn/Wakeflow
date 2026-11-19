@@ -389,13 +389,15 @@ const WORKTREE_LAUNCH =
 
 const COMMAND_SURFACE_EN =
   "`/wakeflow:init` sets up or repairs the workspace, `/wakeflow:status` reports where " +
-  "it stands, `/wakeflow:next` takes the next step on the active Demand, and " +
+  "it stands, `/wakeflow:next` takes the next step on the active Demand, " +
+  "`/wakeflow:quick` turns one sentence into a small Demand for one repository, and " +
   "`/wakeflow:pod` creates or closes a pod. Claude Code always namespaces plugin commands, so " +
   "the `wakeflow:` prefix is part of the name.";
 
 const COMMAND_SURFACE_ZH =
   "`/wakeflow:init` 初始化或修复工作区，`/wakeflow:status` 报告当前状态，" +
-  "`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:pod` 创建或关闭 pod。" +
+  "`/wakeflow:next` 在活动 Demand 上推进一步，`/wakeflow:quick` 把一句话变成一个仓库里的小 Demand，" +
+  "`/wakeflow:pod` 创建或关闭 pod。" +
   "Claude Code 的插件命令一律带插件名前缀，`wakeflow:` 是命令名的一部分。";
 
 /**

@@ -197,7 +197,7 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   result the item says "not checked" and does not block.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
-  end-to-end scenario chain (30 scenarios, run once per host), the Schema
+  end-to-end scenario chain (31 scenarios, run once per host), the Schema
   and helper-script drift checks, and `build:check` against the committed
   artifacts.
 - After a change that reaches the artifacts (runtime, skills, commands,

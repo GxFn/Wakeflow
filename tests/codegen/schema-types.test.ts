@@ -340,5 +340,9 @@ test("生成的合同类型里没有条件成员留下的开放操作数，索�
     indexSignatures += text.split("[k: string]: unknown").length - 1;
   }
   equal(conditionalOperands, 0);
-  equal(indexSignatures, 17);
+  // 1.4 第 4 段（gate-log §13.266）加五处，都是"另一个工具的请求或结果原样放在这里"：accept 请求的
+  // `thenPlan.taskPackage` 与 `thenPlan.planReview`（由规划工具自己的 Schema 校验；照抄一份要占公共目录
+  // 约一万字节）、accept 结果的 `thenPlan.planning` 与 `thenComplete.completion`、快速 Demand 结果的
+  // `delivery`（各由产出它的那个工具准入）。同一批里的拒绝信息是封闭形状，不在其列。
+  equal(indexSignatures, 22);
 });

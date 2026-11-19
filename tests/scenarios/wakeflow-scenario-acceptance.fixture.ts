@@ -203,6 +203,12 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
       "bug 类型的需求包走完实现与测试投递；测试合同只给一次尝试，flaky 失败步骤的重跑被 attempt-capacity 拒绝，升级给用户后 Demand 等待回答，用户决定取消，需求包撤回",
   },
   {
+    scenarioId: "card-04/quick-demand",
+    card: "ADR-0029",
+    title:
+      "快速 Demand：一句话加一个仓库，预览零写、确认一次，一次调用走完发布、认领、规划、准备投递；目标交回带提交的结果，评审单元带着 Wakeflow 自己的越级观察；接受时带 thenComplete，同一次调用里完成并归档",
+  },
+  {
     scenarioId: "card-11/detach-workspace",
     card: "ADR-0024",
     title:

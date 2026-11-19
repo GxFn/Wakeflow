@@ -22,7 +22,7 @@ interface CapturedRegistration {
   readonly configuration: Readonly<Record<string, unknown>>;
 }
 
-test("登记表把二十个工具绑定到同名executor，且只公开请求Schema", async () => {
+test("登记表把二十一个工具绑定到同名executor，且只公开请求Schema", async () => {
   const signal = new AbortController().signal;
   const captured = new Map<string, CapturedRegistration>();
   const server = new McpServer({ name: "catalog-binding-test", version: "1" });
@@ -52,7 +52,7 @@ test("登记表把二十个工具绑定到同名executor，且只公开请求Sch
   }
   registerWakeflowPublicMcpCatalog(server, WAKEFLOW_PUBLIC_TOOL_CATALOG, executors);
 
-  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 20);
+  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 21);
   deepEqual(
     [...captured.keys()],
     WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map((tool) => tool.name),

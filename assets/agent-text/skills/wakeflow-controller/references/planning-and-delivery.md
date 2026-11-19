@@ -91,6 +91,36 @@ them, nor a host session id: the prompt is archived with the Demand, and the
 target takes the callback's destination from the callback permit its import
 returns, not from the prompt (`references/desktop-flow.md`, "The callback").
 
+## Quick Demand
+
+For a small change the user asks for directly - one repository, one
+implementation task, nothing to test separately - `wakeflow_quick_demand` does
+steps 3 to 7 in one confirmed step instead of five turns. Give it the
+repository, a short title, the user's request in their words and, when they
+said how they will know it is done, one line per criterion in `doneWhen`.
+
+1. `mode: "preview"` writes nothing. It returns the two-document requirement
+   package Wakeflow generated from the sentence (`summary.requirement`,
+   `summary.landing`), the criteria and any blocker. Show the user the title,
+   the goal and the criteria and ask once; this is the requirement
+   confirmation, and the only one.
+2. `mode: "apply"` with that `planDigest` and `confirmation.confirmedAt` (when
+   they confirmed) publishes the package, claims it, plans one implementation
+   target and prepares its delivery. `delivery` in the result is the ordinary
+   prepare result: send its permit and record the outcome as in step 8.
+3. Review the result as usual, then accept with `thenComplete: true`
+   (`references/review-and-completion.md`, "One call after an accept").
+
+The limits are structural, not about size: the workspace is idle
+(`pod-busy:<demandId>` otherwise), the repository has exactly one product
+window in the primary pod, checking is controller-only and the task must be
+committed. Anything else - several repositories, a design question, a test
+target - goes to the Design window. A step that refuses stops there
+(`stoppedAt`) and leaves ordinary state: a published package to claim, a
+claimed Demand to plan, a planned target to prepare. The generated landing
+document says plainly that no code fact was verified; the target verifies what
+it relies on.
+
 A target is preparable when it is planned; for an implementation target, when
 a rework or a product-defect rework was requested; for a test target, when
 another attempt was requested; and for either, when its re-arms are exhausted

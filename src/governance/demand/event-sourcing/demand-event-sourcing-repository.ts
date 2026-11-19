@@ -106,6 +106,10 @@ export interface AuditedTargetResultSource {
   readonly result: Readonly<TargetResultRecordedUncommittedEvent["data"]["result"]>;
   readonly callback: Readonly<TargetResultRecordedUncommittedEvent["data"]["callback"]>;
   readonly evidenceResolution: TargetResultRecordedUncommittedEvent["data"]["evidenceResolution"];
+  /** 导入时的越级观察（open-items H13）；1.4 之前的事件没有，为 null。 */
+  readonly sessionPrompts: NonNullable<
+    TargetResultRecordedUncommittedEvent["data"]["sessionPrompts"]
+  > | null;
 }
 
 /** 一份Implementation或Test Controller Review Decision的不可变事件来源。 */
@@ -565,6 +569,7 @@ export class DemandEventSourcingRepository {
               result,
               callback: event.data.callback,
               evidenceResolution: event.data.evidenceResolution,
+              sessionPrompts: event.data.sessionPrompts ?? null,
             }),
           );
           continue;

@@ -37,6 +37,7 @@ import {
   planClaudeCodeTmuxAssetOperation,
 } from "../../../src/hosts/claude-code/claude-code-tmux-asset-operation.js";
 import { claudeCodeTmuxWindowNameFor } from "../../../src/hosts/claude-code/claude-code-window-launch-instructions.js";
+import { listHelperNudgeRecords } from "../../../src/kernel/helper-observation-file.js";
 import { hostWindowLocatorsRootRef } from "../../../src/kernel/layout.js";
 import { computePromptDigest } from "../../../src/kernel/prompt-digest.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -2370,6 +2371,19 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
     textDigest: computeSha256Digest(encodeUtf8("Continue.", "$text"), "$text"),
   });
   equal(readFileSync(path.join(current.state, "buffer.txt"), "utf8"), "Continue.");
+  // H13（1.4 第 4 段）：推出去的每一句留一条记录——哪个窗口、短句的摘要、什么时候——内核按同一个形状读回，
+  // 目标导入结果时据此把这一条 prompt 认作 Controller 推的。到这里推了两次，所以是两条。
+  const nudgeRoot = await RootedDirectory.open(current.root);
+  t.after(() => nudgeRoot.close());
+  const recorded = await listHelperNudgeRecords(nudgeRoot, "claude-code");
+  deepEqual(
+    recorded.map((entry) => [entry.windowId, entry.textDigest]),
+    Array.from({ length: 2 }, () => [
+      PRODUCT_WINDOW_ID,
+      computeSha256Digest(encodeUtf8("Continue.", "$text"), "$text"),
+    ]),
+  );
+  ok(recorded.every((entry) => !Number.isNaN(Date.parse(entry.sentAt))));
   const log = tmuxLog(current);
   deepEqual(
     log.map((entry) => entry[0]),
@@ -2388,6 +2402,8 @@ test("nudge sends one phrase only when the pane shows an API error, is idle and 
   );
   equal(calm.status, 0);
   equal(calm.json.status, "not-needed");
+  // 没有推就没有记录：到这里一共推过三次（默认的两次、中文的一次）。
+  equal((await listHelperNudgeRecords(nudgeRoot, "claude-code")).length, 3);
   equal(calm.json.observedError, null);
   equal(
     tmuxLog(current).some((entry) => entry[0] === "paste-buffer"),

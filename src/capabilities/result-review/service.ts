@@ -97,6 +97,11 @@ import {
   targetResultIdForClaim,
 } from "../../governance/result/target-result.js";
 import {
+  classifyTargetSessionPrompts,
+  type TargetSessionPromptObservation,
+  unobservedTargetSessionPrompts,
+} from "../../governance/result/target-session-prompts.js";
+import {
   computeTargetResultCallbackPromptDigest,
   deriveTargetResultCallbackId,
   deriveTargetResultCallbackStatus,
@@ -151,9 +156,11 @@ import {
   runAppendCommand,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
-import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { listHelperNudgeRecords } from "../../kernel/helper-observation-file.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
+  readHostHookObservationRecord,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -1219,6 +1226,76 @@ async function withCurrentAggregate(
   }
 }
 
+/** 落地记录比导入还晚（两个进程的钟不一致）时区间不成立，按读不全处理。 */
+function intervalHolds(from: UtcInstant, until: UtcInstant): boolean {
+  return Date.parse(from) <= Date.parse(until);
+}
+
+/**
+ * 导入这一刻的越级观察（open-items H13，1.4 第 4 段）：从这份投递的落地记录到现在，目标会话里提交过的
+ * prompt 归成三类计数。起点取结局事件点名的落地记录——没有落地记录（落地由发送返回或 Agent 的陈述证明）
+ * 就报未观察，不假装是零条。观察只是旁证：任何读取问题都落成 `unobserved`，绝不让导入失败；只有取消上抛。
+ */
+async function observeTargetSessionPrompts(
+  context: SliceContext,
+  repository: DemandEventSourcingRepository,
+  deliveryId: string,
+  result: Readonly<TargetResult>,
+): Promise<Readonly<TargetSessionPromptObservation>> {
+  const until = result.report.reportedAt;
+  const signal = signalOptions(context.options.signal);
+  const { workspaceRoot, facade } = context;
+  try {
+    const outcomes = await repository.findDeliveryOutcomeRecordedEvents(deliveryId, signal);
+    const outcome = outcomes.find(
+      (entry) => entry.event.data.outcome.outcomeDigest === result.delivery.outcomeDigest,
+    );
+    const hookRecordId = outcome?.event.data.outcome.evidence.hookRecordId ?? null;
+    if (hookRecordId === null) {
+      return unobservedTargetSessionPrompts("landing-record-absent", until);
+    }
+    const landing = await readHostHookObservationRecord(
+      workspaceRoot,
+      facade.hostId,
+      hookRecordId,
+      signal,
+    );
+    if (landing === null) {
+      return unobservedTargetSessionPrompts("landing-record-unreadable", until);
+    }
+    const from = landing.record.recordedAt;
+    const inventory = await readHostHookObservations(
+      workspaceRoot,
+      facade.hostId,
+      {
+        sessionId: landing.record.sessionId,
+        event: "user-prompt-submit",
+        since: from,
+        limit: HOST_HOOK_RECORDS_MAXIMUM,
+      },
+      signal,
+    );
+    if (!inventory.complete || inventory.unreadable > 0 || !intervalHolds(from, until)) {
+      return unobservedTargetSessionPrompts("records-unavailable", until);
+    }
+    const nudges = await listHelperNudgeRecords(workspaceRoot, facade.hostId, signal.signal);
+    return classifyTargetSessionPrompts({
+      from,
+      until,
+      records: inventory.records.filter((record) => record.recordId !== hookRecordId),
+      nudgeDigests: new Set(
+        nudges
+          .filter((nudge) => nudge.windowId === result.assignment.windowId)
+          .map((nudge) => nudge.textDigest),
+      ),
+    });
+  } catch (error: unknown) {
+    if (context.options.signal?.aborted === true) throw error;
+    if (isWakeflowError(error) && error.reason === "aborted") throw error;
+    return unobservedTargetSessionPrompts("records-unavailable", until);
+  }
+}
+
 async function replayImport(
   context: SliceContext,
   commandResult: ReplayableCommandResult,
@@ -1304,12 +1381,19 @@ async function executeImport(
     appendBinding.expectedStreamRevision + 1,
     now,
   );
+  const sessionPrompts = await observeTargetSessionPrompts(
+    context,
+    repository,
+    input.deliveryId,
+    result,
+  );
   const command = parseDemandEventSourcingCommand({
     commandType: "result.record-target-result",
     commandVersion: 1,
     result,
     callback: issued.callback,
     evidenceResolution,
+    sessionPrompts,
   });
   const commandResult = await appendCommand(repository, command, appendBinding, options);
   if (commandResult.disposition === "idempotent") return replayImport(context, commandResult);
@@ -1796,6 +1880,17 @@ function anchorEvidenceInputOf(
   });
 }
 
+/** H13：导入那一刻的越级观察随结果事件落盘，评审单元原样带出；1.4 之前的结果没有，为 null。 */
+function sessionPromptsOf(
+  history: Readonly<AuditedDemandTargetResultHistory>,
+  targetResultId: string,
+): Readonly<TargetSessionPromptObservation> | null {
+  const source = history.targetResults.find(
+    (entry) => entry.result.targetResultId === targetResultId,
+  );
+  return source?.sessionPrompts ?? null;
+}
+
 async function inspectReview(
   context: SliceContext,
   request: TargetResultReviewInspectionRequest,
@@ -1837,6 +1932,7 @@ async function inspectReview(
   const testView = testUnitView(history, unit, evidence.targetCompletion);
   const resumptionBasis = resumptionBasisView(unit);
   const reportedCommits = await reportedCommitViews(context, unit.target.targetResult);
+  const sessionPrompts = sessionPromptsOf(history, unit.target.targetResult.targetResultId);
   // K5：Controller 规划时自己写过任务包，复审时常常只需要锚点；summary 把整个包换成身份、目标与锚点。
   const detail = request.detail ?? "full";
   return admitTargetResultReviewInspectionResult({
@@ -1876,6 +1972,7 @@ async function inspectReview(
         ? {}
         : { supersededResults: unit.target.supersededResults }),
       ...(reportedCommits === null ? {} : { reportedCommits }),
+      ...(sessionPrompts === null ? {} : { sessionPrompts }),
       reviewUnitDigest: unit.reviewUnitDigest,
       currentDecision:
         unit.currentDecision === null || unit.currentDecisionSourceEvent === null

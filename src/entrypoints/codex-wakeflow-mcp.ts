@@ -42,6 +42,8 @@ import {
 } from "./wakeflow-caller-role-gate.js";
 import { runWakeflowMcpStdio } from "./wakeflow-mcp-stdio.js";
 import { createWakeflowPublicMcpServer } from "./wakeflow-public-mcp-server.js";
+import { withFollowUp } from "./wakeflow-public-mcp-follow-up.js";
+import { createQuickDemandExecutor } from "./wakeflow-public-mcp-quick-demand.js";
 import { WAKEFLOW_SHARED_PUBLIC_EXECUTORS } from "./wakeflow-public-mcp-shared-executors.js";
 
 /**
@@ -163,6 +165,14 @@ export function createCodexWakeflowMcpServer(
       executeVerifyRequest(CODEX_OBSERVATION_FACADE, value, options),
     prepareDelivery: (value, options) =>
       executePrepareDeliveryRequest(CODEX_HOST_FACADE, value, options),
+    // 快速 Demand（ADR-0029 决定 9）：发布、认领、规划、准备投递，服务端按顺序走完。
+    quickDemand: createQuickDemandExecutor({
+      inspectBoard: WAKEFLOW_SHARED_PUBLIC_EXECUTORS.inspectBoard,
+      createDemand: WAKEFLOW_SHARED_PUBLIC_EXECUTORS.createDemand,
+      planTargetTask: WAKEFLOW_SHARED_PUBLIC_EXECUTORS.planTargetTask,
+      prepareDelivery: (value, options) =>
+        executePrepareDeliveryRequest(CODEX_HOST_FACADE, value, options),
+    }),
     recordDeliveryOutcome: (value, options) =>
       executeRecordDeliveryOutcomeRequest(CODEX_HOST_FACADE, value, options),
     rearmDelivery: (value, options) =>
@@ -171,8 +181,16 @@ export function createCodexWakeflowMcpServer(
       executeTargetResultImportRequest(CODEX_HOST_FACADE, value, options),
     inspectTargetResultReview: (value, options) =>
       executeTargetResultReviewInspectionRequest(CODEX_HOST_FACADE, value, options),
-    recordImplementationReviewDecision: (value, options) =>
-      executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
+    // 接受之后紧接着的一步（ADR-0029 决定 9、10）：accept 带着 thenPlan 就接着规划下一份，带着
+    // thenComplete 就接着完成并归档。
+    recordImplementationReviewDecision: withFollowUp(
+      (value, options) =>
+        executeImplementationReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
+      {
+        plan: WAKEFLOW_SHARED_PUBLIC_EXECUTORS.planTargetTask,
+        complete: WAKEFLOW_SHARED_PUBLIC_EXECUTORS.completeDemand,
+      },
+    ),
     recordTestReviewDecision: (value, options) =>
       executeTestReviewDecisionRequest(CODEX_HOST_FACADE, value, options),
   });

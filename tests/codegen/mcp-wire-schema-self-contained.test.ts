@@ -512,6 +512,8 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
       "reportedCommits",
       "resumptionBasis",
       "reviewUnitDigest",
+      // H13（1.4 第 4 段）：导入那一刻 Wakeflow 对目标会话的观察。
+      "sessionPrompts",
       "status",
       "supersededResults",
       "targetCompletion",
@@ -574,7 +576,14 @@ test("MCP wire Schema 自包含且本地词法镜像 Foundation 权威", () => {
   deepEqual(
     Object.keys(implementationDecisionRequest.properties as Record<string, unknown>).sort(),
     // anchorEvidence：needs-review 结果 accept 时的锚点→托管证据绑定，只属于实现决定（§13.121 D7）。
-    [...appendEnvelopeFields, ...judgmentFields, "anchorEvidence"].sort(),
+    // thenPlan、thenComplete：accept 之后紧接着的那一步（ADR-0029 决定 9、10），由入口层的组合执行。
+    [
+      ...appendEnvelopeFields,
+      ...judgmentFields,
+      "anchorEvidence",
+      "thenComplete",
+      "thenPlan",
+    ].sort(),
     "Public Implementation Decision request carries exactly the Controller judgment plus anchor evidence, escalation and resumption",
   );
   equal(

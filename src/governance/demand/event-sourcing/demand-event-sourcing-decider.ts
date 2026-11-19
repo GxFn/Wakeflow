@@ -67,6 +67,11 @@ import {
   type TargetResultEvidenceResolution,
 } from "../../result/target-result-callback.js";
 import {
+  parseTargetSessionPromptObservation,
+  type TargetSessionPromptObservation,
+  TargetSessionPromptObservationError,
+} from "../../result/target-session-prompts.js";
+import {
   type ControllerImplementationReviewDecision,
   ControllerImplementationReviewDecisionError,
   parseControllerImplementationReviewDecision,
@@ -242,6 +247,8 @@ export interface RecordTargetResultCommand {
   readonly result: Readonly<TargetResult>;
   readonly callback: Readonly<TargetResultCallbackRecord>;
   readonly evidenceResolution: readonly Readonly<TargetResultEvidenceResolution>[];
+  /** 导入那一刻对目标会话的越级观察（open-items H13）；没有观察的调用方不给。 */
+  readonly sessionPrompts?: Readonly<TargetSessionPromptObservation>;
 }
 
 /** 回调重发：不取声明、按当前 Controller 绑定重算、代际加一（§13.87 D1）。 */
@@ -446,6 +453,14 @@ const RECORD_TARGET_RESULT_FIELDS = Object.freeze([
   "commandVersion",
   "evidenceResolution",
   "result",
+] as const);
+const RECORD_OBSERVED_TARGET_RESULT_FIELDS = Object.freeze([
+  "callback",
+  "commandType",
+  "commandVersion",
+  "evidenceResolution",
+  "result",
+  "sessionPrompts",
 ] as const);
 const REISSUE_CALLBACK_FIELDS = Object.freeze([
   "commandType",
@@ -1051,7 +1066,23 @@ function parseRearmDeliveryCommand(
 function parseRecordTargetResultCommand(
   base: Readonly<Record<string, unknown>>,
 ): Readonly<DemandEventSourcingCommand> {
-  const command = exactCommand(base, RECORD_TARGET_RESULT_FIELDS);
+  const observed = Object.hasOwn(base, "sessionPrompts");
+  const command = exactCommand(
+    base,
+    observed ? RECORD_OBSERVED_TARGET_RESULT_FIELDS : RECORD_TARGET_RESULT_FIELDS,
+  );
+  let sessionPrompts: Readonly<TargetSessionPromptObservation> | undefined;
+  if (observed) {
+    try {
+      sessionPrompts = parseTargetSessionPromptObservation(
+        command.sessionPrompts,
+        "$/sessionPrompts",
+      );
+    } catch (error: unknown) {
+      if (error instanceof TargetSessionPromptObservationError) fail("input", error.path, error);
+      throw error;
+    }
+  }
   let result: Readonly<TargetResult>;
   try {
     result = parseTargetResult(command.result);
@@ -1081,6 +1112,7 @@ function parseRecordTargetResultCommand(
     result,
     callback,
     evidenceResolution,
+    ...(sessionPrompts === undefined ? {} : { sessionPrompts }),
   });
 }
 
@@ -1329,6 +1361,7 @@ function decideRecordTargetResult(
         result: command.result,
         callback: command.callback,
         evidenceResolution: command.evidenceResolution,
+        ...(command.sessionPrompts === undefined ? {} : { sessionPrompts: command.sessionPrompts }),
       },
     }),
   );

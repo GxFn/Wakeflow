@@ -64,7 +64,9 @@ const RETIRED_VOCABULARY: readonly string[] = Object.freeze([
   "unattended",
 ]);
 
-const MAXIMUM_SKILL_LINES = 200;
+// 1.4 第 4 段（gate-log §13.266，用户 2026-11-18：预算可以酌情放宽，不为压行数损害语义）：200 → 210。
+// Controller 技能点名快速 Demand 的两行放不进 200 行。
+const MAXIMUM_SKILL_LINES = 210;
 const MAXIMUM_SKILL_BYTES = 12 * 1024;
 const MAXIMUM_DESCRIPTION_CHARACTERS = 1024;
 const MAXIMUM_REFERENCE_LINES = 400;
@@ -161,12 +163,12 @@ test("源目录与宿主取值表点名的每个工具都在公共目录里（D4
   }
 });
 
-test("公共目录的 20 个工具每一个都至少被一份技能教到（D4 b：反向覆盖，无人教的工具清零）", () => {
+test("公共目录的 21 个工具每一个都至少被一份技能教到（D4 b：反向覆盖，无人教的工具清零）", () => {
   const taught = new Set<string>();
   for (const source of sourcesUnder(SKILLS_PREFIX)) {
     for (const token of toolTokens(source.text)) taught.add(token);
   }
-  equal(CATALOG_TOOL_NAMES.length, 20);
+  equal(CATALOG_TOOL_NAMES.length, 21);
   deepEqual([...taught].sort(), [...CATALOG_TOOL_NAMES].sort());
 });
 
@@ -318,7 +320,7 @@ test("代码点名的技能路径都存在，源目录里也没有孤儿技能�
 
 test("命令不引入它所指技能之外的工具（D4 e：命令闭合）", () => {
   const commands = sourcesUnder(COMMANDS_PREFIX);
-  equal(commands.length, 4);
+  equal(commands.length, 5);
   for (const command of commands) {
     const skill = /Load the `wakeflow-([a-z]+)` skill/u.exec(command.text)?.[1];
     ok(skill !== undefined, `${command.path} must name the skill it points at`);
@@ -463,7 +465,7 @@ test("每份 reference 都被自己的 SKILL.md 点名，技能文本点名的 r
   }
 });
 
-test("源目录恰好是四份技能、四个命令与两份 README，且只有中文 README 用中文（D3、D6）", () => {
+test("源目录恰好是四份技能、五个命令与两份 README，且只有中文 README 用中文（D3、D6）", () => {
   deepEqual(skillNames(), [
     "wakeflow-controller",
     "wakeflow-design",
@@ -472,7 +474,13 @@ test("源目录恰好是四份技能、四个命令与两份 README，且只有�
   ]);
   deepEqual(
     sourcesUnder(COMMANDS_PREFIX).map((source) => source.path),
-    ["commands/init.md", "commands/next.md", "commands/pod.md", "commands/status.md"],
+    [
+      "commands/init.md",
+      "commands/next.md",
+      "commands/pod.md",
+      "commands/quick.md",
+      "commands/status.md",
+    ],
   );
   for (const source of SOURCES) {
     if (source.path === "README.zh-CN.md") continue;
@@ -498,10 +506,11 @@ test("角色工具归属表与技能正文点名的工具逐一相同，且每�
 });
 
 /** I4：渲染后的 Controller 技能按宿主各有预算——宿主取值表的膨胀在这里被抓住，源预算（D7）管不到它。 */
-const MAXIMUM_RENDERED_CONTROLLER_SKILL_BYTES = 14 * 1024;
+// 1.4 第 4 段（同上）：14 KiB → 15 KiB；实测 Claude Code 渲染后 14,571 字节。词数上限不动。
+const MAXIMUM_RENDERED_CONTROLLER_SKILL_BYTES = 15 * 1024;
 const MAXIMUM_RENDERED_CONTROLLER_SKILL_WORDS = 2_200;
 
-test("渲染后的 Controller SKILL.md 每宿主不超过 2,200 词与 14 KiB，且不剩占位符（I4：渲染预算）", () => {
+test("渲染后的 Controller SKILL.md 每宿主不超过 2,200 词与 15 KiB，且不剩占位符（I4：渲染预算）", () => {
   const source = SOURCES.find((entry) => entry.path === "skills/wakeflow-controller/SKILL.md");
   ok(source !== undefined, "Controller SKILL.md source missing");
   for (const [host, rendered] of [

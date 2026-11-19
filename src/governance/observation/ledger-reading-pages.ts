@@ -37,6 +37,7 @@ import {
   type DemandArchivePageLanguage,
   type DemandArchivePageReviewHistory,
   demandArchivePageHistoryOf,
+  demandArchiveSessionPromptsOf,
   demandArchivePageLine,
   demandArchivePageMarker,
   renderDemandArchivePage,
@@ -275,11 +276,13 @@ function isAborted(error: unknown): boolean {
 async function readHistoryOrNull(
   ledgerRoot: RootedDirectory,
   archiveRef: PortableResourcePath,
+  events: Parameters<typeof demandArchiveSessionPromptsOf>[0],
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandArchivePageReviewHistory> | null> {
   try {
     return demandArchivePageHistoryOf(
       await readArchivedReviewSnapshot(ledgerRoot, archiveRef, signal),
+      demandArchiveSessionPromptsOf(events),
     );
   } catch (error: unknown) {
     const reason =
@@ -307,7 +310,7 @@ async function renderArchivePage(
     summary,
     identity: await readDemandArchiveIdentity(ledgerRoot, summary.archiveRef, signal),
     evidenceCount: await countDemandArchiveEvidence(ledgerRoot, summary.archiveRef, signal),
-    history: await readHistoryOrNull(ledgerRoot, summary.archiveRef, signal),
+    history: await readHistoryOrNull(ledgerRoot, summary.archiveRef, read.events, signal),
     measures:
       read.eventCommits === 0 ? null : measureDemandArchiveEvents(read.events, read.eventCommits),
   });

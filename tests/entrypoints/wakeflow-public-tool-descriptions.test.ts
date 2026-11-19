@@ -130,6 +130,7 @@ const EXPECTED_DISCRIMINATORS: Readonly<Record<string, readonly string[]>> = Obj
   wakeflow_maintain_workspace: ["action", "mode"],
   wakeflow_pod: ["intent.kind", "mode"],
   wakeflow_publish_requirement: ["action", "mode"],
+  wakeflow_quick_demand: ["mode"],
   wakeflow_record_evidence: ["mode"],
   wakeflow_record_implementation_review_decision: ["decision"],
   wakeflow_record_test_review_decision: ["decision"],
@@ -154,7 +155,7 @@ test("每个公共工具的描述逐字点名其请求判别枚举的每一个�
 });
 
 test("每个公共工具的描述不超过上限（§13.130：目录构造已拒绝，这里让上限在测试里可见）", () => {
-  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 20);
+  equal(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.length, 21);
   for (const tool of WAKEFLOW_PUBLIC_TOOL_CATALOG.tools) {
     const bytes = Buffer.byteLength(tool.description, "utf8");
     ok(
@@ -185,6 +186,8 @@ const EXPECTED_WRITE_EFFECTS: Readonly<Record<string, string>> = Object.freeze({
   wakeflow_pod: "runs one config transaction",
   wakeflow_prepare_delivery: "appends the envelope with its fence token",
   wakeflow_publish_requirement: "apply writes the immutable ledger record",
+  wakeflow_quick_demand:
+    "publishes the package, claims it, plans one implementation target and prepares its delivery",
   wakeflow_rearm_delivery: "the generation increases by one",
   wakeflow_record_delivery_outcome: "Record the outcome of one delivery generation",
   wakeflow_record_evidence: "Record one immutable managed evidence record",

@@ -10,7 +10,7 @@ import type {
   RequirementDocumentRole,
 } from "../../contracts/vocabulary/requirement-sections.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   type PortableResourcePath,
@@ -23,6 +23,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
+  assertStrictTextContent,
   readStrictTextFile,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
@@ -115,6 +116,12 @@ export interface RequirementServiceOptions {
   readonly durability?: RootedDirectoryDurability;
   readonly clock?: UtcWallClock;
   readonly signal?: AbortSignal;
+  /**
+   * 快速 Demand（ADR-0029 决定 9）：需求与落地两份文档由入口层生成、在这里直接给出，不经设计面里的
+   * 文件——预览因此零写，发布走的仍是同一个事务与同一套检查（章节、验收标准、隐私、用户确认）。
+   * 它不是 wire 请求的成员，公共工具的调用方给不了；请求里的两个路径成员此时只是占位。
+   */
+  readonly inlineDocuments?: Readonly<{ readonly requirement: string; readonly landing: string }>;
 }
 
 type PublishRequest = Extract<RequirementPublicationRequest, { readonly action: "publish" }>;
@@ -129,6 +136,7 @@ interface RequirementContext {
   readonly store: LedgerAuthorityStore;
   readonly clock: UtcWallClock | undefined;
   readonly signal: AbortSignal | undefined;
+  readonly inlineDocuments: RequirementServiceOptions["inlineDocuments"];
 }
 
 interface PublishPlan {
@@ -252,6 +260,7 @@ async function openContext(
     store: new LedgerAuthorityStore(ledgerRoot),
     clock: options.clock,
     signal: options.signal,
+    inlineDocuments: options.inlineDocuments,
   });
 }
 
@@ -306,6 +315,41 @@ async function readSurfaceDocument(
   }
 }
 
+/** 直接给出的一份文档：与从设计面读到的同一套严格文本规则，摘要按同样的字节算。 */
+function inlineDocument(
+  role: "requirement" | "landing",
+  text: string,
+  requestPath: string,
+): PackageDocumentText {
+  try {
+    assertStrictTextContent(text);
+  } catch (error: unknown) {
+    if (error instanceof StrictTextFileError) {
+      fail("invalid-request", `package-document-${error.reason}`, requestPath, { cause: error });
+    }
+    throw error;
+  }
+  const bytes = encodeUtf8(text, requestPath);
+  if (bytes.byteLength > MEMBER_MAXIMUM_BYTES) {
+    fail("invalid-request", "package-document-capacity", requestPath);
+  }
+  return Object.freeze({
+    role,
+    path: parsePortableResourcePath(`${role}.md`, "$request.package"),
+    text,
+    digest: computeSha256Digest(bytes, requestPath),
+  });
+}
+
+function inlinePackageDocuments(
+  documents: NonNullable<RequirementServiceOptions["inlineDocuments"]>,
+): readonly PackageDocumentText[] {
+  return Object.freeze([
+    inlineDocument("requirement", documents.requirement, "$request.package.requirementPath"),
+    inlineDocument("landing", documents.landing, "$request.package.landingPath"),
+  ]);
+}
+
 function attachmentRecordPath(sourcePath: string): string {
   const name = sourcePath.slice(sourcePath.lastIndexOf("/") + 1);
   return `attachments/${name}`;
@@ -321,6 +365,7 @@ async function readPackageDocuments(
   );
   if (surface === undefined)
     fail("not-found", "design-surface", "$request.package.designSurfaceId");
+  if (context.inlineDocuments !== undefined) return inlinePackageDocuments(context.inlineDocuments);
   const placement = context.snapshot.placements.roots.find(
     (entry) => entry.key === `support.${input.designSurfaceId}.root`,
   );

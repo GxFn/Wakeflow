@@ -680,7 +680,7 @@ test("制品搬到仓库之外后，两个 MCP 入口仍经官方 stdio Client �
       await client.connect(transport);
       const listed = await client.listTools();
       deepEqual(listed.tools.map((tool) => tool.name).sort(), expectedTools);
-      equal(listed.tools.length, 20);
+      equal(listed.tools.length, 21);
     } finally {
       await Promise.allSettled([client.close(), transport.close()]);
     }

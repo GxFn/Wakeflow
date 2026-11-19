@@ -60,6 +60,10 @@ import {
   type WakeflowToolCatalog,
   type WakeflowToolRegistration,
 } from "../kernel/tool-registry.js";
+import {
+  QUICK_DEMAND_TOOL_REGISTRATION,
+  type QuickDemandResult,
+} from "./wakeflow-public-mcp-quick-demand-contract.js";
 import type { WakeflowPublicMcpExecutor } from "./wakeflow-public-mcp-tool.js";
 
 /**
@@ -86,6 +90,7 @@ export interface WakeflowPublicMcpExecutors {
   readonly planTargetTask: WakeflowPublicMcpExecutor<TargetTaskPlanningResult>;
   readonly prepareDelivery: WakeflowPublicMcpExecutor<PrepareDeliveryResult>;
   readonly publishRequirement: WakeflowPublicMcpExecutor<RequirementPublicationResult>;
+  readonly quickDemand: WakeflowPublicMcpExecutor<QuickDemandResult>;
   readonly inspectBoard: WakeflowPublicMcpExecutor<BoardInspectionResult>;
   readonly rearmDelivery: WakeflowPublicMcpExecutor<RearmDeliveryResult>;
   readonly recordImplementationReviewDecision: WakeflowPublicMcpExecutor<ImplementationReviewDecisionResult>;
@@ -125,6 +130,7 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
   REQUIREMENT_PUBLICATION_TOOL_REGISTRATION satisfies Registration,
   BOARD_INSPECTION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CREATION_TOOL_REGISTRATION satisfies Registration,
+  QUICK_DEMAND_TOOL_REGISTRATION satisfies Registration,
   DEMAND_COMPLETION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CANCELLATION_TOOL_REGISTRATION satisfies Registration,
   DEMAND_CONTINUATION_TOOL_REGISTRATION satisfies Registration,

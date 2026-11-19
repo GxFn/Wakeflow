@@ -83,6 +83,24 @@
     },
     "escalation": {
       "$ref": "#/$defs/escalation"
+    },
+    "thenPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["taskPackage"],
+      "properties": {
+        "taskPackage": {
+          "type": "object"
+        },
+        "planReview": {
+          "type": "object"
+        }
+      },
+      "description": "Only with decision accept: once the accept is recorded, plan this next task package in the same call. taskPackage and planReview are exactly what wakeflow_plan_target_task takes. A refused plan leaves the accept in place; the result's thenPlan carries the refusal."
+    },
+    "thenComplete": {
+      "const": true,
+      "description": "Only with decision accept, and not with thenPlan: once the accept is recorded, complete and archive the Demand in the same call when its completion preview has no blocker. Blocked or refused, the accept still stands and the result's thenComplete says why."
     }
   },
   "allOf": [

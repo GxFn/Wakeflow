@@ -10,6 +10,7 @@ import {
   demandArchivePageMarker,
   renderDemandArchivePage,
 } from "../../../src/governance/observation/demand-archive-page.js";
+import { parseTargetSessionPromptObservation } from "../../../src/governance/result/target-session-prompts.js";
 import {
   type LedgerHistoryEntry,
   renderLedgerHistoryIndex,
@@ -76,6 +77,16 @@ function target(overrides: Partial<DemandArchivePageTarget> = {}): DemandArchive
         residualRisks: ["Rate limiting is still open."],
       },
     ],
+    sessionPrompts: parseTargetSessionPromptObservation({
+      status: "observed",
+      reason: null,
+      from: "2026-11-17T00:03:00.000Z",
+      until: "2026-11-17T00:10:40.000Z",
+      permitPrompts: 1,
+      nudgePrompts: 1,
+      outsidePrompts: 2,
+      outsideAt: ["2026-11-17T00:05:00.000Z", "2026-11-17T00:06:30.000Z"],
+    }),
     ...overrides,
   };
 }
@@ -152,10 +163,10 @@ test("页面有四样固定内容加度量，按固定顺序；每一样说的�
   // 还剩什么：最后一次决定的剩余风险、目标报告的风险、任务包之外的指示、记录下来的分支。
   ok(page.includes("- Target 1: Residual risk — Rate limiting is still open."));
   ok(page.includes("- Target 1: Risk the target reported — The route has no rate limit."));
-  // 任务包之外的指示单独一栏（ADR-0030 决定 7），是目标自己的申报。
+  // 任务包之外的指示单独一栏（ADR-0030 决定 7）：目标的申报与 Wakeflow 自己的观察并排，各自标明出处。
   ok(
     page.includes(
-      "## Instructions outside the task package\n\n> What each target declared it was told to do outside its task package, and what it did about it. This is the target's own account.\n\n- Target 1: user, declined — Also rename the file.\n",
+      "## Instructions outside the task package\n\n> Two accounts side by side: what each target declared it was told to do outside its task package, and what Wakeflow itself counted in the target's session. Neither replaces the other.\n\n- Target 1: declared by the target (user, declined) — Also rename the file.\n- Target 1: observed by Wakeflow between landing and result import: 2 prompts from outside the delivery, 1 carrying a Wakeflow permit, 1 matching a continue phrase the Controller pushed (at 2026-11-17T00:05:00.000Z, 2026-11-17T00:06:30.000Z)\n",
     ),
     page,
   );
@@ -190,10 +201,14 @@ test("记录版本 1 的报告没有逐条结论与任务包之外的指示：�
   const legacy = target({
     anchors: target().anchors.map((anchor) => ({ ...anchor, result: null })),
     report: { ...(target().report ?? fail()), outsideInstructions: null },
+    // 1.4 之前的结果事件也没有 Wakeflow 的观察：页面不为它编一行。
+    sessionPrompts: null,
   });
   const page = renderDemandArchivePage(facts({ targets: [legacy] }), "en");
   ok(page.includes("The target's result per anchor was not recorded (report record version 1)."));
   ok(page.includes("- Target 1: not recorded (report record version 1)"), page);
+  equal(page.includes("observed by Wakeflow"), false);
+  equal(page.includes("could not observe"), false);
   equal(page.includes("| Anchor | Claim |"), false);
 });
 
@@ -228,6 +243,7 @@ test("没做完的归档：未被接受的目标、归档时没有结果的目�
   const clean = target({
     report: { ...(target().report ?? fail()), branch: null, risks: [], outsideInstructions: [] },
     decisions: target().decisions.map((decision) => ({ ...decision, residualRisks: [] })),
+    sessionPrompts: null,
   });
   const nothing = renderDemandArchivePage(facts({ targets: [clean] }), "en");
   ok(nothing.includes("## What remains\n\nNothing was recorded as left open.\n"), nothing);
@@ -339,4 +355,57 @@ test("历史索引：每个归档过的 Demand 一行、新的在前；页面不
   ok(zh.startsWith("# Wakeflow Demand 历史\n\n<!-- wakeflow:ledger-history:v1:zh-Hans -->\n"));
   ok(zh.includes("| 归档时间 | Demand | 类型 | 结局 | 页面 |"));
   ok(renderLedgerHistoryIndex([], "en").includes("No Demand has been archived yet."));
+});
+
+test("越级观察（H13）：没有落地记录可当起点时页面说没能观察、不是零条；观察到零条时照实写零", () => {
+  const unobserved = renderDemandArchivePage(
+    facts({
+      targets: [
+        target({
+          sessionPrompts: parseTargetSessionPromptObservation({
+            status: "unobserved",
+            reason: "landing-record-absent",
+            from: null,
+            until: "2026-11-17T00:10:40.000Z",
+            permitPrompts: 0,
+            nudgePrompts: 0,
+            outsidePrompts: 0,
+            outsideAt: [],
+          }),
+        }),
+      ],
+    }),
+    "en",
+  );
+  ok(
+    unobserved.includes(
+      "- Target 1: Wakeflow could not observe the target session (landing-record-absent); this is not a count of zero",
+    ),
+    unobserved,
+  );
+  const quiet = renderDemandArchivePage(
+    facts({
+      targets: [
+        target({
+          sessionPrompts: parseTargetSessionPromptObservation({
+            status: "observed",
+            reason: null,
+            from: "2026-11-17T00:03:00.000Z",
+            until: "2026-11-17T00:10:40.000Z",
+            permitPrompts: 0,
+            nudgePrompts: 0,
+            outsidePrompts: 0,
+            outsideAt: [],
+          }),
+        }),
+      ],
+    }),
+    "zh-Hans",
+  );
+  ok(
+    quiet.includes(
+      "Wakeflow 在落地到结果导入之间观察到：0 条投递之外的 prompt，0 条带 Wakeflow 的许可，0 条与 Controller 推过的续跑短句相符\n",
+    ),
+    quiet,
+  );
 });

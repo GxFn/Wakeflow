@@ -1674,6 +1674,10 @@
             "$ref": "#/$defs/reportedCommit"
           },
           "description": "Present when an implementation result reports commits: one entry per reported commit, in report order, with the managed commit evidence Wakeflow recorded for it (ADR-0028)."
+        },
+        "sessionPrompts": {
+          "$ref": "#/$defs/sessionPrompts",
+          "description": "Wakeflow's own count, taken when the result was imported, of prompts submitted in the target session between this delivery's landing record and the import: permitPrompts carry a Wakeflow permit, nudgePrompts match a continue phrase the Controller pushed, outsidePrompts are everything else, with up to 16 of their times. unobserved means there was no landing record to start from; absent means the result predates this observation. Set it beside the report's outsideInstructions, the target's own account."
         }
       },
       "allOf": [
@@ -2727,6 +2731,68 @@
         },
         "handling": {
           "enum": ["followed", "declined", "escalated"]
+        }
+      }
+    },
+    "sessionPrompts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason",
+        "from",
+        "until",
+        "permitPrompts",
+        "nudgePrompts",
+        "outsidePrompts",
+        "outsideAt"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["observed", "unobserved"]
+        },
+        "reason": {
+          "enum": [
+            null,
+            "landing-record-absent",
+            "landing-record-unreadable",
+            "records-unavailable"
+          ]
+        },
+        "from": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/utcInstant"
+            }
+          ]
+        },
+        "until": {
+          "$ref": "#/$defs/utcInstant"
+        },
+        "permitPrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "nudgePrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "outsidePrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "outsideAt": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/utcInstant"
+          }
         }
       }
     }

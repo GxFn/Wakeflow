@@ -68,6 +68,14 @@ function decodeStrictUtf8(bytes: Uint8Array): string {
   }
 }
 
+/**
+ * 同一套严格文本规则用在已经在内存里的文本上（不经文件的生成文档）：非空、无 BOM、只有 LF、
+ * 以换行结尾、已是 NFC。不合规则抛出与读文件相同的错误类。
+ */
+export function assertStrictTextContent(text: string): void {
+  assertStrictText(text);
+}
+
 function assertStrictText(text: string): void {
   if (text.length === 0) fail("empty", "$text");
   if (text.startsWith("\ufeff")) fail("bom", "$text");

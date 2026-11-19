@@ -82,6 +82,68 @@
           }
         }
       }
+    },
+    "sessionPrompts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason",
+        "from",
+        "until",
+        "permitPrompts",
+        "nudgePrompts",
+        "outsidePrompts",
+        "outsideAt"
+      ],
+      "properties": {
+        "status": {
+          "enum": ["observed", "unobserved"]
+        },
+        "reason": {
+          "enum": [
+            null,
+            "landing-record-absent",
+            "landing-record-unreadable",
+            "records-unavailable"
+          ]
+        },
+        "from": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+            }
+          ]
+        },
+        "until": {
+          "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+        },
+        "permitPrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "nudgePrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "outsidePrompts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "outsideAt": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "urn:wakeflow:foundation:time:utc-instant:v1"
+          }
+        }
+      }
     }
   }
 }

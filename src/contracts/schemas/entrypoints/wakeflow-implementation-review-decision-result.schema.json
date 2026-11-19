@@ -115,6 +115,48 @@
     },
     "next": {
       "$ref": "#/$defs/next"
+    },
+    "thenPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["planned", "refused"]
+        },
+        "planning": {
+          "type": "object"
+        },
+        "error": {
+          "$ref": "#/$defs/refusal"
+        }
+      },
+      "description": "Present when the request carried thenPlan: planned with the wakeflow_plan_target_task result under planning (next then continues from that plan), or refused with the planner's error; the recorded accept stands either way."
+    },
+    "thenComplete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["completed", "blocked", "refused"]
+        },
+        "completion": {
+          "type": "object"
+        },
+        "blockers": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "error": {
+          "$ref": "#/$defs/refusal"
+        }
+      },
+      "description": "Present when the request carried thenComplete: completed with the wakeflow_complete_demand result under completion (next then continues from it), blocked with the completion preview's blockers, or refused with the error; the recorded accept stands either way."
     }
   },
   "$defs": {
@@ -249,6 +291,63 @@
       "minLength": 20,
       "maxLength": 30,
       "pattern": "^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+    },
+    "refusal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "reason"],
+      "description": "The refusing tool's public error: its code and reason as that tool would have returned them.",
+      "properties": {
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "details": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "causeCode": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "causeReason": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "operationId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "bindingAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "claimAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "eventAuthority": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "publicationAuthority": {
+          "type": "string",
+          "maxLength": 32
+        }
+      }
     }
   }
 }

@@ -6642,6 +6642,190 @@ async function scenarioBlockedAndResume(context: ScenarioContext): Promise<strin
   return `resumption-on-reported=resumption-unexpected; blocked=${blocked.status}/${blocked.target.phase}; route=${route.kinds[0]}; basis=${waiting.reviewUnit.resumptionBasis?.kind}; gates=missing+previous-decision+basis rejected; resumed-accept=${accepted.target.phase}; next=${accepted.next.frontier}`;
 }
 
+// ---- card-04/quick-demand（ADR-0029 决定 9，open-items K9、H13，1.4 第 4 段） ----------------------------
+
+interface QuickDemandPreview {
+  readonly status: string;
+  readonly blockers: readonly string[];
+  readonly planDigest: string | null;
+  readonly summary: { readonly requirement: string; readonly criteria: readonly unknown[] };
+}
+
+interface QuickDemandMutation {
+  readonly status: string;
+  readonly stoppedAt: string | null;
+  readonly requirementId: string;
+  readonly demandId: string;
+  readonly targetTaskId: string;
+  readonly steps: readonly { readonly step: string; readonly status: string }[];
+  /** `wakeflow_prepare_delivery` 的结果原样：许可在 `permit` 里，投递标识在 `delivery` 里。 */
+  readonly delivery: {
+    readonly delivery: { readonly deliveryId: string };
+    readonly permit: {
+      readonly prompt: string;
+      readonly promptRef: string;
+      readonly promptDigest: string;
+      readonly fence: {
+        readonly claimId: string;
+        readonly claimDigest: string;
+        readonly streamRevision: number;
+      };
+      readonly issuedAt: string;
+    };
+  };
+}
+
+/**
+ * 快速 Demand 走完整条路：上一个场景的 Demand 已取消，主 pod 空闲、窗口都已登记。预览零写；确认之后一次
+ * 调用得到可以直接发送的投递许可；目标交回带提交的结果（任务包要求提交）；评审单元带着 Wakeflow 自己对
+ * 目标会话的观察；接受时带 `thenComplete`，同一次调用里完成并归档，归档旁边有这个 Demand 的一页。
+ */
+async function scenarioQuickDemand(context: ScenarioContext): Promise<string> {
+  const root = context.workspace.workspacePath;
+  if (!context.repositoryId || !context.controllerWindowId) {
+    throw new Error("scenario ordering: import-and-review must run first");
+  }
+  const request = {
+    root,
+    repositoryId: context.repositoryId,
+    title: "聚焦检查的提示语",
+    request: "把聚焦检查失败时的提示语改成一句完整的话。",
+    doneWhen: ["失败时的提示语是一句完整的话"],
+  };
+  const before = workspaceBytes(root);
+  const previewed = await call(context, "wakeflow_quick_demand", { ...request, mode: "preview" });
+  assertNoPrivatePath(context, previewed);
+  const preview = previewed.structuredContent as QuickDemandPreview;
+  equal(preview.status, "ready", preview.blockers.join(","));
+  equal(preview.summary.criteria.length, 1);
+  deepEqual(changedWorkspacePaths(before, workspaceBytes(root)), [], "preview wrote");
+
+  const applied = await call(context, "wakeflow_quick_demand", {
+    ...request,
+    mode: "apply",
+    planDigest: preview.planDigest,
+    confirmation: { confirmedAt: "2026-09-21T10:00:00.000Z" },
+  });
+  assertNoPrivatePath(context, applied);
+  const quick = applied.structuredContent as QuickDemandMutation;
+  equal(quick.status, "prepared", JSON.stringify(quick.steps));
+  deepEqual(
+    quick.steps.map((entry) => entry.step),
+    ["publish", "claim", "plan", "prepare"],
+  );
+  equal((await boardPackage(context, quick.requirementId)).status, "claimed");
+  context.demandId = quick.demandId;
+  const prepared = quick.delivery;
+  const permit: DeliveryPermit = {
+    deliveryId: prepared.delivery.deliveryId,
+    claimId: prepared.permit.fence.claimId,
+    claimDigest: prepared.permit.fence.claimDigest,
+    prompt: prepared.permit.prompt,
+    promptRef: prepared.permit.promptRef,
+    promptDigest: prepared.permit.promptDigest,
+    issuedAt: prepared.permit.issuedAt,
+    streamRevision: prepared.permit.fence.streamRevision,
+  };
+  equal(permit.prompt.includes("把聚焦检查失败时的提示语改成一句完整的话。"), true);
+
+  await landPrompt(context, permit.prompt);
+  const outcome = await recordOutcome(context, permit, "scenario-quick-outcome");
+  equal(outcome.outcome.disposition, "accepted");
+  const evidence = await recordEvidence(context);
+  const evidenceRef = { ref: evidence.ref, digest: evidence.digest };
+  // 任务包要求提交：completed 的结果必须是已提交的。产品仓库是真实仓库，导入只认仓库里真有的提交
+  // （ADR-0028），所以这里先真的提交一次。
+  gitInProduct(context, "commit", "--quiet", "--allow-empty", "-m", "quick demand change");
+  const commitOid = gitInProduct(context, "rev-parse", "HEAD").trim();
+  const branch = gitInProduct(context, "rev-parse", "--abbrev-ref", "HEAD").trim();
+  const imported = (
+    await call(
+      context,
+      WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
+      importRequest(
+        context,
+        permit,
+        "scenario-quick-import",
+        await currentStreamRevision(context),
+        {
+          outcome: "completed",
+          summary: "提示语已改成一句完整的话。",
+          repositoryChange: {
+            repositoryId: context.repositoryId,
+            disposition: "committed",
+            branch,
+            commits: [{ algorithm: "sha1", value: commitOid }],
+          },
+          evidenceLocators: [{ kind: "test-output", ...evidenceRef }],
+          verification: ["聚焦检查：通过"],
+          risks: [],
+          anchorEvidence: [{ anchorId: "ac-1", evidenceRefs: [evidenceRef] }],
+          anchorResults: [
+            { anchorId: "ac-1", status: "passed", observed: "提示语现在是一句完整的话。" },
+          ],
+          outsideInstructions: [],
+        },
+      ),
+    )
+  ).structuredContent as ImportResult;
+  equal(imported.status, "committed");
+  await landPrompt(
+    context,
+    imported.callback.permit.prompt,
+    context.controllerWindowId,
+    context.controllerHandle,
+  );
+  await recordSessionEvent(context, context.productWindowId, context.productHandle, "stop");
+
+  const inspection = await inspectReview(context, quick.targetTaskId);
+  // H13：评审单元带着导入那一刻 Wakeflow 自己的观察；这条路上没有任何任务包之外的 prompt。
+  const sessionPrompts = (
+    inspection.reviewUnit as unknown as {
+      readonly sessionPrompts?: { readonly status: string; readonly outsidePrompts: number };
+    }
+  ).sessionPrompts;
+  equal(sessionPrompts === undefined, false, "the review unit carries the session observation");
+  equal(sessionPrompts?.outsidePrompts, 0);
+  equal(inspection.reviewUnit.allowedDecisions.includes("accept"), true);
+
+  const accepted = (
+    await call(context, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, {
+      ...implementationDecisionRequest(
+        context,
+        inspection,
+        "accept",
+        "scenario-quick-accept",
+        await currentStreamRevision(context),
+      ),
+      thenComplete: true,
+    })
+  ).structuredContent as DecisionResult & {
+    readonly thenComplete?: {
+      readonly status: string;
+      readonly blockers?: readonly string[];
+      readonly completion?: { readonly archive: { readonly archiveRef: string } };
+    };
+  };
+  equal(accepted.status, "committed");
+  equal(accepted.target.phase, "accepted");
+  equal(
+    accepted.thenComplete?.status,
+    "completed",
+    JSON.stringify(accepted.thenComplete?.blockers ?? accepted.thenComplete),
+  );
+  // 接受即归档：需求包已归档，活动根已删，归档旁边有这个 Demand 的一页。
+  equal((await boardPackage(context, quick.requirementId)).status, "archived");
+  equal(
+    existsSync(path.join(root, ...demandFinalRootRef(quick.demandId).split("/"))),
+    false,
+    "active root survived the accept",
+  );
+  const archiveRef = accepted.thenComplete?.completion?.archive.archiveRef ?? "";
+  const page = readFileSync(path.join(root, "Ledger", ...`${archiveRef}.md`.split("/")), "utf8");
+  equal(page.includes(`- Demand: \`${quick.demandId}\``), true, page.slice(0, 400));
+  return `preview=ready zero-write; apply=${quick.steps.map((entry) => entry.status).join("+")}; session prompts=${sessionPrompts?.status}; accept thenComplete=${accepted.thenComplete?.status}; package=archived`;
+}
+
 // ---- card-11/detach-workspace（ADR-0024：退出路径） ------------------------------------------------------
 
 /** 计划里每一步的种类：共享步取 `stepKind`，宿主步取 `operationKind`（ADR-0024 把 Claude 的两个宿主步也按步骤种类命名）。 */
@@ -7223,6 +7407,7 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
     "card-04/research-demand": scenarioResearchDemand,
     "card-06/indeterminate-resolution": scenarioIndeterminateResolution,
     "card-07/bug-attempt-capacity": scenarioBugAttemptCapacity,
+    "card-04/quick-demand": scenarioQuickDemand,
     "card-11/detach-workspace": scenarioDetachWorkspace,
   });
 

@@ -46,6 +46,7 @@ import {
   connectWakeflowMcpServerForTest,
   connectWakeflowMcpTestClient,
 } from "./wakeflow-public-mcp-server.fixture.js";
+import { WAKEFLOW_QUICK_DEMAND_PUBLIC_TOOL_NAME } from "../../src/entrypoints/wakeflow-public-mcp-quick-demand-contract.js";
 
 useDisposableDurability();
 
@@ -121,6 +122,12 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
   ]),
   expectedTool(WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, "demand-publication", DESTRUCTIVE, [
     "Only one active Demand per pod (podId defaults to the primary pod)",
+  ]),
+  // 快速 Demand（ADR-0029 决定 9）：入口层的组合，四条现有命令按顺序走。
+  expectedTool(WAKEFLOW_QUICK_DEMAND_PUBLIC_TOOL_NAME, "quick-demand", DESTRUCTIVE, [
+    "preview writes nothing",
+    "publishes the package, claims it, plans one implementation target and prepares its delivery",
+    "Limits are structural",
   ]),
   expectedTool(WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, "demand-cancellation", DESTRUCTIVE, [
     "withdraws the requirement package",
@@ -223,6 +230,7 @@ function validPublicServerOptions(): PublicServerOptions {
     recordEvidence: unavailableExecutor,
     managePod: unavailableExecutor,
     publishRequirement: unavailableExecutor,
+    quickDemand: unavailableExecutor,
     executeMaintenance: unavailableExecutor,
     importTargetResult: unavailableExecutor,
     inspectStatus: unavailableExecutor,
@@ -248,6 +256,7 @@ const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
   "recordEvidence",
   "managePod",
   "publishRequirement",
+  "quickDemand",
   "registerWindowHostBinding",
   "inspectStatus",
   "verifyWorkspace",
@@ -295,7 +304,7 @@ test("MCP composition拒绝Proxy executor与额外配置字段", () => {
   );
 });
 
-test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
+test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);
   const instructions = client.getInstructions();
   equal(typeof instructions, "string");
@@ -336,7 +345,7 @@ test("官方MCP server只发布二十个闭合Schema工具", async (t) => {
   );
 });
 
-test("Codex与Claude Code composition root发布同一二十工具集合", async () => {
+test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {
   const listedNames: string[][] = [];
   for (const createServer of [createCodexWakeflowMcpServer, createClaudeCodeWakeflowMcpServer]) {
     const server = createServer("1.0.0-test");

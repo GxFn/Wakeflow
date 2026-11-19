@@ -33,6 +33,7 @@ export function defaultMcpExecutors(): WakeflowMcpExecutorSet {
     recordEvidence: async () => unexpectedMcpExecutor("recordEvidence"),
     managePod: async () => unexpectedMcpExecutor("managePod"),
     publishRequirement: async () => unexpectedMcpExecutor("publishRequirement"),
+    quickDemand: async () => unexpectedMcpExecutor("quickDemand"),
     executeMaintenance: async () => unexpectedMcpExecutor("executeMaintenance"),
     importTargetResult: async () => unexpectedMcpExecutor("importTargetResult"),
     inspectStatus: async () => unexpectedMcpExecutor("inspectStatus"),

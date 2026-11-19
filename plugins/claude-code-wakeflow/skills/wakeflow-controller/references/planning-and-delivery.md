@@ -24,6 +24,16 @@ lineage, not a correction.
 - **Acceptance anchors** - each one bound to an acceptance-criteria item that
   exists in the requirement package. An invented anchor is refused; that
   refusal is protecting the trace from requirement to result.
+- **Required evidence kinds** - optional, and every kind you name is a
+  completion gate you must then satisfy with a record. For committed work
+  leave it out or name `commit` alone: the import records each reported
+  commit with its changed paths. Name `diff`, `test-output` or `document`
+  only when a criterion cannot be shown by the commit.
+
+Size the package to the task and state each fact once. The target reads the
+requirement documents you select as authority, so do not copy their sentences
+into the goal, the expectation and the anchor again; a one-file change needs a
+few lines. Context you add is what you verified and the target cannot see.
 
 What Wakeflow derives and you must not restate: the window, the environment,
 the baselines. What you must state when it is true: an environment prerequisite
@@ -198,7 +208,7 @@ refused while the delivery is not indeterminate.
 
 `wakeflow_rearm_delivery` (its `deliveryId` is on the route's rearm frontier in `wakeflow_status` with the Demand id - never search Wakeflow's files for it) re-issues the permit for a rejected-before-send
 delivery with a fresh claim and fence, at most three times per envelope. After
-that, prepare the target again for a new envelope. A window replaced since the permit was issued is the exception: its old envelope cannot be re-armed (`binding-changed`), so prepare the target again at once - `rearm-available` does not block that, and the new prompt names the current binding and Controller. On a transport where a window's session can be gone, check that the target's and the Controller's sessions still exist before you prepare, not after. Given the callback delivery
+that, prepare the target again for a new envelope. A window replaced since the permit was issued is the exception: its old envelope cannot be re-armed (`binding-changed`), so prepare the target again at once - `rearm-available` does not block that, and the new prompt names the current binding and Controller. Do not probe windows before preparing: a session that is gone refuses the send, nothing was sent, and you restore the window then; the callback's destination is taken at import, not from the prompt. Given the callback delivery
 of a result-reported target instead, it re-issues the wake-controller callback
 permit against the current Controller binding, with no claim or fence. A
 re-armed target permit carries the first generation's prompt byte for byte -

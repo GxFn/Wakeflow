@@ -145,9 +145,9 @@ with `wakeflow_pod`: record the branch dispositions, then remove it once its win
 
 `wakeflow_status` is one read across every domain and always names the next
 actions. `wakeflow_verify` is the strict read: each gate passes, fails, or is
-unavailable, and it repairs nothing. Run it when `status` looks wrong, before
-completing a Demand, and whenever a delivery looked sent but no evidence
-arrived. An `overall` of `maintenance` means `maintenance.protocol` is not
+unavailable, and it repairs nothing. Run it when `status` looks wrong and
+whenever a delivery looked sent but no evidence arrived - not before a
+completion, which runs the same gates. An `overall` of `maintenance` means `maintenance.protocol` is not
 `idle`; act on its value first: `recovery-required` - an apply was interrupted,
 recover the recoverable residue's operation, or preview reconcile when none is; `busy` -
 another maintenance is running, wait and read status again, never recover it;

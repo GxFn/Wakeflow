@@ -5,7 +5,7 @@ import { claudeCodeMaintenanceCapability } from "./claude-code-maintenance-capab
  * Wakeflow Host / Claude Code：Claude 维护执行的固定 composition root。
  *
  * 调用方无需也不能自行选择 capability；preview、normal execution 与 recovery 始终绑定
- * 同一个 Claude 闭合实现和共享唯一 journal。
+ * 同一个 Claude 闭合实现和共享唯一 intent。
  */
 /** 构建包含 Claude portable settings 的零写入聚合计划。 */
 export async function previewClaudeCodeMaintenanceExecution(root, request) {
@@ -15,7 +15,7 @@ export async function previewClaudeCodeMaintenanceExecution(root, request) {
 export async function executeClaudeCodeMaintenanceExecution(root, plan, request, options = {}) {
     return executeWakeflowMaintenanceExecutionTransaction(root, plan, request, claudeCodeMaintenanceCapability, options);
 }
-/** 只凭operation ID与私有intent/journal恢复同一Claude维护事务。 */
+/** 只凭operation ID与私有intent恢复同一Claude维护事务。 */
 export async function recoverClaudeCodeMaintenanceExecution(root, operationId, options = {}) {
     return recoverWakeflowMaintenanceExecutionTransaction(root, operationId, claudeCodeMaintenanceCapability, options);
 }

@@ -255,7 +255,6 @@ const TRANSACTION_ERROR_TABLE = Object.freeze({
     gate: ["concurrency-conflict", "maintenance-gate", "$request.root"],
     "recovery-required": ["recovery-required", null, "$request.root"],
     intent: ["recovery-required", null, "$request.root"],
-    journal: ["recovery-required", null, "$request.root"],
     "terminal-closure": ["recovery-required", null, "$request.root"],
     transaction: ["io-failure", null, "$request.root"],
     step: ["io-failure", null, "$request.root"],
@@ -535,7 +534,7 @@ async function planHookStageResidue(context) {
 }
 /**
  * reconcile 最先看维护门自己：没有操作可恢复的残留（B9）挡着每一次维护预览，所以它排在别的计划之前。
- * 有 intent 或 journal 的残留不在这里——那是按 operation ID 的 recover。
+ * 有 intent 的残留不在这里——那是按 operation ID 的 recover。
  */
 async function planGateResidue(context) {
     let residue;

@@ -16,7 +16,7 @@ export async function previewCodexMaintenanceExecution(root, request) {
 export async function executeCodexMaintenanceExecution(root, plan, request, options = {}) {
     return executeWakeflowMaintenanceExecutionTransaction(root, plan, request, codexMaintenanceCapability, options);
 }
-/** 只凭 operation ID 与私有 intent/journal 恢复同一 Codex 维护事务。 */
+/** 只凭 operation ID 与私有 intent 恢复同一 Codex 维护事务。 */
 export async function recoverCodexMaintenanceExecution(root, operationId, options = {}) {
     return recoverWakeflowMaintenanceExecutionTransaction(root, operationId, codexMaintenanceCapability, options);
 }

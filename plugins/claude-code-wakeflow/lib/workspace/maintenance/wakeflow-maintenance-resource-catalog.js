@@ -6,10 +6,10 @@ import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resourc
  *
  * 本目录只声明 `.wakeflow-local`、maintenance bootstrap 目录链和唯一 maintenance
  * gate。Active 两级共享容器由相邻 Active Layout Catalog 独立声明；具体 transaction
- * intent/journal 由operationId factory生成，不作为全局路径模式注册。
+ * intent 由operationId factory生成，不作为全局路径模式注册。
  *
  * 目录声明只允许逐级 materialize 且观察已有 mode；fresh strict-absent、bootstrap-prefix
- * 分类、journal 准入和物理效果由相邻 inspection/owner 负责。
+ * 分类、intent 准入和物理效果由相邻 inspection/owner 负责。
  */
 export const WAKEFLOW_LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 export const WAKEFLOW_RUNTIME_ROOT_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_ROOT}/runtime`);

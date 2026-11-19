@@ -237,7 +237,7 @@ async function runCorrelatedGate(root, operationId, options, operation, prepare)
     }
 }
 /**
- * 在调用方已经验证 prepared journal / recovery evidence 后，以原 operation ID 取得 gate。
+ * 在调用方已经验证磁盘上的 intent（恢复依据）之后，以原 operation ID 取得 gate。
  */
 function parseWakeflowExistingMaintenanceGateOptions(value) {
     let record;

@@ -1,6 +1,6 @@
 import { DeterministicJsonDocumentError, parseDeterministicJsonDocument, } from "../../foundation/data/deterministic-json-document.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
-import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
@@ -10,16 +10,17 @@ import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintenanceIntentResourceDeclaration, parseWakeflowMaintenanceExecutionIntent, renderWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
+import { advanceWakeflowMaintenanceExecutionIntent, computeWakeflowMaintenanceExecutionIntentDigest, createWakeflowMaintenanceIntentResourceDeclaration, parseWakeflowMaintenanceExecutionIntent, renderWakeflowMaintenanceExecutionIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
-import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, wakeflowMaintenanceJournalRef, } from "./wakeflow-maintenance-operation-id.js";
+import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import { parseWakeflowMaintenanceWriter, } from "./wakeflow-maintenance-writer.js";
 /**
- * Wakeflow Workspace / Maintenance：immutable execution intent 的私有物理 store。
+ * Wakeflow Workspace / Maintenance：execution intent 的私有物理 store。
  *
- * Intent 以0600 absent-only原子发布一次，随后只读并由mutable journal的intentDigest绑定。
- * 每次目录形状检查都只接受同operation的 intent 或 intent+journal；它不是第二状态机。
+ * Intent 以0600 absent-only原子发布一次；此后唯一的改写是做完一步之后把 `completedSteps` 加一
+ *（按原文件的节点与摘要做精确替换，意图摘要必须不变）。它是一次维护在事务目录里唯一的文件：每次
+ * 目录形状检查都只接受同operation的这一份（1.4 第 5 段 5a 的 C 行，ADR-0031；此前另有一份检查点日志）。
  */
 const WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES = parseByteCount(2 * 1024 * 1024, "$maintenanceIntent.maximumBytes");
 const ERROR_MESSAGES = {
@@ -125,19 +126,10 @@ async function assertTransactionEntries(root, expected) {
 async function assertWakeflowMaintenanceTransactionsEmpty(root) {
     return assertTransactionEntries(root, []);
 }
-/** 证明transactions只含指定exact intent。 */
-export async function assertWakeflowMaintenanceIntentIsOnlyTransactionPrefix(root, source) {
+/** 证明transactions只含指定exact intent，并且它还是读到时的那一份。 */
+export async function assertWakeflowMaintenanceIntentIsOnlyTransaction(root, source) {
     assertSource(source);
     await assertTransactionEntries(root, [source.resourcePath]);
-    await assertIntentSourceCurrent(root, source);
-}
-/** 证明transactions只含同operation的exact intent与journal。 */
-export async function assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, source) {
-    assertSource(source);
-    await assertTransactionEntries(root, [
-        source.resourcePath,
-        wakeflowMaintenanceJournalRef(source.operationId),
-    ]);
     await assertIntentSourceCurrent(root, source);
 }
 async function assertIntentSourceCurrent(root, source) {
@@ -328,7 +320,88 @@ export async function publishWakeflowMaintenanceExecutionIntent(root, context, i
     }
     return source;
 }
-/** 在journal仍存在时先精确退休immutable intent。 */
+/**
+ * 做完一步之后把 `completedSteps` 加一：按读到时的节点与摘要精确替换，重读并核对意图摘要没有变。
+ * 替换提交与否说不清时报 `commit-uncertain`，由恢复按磁盘上的计数接着做。
+ */
+export async function checkpointWakeflowMaintenanceExecutionIntent(root, context, source) {
+    try {
+        assertWakeflowMaintenanceGateContext(context, root);
+    }
+    catch (error) {
+        if (error instanceof WakeflowMaintenanceGateError) {
+            fail("gate", "$context", error);
+        }
+        throw error;
+    }
+    assertSource(source);
+    if (source.operationId !== context.operationId) {
+        fail("input", "$intentSource");
+    }
+    let advanced;
+    try {
+        advanced = advanceWakeflowMaintenanceExecutionIntent(source.intent);
+    }
+    catch (error) {
+        if (error instanceof WakeflowMaintenanceExecutionIntentError) {
+            fail("input", "$intentSource", error);
+        }
+        throw error;
+    }
+    admitOperation(context.operationId, "exact-source-replace");
+    await assertWakeflowMaintenanceIntentIsOnlyTransaction(root, source);
+    const bytes = encodeUtf8(renderWakeflowMaintenanceExecutionIntent(advanced));
+    admittedByteCount(bytes);
+    let replacement;
+    try {
+        replacement = await replaceFileAtomically(root, source.resourcePath, bytes, {
+            mode: 0o600,
+            expected: Object.freeze({
+                resourcePath: source.resourcePath,
+                node: source.node,
+                byteCount: source.node.byteCount,
+                digest: source.digest,
+            }),
+        });
+    }
+    catch (error) {
+        if (error instanceof DurableAtomicFileWriteError) {
+            if (error.reason === "expectation-changed" ||
+                error.reason === "expectation-read-failure" ||
+                error.reason === "target-exists") {
+                fail("conflict", "$intent", error);
+            }
+            if (error.reason === "stage-recovery-required") {
+                fail("recovery-required", "$intent", error);
+            }
+            if (error.reason === "commit-uncertain" ||
+                error.reason === "durability-failure" ||
+                error.reason === "stage-cleanup-failure" ||
+                error.reason === "close-failure") {
+                fail("commit-uncertain", "$intent", error);
+            }
+            fail("effect-failure", "$intent", error);
+        }
+        throw error;
+    }
+    let next;
+    try {
+        next = await readWakeflowMaintenanceExecutionIntent(root, context.operationId);
+    }
+    catch (cause) {
+        fail("commit-uncertain", "$intent", cause);
+    }
+    if (replacement.digest !== next.digest ||
+        replacement.byteCount !== next.node.byteCount ||
+        replacement.node.deviceId !== next.node.deviceId ||
+        replacement.node.inodeId !== next.node.inodeId ||
+        next.intentDigest !== source.intentDigest ||
+        next.intent.completedSteps !== advanced.completedSteps) {
+        fail("commit-uncertain", "$intent");
+    }
+    return next;
+}
+/** 全部步骤做完之后精确退休 intent；退休之后事务目录必须是空的。 */
 export async function retireWakeflowMaintenanceExecutionIntent(root, context, source) {
     try {
         assertWakeflowMaintenanceGateContext(context, root);
@@ -344,7 +417,7 @@ export async function retireWakeflowMaintenanceExecutionIntent(root, context, so
         fail("input", "$intentSource");
     }
     admitOperation(context.operationId, "exact-retire");
-    await assertWakeflowMaintenanceIntentAndJournalAreOnlyTransaction(root, source);
+    await assertWakeflowMaintenanceIntentIsOnlyTransaction(root, source);
     let retirement;
     try {
         retirement = await unlinkRegularFileExactly(root, source.resourcePath, {
@@ -366,7 +439,7 @@ export async function retireWakeflowMaintenanceExecutionIntent(root, context, so
         throw error;
     }
     try {
-        await assertTransactionEntries(root, [wakeflowMaintenanceJournalRef(context.operationId)]);
+        await assertWakeflowMaintenanceTransactionsEmpty(root);
     }
     catch (cause) {
         fail("commit-uncertain", "$intent", cause);

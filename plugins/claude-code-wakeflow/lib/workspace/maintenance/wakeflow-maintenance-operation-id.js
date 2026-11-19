@@ -54,13 +54,8 @@ export function createWakeflowMaintenanceOperationId(uuidFactory) {
         throw error;
     }
 }
-/** 从operation ID派生唯一immutable intent引用。 */
+/** 从operation ID派生这次维护唯一的事务文件（intent）的引用。 */
 export function wakeflowMaintenanceIntentRef(value) {
     const operationId = parseWakeflowMaintenanceOperationId(value);
     return parsePortableResourcePath(`${WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF}/${operationId}.intent.json`);
-}
-/** 从operation ID派生唯一mutable journal引用。 */
-export function wakeflowMaintenanceJournalRef(value) {
-    const operationId = parseWakeflowMaintenanceOperationId(value);
-    return parsePortableResourcePath(`${WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF}/${operationId}.journal.json`);
 }

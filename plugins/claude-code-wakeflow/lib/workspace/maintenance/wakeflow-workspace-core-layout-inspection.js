@@ -149,16 +149,15 @@ function entryNamed(read, name) {
     return read.entries.find((entry) => entry.name === name) ?? null;
 }
 const NO_MAINTENANCE_RESIDUES = Object.freeze([]);
-const RESIDUE_NAME_PATTERN = /^(.+)\.(intent|journal)\.json$/u;
+const RESIDUE_NAME_PATTERN = /^(.+)\.intent\.json$/u;
 function maintenanceResidue(name) {
     const match = RESIDUE_NAME_PATTERN.exec(name);
     const candidate = match?.[1];
-    const kind = match?.[2];
-    if (candidate !== undefined && (kind === "intent" || kind === "journal")) {
+    if (candidate !== undefined) {
         try {
             return Object.freeze({
                 name,
-                kind,
+                kind: "intent",
                 operationId: parseWakeflowMaintenanceOperationId(candidate),
             });
         }

@@ -21,7 +21,8 @@ import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState, supplementAttachTarget, } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
-import { readWakeflowMaintenanceJournalOrNull, WakeflowMaintenanceJournalStoreError, } from "../../workspace/maintenance/wakeflow-maintenance-journal-store.js";
+import { peekWakeflowMaintenanceIntentWriter } from "../../workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
+import { parseWakeflowMaintenanceOperationId } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { inspectWakeflowPrivateModes, wakeflowPrivateModeAreas, } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import { previewWakeflowStaticMaterialization } from "../../workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "../../workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
@@ -1162,25 +1163,19 @@ async function readDemandForVerify(context, demand) {
     }
 }
 /**
- * 维护日志（事务残留）里写者戳版本的最高值（C11）：维护协议读不出、或某份日志读不出即 unavailable；
- * 没有日志或日志没有戳为 null。只读 `journal` 类残留，按 operationId 走日志仓库的读法，零写。
+ * 维护事务残留里写者戳版本的最高值（C11）：维护协议读不出即 unavailable；没有残留、残留没有戳或戳读不出
+ * 为 null。只看 `intent` 类残留，并且只读出戳本身——另一版制品写的 intent 本构建未必解析得了，戳照样
+ * 读得出。零写。
  */
 async function maintenanceWriterFacts(context) {
     if (context.maintenance.status !== "observed")
         return UNREADABLE_WRITER;
     const versions = [];
     for (const residue of context.maintenance.residues) {
-        if (residue.kind !== "journal" || residue.operationId === null)
+        if (residue.kind !== "intent" || residue.operationId === null)
             continue;
-        try {
-            const source = await readWakeflowMaintenanceJournalOrNull(context.root, residue.operationId);
-            versions.push(source?.journal.writer?.version ?? null);
-        }
-        catch (error) {
-            if (!(error instanceof WakeflowMaintenanceJournalStoreError))
-                throw error;
-            return UNREADABLE_WRITER;
-        }
+        const writer = await peekWakeflowMaintenanceIntentWriter(context.root, parseWakeflowMaintenanceOperationId(residue.operationId));
+        versions.push(writer?.version ?? null);
     }
     return Object.freeze({
         status: "observed",

@@ -137,7 +137,12 @@ prove a claim. A verification is a check you run, not a change you make.
 A decision states: the goal as you understood it, the independent check you
 made for every anchor, what you could not verify, the residual risk, and the
 next step. Write it in your own words and make the reason checkable: name the
-anchor, the file, the evidence. "Looks good" is not a review.
+anchor, the file, the evidence. "Looks good" is not a review. Size it to the
+change: one check per anchor when one command settles it, `method` the command
+or the file you read, `observation` the fact that decides the anchor - not the
+transcript of your session; the rationale adds what the checks do not say and
+does not retell them. Record a check's output as evidence only when the
+decision rests on something the commit record does not hold.
 
 When the returned route is `awaiting-decision`, hand the user the issue,
 options and recommendation, then bring their answer back with
@@ -249,7 +254,8 @@ An accept can carry the step that follows it, so it does not cost another turn:
   stands, fix the package and plan it with the planning tool.
 - `thenComplete: true` - "accept and archive": once the accept is recorded
   Wakeflow runs the completion preview and applies it when nothing blocks.
-  `completed` carries the completion result (name the archived page as usual);
+  `completed` carries the completion result (name the archived page as usual;
+  it holds the archive and `next`, so no status read is needed after it);
   `blocked` lists the completion preview's blockers and the accept stands.
   Use it when this accept is the last thing the Demand needs - a quick Demand
   always ends this way. If the call is cut after the archive was sealed, a

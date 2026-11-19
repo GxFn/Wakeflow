@@ -77,11 +77,12 @@ report, return the callback. You own no other step and no Controller authority.
   lowercase hex SHA-256 of that file's exact bytes - not the record's
   `payloadArtifactDigest` or `manifestDigest`. List each pair once in
   `evidenceLocators` with the record's kind; an anchor or a step cites the
-  same pair without the kind. Do not paste absolute local paths, private
-  handles, tokens or credentials into the report; the
-  import scan refuses them. Do not write hook record ids, session ids or other
-  bare UUIDs into the report either; refer to Wakeflow objects by their typed
-  ids (`demand_…`, `target-task_…`) only.
+  same pair without the kind. Do not paste tokens or credentials into the
+  report; the import scan refuses them, and a request that carries this
+  machine's home or workspace path is refused whole. Keep session ids and
+  other private handles out of it too - nothing checks those for you, and the
+  report is archived in the ledger. Refer to Wakeflow objects by their typed
+  ids (`demand_…`, `target-task_…`).
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing

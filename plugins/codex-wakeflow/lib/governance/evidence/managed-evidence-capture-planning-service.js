@@ -14,15 +14,14 @@ import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
-import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, scanPrivacyText, } from "../../kernel/privacy-scan.js";
+import { scanPrivacy, scanPrivacyText } from "../../kernel/privacy-scan.js";
 import { assertDemandOperationConfigCurrent, closeDemandOperationAuthorityContext, DemandOperationAuthorityContextError, openDemandOperationAuthorityContext, } from "../demand/demand-operation-authority-context.js";
 import { DemandEventSourcingRootAuthorityError, loadDemandEventSourcingRootAuthority, } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { createManagedEvidenceCapturePlan, ManagedEvidenceCapturePlanError, } from "./managed-evidence-capture-plan.js";
 import { managedEvidenceCommitObservationOf, observeConfiguredRepositoryCommit, } from "./managed-evidence-commit-observation.js";
 import { ManagedEvidenceConfiguredSourceRootError, openConfiguredManagedEvidenceSourceRoot, } from "./managed-evidence-configured-source-root.js";
-import { createManagedEvidenceManifest, MANAGED_EVIDENCE_PAYLOAD_LIMITS, MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
+import { createManagedEvidenceManifest, MANAGED_EVIDENCE_PAYLOAD_LIMITS, ManagedEvidenceManifestError, } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import { assertManagedEvidenceKindMatchesSource, ManagedEvidenceSourceSelectionError, managedEvidenceSourceKey, parseManagedEvidenceSourceSelection, } from "./managed-evidence-source-selection.js";
 import { ownString } from "../../foundation/data/own-string.js";
@@ -179,31 +178,12 @@ function mapArtifactError(error) {
         fail("source-changed", error);
     fail("source", error);
 }
-/** 隐私白名单：工作区根、ledger 根与配置里的全部仓库与支撑面真实路径（能力卡 8 Q1）。 */
-function managedEvidencePrivacyPolicy(workspaceRoot, config, worktreePaths = []) {
-    const roots = new Set([
-        workspaceRoot.absolutePath,
-        config.placements.workspaceRoot,
-        config.ledgerRoot,
-        ...worktreePaths,
-    ]);
-    for (const entry of config.placements.roots) {
-        roots.add(entry.absolutePath);
-        if (entry.realPath !== null)
-            roots.add(entry.realPath);
-    }
-    return Object.freeze({
-        allowedPathRoots: Object.freeze([...roots]),
-        allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-    });
-}
 /**
  * Every decodable member is scanned, including opaque text; findings retain source lines.
- * A member that is not UTF-8 is still scanned through a lossy decode for the credential kinds
- * only: a key embedded among binary bytes must not escape the capture gate, while path and UUID
- * hits in such bytes are noise and are not reported (§13.161 B9-3).
+ * A member that is not UTF-8 is still scanned through a lossy decode: a key embedded among
+ * binary bytes must not escape the capture gate (§13.161 B9-3).
  */
-function classifyContent(bytes, ref, policy) {
+function classifyContent(bytes, ref) {
     let text;
     try {
         text = decodeUtf8(bytes, "$content");
@@ -214,12 +194,10 @@ function classifyContent(bytes, ref, policy) {
         const lossy = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
         return Object.freeze({
             opaque: true,
-            findings: Object.freeze(scanPrivacyText(lossy, policy)
-                .findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
-                .map((finding) => Object.freeze({ ref, line: finding.line, kind: finding.kind }))),
+            findings: Object.freeze(scanPrivacyText(lossy).findings.map((finding) => Object.freeze({ ref, line: finding.line, kind: finding.kind }))),
         });
     }
-    const scanned = scanPrivacyText(text, policy);
+    const scanned = scanPrivacyText(text);
     return Object.freeze({
         opaque: scanned.opaque,
         findings: Object.freeze(scanned.findings.map((finding) => Object.freeze({ ref, line: finding.line, kind: finding.kind }))),
@@ -245,28 +223,21 @@ function reviewOf(classified) {
     const findings = uniqueFindings(classified.flatMap((entry) => entry.content.findings).sort(compareFinding));
     return Object.freeze({
         opaqueFileRefs: Object.freeze(classified.filter((entry) => entry.content.opaque).map((entry) => entry.ref)),
-        privacyFindings: Object.freeze(findings.filter((finding) => !CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))),
-        credentialFindings: Object.freeze(findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))),
+        credentialFindings: Object.freeze(findings),
     });
 }
 /**
- * 内容阻塞项（能力卡 8 Q1，切片 8 D3）：凭证类命中永远阻塞；opaque 成员与非凭证类命中只在
- * `reject` 策略下阻塞；超过记录容量的非凭证类命中不能被确认。
+ * 内容阻塞项（能力卡 8 Q1，切片 8 D3）：凭证类命中永远阻塞；opaque 成员只在 `reject` 策略下阻塞。
+ * 隐私扫描只认凭证（ADR-0031），所以没有"可以被确认的隐私命中"这一类了。
  */
 export function deriveManagedEvidenceContentBlockers(review, policy) {
     const blockers = [];
     for (const finding of review.credentialFindings) {
         blockers.push(`privacy:${finding.kind}:${finding.ref}:${finding.line}`);
     }
-    if (review.privacyFindings.length > MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT) {
-        blockers.push(`privacy-findings-overflow:${review.privacyFindings.length}`);
-    }
     if (policy === "reject") {
         for (const ref of review.opaqueFileRefs)
             blockers.push(`opaque-content:${ref}`);
-        for (const finding of review.privacyFindings) {
-            blockers.push(`privacy:${finding.kind}:${finding.ref}:${finding.line}`);
-        }
     }
     return Object.freeze(blockers.slice(0, BLOCKER_LIMIT));
 }
@@ -288,7 +259,7 @@ function singleFileIdentity(byteCount, digest, executable) {
     }
     return Object.freeze({ artifactDigest: computeCanonicalJsonSha256Digest(manifest), manifest });
 }
-async function captureFile(root, source, expectedNode, policy, signal) {
+async function captureFile(root, source, expectedNode, signal) {
     let read;
     try {
         read = await readStableFile(root, source.path, {
@@ -302,7 +273,7 @@ async function captureFile(root, source, expectedNode, policy, signal) {
             mapStableFileError(error);
         throw error;
     }
-    const content = classifyContent(read.bytes, CAPTURED_FILE_REF, policy);
+    const content = classifyContent(read.bytes, CAPTURED_FILE_REF);
     return Object.freeze({
         identity: singleFileIdentity(Number(read.byteCount), read.digest, (read.node.permissionBits & 0o111) !== 0),
         source,
@@ -360,7 +331,7 @@ async function inspectTreeIdentity(treeRoot, signal) {
         throw error;
     }
 }
-async function classifyTreeFiles(treeRoot, identity, policy, signal) {
+async function classifyTreeFiles(treeRoot, identity, signal) {
     const limit = pLimit(CONTENT_CLASSIFICATION_CONCURRENCY);
     const settled = await Promise.allSettled(identity.manifest.files.map((file) => limit(async () => {
         let read;
@@ -380,7 +351,7 @@ async function classifyTreeFiles(treeRoot, identity, policy, signal) {
         }
         return Object.freeze({
             ref: file.ref,
-            content: classifyContent(read.bytes, file.ref, policy),
+            content: classifyContent(read.bytes, file.ref),
         });
     })));
     for (const result of settled) {
@@ -389,13 +360,13 @@ async function classifyTreeFiles(treeRoot, identity, policy, signal) {
     }
     return reviewOf(settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : [])));
 }
-async function captureTree(sourceRoot, source, expectedNode, policy, signal) {
+async function captureTree(sourceRoot, source, expectedNode, signal) {
     const treeRoot = await openSelectedTreeRoot(sourceRoot, source, expectedNode);
     let result;
     let failure;
     try {
         const first = await inspectTreeIdentity(treeRoot, signal);
-        const review = await classifyTreeFiles(treeRoot, first, policy, signal);
+        const review = await classifyTreeFiles(treeRoot, first, signal);
         const current = await inspectTreeIdentity(treeRoot, signal);
         if (current.artifactDigest !== first.artifactDigest)
             fail("source-changed");
@@ -417,7 +388,7 @@ async function captureTree(sourceRoot, source, expectedNode, policy, signal) {
         fail("operation-failure");
     return result;
 }
-async function captureManagedPath(workspaceRoot, config, source, policy, signal) {
+async function captureManagedPath(workspaceRoot, config, source, signal) {
     let sourceRoot;
     try {
         sourceRoot = await openConfiguredManagedEvidenceSourceRoot(workspaceRoot, config, source, signal === undefined ? {} : { signal });
@@ -448,8 +419,8 @@ async function captureManagedPath(workspaceRoot, config, source, policy, signal)
             fail("source-type");
         result =
             source.resourceType === "file"
-                ? await captureFile(sourceRoot, source, observation.node, policy, signal)
-                : await captureTree(sourceRoot, source, observation.node, policy, signal);
+                ? await captureFile(sourceRoot, source, observation.node, signal)
+                : await captureTree(sourceRoot, source, observation.node, signal);
     }
     catch (error) {
         failure = error;
@@ -471,10 +442,10 @@ async function captureManagedPath(workspaceRoot, config, source, policy, signal)
  * 引用类来源：负载是来源投影文档。投影里只有 typed id、记录标识与摘要，唯一的自由文本是
  * 链接 URL，因此只有 URL 经隐私扫描（查询串里的凭证会被拦下）。
  */
-function captureProjection(source, policy) {
+function captureProjection(source) {
     const projection = encodeManagedEvidenceSourceProjection(source);
     const findings = source.kind === "link"
-        ? scanPrivacy(source.url, policy).map((finding) => Object.freeze({ ref: CAPTURED_FILE_REF, line: finding.line, kind: finding.kind }))
+        ? scanPrivacy(source.url).map((finding) => Object.freeze({ ref: CAPTURED_FILE_REF, line: finding.line, kind: finding.kind }))
         : [];
     return Object.freeze({
         identity: singleFileIdentity(projection.byteCount, projection.digest, false),
@@ -499,21 +470,21 @@ async function observeCommit(config, source, signal) {
  * 提交来源：仓库里没有这个对象、或它不是提交时给出阻塞项；观察到了就把事实并进来源，负载仍是来源
  * 投影（由清单的来源字段完整重建）。
  */
-async function captureCommit(config, source, policy, signal) {
+async function captureCommit(config, source, signal) {
     if (config.indexes.repositoryById[source.repositoryId] === undefined)
         fail("source-root");
     const observed = await observeCommit(config, source, signal);
     if (observed === null)
-        return captureProjection(source, policy);
+        return captureProjection(source);
     if (observed.status !== "observed") {
         const blocker = observed.status === "missing"
             ? `commit-unknown:${source.commitOid}`
             : `commit-not-a-commit:${source.commitOid}`;
-        return Object.freeze({ ...captureProjection(source, policy), blockers: [blocker] });
+        return Object.freeze({ ...captureProjection(source), blockers: [blocker] });
     }
-    return captureProjection(Object.freeze({ ...source, observation: managedEvidenceCommitObservationOf(observed) }), policy);
+    return captureProjection(Object.freeze({ ...source, observation: managedEvidenceCommitObservationOf(observed) }));
 }
-async function captureObservation(workspaceRoot, selection, source, policy, signal) {
+async function captureObservation(workspaceRoot, selection, source, signal) {
     const read = await readKernelSource(() => readHostHookObservationRecord(workspaceRoot, source.hostId, source.recordId, signal === undefined ? {} : { signal }), signal);
     if (read === null)
         fail("source");
@@ -538,20 +509,19 @@ async function captureObservation(workspaceRoot, selection, source, policy, sign
             fail("kind", error);
         throw error;
     }
-    return captureProjection(projected, policy);
+    return captureProjection(projected);
 }
-async function captureSelectedSource(workspaceRoot, config, selection, worktreePaths, signal) {
-    const policy = managedEvidencePrivacyPolicy(workspaceRoot, config, worktreePaths);
+async function captureSelectedSource(workspaceRoot, config, selection, signal) {
     const source = selection.source;
     switch (source.kind) {
         case "managed-path":
-            return captureManagedPath(workspaceRoot, config, source, policy, signal);
+            return captureManagedPath(workspaceRoot, config, source, signal);
         case "observation":
-            return captureObservation(workspaceRoot, selection, source, policy, signal);
+            return captureObservation(workspaceRoot, selection, source, signal);
         case "link":
-            return captureProjection(source, policy);
+            return captureProjection(source);
         case "commit":
-            return captureCommit(config, source, policy, signal);
+            return captureCommit(config, source, signal);
         default: {
             const exhaustive = source;
             return exhaustive;
@@ -600,13 +570,9 @@ async function assertAuthorityCurrent(workspaceRoot, context, expected, signal) 
 export function deriveManagedEvidenceId(demandId, selection, artifactDigest) {
     return deriveDurableId("evidence", "managed-evidence", demandId, managedEvidenceSourceKey(selection.source), artifactDigest);
 }
-function manifestFindings(review) {
-    return Object.freeze(review.privacyFindings.flatMap((finding) => finding.kind === "unlisted-absolute-path" || finding.kind === "bare-uuid"
-        ? [Object.freeze({ ref: finding.ref, line: finding.line, kind: finding.kind })]
-        : []));
-}
 function createManifest(context, demandId, selection, captured, clock) {
-    const needsReview = captured.review.opaqueFileRefs.length > 0 || captured.review.privacyFindings.length > 0;
+    // 需要 Controller 确认的只剩 opaque 成员；`privacyFindings` 留在清单里只为读旧记录，新记录恒为空。
+    const needsReview = captured.review.opaqueFileRefs.length > 0;
     try {
         return createManagedEvidenceManifest({
             evidenceId: deriveManagedEvidenceId(demandId, selection, captured.identity.artifactDigest),
@@ -626,7 +592,7 @@ function createManifest(context, demandId, selection, captured, clock) {
             contentReview: {
                 disposition: needsReview ? "controller-confirmed" : "not-required",
                 opaqueFileRefs: captured.review.opaqueFileRefs,
-                privacyFindings: manifestFindings(captured.review),
+                privacyFindings: [],
             },
         }, clock === undefined ? {} : { clock });
     }
@@ -669,11 +635,7 @@ export class ManagedEvidenceCapturePlanningService {
                 fail("demand");
             }
             const expectedDemand = demandExpectation(context);
-            // Demand 所在 pod 的 worktree 检出路径进入隐私白名单：测试输出里出现自己的检出不算泄露。
-            const workspaceRoot = this.#workspaceRoot;
-            const podId = context.loaded.identity.podId;
-            const worktreePaths = (await readKernelSource(() => listPodWorktreeReceiptsAnyHost(workspaceRoot, podId, options.signal === undefined ? {} : { signal: options.signal }), options.signal)).map((receipt) => receipt.path);
-            const captured = await captureSelectedSource(this.#workspaceRoot, context.config, selection, worktreePaths, options.signal);
+            const captured = await captureSelectedSource(this.#workspaceRoot, context.config, selection, options.signal);
             const blockers = [
                 ...(captured.blockers ?? []),
                 ...deriveManagedEvidenceContentBlockers(captured.review, selection.contentReview),

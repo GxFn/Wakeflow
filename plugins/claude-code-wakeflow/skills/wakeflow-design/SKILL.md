@@ -42,8 +42,8 @@ Nothing you write reaches an implementer except through it.
   A requirement that cannot be verified against the repository is a question
   for the user, not a sentence in the package.
 - Never put a credential, a token, a private handle or an absolute local path
-  into a package. The privacy scan will refuse it, and refusing late wastes the
-  user's turn.
+  into a package. The privacy scan refuses the first two, and refusing late
+  wastes the user's turn; the other two nothing checks for you.
 - A refusal whose `reason` is `tool-not-for-role` means that tool belongs to
   another role's window - planning, delivery, review and maintenance are the
   Controller's. Do not retry it by any route; tell the user what you needed.

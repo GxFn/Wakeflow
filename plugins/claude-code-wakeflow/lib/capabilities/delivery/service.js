@@ -37,7 +37,7 @@ import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookO
 import { deriveDurableId } from "../../kernel/ids.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { listPodWorktreeReceipts, readPodWorktreeReceipt, } from "../../kernel/pod-worktree-receipts.js";
-import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, } from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import { createWorkClaim, deriveWorkClaimId, inspectWorkClaim, releaseWorkClaim, releaseWorkClaimIfHeld, takeWorkClaim, } from "../../kernel/work-claims.js";
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
@@ -1109,15 +1109,6 @@ export async function executePrepareDeliveryRequest(facade, value, options = {})
 }
 // ---- outcome ------------------------------------------------------------------
 const SEND_RETURN_MAXIMUM_BYTES = 16 * 1024;
-/**
- * E2（ADR-0020 决定 2）：Agent 交回宿主发送调用的原样返回值时，由 Wakeflow 算它规范 JSON 的 sha256 作为
- * `evidenceDigest`——摘要的定义因此在合同里而不在 Agent 手里；同时给出的 evidenceDigest 必须一致。记录只留
- * 摘要，不留内容。
- */
-const ATTEMPT_FAILURE_PRIVACY_POLICY = Object.freeze({
-    allowedPathRoots: Object.freeze([]),
-    allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-});
 function normalizeAttemptFailure(attempt) {
     if (attempt.failure === undefined)
         return {};
@@ -1126,9 +1117,7 @@ function normalizeAttemptFailure(attempt) {
     }
     if (attempt.failure.summary !== null) {
         const blockers = [];
-        for (const finding of scanPrivacy(attempt.failure.summary, ATTEMPT_FAILURE_PRIVACY_POLICY)) {
-            if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
-                continue;
+        for (const finding of scanPrivacy(attempt.failure.summary)) {
             blockers.push(`privacy:attempt-failure:${finding.line}:${finding.kind}`);
         }
         if (blockers.length > 0)

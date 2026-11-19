@@ -58,7 +58,6 @@ export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
     maxRefBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxRefBytes - 8,
     maxTotalBytes: Math.min(LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, WAKEFLOW_DEMAND_TREE_CAPACITY.maximumTotalBytes - MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES),
 });
-export const MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT = 64;
 const ERROR_MESSAGES = {
     input: "Managed evidence manifest input is invalid.",
     json: "Managed evidence manifest is not passive JSON data.",

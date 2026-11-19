@@ -45,7 +45,6 @@ import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../ker
 import { listHelperNudgeRecords } from "../../kernel/helper-observation-file.js";
 import { HOST_HOOK_RECORDS_MAXIMUM, readHostHookObservationRecord, readHostHookObservations, } from "../../kernel/hook-observations.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
 import { selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import { inspectWakeflowWindowHostBindingInventory, WakeflowWindowHostBindingStoreError, } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
@@ -54,23 +53,6 @@ import { compileWakeflowWindowLaunchIntents } from "../../workspace/window-runti
 import { admitImplementationReviewDecisionResult, admitTargetResultImportResult, admitTargetResultReviewInspectionResult, admitTestReviewDecisionResult, parseImplementationReviewDecisionRequest, parseTargetResultImportRequest, parseTargetResultReviewInspectionRequest, parseTestReviewDecisionRequest, WAKEFLOW_IMPLEMENTATION_REVIEW_DECISION_PUBLIC_TOOL_NAME, WAKEFLOW_RESULT_REVIEW_PUBLIC_SCHEMA_VERSION, WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME, WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME, WAKEFLOW_TEST_REVIEW_DECISION_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { collectEvidenceReferences, deriveAnchorResultBlockers, deriveCallbackLanding, deriveCredentialBlockers, deriveImplementationAllowedDecisions, deriveImplementationDecisionBlockers, derivePrivacyRules, deriveResumptionBlockers, deriveStepViews, deriveTargetCompletion, deriveTestAllowedDecisions, deriveTestDecisionBlockers, findReviewEscalationEventId, implementationPhaseForDecision, locateEvidenceReference, planEvidenceLocator, reportTexts, stringLeavesOf, summarizeResultForCallback, testPhaseForDecision, } from "./decide.js";
 import { renderWakeControllerPrompt } from "./prompt.js";
-const REPORT_PRIVACY_POLICY = Object.freeze({
-    allowedPathRoots: Object.freeze([]),
-    allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-});
-/**
- * 报告正文的扫描口径（open-items F9）。报告写的是产品里发生了什么：站内路由（`/api/v1/users`）、模块别名与
- * 产品自己的 UUID 是正常内容，不该让整份报告被拒；该挡的是指向用户或系统目录的路径，和这个工作区里各窗口
- * 的会话句柄（不该进 git 跟踪的 ledger，ADR-0020 决定 4）。凭证类命中与口径无关，照旧无条件拒绝。
- */
-async function reportPrivacyPolicy(context) {
-    const bindings = await loadBindings(context);
-    return Object.freeze({
-        ...REPORT_PRIVACY_POLICY,
-        pathScope: "system",
-        privateUuids: Object.freeze(bindings.map((binding) => binding.handle.value)),
-    });
-}
 const MANIFEST_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, "$limit");
 const PAYLOAD_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes, "$limit");
 const HANDLER_ERROR_TABLE = Object.freeze({
@@ -812,7 +794,7 @@ async function executeImport(context, input, binding) {
     if (target.currentDelivery.fence.claimDigest !== input.claimDigest) {
         await assertEarlierGenerationFence(repository, input, options.signal);
     }
-    const privacyRules = derivePrivacyRules(reportTexts(input.report.content), await reportPrivacyPolicy(context));
+    const privacyRules = derivePrivacyRules(reportTexts(input.report.content));
     if (privacyRules.length > 0) {
         rejectWith(privacyRules.map((rule) => `privacy:${rule}`), "$request.report");
     }
@@ -1431,7 +1413,7 @@ async function executeImplementationDecision(context, input, binding) {
     // 记录时未给绑定就是 null（缺失）；undefined 只留给允许集推导（§13.121 D7）。
     const blockers = deriveImplementationDecisionBlockers(request.decision, implementationAdmissionView(sources.unit, sources.evidence.targetCompletion, managedEvidenceIdsOf(context)), request.independentChecks, request.anchorEvidence ?? null);
     // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
-    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request), REPORT_PRIVACY_POLICY);
+    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request));
     if (blockers.length > 0 || credentialBlockers.length > 0) {
         rejectWith([...blockers, ...credentialBlockers], "$request.decision");
     }
@@ -1592,7 +1574,7 @@ async function executeTestDecision(context, input, binding) {
     }
     const blockers = deriveTestDecisionBlockers(request, testView.admission);
     // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
-    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request), REPORT_PRIVACY_POLICY);
+    const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request));
     if (blockers.length > 0 || credentialBlockers.length > 0) {
         rejectWith([...blockers, ...credentialBlockers], "$request.decision");
     }

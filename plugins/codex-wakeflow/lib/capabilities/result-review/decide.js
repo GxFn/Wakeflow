@@ -1,6 +1,6 @@
 import { RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS, } from "../../contracts/vocabulary/test-step-vocabulary.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../governance/demand/event-sourcing/demand-event-sourcing-decider.js";
-import { CREDENTIAL_PRIVACY_FINDING_KINDS, scanPrivacy, } from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { findPromptLanding } from "../../kernel/prompt-digest.js";
 /**
  * Wakeflow Capabilities / Result Review：结果导入与评审的纯决定（能力卡 7 修订，§13.87 D2 D3 D6 D7）。
@@ -128,10 +128,8 @@ export function deriveAnchorResultBlockers(expectedAnchorIds, answeredAnchorIds)
     ]);
 }
 /** Controller 写进事件流的决定文本只拒凭证类命中（复审 G3）：rationale、阻塞理由、残余风险、升级的问题/选项/建议。 */
-export function deriveCredentialBlockers(texts, policy) {
-    return Object.freeze(derivePrivacyRules(texts, policy)
-        .filter((kind) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(kind))
-        .map((kind) => `privacy:${kind}`));
+export function deriveCredentialBlockers(texts) {
+    return Object.freeze(derivePrivacyRules(texts).map((kind) => `privacy:${kind}`));
 }
 /** 递归收集一个请求值里的全部字符串叶子：决定请求的文本字段随 schema 演进，扫描不挑字段名。 */
 export function stringLeavesOf(value, limit = 4096) {
@@ -152,11 +150,11 @@ export function stringLeavesOf(value, limit = 4096) {
     visit(value);
     return Object.freeze(leaves);
 }
-/** 隐私扫描只返回命中的规则类别（去重、稳定排序），从不返回命中的文本。 */
-export function derivePrivacyRules(texts, policy) {
+/** 隐私扫描（只有凭证类，ADR-0031）只返回命中的规则类别（去重、稳定排序），从不返回命中的文本。 */
+export function derivePrivacyRules(texts) {
     const kinds = new Set();
     for (const text of texts) {
-        for (const finding of scanPrivacy(text, policy))
+        for (const finding of scanPrivacy(text))
             kinds.add(finding.kind);
     }
     return Object.freeze([...kinds].sort());

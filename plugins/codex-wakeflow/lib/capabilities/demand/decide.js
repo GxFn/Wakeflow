@@ -2,7 +2,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import { CREDENTIAL_PRIVACY_FINDING_KINDS, DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy, } from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 /** 认领即创建：同一需求包与同一认领状态派生同一个 Demand 身份，重试不会造出第二个。 */
 export function deriveDemandCreationIds(requirementId, claimStateDigest) {
     const demandId = deriveDurableId("demand", "requirement-claim", requirementId, claimStateDigest);
@@ -39,18 +39,12 @@ export function computePayloadTreeDigest(files) {
             : 0)
         .map((file) => ({ path: file.resourcePath, bytes: file.byteCount, digest: file.digest })), "$payload"));
 }
-const PRIVACY_POLICY = Object.freeze({
-    allowedPathRoots: Object.freeze([]),
-    allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-});
 const PAYLOAD_PRIVACY_BLOCKER_MAXIMUM = 16;
 /** 归档进 tracked 的 Ledger，只拒绝凭证类命中（能力卡 8）；路径与标识由归档负载自带。 */
 export function payloadPrivacyBlockers(files) {
     const blockers = [];
     for (const file of files) {
-        for (const finding of scanPrivacy(file.text, PRIVACY_POLICY)) {
-            if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
-                continue;
+        for (const finding of scanPrivacy(file.text)) {
             blockers.push(`payload-privacy:${file.resourcePath}:${finding.line}:${finding.kind}`);
             if (blockers.length >= PAYLOAD_PRIVACY_BLOCKER_MAXIMUM)
                 return Object.freeze(blockers);
@@ -64,9 +58,7 @@ export function payloadPrivacyBlockers(files) {
  */
 export function textPrivacyBlockers(label, text) {
     const blockers = [];
-    for (const finding of scanPrivacy(text, PRIVACY_POLICY)) {
-        if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
-            continue;
+    for (const finding of scanPrivacy(text)) {
         blockers.push(`privacy:${label}:${finding.line}:${finding.kind}`);
         if (blockers.length >= PAYLOAD_PRIVACY_BLOCKER_MAXIMUM)
             break;

@@ -1,18 +1,11 @@
-import { WAKEFLOW_DURABLE_ID_KINDS } from "./wakeflow-durable-id.js";
 /**
- * Wakeflow Contracts / Identity：所有 `<前缀><uuid>` 形式身份的前缀清单——唯一来源（§13.161 B9-1）。
+ * Wakeflow Contracts / Identity：不是 durable ID kind、却同样以 `<前缀><uuid>` 出现在公开结果、提示和
+ * 技能文本里的运行时身份的前缀。
  *
- * 持久业务身份的前缀由 durable ID kind 派生；窗口绑定与维护操作这两个运行时身份不是 durable
- * kind，却同样出现在公开结果、提示和技能文本里。隐私扫描只放行这里列出的前缀：新增一种带前缀
- * 的身份必须在此登记，否则它的输出会被当作裸 UUID 拒绝。
+ * 1.3 之前这里还有一张汇总所有前缀的清单，是隐私扫描放行 UUID 的白名单（§13.161 B9-1）；那条规则随
+ * 1.4 第 5 段删除（ADR-0031），清单没有别的读者，一并删掉。
  */
 export const WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX = "window_binding_";
 export const WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX = "maintenance_operation_";
 /** 边界事故记录的 id 前缀（§13.166 G1）：出现在公共错误信封里，所以是登记过的典型化身份。 */
 export const WAKEFLOW_INCIDENT_ID_PREFIX = "incident_";
-export const WAKEFLOW_TYPED_ID_PREFIXES = Object.freeze([
-    ...WAKEFLOW_DURABLE_ID_KINDS.map((kind) => `${kind}_`),
-    WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX,
-    WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX,
-    WAKEFLOW_INCIDENT_ID_PREFIX,
-]);

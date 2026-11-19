@@ -364,9 +364,8 @@ function demandGates(facts) {
         ...unavailable.map(() => "unavailable"),
     ]);
     const evidence = aggregate(facts.demands.map((demand) => demand.evidence));
-    const candidates = facts.demands.reduce((sum, demand) => sum + demand.appendCandidates, 0);
+    // 这道门只查游离的生命周期日志。残留的追加候选不在这里数：有它的 Demand 根盘点读不出，由上一道门报出。
     const strayCode = [
-        ...(candidates > 0 ? [`candidates:${candidates}`] : []),
         ...(facts.strayJournals ?? []).map((demandId) => `journal:${demandId}`),
         ...(facts.strayJournals === null ? ["journals:unreadable"] : []),
     ];

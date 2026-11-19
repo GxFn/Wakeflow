@@ -155,10 +155,10 @@ again.
 
 ## Privacy
 
-The scan refuses credentials outright and flags unlisted absolute local paths.
-Neither belongs in a package that will be read by other windows and archived
-forever. Refer to a file by its repository-relative path; refer to a service by
-its name, not by a token.
+The scan refuses credentials outright. It does not look at paths, but an
+absolute local path does not belong in a package that will be read by other
+windows and archived forever either. Refer to a file by its repository-relative
+path; refer to a service by its name, not by a token.
 
 ## Skeletons
 

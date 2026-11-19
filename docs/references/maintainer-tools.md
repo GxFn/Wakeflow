@@ -503,3 +503,15 @@ npm run --silent wf -- metrics transcript --input SESSION.jsonl --since 2026-11-
 - `transcript` 读一份宿主会话记录（JSONL），数 `--since` 到 `--until` 之间的工具调用：Wakeflow 的工具按名字计数，助手脚本（`operations/assets/*.mjs`）单列，其余归一类；同一个调用在记录里重复出现时只数一次。
 
 口径的两处限制：投递时写的三段文字与证据的选择没有在归档里单独存下来，不计入手写字节数（1.3.1 的小样本里这两类合计约两成）；会话记录在本机的宿主目录里，路径与内容都是私有的，命令只输出计数。两条命令都不读工作区状态、不进制品。
+
+## 29. 一次工具调用做了多少次文件系统调用
+
+```bash
+npm run --silent wf -- metrics storage --candidate plugins/claude-code-wakeflow --root "<disposable-workspace>"
+npm run --silent wf -- metrics storage --candidate plugins/claude-code-wakeflow --root "<disposable-workspace>" --tool wakeflow_verify --runs 3
+npm run --silent wf -- metrics storage --candidate plugins/codex-wakeflow --root "<disposable-workspace>" --tool wakeflow_status --arguments '{"detail":"summary"}'
+```
+
+ADR-0032 的前后对照由这条命令量出（`tooling/metrics/storage-metrics.ts`）。它像 `mcp call` 一样对一份制品副本起一个新的 stdio 进程，不同的是进程里预加载一段计数脚本，包住 `node:fs` 的 Promise 接口、同步接口与文件句柄的方法；每调用一次工具（缺省 `wakeflow_status`，`--runs` 是连续调用的次数，1 到 20）取一次计数并清零。每次调用给出：墙钟、文件系统调用总数、其中逐段核对路径的（lstat 与 realpath）、打开、读、写、列目录、落盘同步的次数与耗时、重命名、链接与删除的次数。
+
+读数时注意三点：`fileSystemMs` 与 `syncMs` 是各次调用耗时之和，调用并行时会超过墙钟，只用来比较前后；第一次调用带着进程刚启动的开销，比较时看第二次起；工具被拒（比如根不是 Wakeflow 工作区）也照样有计数，`toolStatus` 是 `failed`。结果里只有计数与毫秒，没有路径与内容。它不读也不改仓库状态、不进制品；变更类工具会真的改工作区，所以和 `mcp call` 一样只对可丢弃工作区使用。基线（1.4.0，一次性测试工作区，约 1,150 个状态文件）：`status` 76,619 次调用、其中 65,758 次是核对路径、1.8 秒；数字与量法记在 [1.4.1 存储层计划](../reviews/2026-11-19-1.4.1-storage-layer-plan.md)第 2 节。

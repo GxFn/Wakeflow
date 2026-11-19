@@ -29,6 +29,7 @@ import {
   measureSessionTranscript,
   type SessionCallMetrics,
 } from "./metrics/demand-metrics.js";
+import { measureStorageCalls, type StorageMetrics } from "./metrics/storage-metrics.js";
 import { planVersionBump } from "./release/bump-version.js";
 import { refreshPluginCache } from "./release/cache-refresh.js";
 import {
@@ -92,6 +93,7 @@ npm run wf -- scaffold requirement (--root WORKSPACE | --design DIR) --name NAME
 npm run wf -- timings apply --receipt .build/verification/run-ID/receipt.json
 npm run wf -- metrics archive --dir ARCHIVE_REVISION_DIR
 npm run wf -- metrics transcript --input SESSION_JSONL [--since ISO_TIME] [--until ISO_TIME]
+npm run wf -- metrics storage --candidate PLUGIN_ARTIFACT --root DISPOSABLE_WORKSPACE [--tool wakeflow_NAME] [--arguments JSON] [--runs N]
 
 Verification writes private receipts under .build/verification/. It never rebuilds plugins/ implicitly.
 Doctor reads only. Imported runtime reports are unverified; no command installs, trusts or activates a plugin.
@@ -611,7 +613,27 @@ function runMetricsCommand(
   action: string | undefined,
   options: Map<string, string[]>,
   root: string,
-): DemandArchiveMetrics | SessionCallMetrics {
+): DemandArchiveMetrics | SessionCallMetrics | Promise<Readonly<StorageMetrics>> {
+  if (action === "storage") {
+    const candidate = options.get("--candidate")?.[0];
+    const workspace = options.get("--root")?.[0];
+    if (
+      candidate === undefined ||
+      workspace === undefined ||
+      [...options.keys()].some(
+        (key) => !["--candidate", "--root", "--tool", "--arguments", "--runs"].includes(key),
+      )
+    )
+      invalid();
+    const inline = options.get("--arguments")?.[0];
+    return measureStorageCalls({
+      candidate: path.resolve(root, candidate),
+      workspace: path.resolve(root, workspace),
+      tool: options.get("--tool")?.[0] ?? "wakeflow_status",
+      arguments: parseToolArguments(root, inline === undefined ? {} : { inline }),
+      repeat: Number(options.get("--runs")?.[0] ?? "1"),
+    });
+  }
   const directory = options.get("--dir")?.[0];
   if (action === "archive" && options.size === 1 && directory !== undefined)
     return measureArchivedDemand(path.resolve(root, directory));

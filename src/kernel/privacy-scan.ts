@@ -1,32 +1,21 @@
-import path from "node:path";
-
-import { WAKEFLOW_TYPED_ID_PREFIXES } from "../contracts/identity/wakeflow-typed-id-prefixes.js";
-import { fail } from "./error.js";
-
 /**
  * Wakeflow Kernel / Privacy Scan：文本内容的唯一隐私扫描引擎（能力卡 8 Q1，ADR-0013）。
  *
- * 只拒绝不脱敏。凭证类三条规则无条件命中；绝对路径与 UUID 按白名单判断：
- * 位于允许根之下的路径与带已知 typed 前缀的 UUID 通过，其余命中。结果只含
+ * 只拒绝不脱敏，只认凭证：私钥块、提供商令牌、凭证赋值（含 Authorization 头与 URL 里的口令）。结果只含
  * 类别与位置，从不含命中的文本，因此可以进入公共错误与记录。
+ *
+ * 1.4 第 5 段（ADR-0031，用户 2026-11-18 同意）：此前另有两类按白名单判断的命中——不在允许根之下的绝对
+ * 路径、不带已知前缀的 UUID。六轮现场里它们命中的都不是秘密，只制造返工，已删除；带着这两类命中的旧
+ * 受管证据清单照旧读得出（清单的 Schema 没有动）。
  */
 
 const PRIVACY_FINDING_KINDS = Object.freeze([
   "private-key",
   "provider-credential",
   "credential-assignment",
-  "unlisted-absolute-path",
-  "bare-uuid",
 ] as const);
 
 type PrivacyFindingKind = (typeof PRIVACY_FINDING_KINDS)[number];
-
-/** 凭证类命中：无条件阻塞，任何内容审阅策略都不能放行；证据捕获门与归档门共用这一份定义。 */
-export const CREDENTIAL_PRIVACY_FINDING_KINDS: readonly PrivacyFindingKind[] = Object.freeze([
-  "private-key",
-  "provider-credential",
-  "credential-assignment",
-] as const);
 
 export interface PrivacyFinding {
   readonly kind: PrivacyFindingKind;
@@ -36,27 +25,6 @@ export interface PrivacyFinding {
   readonly column: number;
   readonly length: number;
 }
-
-export interface PrivacyScanPolicy {
-  /** 允许出现的绝对路径根；路径必须等于某个根或位于其下。 */
-  readonly allowedPathRoots: readonly string[];
-  /** 允许直接跟在 UUID 前面的前缀，例如 `demand_`。 */
-  readonly allowedIdPrefixes: readonly string[];
-  /**
-   * 绝对路径的口径（open-items F9）。缺省 `any`：任何不在允许根之下的绝对路径都算。`system` 只算指向用户
-   * 目录或系统目录的路径与显式的文件系统写法（`file://`、盘符、UNC、`~/`、`$HOME/`）——自由文本里常见的
-   * 站内路由（`/api/v1/users`）与模块别名（`@/components`）不是私有路径。
-   */
-  readonly pathScope?: "any" | "system";
-  /**
-   * 裸 UUID 的口径（open-items F9）。缺省全部算。给了这张表就只算表里的值（不分大小写）：调用方把本工作区
-   * 的会话句柄交进来，产品自己的 UUID（请求号、记录号）不再被误拒，真正要挡的私有标识照挡。
-   */
-  readonly privateUuids?: readonly string[];
-}
-
-/** 持久身份与运行时身份（窗口绑定、维护操作）的前缀同出一源：新前缀只登记在 contracts。 */
-export const DEFAULT_ALLOWED_ID_PREFIXES: readonly string[] = WAKEFLOW_TYPED_ID_PREFIXES;
 
 const PRIVATE_KEY_PATTERN = /-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----/gu;
 // 提供商令牌前缀；JWT 按 base64url 的三段 `eyJ…` 形状识别（§13.165 F6），Slack 含 e/r 的轮换与刷新令牌。
@@ -69,103 +37,21 @@ const AUTHORIZATION_PATTERN =
   /\b(?:proxy-)?authorization["']?[ \t]*:[ \t]*["']?(?:Bearer|Basic|Token)[ \t]+[A-Za-z0-9._~+/=-]{8,}/giu;
 const URL_CREDENTIAL_PATTERN =
   /(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s"'<>/?#:@]+:[^\s"'<>/?#@]+@/gu;
-const ABSOLUTE_PATH_PATTERN =
-  /(?<![A-Za-z0-9_+.-])file:\/\/[^\s"'`()<>]+|(?<![A-Za-z0-9_./\\-])(?:[A-Za-z]:[\\/]|\\\\)[^\s"'`()<>]+|(?<![\p{L}\p{N}_./\\-])(?:~|\$HOME|\/[^\s"'`()<>:/\\]+)(?:\/[^\s"'`()<>:/\\]+)+\/?/giu;
-// Natural-language text may adjoin a system location without an ASCII space.
-// Keep that protection without treating arbitrary Unicode slash lists as paths.
-const EMBEDDED_PATH_PATTERN = /(?<=\P{ASCII})\/[^\s"'`()<>:/\\]+(?:\/[^\s"'`()<>:/\\]+)+\/?/gu;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: CSI bytes delimit terminal formatting, not payload text.
 const CSI_PATTERN = /(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/gu;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Unknown controls retain the opaque-content review boundary.
 const NON_TEXT_CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/u;
-const UUID_PATTERN =
-  /(?<![A-Za-z0-9])[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![A-Za-z0-9_-])/giu;
-
 interface Match {
   readonly kind: PrivacyFindingKind;
   readonly index: number;
   readonly length: number;
 }
 
-interface PathValue {
-  readonly value: string;
-  readonly separator: "/" | "\\";
-}
-
-function fileUriPath(value: string): string | null {
-  try {
-    const url = new URL(value);
-    if (url.search !== "" || url.hash !== "") return null;
-    const pathname = decodeURIComponent(url.pathname);
-    if (url.hostname !== "") return `\\\\${url.hostname}${pathname.replaceAll("/", "\\")}`;
-    return /^\/[A-Za-z]:\//u.test(pathname) ? pathname.slice(1) : pathname;
-  } catch {
-    return null;
-  }
-}
-
-/** Lexical containment only: normalize dot segments without reading the filesystem. */
-function normalizePath(value: string): PathValue | null {
-  if (/^file:\/\//iu.test(value)) {
-    const decoded = fileUriPath(value);
-    if (decoded === null) return null;
-    value = decoded;
-  }
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: A malformed/encoded locator cannot gain a whitelist match.
-  if (/[\u0000-\u001f\u007f]/u.test(value)) return null;
-  if (/^[A-Za-z]:[\\/]|^\\\\/u.test(value)) {
-    const normalized = path.win32.normalize(value);
-    const root = path.win32.parse(normalized).root;
-    return {
-      value: normalized.length > root.length ? normalized.replace(/\\$/u, "") : normalized,
-      separator: "\\",
-    };
-  }
-  if (!value.startsWith("/")) return null;
-  const normalized = path.posix.normalize(value);
-  return {
-    value: normalized.length > 1 ? normalized.replace(/\/$/u, "") : normalized,
-    separator: "/",
-  };
-}
-
-function pathIsAllowed(candidate: string, roots: readonly PathValue[]): boolean {
-  const normalized = normalizePath(candidate);
-  if (normalized === null) return false;
-  return roots.some((admittedRoot) => {
-    if (admittedRoot.separator !== normalized.separator) return false;
-    const prefix = admittedRoot.value.endsWith(admittedRoot.separator)
-      ? admittedRoot.value
-      : `${admittedRoot.value}${admittedRoot.separator}`;
-    return normalized.value === admittedRoot.value || normalized.value.startsWith(prefix);
-  });
-}
-
-function uuidIsPrefixed(text: string, index: number, prefixes: readonly string[]): boolean {
-  return prefixes.some((prefix) => {
-    const start = index - prefix.length;
-    return (
-      prefix.length > 0 &&
-      start >= 0 &&
-      text.startsWith(prefix, start) &&
-      (start === 0 || !/[A-Za-z0-9_-]/u.test(text[start - 1] ?? ""))
-    );
-  });
-}
-
-function collect(
-  text: string,
-  pattern: RegExp,
-  kind: PrivacyFindingKind,
-  accept: (match: RegExpExecArray) => boolean,
-  sink: Match[],
-): void {
+function collect(text: string, pattern: RegExp, kind: PrivacyFindingKind, sink: Match[]): void {
   pattern.lastIndex = 0;
   for (const match of text.matchAll(pattern)) {
     if (match[0].length === 0) continue;
-    if (accept(match)) {
-      sink.push({ kind, index: match.index, length: match[0].length });
-    }
+    sink.push({ kind, index: match.index, length: match[0].length });
   }
 }
 
@@ -185,46 +71,14 @@ function createLocator(text: string): (index: number) => { line: number; column:
   };
 }
 
-/** 扫描一段文本，返回按位置排序的命中列表；空列表表示通过。 */
-function scanMatches(
-  text: string,
-  policy: PrivacyScanPolicy,
-  roots: readonly PathValue[],
-): Match[] {
+/** 扫描一段文本的凭证命中；空列表表示通过。 */
+function scanMatches(text: string): Match[] {
   const matches: Match[] = [];
-  collect(text, PRIVATE_KEY_PATTERN, "private-key", () => true, matches);
-  collect(text, PROVIDER_CREDENTIAL_PATTERN, "provider-credential", () => true, matches);
-  collect(text, CREDENTIAL_ASSIGNMENT_PATTERN, "credential-assignment", () => true, matches);
-  collect(text, AUTHORIZATION_PATTERN, "credential-assignment", () => true, matches);
-  collect(text, URL_CREDENTIAL_PATTERN, "credential-assignment", () => true, matches);
-  const systemOnly = policy.pathScope === "system";
-  collect(
-    text,
-    ABSOLUTE_PATH_PATTERN,
-    "unlisted-absolute-path",
-    (match) => !pathIsAllowed(match[0], roots) && (!systemOnly || isSystemAbsolutePath(match[0])),
-    matches,
-  );
-  const privateUuids =
-    policy.privateUuids === undefined
-      ? null
-      : new Set(policy.privateUuids.map((value) => value.toLowerCase()));
-  collect(
-    text,
-    UUID_PATTERN,
-    "bare-uuid",
-    (match) =>
-      !uuidIsPrefixed(text, match.index, policy.allowedIdPrefixes) &&
-      (privateUuids === null || privateUuids.has(match[0].toLowerCase())),
-    matches,
-  );
-  collect(
-    text,
-    EMBEDDED_PATH_PATTERN,
-    "unlisted-absolute-path",
-    (match) => isSystemAbsolutePath(match[0]) && !pathIsAllowed(match[0], roots),
-    matches,
-  );
+  collect(text, PRIVATE_KEY_PATTERN, "private-key", matches);
+  collect(text, PROVIDER_CREDENTIAL_PATTERN, "provider-credential", matches);
+  collect(text, CREDENTIAL_ASSIGNMENT_PATTERN, "credential-assignment", matches);
+  collect(text, AUTHORIZATION_PATTERN, "credential-assignment", matches);
+  collect(text, URL_CREDENTIAL_PATTERN, "credential-assignment", matches);
   return matches;
 }
 
@@ -249,20 +103,6 @@ function withoutCsi(text: string): { text: string; offsets: readonly RemovedCsi[
   return { text: parts.join(""), offsets };
 }
 
-/** Free text may name site routes; explicit filesystem locators stay private (`pathScope: "system"`). */
-function isSystemAbsolutePath(text: string): boolean {
-  const candidate = withoutCsi(text).text;
-  if (/^(?:file:\/\/|[A-Za-z]:[\\/]|\\\\|~\/|\$HOME\/)/iu.test(candidate)) return true;
-  const normalized = normalizePath(candidate);
-  return (
-    normalized !== null &&
-    normalized.separator === "/" &&
-    /^\/(?:Users|home|private|var|tmp|etc|opt|srv|root|mnt|Volumes|usr|Library|Applications)(?:\/|$)/u.test(
-      normalized.value,
-    )
-  );
-}
-
 function originalIndex(index: number, offsets: readonly RemovedCsi[]): number {
   let low = 0;
   let high = offsets.length;
@@ -279,27 +119,39 @@ export interface PrivacyTextScan {
   readonly findings: readonly PrivacyFinding[];
 }
 
+/**
+ * Stripping one layer of terminal formatting can join the pieces of another (`ESC ESC[31m[31m`), so the
+ * scan repeats on each stripped layer. The bound keeps hostile nesting linear; whatever is still wrapped
+ * after it leaves an escape byte behind, which classifies the text as opaque.
+ */
+const CSI_STRIP_PASSES = 32;
+
+function originalIndexThrough(index: number, layers: readonly (readonly RemovedCsi[])[]): number {
+  let mapped = index;
+  for (let layer = layers.length - 1; layer >= 0; layer -= 1) {
+    mapped = originalIndex(mapped, layers[layer] ?? []);
+  }
+  return mapped;
+}
+
 /** Opaque classification never suppresses scanning of decodable text. */
-export function scanPrivacyText(
-  text: string,
-  policy: PrivacyScanPolicy,
-): Readonly<PrivacyTextScan> {
-  const view = withoutCsi(text);
-  const roots = policy.allowedPathRoots.map(normalizePath).filter((root) => root !== null);
-  // Decoration is not part of a filesystem name. Raw credentials are scanned as
-  // well, so hidden terminal payloads do not become an escape from detection.
-  const raw = scanMatches(text, policy, roots);
-  const matches =
-    view.offsets.length === 0
-      ? raw
-      : raw.filter((match) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(match.kind));
-  if (view.offsets.length > 0) {
-    for (const match of scanMatches(view.text, policy, roots)) {
-      const index = originalIndex(match.index, view.offsets);
+export function scanPrivacyText(text: string): Readonly<PrivacyTextScan> {
+  // The original and every stripped layer are scanned: a credential hidden inside an escape sequence
+  // does not get away, and one interrupted by formatting is still recognised.
+  const matches = scanMatches(text);
+  const layers: (readonly RemovedCsi[])[] = [];
+  let stripped = text;
+  for (let pass = 0; pass < CSI_STRIP_PASSES; pass += 1) {
+    const view = withoutCsi(stripped);
+    if (view.offsets.length === 0) break;
+    layers.push(view.offsets);
+    stripped = view.text;
+    for (const match of scanMatches(stripped)) {
+      const index = originalIndexThrough(match.index, layers);
       matches.push({
         ...match,
         index,
-        length: originalIndex(match.index + match.length - 1, view.offsets) - index + 1,
+        length: originalIndexThrough(match.index + match.length - 1, layers) - index + 1,
       });
     }
   }
@@ -321,15 +173,9 @@ export function scanPrivacyText(
       });
     }),
   );
-  return Object.freeze({ opaque: NON_TEXT_CONTROL_PATTERN.test(view.text), findings });
+  return Object.freeze({ opaque: NON_TEXT_CONTROL_PATTERN.test(stripped), findings });
 }
 
-export function scanPrivacy(text: string, policy: PrivacyScanPolicy): readonly PrivacyFinding[] {
-  return scanPrivacyText(text, policy).findings;
-}
-
-/** 任一命中即以 `privacy-violation` 失败，原因是第一个命中的类别。 */
-export function assertPrivacyClean(text: string, policy: PrivacyScanPolicy, path = "$"): void {
-  const first = scanPrivacy(text, policy)[0];
-  if (first !== undefined) fail("privacy-violation", first.kind, path);
+export function scanPrivacy(text: string): readonly PrivacyFinding[] {
+  return scanPrivacyText(text).findings;
 }

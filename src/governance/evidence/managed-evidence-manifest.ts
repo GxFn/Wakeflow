@@ -112,6 +112,7 @@ export const MANAGED_EVIDENCE_PAYLOAD_LIMITS = Object.freeze({
 } as const);
 
 export type ManagedEvidenceContentReviewDisposition = "controller-confirmed" | "not-required";
+/** Kinds only records written before 1.4 carry (ADR-0031): the scan no longer produces them. */
 export type ManagedEvidencePrivacyFindingKind = "unlisted-absolute-path" | "bare-uuid";
 
 export interface ManagedEvidencePrivacyFinding {
@@ -119,8 +120,6 @@ export interface ManagedEvidencePrivacyFinding {
   readonly line: number;
   readonly kind: ManagedEvidencePrivacyFindingKind;
 }
-
-export const MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT = 64;
 
 export interface ManagedEvidenceRecorder {
   readonly windowId: WakeflowDurableId<"window">;

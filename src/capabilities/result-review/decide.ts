@@ -16,11 +16,7 @@ import type { TestTargetResultStep } from "../../governance/result/test-target-r
 import type { ControllerReviewDecision } from "../../governance/review/controller-review-decision.js";
 import type { ControllerIndependentCheckOutcome } from "../../governance/review/controller-review-decision-contract.js";
 import type { TestContractStep } from "../../governance/tasking/task-package.js";
-import {
-  CREDENTIAL_PRIVACY_FINDING_KINDS,
-  type PrivacyScanPolicy,
-  scanPrivacy,
-} from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { findPromptLanding } from "../../kernel/prompt-digest.js";
 
 /**
@@ -219,15 +215,8 @@ export function deriveAnchorResultBlockers(
 }
 
 /** Controller 写进事件流的决定文本只拒凭证类命中（复审 G3）：rationale、阻塞理由、残余风险、升级的问题/选项/建议。 */
-export function deriveCredentialBlockers(
-  texts: readonly string[],
-  policy: Readonly<PrivacyScanPolicy>,
-): readonly string[] {
-  return Object.freeze(
-    derivePrivacyRules(texts, policy)
-      .filter((kind) => (CREDENTIAL_PRIVACY_FINDING_KINDS as readonly string[]).includes(kind))
-      .map((kind) => `privacy:${kind}`),
-  );
+export function deriveCredentialBlockers(texts: readonly string[]): readonly string[] {
+  return Object.freeze(derivePrivacyRules(texts).map((kind) => `privacy:${kind}`));
 }
 
 /** 递归收集一个请求值里的全部字符串叶子：决定请求的文本字段随 schema 演进，扫描不挑字段名。 */
@@ -245,14 +234,11 @@ export function stringLeavesOf(value: unknown, limit = 4096): readonly string[] 
   return Object.freeze(leaves);
 }
 
-/** 隐私扫描只返回命中的规则类别（去重、稳定排序），从不返回命中的文本。 */
-export function derivePrivacyRules(
-  texts: readonly string[],
-  policy: Readonly<PrivacyScanPolicy>,
-): readonly string[] {
+/** 隐私扫描（只有凭证类，ADR-0031）只返回命中的规则类别（去重、稳定排序），从不返回命中的文本。 */
+export function derivePrivacyRules(texts: readonly string[]): readonly string[] {
   const kinds = new Set<string>();
   for (const text of texts) {
-    for (const finding of scanPrivacy(text, policy)) kinds.add(finding.kind);
+    for (const finding of scanPrivacy(text)) kinds.add(finding.kind);
   }
   return Object.freeze([...kinds].sort());
 }

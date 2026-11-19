@@ -1034,7 +1034,6 @@ test("verify：本地门通过而远端 runtime 未验证；hook 观察目录出
       "demand-root-audit",
       "board-claim",
       "work-claims-released",
-      "append-candidates-clear",
       "evidence-integrity",
       "requirement-coverage",
     ],

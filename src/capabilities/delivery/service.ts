@@ -143,11 +143,7 @@ import {
   listPodWorktreeReceipts,
   readPodWorktreeReceipt,
 } from "../../kernel/pod-worktree-receipts.js";
-import {
-  CREDENTIAL_PRIVACY_FINDING_KINDS,
-  DEFAULT_ALLOWED_ID_PREFIXES,
-  scanPrivacy,
-} from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import {
   createWorkClaim,
@@ -1860,11 +1856,6 @@ const SEND_RETURN_MAXIMUM_BYTES = 16 * 1024;
  * `evidenceDigest`——摘要的定义因此在合同里而不在 Agent 手里；同时给出的 evidenceDigest 必须一致。记录只留
  * 摘要，不留内容。
  */
-const ATTEMPT_FAILURE_PRIVACY_POLICY = Object.freeze({
-  allowedPathRoots: Object.freeze([]),
-  allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-});
-
 /** 复审 D6：failure 只随没送出去的尝试记录，summary 走凭证扫描（与归档、终态文本同一策略）。 */
 /** 请求里的 attempt：给了 `outcome` 引用时请求里没有它，所以成员是可选的；这里是给出时的形状。 */
 type OutcomeAttempt = NonNullable<RecordDeliveryOutcomeRequest["attempt"]>;
@@ -1878,8 +1869,7 @@ function normalizeAttemptFailure(attempt: OutcomeAttempt): {
   }
   if (attempt.failure.summary !== null) {
     const blockers: string[] = [];
-    for (const finding of scanPrivacy(attempt.failure.summary, ATTEMPT_FAILURE_PRIVACY_POLICY)) {
-      if (!CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)) continue;
+    for (const finding of scanPrivacy(attempt.failure.summary)) {
       blockers.push(`privacy:attempt-failure:${finding.line}:${finding.kind}`);
     }
     if (blockers.length > 0) rejectWith(blockers, "$request.attempt.failure.summary");

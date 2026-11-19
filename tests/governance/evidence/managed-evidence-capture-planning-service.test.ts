@@ -258,22 +258,19 @@ test("文件来源规范化为 content；opaque 成员在 reject 下阻塞，凭
   }
 });
 
-test("非凭证类命中按工作区根白名单判断，只在 controller-confirmed 下进入记录", async () => {
+test("路径与 UUID 不是命中（ADR-0031）：reject 下只有 opaque 成员阻塞，确认后的清单不带隐私命中", async () => {
   const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
   try {
     writeFileSync(
       path.join(fixture.repositoryRoot, "artifacts/test-run/logs/paths.txt"),
-      `${fixture.publication.workspaceRoot.absolutePath}/notes.md\n/Users/example/private/notes.md\n`,
+      "/Users/a/x /Users/b/y\n/tmp/x/123e4567-e89b-42d3-a456-426614174000/out.log\n",
     );
     const rejected = await service(fixture).preview(fixture.demandId, treeSelection("reject"), {
       clock: () => EVIDENCE_CAPTURED_AT,
     });
     equal(rejected.status, "blocked");
     if (rejected.status === "blocked") {
-      deepEqual(rejected.blockers, [
-        "opaque-content:screenshots/result.bin",
-        "privacy:unlisted-absolute-path:logs/paths.txt:2",
-      ]);
+      deepEqual(rejected.blockers, ["opaque-content:screenshots/result.bin"]);
     }
     const confirmed = readyCapturePlan(
       await service(fixture).preview(fixture.demandId, treeSelection(), {
@@ -283,30 +280,8 @@ test("非凭证类命中按工作区根白名单判断，只在 controller-confi
     deepEqual(confirmed.manifest.contentReview, {
       disposition: "controller-confirmed",
       opaqueFileRefs: ["screenshots/result.bin"],
-      privacyFindings: [{ ref: "logs/paths.txt", line: 2, kind: "unlisted-absolute-path" }],
+      privacyFindings: [],
     });
-  } finally {
-    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
-  }
-});
-
-test("同一行的多个非凭证命中按 kind 排序去重，confirm 下仍得到就绪计划", async () => {
-  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
-  try {
-    writeFileSync(
-      path.join(fixture.repositoryRoot, "artifacts/test-run/logs/paths.txt"),
-      "/Users/a/x /Users/b/y\n/tmp/x/123e4567-e89b-42d3-a456-426614174000/out.log\n",
-    );
-    const confirmed = readyCapturePlan(
-      await service(fixture).preview(fixture.demandId, treeSelection(), {
-        clock: () => EVIDENCE_CAPTURED_AT,
-      }),
-    );
-    deepEqual(confirmed.manifest.contentReview.privacyFindings, [
-      { ref: "logs/paths.txt", line: 1, kind: "unlisted-absolute-path" },
-      { ref: "logs/paths.txt", line: 2, kind: "bare-uuid" },
-      { ref: "logs/paths.txt", line: 2, kind: "unlisted-absolute-path" },
-    ]);
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
   }

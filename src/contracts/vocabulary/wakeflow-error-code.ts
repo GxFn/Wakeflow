@@ -10,7 +10,7 @@ export const WAKEFLOW_ERROR_CODES = Object.freeze([
   "invalid-request",
   /** 超过 `kernel/limits` 表中的某个上限。 */
   "capacity-exceeded",
-  /** 隐私扫描命中凭证、未列白的绝对路径或裸 UUID。 */
+  /** 隐私扫描命中凭证（私钥块、提供商令牌、凭证赋值）。 */
   "privacy-violation",
   /** 公共输出含私有值、超限或不满足结果 Schema。 */
   "output-boundary",

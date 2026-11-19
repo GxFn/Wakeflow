@@ -1,7 +1,7 @@
 import { equal, ok } from "node:assert/strict";
 import { test } from "node:test";
 import fc from "fast-check";
-import { DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacyText } from "../../src/kernel/privacy-scan.js";
+import { scanPrivacyText } from "../../src/kernel/privacy-scan.js";
 import {
   modelTestOptions,
   persistModelCounterexample,
@@ -10,13 +10,12 @@ import {
 interface Model {
   credential: boolean;
   opaque: boolean;
-  locator: boolean;
 }
 interface Real {
   text: string;
-  roots: string[];
 }
-type Operation = "credential" | "format" | "opaque" | "allow" | "path" | "uuid" | "reset";
+// 路径与 UUID 两种操作随它们的规则一起删掉了（ADR-0031）：`plain` 留着，证明这类文本不产生命中也不遮住凭证。
+type Operation = "credential" | "format" | "opaque" | "plain" | "reset";
 const syntheticSecret = "synthetic-property-value";
 
 /** The model knows only which hazards were introduced, never the scanner's regexes or offsets. */
@@ -48,38 +47,21 @@ class TextCommand implements fc.Command<Model, Real> {
         real.text = `\u0000${real.text}`;
         model.opaque = true;
         break;
-      case "allow":
-        real.roots = ["/allowed/work", "/allowed/work-other"];
-        break;
-      case "path":
-        real.text += "\n/allowed/work/../../private/fixture.txt\n";
-        model.locator = true;
-        break;
-      case "uuid":
-        real.text += "\nunknown_demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc\n";
-        model.locator = true;
+      case "plain":
+        real.text +=
+          "\n/private/fixture.txt and unknown_demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc\n";
         break;
       case "reset":
         real.text = "";
         model.credential = false;
         model.opaque = false;
-        model.locator = false;
         break;
     }
-    const result = scanPrivacyText(real.text, {
-      allowedPathRoots: real.roots,
-      allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-    });
+    const result = scanPrivacyText(real.text);
     // §13.161 B9-5：opaque 不是漏掉凭证的借口。
     if (model.credential) ok(result.findings.some((f) => f.kind === "credential-assignment"));
+    else equal(result.findings.length, 0);
     if (model.opaque) equal(result.opaque, true);
-    if (model.locator)
-      ok(
-        result.opaque ||
-          result.findings.some(
-            (f) => f.kind === "bare-uuid" || f.kind === "unlisted-absolute-path",
-          ),
-      );
     equal(JSON.stringify(result).includes(syntheticSecret), false);
     for (const finding of result.findings)
       ok(finding.line >= 1 && finding.column >= 1 && finding.length > 0);
@@ -98,15 +80,7 @@ test(`privacy command model: seed=${options.seed}, runs=${options.numRuns}`, (t)
   );
   const command = fc
     .tuple(
-      fc.constantFrom<Operation>(
-        "credential",
-        "format",
-        "opaque",
-        "allow",
-        "path",
-        "uuid",
-        "reset",
-      ),
+      fc.constantFrom<Operation>("credential", "format", "opaque", "plain", "reset"),
       fc.nat({ max: 2048 }),
     )
     .map(([operation, position]) => new TextCommand(operation, position));
@@ -120,8 +94,8 @@ test(`privacy command model: seed=${options.seed}, runs=${options.numRuns}`, (t)
         (commands) => {
           fc.modelRun(
             () => ({
-              model: { credential: false, opaque: false, locator: false },
-              real: { text: "", roots: ["/allowed/work"] },
+              model: { credential: false, opaque: false },
+              real: { text: "" },
             }),
             commands,
           );

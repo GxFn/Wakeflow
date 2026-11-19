@@ -134,14 +134,13 @@ const RESEARCH_BLOCKER = Object.freeze({
   kind: "research-evidence-missing",
   owner: "demand-lifecycle",
 });
-/** demand 切片八门里 payload-privacy 只在完成路径扫描；这里 `payloadBlockers: null`，所以是七门加 research。 */
+/** demand 切片七门里 payload-privacy 只在完成路径扫描；这里 `payloadBlockers: null`，所以是六门加 research。 */
 const BASE_GATES = Object.freeze([
   "config-authority",
   "ledger-layout",
   "demand-root-audit",
   "board-claim",
   "work-claims-released",
-  "append-candidates-clear",
   "evidence-integrity",
 ]);
 

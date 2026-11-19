@@ -89,7 +89,6 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
         status: "observed",
         audit: "pass",
         evidence: "pass",
-        appendCandidates: 0,
         writer: OBSERVED_WRITER,
       },
     ],
@@ -641,7 +640,6 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
         status: "observed",
         audit: "fail",
         evidence: "fail",
-        appendCandidates: 2,
         writer: OBSERVED_WRITER,
       },
       {
@@ -649,7 +647,6 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
         status: "unavailable",
         audit: "unavailable",
         evidence: "unavailable",
-        appendCandidates: 0,
         writer: { status: "unavailable", newestVersion: null },
       },
     ],
@@ -660,7 +657,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
   deepEqual(verdictOf(failingDemand, "evidence-integrity"), ["fail", `${DEMAND_A},${DEMAND_B}`]);
   deepEqual(verdictOf(failingDemand, "append-candidates-clear"), [
     "fail",
-    "candidates:2,journal:demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    "journal:demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   ]);
   // 日志目录读不出：门 unavailable 而不是 pass（读失败不能变成通过）。
   deepEqual(verdictOf(healthyFacts({ strayJournals: null }), "append-candidates-clear"), [
@@ -676,7 +673,6 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
             status: "unavailable",
             audit: "unavailable",
             evidence: "unavailable",
-            appendCandidates: 0,
             writer: { status: "unavailable", newestVersion: null },
           },
         ],
@@ -1843,7 +1839,6 @@ test("artifact-older-than-stream 门（C11 版本轴）：流或维护日志里�
     status: "observed",
     audit: "pass",
     evidence: "pass",
-    appendCandidates: 0,
     writer: { status, newestVersion },
   });
   // 没有戳：本进程有版本 → pass 无码；没有服务进程身份或没有版本（测试构建）→ pass not-applicable。

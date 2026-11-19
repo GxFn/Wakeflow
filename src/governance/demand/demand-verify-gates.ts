@@ -167,12 +167,6 @@ async function workClaimGate(input: VerifyInput): Promise<VerifyGateOutcome> {
     : gate("work-claims-released", "fail", held.join(","));
 }
 
-function appendCandidateGate(input: VerifyInput): VerifyGateOutcome {
-  return input.loaded.inventory.appendCandidateCount === 0
-    ? gate("append-candidates-clear", "pass")
-    : gate("append-candidates-clear", "fail", String(input.loaded.inventory.appendCandidateCount));
-}
-
 /**
  * 复审 G6：每条受管证据的负载字节在完成路径上重新哈希——清单树里每个文件的字节数与 sha256 都要
  * 等于磁盘上的；读不到、超长、摘要不等都算该条证据失败（`<evidenceId>:<ref>`）。上限由证据清单
@@ -297,7 +291,8 @@ export async function evaluateVerifyGates(input: VerifyInput): Promise<VerifyRep
     await guarded("demand-root-audit", () => auditGate(input)),
     boardGate(input),
     await guarded("work-claims-released", () => workClaimGate(input)),
-    appendCandidateGate(input),
+    // 这里曾有一道 `append-candidates-clear`：它拿盘点里写死的 0 与 0 比，不可能失败——残留的追加候选让
+    // 根盘点直接读不出（`demand-root-audit` 报出来）。1.4 第 5 段删除（ADR-0031，open-items K11 ①）。
     await guarded("evidence-integrity", () => evidenceGate(input)),
     ...(input.payloadBlockers === null ? [] : [privacyGate(input.payloadBlockers)]),
     ...(research === null ? [] : [research]),

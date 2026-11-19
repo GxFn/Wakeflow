@@ -1675,7 +1675,6 @@ async function gateFacts(
         status: demand.status,
         audit: gateStatus(reading.report, "demand-root-audit"),
         evidence: gateStatus(reading.report, "evidence-integrity"),
-        appendCandidates: demand.loaded?.inventory.appendCandidateCount ?? 0,
         writer: reading.writer,
       };
     }),

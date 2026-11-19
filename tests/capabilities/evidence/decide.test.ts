@@ -126,16 +126,12 @@ test("计划投影只带摘要与计数；preview 的 next 就绪指向 apply、
   });
 });
 
-test("内容阻塞项：凭证类永远阻塞，opaque 与非凭证命中只在 reject 下阻塞，超量命中不能确认", () => {
+test("内容阻塞项：凭证类永远阻塞，opaque 成员只在 reject 下阻塞", () => {
   const review: ManagedEvidenceCaptureReview = {
     opaqueFileRefs: ["shots/a.bin" as never],
-    privacyFindings: [{ ref: "logs/a.txt" as never, line: 3, kind: "unlisted-absolute-path" }],
     credentialFindings: [],
   };
-  deepEqual(deriveManagedEvidenceContentBlockers(review, "reject"), [
-    "opaque-content:shots/a.bin",
-    "privacy:unlisted-absolute-path:logs/a.txt:3",
-  ]);
+  deepEqual(deriveManagedEvidenceContentBlockers(review, "reject"), ["opaque-content:shots/a.bin"]);
   deepEqual(deriveManagedEvidenceContentBlockers(review, "controller-confirmed"), []);
   const credential: ManagedEvidenceCaptureReview = {
     ...review,
@@ -144,19 +140,11 @@ test("内容阻塞项：凭证类永远阻塞，opaque 与非凭证命中只在 
   deepEqual(deriveManagedEvidenceContentBlockers(credential, "controller-confirmed"), [
     "privacy:provider-credential:logs/a.txt:9",
   ]);
-  const overflow: ManagedEvidenceCaptureReview = {
-    opaqueFileRefs: [],
+  const many: ManagedEvidenceCaptureReview = {
+    opaqueFileRefs: Array.from({ length: 65 }, (_entry, index) => `shots/${index}.bin` as never),
     credentialFindings: [],
-    privacyFindings: Array.from({ length: 65 }, (_entry, index) => ({
-      ref: "logs/a.txt" as never,
-      line: index + 1,
-      kind: "bare-uuid" as const,
-    })),
   };
-  deepEqual(deriveManagedEvidenceContentBlockers(overflow, "controller-confirmed"), [
-    "privacy-findings-overflow:65",
-  ]);
-  equal(deriveManagedEvidenceContentBlockers(overflow, "reject").length, 16, "blockers are capped");
+  equal(deriveManagedEvidenceContentBlockers(many, "reject").length, 16, "blockers are capped");
 });
 
 test("来源键区分四种来源，同一来源不同负载得到不同身份", () => {

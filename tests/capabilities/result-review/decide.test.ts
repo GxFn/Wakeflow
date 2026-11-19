@@ -26,7 +26,6 @@ import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../../src/governance/dema
 import { deriveTargetResultCallbackStatus } from "../../../src/governance/result/target-result-callback.js";
 import type { TestTargetResultStep } from "../../../src/governance/result/test-target-result-report.js";
 import type { TestContractStep } from "../../../src/governance/tasking/task-package.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../../src/kernel/privacy-scan.js";
 
 /**
  * 结果导入与评审的纯决定（§13.87 D2 D3 D6 D7）：定位符计划、隐私规则、完成证据、回调状态、
@@ -37,25 +36,23 @@ import { DEFAULT_ALLOWED_ID_PREFIXES } from "../../../src/kernel/privacy-scan.js
 const EVIDENCE_ID = "evidence_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 test("report admission shares credential detection without misclassifying regexes or Unicode slash lists", () => {
-  const policy = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
   deepEqual(
-    derivePrivacyRules(
-      [String.raw`replace(/\s+/g, " ")`, "BigInt/Symbol/函数/数组/Number"],
-      policy,
-    ),
+    derivePrivacyRules([String.raw`replace(/\s+/g, " ")`, "BigInt/Symbol/函数/数组/Number"]),
     [],
   );
   const secret = "synthetic".repeat(3);
   deepEqual(
-    derivePrivacyRules(
-      [JSON.stringify({ password: secret }), `Authorization: Bearer ${secret}`],
-      policy,
-    ),
+    derivePrivacyRules([JSON.stringify({ password: secret }), `Authorization: Bearer ${secret}`]),
     ["credential-assignment"],
   );
-  deepEqual(derivePrivacyRules([String.raw`C:\Users\Example\private.txt`], policy), [
-    "unlisted-absolute-path",
-  ]);
+  // 路径与 UUID 不再是命中（ADR-0031）：报告写产品里发生了什么，不因为一条路径被拒。
+  deepEqual(
+    derivePrivacyRules([
+      String.raw`C:\Users\Example\private.txt`,
+      "session 0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f",
+    ]),
+    [],
+  );
 });
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const OTHER_DIGEST = parseSha256Digest(`sha256:${"2".repeat(64)}`);
@@ -130,16 +127,12 @@ test("报告里的证据引用去重收集，自由文本按隐私规则只返�
     ],
   });
   equal(texts.length, 5);
-  const policy = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
-  deepEqual(derivePrivacyRules(texts, policy), ["credential-assignment"]);
+  deepEqual(derivePrivacyRules(texts), ["credential-assignment"]);
   deepEqual(
-    derivePrivacyRules(
-      ["/Users/someone/private/path/file", "sk-ant-abcdefghijklmnopqrstu"],
-      policy,
-    ),
-    ["provider-credential", "unlisted-absolute-path"],
+    derivePrivacyRules(["/Users/someone/private/path/file", "sk-ant-abcdefghijklmnopqrstu"]),
+    ["provider-credential"],
   );
-  deepEqual(derivePrivacyRules(["demand_22222222-2222-4222-8222-222222222222"], policy), []);
+  deepEqual(derivePrivacyRules(["demand_22222222-2222-4222-8222-222222222222"]), []);
 });
 
 test("完成证据取结果之后的首条 Stop/turn-complete 记录，回调落地取摘要相符的 user-prompt-submit", () => {
@@ -841,12 +834,11 @@ test("限定范围的重跑必须恰好覆盖未决步骤：失败的，加上�
 });
 
 test("Controller 决定文本只拒凭证类命中，字符串叶子递归收集（复审 G3）", () => {
-  const policy = { allowedPathRoots: [], allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES };
   deepEqual(
-    deriveCredentialBlockers(["rationale mentions /Users/someone/file and a token word"], policy),
+    deriveCredentialBlockers(["rationale mentions /Users/someone/file and a token word"]),
     [],
   );
-  deepEqual(deriveCredentialBlockers(["-----BEGIN RSA PRIVATE KEY-----", "fine"], policy), [
+  deepEqual(deriveCredentialBlockers(["-----BEGIN RSA PRIVATE KEY-----", "fine"]), [
     "privacy:private-key",
   ]);
   deepEqual(stringLeavesOf({ a: "x", b: ["y", { c: "z", d: 3, e: null }] }), ["x", "y", "z"]);

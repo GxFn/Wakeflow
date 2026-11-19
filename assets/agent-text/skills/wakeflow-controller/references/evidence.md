@@ -61,10 +61,9 @@ the change is still yours to do, in the repository, at that commit.
 
 Before the preview, put the file where it stays: your own check outputs and
 probes go under the Test surface at `controller-checks/<demandId>/`, one file
-per check, with absolute paths replaced by `<workspace root>` before you
-record them (a `diff` record is for material git does not hold; a committed
-change is its commit record). A record cites that path, so a file moved later
-is a file Wakeflow can no longer re-read.
+per check, saved as they were printed (a `diff` record is for material git
+does not hold; a committed change is its commit record). A record cites that
+path, so a file moved later is a file Wakeflow can no longer re-read.
 
 1. Record with one `apply` call and no `planDigest`: Wakeflow derives the
    plan and records it, or reports that this exact content is already
@@ -88,23 +87,23 @@ the window that captured the source. A test window's own step outputs
 therefore show this window too; which window captured what is said by the
 report that cites them, not by the record.
 
-## Privacy, and the two things you may confirm
+## Privacy, and the one thing you may confirm
 
-The scan runs on every record and the outcomes are not symmetric:
+The scan runs on every record, it looks for credentials only, and the two
+outcomes are not symmetric:
 
 - A credential finding always blocks. There is no confirmation that lets it
   through, and there is no version of the situation where the right move is to
   strip the string and retry without telling the user what was in their file.
-- An opaque member - a binary or a file with control characters - and an
-  unlisted absolute path are blocked until you confirm them explicitly. That
-  confirmation is a decision you are making on the user's behalf about what
-  leaves their machine, so make it deliberately: look at what the preview
-  listed, and confirm only the members you actually understand.
-- A bare UUID is a non-credential finding of the same kind and can be
-  confirmed, but do not plan on it: never write hook record ids, session ids
-  or other bare UUIDs into a file you intend to record, and refer to Wakeflow
-  objects by their typed ids (`demand_…`, `target-task_…`, `evidence_…`) only -
-  the scan admits those and reports a bare one as `bare-uuid`.
+- An opaque member - a binary or a file with control characters - is blocked
+  until you confirm it explicitly. That confirmation is a decision you are
+  making on the user's behalf about what leaves their machine, so make it
+  deliberately: look at what the preview listed, and confirm only the members
+  you actually understand.
+
+Paths and identifiers are not findings. A local path or a request id in a test
+log records as it is; whether a file holding someone's private handle belongs
+in the ledger at all is your judgment, made when you look at the preview.
 
 Never confirm a tree you have not looked at because the preview was long.
 

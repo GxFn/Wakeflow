@@ -14,24 +14,20 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
-test("requirement route prose stays allowed while filesystem locators use normalized classification", () => {
-  deepEqual(
-    privacyBlockers("requirement", "/api/orders and /docs/spec.md; BigInt/Symbol/函数/数组/Number"),
-    [],
-  );
+test("requirement prose with routes and filesystem paths is admitted; only a credential blocks (ADR-0031)", () => {
   for (const text of [
+    "/api/orders and /docs/spec.md; BigInt/Symbol/函数/数组/Number",
     "file:///Users/example/private/report.txt",
     String.raw`C:\Users\Example\report.txt`,
-    String.raw`\\server\share\report.txt`,
     "$HOME/.ssh/id",
-    "/api/../../Users/example/private.txt",
-    "/Us\u001b[31mers/example/private.txt\u001b[0m",
   ])
-    equal(
-      privacyBlockers("requirement", text).some((b) => b.endsWith("unlisted-absolute-path")),
-      true,
-      text,
-    );
+    deepEqual(privacyBlockers("requirement", text), [], text);
+  equal(
+    privacyBlockers("requirement", `API_KEY=${"synthetic".repeat(3)}`).some((b) =>
+      b.endsWith("credential-assignment"),
+    ),
+    true,
+  );
 });
 
 import {
@@ -147,7 +143,7 @@ test("发布阻塞：缺确认、测试决策与类型不符、supersedes 未知
     document(
       "requirement",
       "requirement.md",
-      `${FIXTURE_REQUIREMENT_MARKDOWN}\n## 附注\n\n见 /Users/someone/secret.txt\n`,
+      `${FIXTURE_REQUIREMENT_MARKDOWN}\n## 附注\n\n见 API_KEY=${"synthetic".repeat(3)}\n`,
     ),
     LANDING,
   ]);

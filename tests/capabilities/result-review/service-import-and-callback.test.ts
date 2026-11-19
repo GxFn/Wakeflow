@@ -71,7 +71,7 @@ function after(instant: string, milliseconds: number): UtcInstant {
   return parseUtcInstant(new Date(Date.parse(instant) + milliseconds).toISOString());
 }
 
-test("报告的隐私口径（open-items F9）：站内路由、模块别名与产品自己的 UUID 不再让报告被拒；用户目录的路径与本工作区窗口的会话句柄照挡", async () => {
+test("报告的隐私口径（ADR-0031）：只有凭证让报告被拒；路由、路径、产品自己的 UUID 与本工作区窗口的会话句柄都不再拒绝", async () => {
   const fixture = await createDeliveryWorkspaceFixture();
   try {
     // Controller 窗口以 UUID 形状的句柄登记（Claude Code 的会话 id 就是这个形状）：它是这个工作区的私有标识。
@@ -108,16 +108,15 @@ test("报告的隐私口径（open-items F9）：站内路由、模块别名与�
           JSON.stringify(error.details ?? {}).includes(`privacy:${rule}`),
       );
     };
-    // 该挡的照挡：用户目录的路径、显式的文件系统写法、本工作区窗口的会话句柄。
-    await rejected("f9-path", "see /Users/example/notes.txt", "unlisted-absolute-path");
-    await rejected("f9-file-uri", "see file:///Users/example/notes.txt", "unlisted-absolute-path");
-    await rejected("f9-session", `session ${controllerSession}`, "bare-uuid");
-    // 产品里的正常内容：路由、模块别名、请求号。一份报告里都有，照常导入。
+    // 该挡的照挡：凭证。
+    await rejected("f9-credential", `API_KEY=${"synthetic".repeat(3)}`, "credential-assignment");
+    // 路由、模块别名、请求号、本机路径与会话句柄在一份报告里都有，照常导入。后两样此前被拒（ADR-0020
+    // 决定 4 的那一道检查）；现在不查，报告里该不该写它们由目标技能的文本约束。这里钉住的是"不再拒绝"。
     const imported = await importFixtureImplementationResult(fixture, delivered, {
       idempotencyKey: "f9-ordinary",
       evidence,
       content: withSummary(
-        'GET /api/v1/users 返回 200；import 自 "@/components/Button"；请求号 123e4567-e89b-42d3-a456-426614174000。',
+        `GET /api/v1/users 返回 200；import 自 "@/components/Button"；请求号 123e4567-e89b-42d3-a456-426614174000；见 /Users/example/notes.txt；session ${controllerSession}。`,
       ),
     });
     equal(imported.status, "committed");

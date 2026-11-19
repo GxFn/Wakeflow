@@ -17,7 +17,7 @@ import {
   parseMarkdownListItems,
   parseMarkdownSections,
 } from "../../kernel/markdown-sections.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES, scanPrivacy } from "../../kernel/privacy-scan.js";
+import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
 import type {
   RequirementClaimState,
@@ -72,19 +72,10 @@ export interface PackageAnalysis {
 
 const SUMMARY_TEXT_MAXIMUM = 4000;
 const PRIVACY_BLOCKER_MAXIMUM = 32;
-/**
- * 需求文档里常见的 URL 路由与站内链接（`/api/orders`、`/docs/spec.md`）不是私有路径；
- * 只有指向用户目录或系统目录的绝对路径才算泄露。
- */
-const PRIVACY_POLICY = Object.freeze({
-  allowedPathRoots: Object.freeze([]),
-  allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-  pathScope: "system" as const,
-});
 
-/** 隐私命中只报位置与类别，从不回显命中文本。 */
+/** 隐私命中（只有凭证类，ADR-0031）只报位置与类别，从不回显命中文本。 */
 export function privacyBlockers(label: string, text: string): readonly string[] {
-  return scanPrivacy(text, PRIVACY_POLICY)
+  return scanPrivacy(text)
     .slice(0, PRIVACY_BLOCKER_MAXIMUM)
     .map((finding) => `privacy-violation:${label}:${finding.line}:${finding.kind}`);
 }

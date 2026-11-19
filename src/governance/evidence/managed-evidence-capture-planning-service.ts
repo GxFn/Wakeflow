@@ -40,15 +40,7 @@ import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { readHostHookObservationRecord } from "../../kernel/hook-observations.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
-import {
-  CREDENTIAL_PRIVACY_FINDING_KINDS,
-  DEFAULT_ALLOWED_ID_PREFIXES,
-  type PrivacyFinding,
-  type PrivacyScanPolicy,
-  scanPrivacy,
-  scanPrivacyText,
-} from "../../kernel/privacy-scan.js";
+import { type PrivacyFinding, scanPrivacy, scanPrivacyText } from "../../kernel/privacy-scan.js";
 import {
   assertDemandOperationConfigCurrent,
   closeDemandOperationAuthorityContext,
@@ -79,10 +71,8 @@ import {
 import {
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
-  MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT,
   type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,
-  type ManagedEvidencePrivacyFinding,
 } from "./managed-evidence-manifest.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
 import {
@@ -127,7 +117,6 @@ export interface ManagedEvidenceCaptureFinding {
 /** 捕获时观察到的、需要 Controller 确认或永远阻塞的内容事实。 */
 export interface ManagedEvidenceCaptureReview {
   readonly opaqueFileRefs: readonly PortableResourcePath[];
-  readonly privacyFindings: readonly Readonly<ManagedEvidenceCaptureFinding>[];
   readonly credentialFindings: readonly Readonly<ManagedEvidenceCaptureFinding>[];
 }
 
@@ -338,28 +327,6 @@ function mapArtifactError(error: LoadedArtifactTreeIdentityError): never {
   fail("source", error);
 }
 
-/** 隐私白名单：工作区根、ledger 根与配置里的全部仓库与支撑面真实路径（能力卡 8 Q1）。 */
-function managedEvidencePrivacyPolicy(
-  workspaceRoot: RootedDirectory,
-  config: Readonly<WakeflowConfigAuthoritySnapshot>,
-  worktreePaths: readonly string[] = [],
-): PrivacyScanPolicy {
-  const roots = new Set<string>([
-    workspaceRoot.absolutePath,
-    config.placements.workspaceRoot,
-    config.ledgerRoot,
-    ...worktreePaths,
-  ]);
-  for (const entry of config.placements.roots) {
-    roots.add(entry.absolutePath);
-    if (entry.realPath !== null) roots.add(entry.realPath);
-  }
-  return Object.freeze({
-    allowedPathRoots: Object.freeze([...roots]),
-    allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-  });
-}
-
 interface ClassifiedContent {
   readonly opaque: boolean;
   readonly findings: readonly Readonly<ManagedEvidenceCaptureFinding>[];
@@ -367,14 +334,12 @@ interface ClassifiedContent {
 
 /**
  * Every decodable member is scanned, including opaque text; findings retain source lines.
- * A member that is not UTF-8 is still scanned through a lossy decode for the credential kinds
- * only: a key embedded among binary bytes must not escape the capture gate, while path and UUID
- * hits in such bytes are noise and are not reported (§13.161 B9-3).
+ * A member that is not UTF-8 is still scanned through a lossy decode: a key embedded among
+ * binary bytes must not escape the capture gate (§13.161 B9-3).
  */
 function classifyContent(
   bytes: Uint8Array,
   ref: PortableResourcePath,
-  policy: PrivacyScanPolicy,
 ): Readonly<ClassifiedContent> {
   let text: string;
   try {
@@ -385,13 +350,13 @@ function classifyContent(
     return Object.freeze({
       opaque: true,
       findings: Object.freeze(
-        scanPrivacyText(lossy, policy)
-          .findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind))
-          .map((finding) => Object.freeze({ ref, line: finding.line, kind: finding.kind })),
+        scanPrivacyText(lossy).findings.map((finding) =>
+          Object.freeze({ ref, line: finding.line, kind: finding.kind }),
+        ),
       ),
     });
   }
-  const scanned = scanPrivacyText(text, policy);
+  const scanned = scanPrivacyText(text);
   return Object.freeze({
     opaque: scanned.opaque,
     findings: Object.freeze(
@@ -432,18 +397,13 @@ function reviewOf(
     opaqueFileRefs: Object.freeze(
       classified.filter((entry) => entry.content.opaque).map((entry) => entry.ref),
     ),
-    privacyFindings: Object.freeze(
-      findings.filter((finding) => !CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)),
-    ),
-    credentialFindings: Object.freeze(
-      findings.filter((finding) => CREDENTIAL_PRIVACY_FINDING_KINDS.includes(finding.kind)),
-    ),
+    credentialFindings: Object.freeze(findings),
   });
 }
 
 /**
- * 内容阻塞项（能力卡 8 Q1，切片 8 D3）：凭证类命中永远阻塞；opaque 成员与非凭证类命中只在
- * `reject` 策略下阻塞；超过记录容量的非凭证类命中不能被确认。
+ * 内容阻塞项（能力卡 8 Q1，切片 8 D3）：凭证类命中永远阻塞；opaque 成员只在 `reject` 策略下阻塞。
+ * 隐私扫描只认凭证（ADR-0031），所以没有"可以被确认的隐私命中"这一类了。
  */
 export function deriveManagedEvidenceContentBlockers(
   review: Readonly<ManagedEvidenceCaptureReview>,
@@ -453,14 +413,8 @@ export function deriveManagedEvidenceContentBlockers(
   for (const finding of review.credentialFindings) {
     blockers.push(`privacy:${finding.kind}:${finding.ref}:${finding.line}`);
   }
-  if (review.privacyFindings.length > MANAGED_EVIDENCE_PRIVACY_FINDING_LIMIT) {
-    blockers.push(`privacy-findings-overflow:${review.privacyFindings.length}`);
-  }
   if (policy === "reject") {
     for (const ref of review.opaqueFileRefs) blockers.push(`opaque-content:${ref}`);
-    for (const finding of review.privacyFindings) {
-      blockers.push(`privacy:${finding.kind}:${finding.ref}:${finding.line}`);
-    }
   }
   return Object.freeze(blockers.slice(0, BLOCKER_LIMIT));
 }
@@ -490,7 +444,6 @@ async function captureFile(
   root: RootedDirectory,
   source: Readonly<ManagedEvidenceManagedPathSource>,
   expectedNode: Readonly<FileNodeSnapshot>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
   let read: Awaited<ReturnType<typeof readStableFile>>;
@@ -504,7 +457,7 @@ async function captureFile(
     if (error instanceof StableFileReadError) mapStableFileError(error);
     throw error;
   }
-  const content = classifyContent(read.bytes, CAPTURED_FILE_REF, policy);
+  const content = classifyContent(read.bytes, CAPTURED_FILE_REF);
   return Object.freeze({
     identity: singleFileIdentity(
       Number(read.byteCount),
@@ -572,7 +525,6 @@ async function inspectTreeIdentity(
 async function classifyTreeFiles(
   treeRoot: RootedDirectory,
   identity: Readonly<LoadedArtifactTreeIdentity>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ManagedEvidenceCaptureReview>> {
   const limit = pLimit(CONTENT_CLASSIFICATION_CONCURRENCY);
@@ -594,7 +546,7 @@ async function classifyTreeFiles(
         }
         return Object.freeze({
           ref: file.ref,
-          content: classifyContent(read.bytes, file.ref, policy),
+          content: classifyContent(read.bytes, file.ref),
         });
       }),
     ),
@@ -611,7 +563,6 @@ async function captureTree(
   sourceRoot: RootedDirectory,
   source: Readonly<ManagedEvidenceManagedPathSource>,
   expectedNode: Readonly<FileNodeSnapshot>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
   const treeRoot = await openSelectedTreeRoot(sourceRoot, source, expectedNode);
@@ -619,7 +570,7 @@ async function captureTree(
   let failure: unknown;
   try {
     const first = await inspectTreeIdentity(treeRoot, signal);
-    const review = await classifyTreeFiles(treeRoot, first, policy, signal);
+    const review = await classifyTreeFiles(treeRoot, first, signal);
     const current = await inspectTreeIdentity(treeRoot, signal);
     if (current.artifactDigest !== first.artifactDigest) fail("source-changed");
     result = Object.freeze({ identity: current, source, review });
@@ -640,7 +591,6 @@ async function captureManagedPath(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   source: Readonly<ManagedEvidenceManagedPathSource>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
   let sourceRoot: RootedDirectory;
@@ -671,8 +621,8 @@ async function captureManagedPath(
     if (observation.node.kind !== expectedKind) fail("source-type");
     result =
       source.resourceType === "file"
-        ? await captureFile(sourceRoot, source, observation.node, policy, signal)
-        : await captureTree(sourceRoot, source, observation.node, policy, signal);
+        ? await captureFile(sourceRoot, source, observation.node, signal)
+        : await captureTree(sourceRoot, source, observation.node, signal);
   } catch (error: unknown) {
     failure = error;
   }
@@ -692,12 +642,11 @@ async function captureManagedPath(
  */
 function captureProjection(
   source: Exclude<ManagedEvidenceSource, Readonly<ManagedEvidenceManagedPathSource>>,
-  policy: PrivacyScanPolicy,
 ): Readonly<CapturedSource> {
   const projection = encodeManagedEvidenceSourceProjection(source);
   const findings =
     source.kind === "link"
-      ? scanPrivacy(source.url, policy).map((finding) =>
+      ? scanPrivacy(source.url).map((finding) =>
           Object.freeze({ ref: CAPTURED_FILE_REF, line: finding.line, kind: finding.kind }),
         )
       : [];
@@ -730,22 +679,20 @@ async function observeCommit(
 async function captureCommit(
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   source: Readonly<ManagedEvidenceCommitSelection>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
   if (config.indexes.repositoryById[source.repositoryId] === undefined) fail("source-root");
   const observed = await observeCommit(config, source, signal);
-  if (observed === null) return captureProjection(source, policy);
+  if (observed === null) return captureProjection(source);
   if (observed.status !== "observed") {
     const blocker =
       observed.status === "missing"
         ? `commit-unknown:${source.commitOid}`
         : `commit-not-a-commit:${source.commitOid}`;
-    return Object.freeze({ ...captureProjection(source, policy), blockers: [blocker] });
+    return Object.freeze({ ...captureProjection(source), blockers: [blocker] });
   }
   return captureProjection(
     Object.freeze({ ...source, observation: managedEvidenceCommitObservationOf(observed) }),
-    policy,
   );
 }
 
@@ -753,7 +700,6 @@ async function captureObservation(
   workspaceRoot: RootedDirectory,
   selection: Readonly<ManagedEvidenceSourceSelection>,
   source: Extract<ManagedEvidenceSourceSelection["source"], { readonly kind: "observation" }>,
-  policy: PrivacyScanPolicy,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
   const read = await readKernelSource(
@@ -786,27 +732,25 @@ async function captureObservation(
     if (error instanceof ManagedEvidenceSourceSelectionError) fail("kind", error);
     throw error;
   }
-  return captureProjection(projected, policy);
+  return captureProjection(projected);
 }
 
 async function captureSelectedSource(
   workspaceRoot: RootedDirectory,
   config: Readonly<WakeflowConfigAuthoritySnapshot>,
   selection: Readonly<ManagedEvidenceSourceSelection>,
-  worktreePaths: readonly string[],
   signal: AbortSignal | undefined,
 ): Promise<Readonly<CapturedSource>> {
-  const policy = managedEvidencePrivacyPolicy(workspaceRoot, config, worktreePaths);
   const source = selection.source;
   switch (source.kind) {
     case "managed-path":
-      return captureManagedPath(workspaceRoot, config, source, policy, signal);
+      return captureManagedPath(workspaceRoot, config, source, signal);
     case "observation":
-      return captureObservation(workspaceRoot, selection, source, policy, signal);
+      return captureObservation(workspaceRoot, selection, source, signal);
     case "link":
-      return captureProjection(source, policy);
+      return captureProjection(source);
     case "commit":
-      return captureCommit(config, source, policy, signal);
+      return captureCommit(config, source, signal);
     default: {
       const exhaustive: never = source;
       return exhaustive;
@@ -877,18 +821,6 @@ export function deriveManagedEvidenceId(
   );
 }
 
-function manifestFindings(
-  review: Readonly<ManagedEvidenceCaptureReview>,
-): readonly Readonly<ManagedEvidencePrivacyFinding>[] {
-  return Object.freeze(
-    review.privacyFindings.flatMap((finding) =>
-      finding.kind === "unlisted-absolute-path" || finding.kind === "bare-uuid"
-        ? [Object.freeze({ ref: finding.ref, line: finding.line, kind: finding.kind })]
-        : [],
-    ),
-  );
-}
-
 function createManifest(
   context: Readonly<DemandOperationAuthorityContext>,
   demandId: WakeflowDurableId<"demand">,
@@ -896,8 +828,8 @@ function createManifest(
   captured: Readonly<CapturedSource>,
   clock: UtcWallClock | undefined,
 ): Readonly<ManagedEvidenceManifest> {
-  const needsReview =
-    captured.review.opaqueFileRefs.length > 0 || captured.review.privacyFindings.length > 0;
+  // 需要 Controller 确认的只剩 opaque 成员；`privacyFindings` 留在清单里只为读旧记录，新记录恒为空。
+  const needsReview = captured.review.opaqueFileRefs.length > 0;
   try {
     return createManagedEvidenceManifest(
       {
@@ -918,7 +850,7 @@ function createManifest(
         contentReview: {
           disposition: needsReview ? "controller-confirmed" : "not-required",
           opaqueFileRefs: captured.review.opaqueFileRefs,
-          privacyFindings: manifestFindings(captured.review),
+          privacyFindings: [],
         },
       },
       clock === undefined ? {} : { clock },
@@ -976,25 +908,10 @@ export class ManagedEvidenceCapturePlanningService {
         fail("demand");
       }
       const expectedDemand = demandExpectation(context);
-      // Demand 所在 pod 的 worktree 检出路径进入隐私白名单：测试输出里出现自己的检出不算泄露。
-      const workspaceRoot = this.#workspaceRoot;
-      const podId = context.loaded.identity.podId;
-      const worktreePaths = (
-        await readKernelSource(
-          () =>
-            listPodWorktreeReceiptsAnyHost(
-              workspaceRoot,
-              podId,
-              options.signal === undefined ? {} : { signal: options.signal },
-            ),
-          options.signal,
-        )
-      ).map((receipt) => receipt.path);
       const captured = await captureSelectedSource(
         this.#workspaceRoot,
         context.config,
         selection,
-        worktreePaths,
         options.signal,
       );
       const blockers = [

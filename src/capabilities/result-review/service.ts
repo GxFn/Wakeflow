@@ -164,7 +164,6 @@ import {
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
-import { DEFAULT_ALLOWED_ID_PREFIXES, type PrivacyScanPolicy } from "../../kernel/privacy-scan.js";
 import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
 import {
   selectWakeflowWorkspaceHostResourceProfile,
@@ -302,24 +301,6 @@ interface CommandOutcome {
   readonly currentAggregate?: DemandEventSourcingCommandResult["aggregate"];
 }
 
-const REPORT_PRIVACY_POLICY = Object.freeze({
-  allowedPathRoots: Object.freeze([]),
-  allowedIdPrefixes: DEFAULT_ALLOWED_ID_PREFIXES,
-});
-
-/**
- * 报告正文的扫描口径（open-items F9）。报告写的是产品里发生了什么：站内路由（`/api/v1/users`）、模块别名与
- * 产品自己的 UUID 是正常内容，不该让整份报告被拒；该挡的是指向用户或系统目录的路径，和这个工作区里各窗口
- * 的会话句柄（不该进 git 跟踪的 ledger，ADR-0020 决定 4）。凭证类命中与口径无关，照旧无条件拒绝。
- */
-async function reportPrivacyPolicy(context: SliceContext): Promise<PrivacyScanPolicy> {
-  const bindings = await loadBindings(context);
-  return Object.freeze({
-    ...REPORT_PRIVACY_POLICY,
-    pathScope: "system" as const,
-    privateUuids: Object.freeze(bindings.map((binding) => binding.handle.value)),
-  });
-}
 const MANIFEST_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES, "$limit");
 const PAYLOAD_READ_LIMIT = parseByteCount(MANAGED_EVIDENCE_PAYLOAD_LIMITS.maxFileBytes, "$limit");
 const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, string, string]>> =
@@ -1350,10 +1331,7 @@ async function executeImport(
   if (target.currentDelivery.fence.claimDigest !== input.claimDigest) {
     await assertEarlierGenerationFence(repository, input, options.signal);
   }
-  const privacyRules = derivePrivacyRules(
-    reportTexts(input.report.content),
-    await reportPrivacyPolicy(context),
-  );
+  const privacyRules = derivePrivacyRules(reportTexts(input.report.content));
   if (privacyRules.length > 0) {
     rejectWith(
       privacyRules.map((rule) => `privacy:${rule}`),
@@ -2245,10 +2223,7 @@ async function executeImplementationDecision(
     request.anchorEvidence ?? null,
   );
   // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
-  const credentialBlockers = deriveCredentialBlockers(
-    stringLeavesOf(request),
-    REPORT_PRIVACY_POLICY,
-  );
+  const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request));
   if (blockers.length > 0 || credentialBlockers.length > 0) {
     rejectWith([...blockers, ...credentialBlockers], "$request.decision");
   }
@@ -2461,10 +2436,7 @@ async function executeTestDecision(
   }
   const blockers = deriveTestDecisionBlockers(request, testView.admission);
   // Controller 自己的决定文本也不能把凭据写进事件流（复审 G3）；只拒凭证类命中，与归档扫描同一策略。
-  const credentialBlockers = deriveCredentialBlockers(
-    stringLeavesOf(request),
-    REPORT_PRIVACY_POLICY,
-  );
+  const credentialBlockers = deriveCredentialBlockers(stringLeavesOf(request));
   if (blockers.length > 0 || credentialBlockers.length > 0) {
     rejectWith([...blockers, ...credentialBlockers], "$request.decision");
   }

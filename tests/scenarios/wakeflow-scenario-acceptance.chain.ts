@@ -2238,13 +2238,14 @@ async function scenarioImportAndReview(context: ScenarioContext): Promise<string
   );
   const leaking = await context.connection.client.callTool({
     name: WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
-    arguments: importRequest(context, permit, "scenario-import-private-path", revision, {
+    arguments: importRequest(context, permit, "scenario-import-credential", revision, {
       ...content,
-      summary: `${content.summary} 详见 /Users/example/private-notes/review.txt`,
+      // 假凭证在运行时拼出，源码里不留凭证形态的字面量。
+      summary: `${content.summary} 详见 API_KEY=${"synthetic".repeat(3)}`,
     }),
   });
-  equal(leaking.isError, true, "a report carrying an unlisted absolute path must be rejected");
-  equal(scenarioToolText(leaking).includes("privacy:unlisted-absolute-path"), true);
+  equal(leaking.isError, true, "a report carrying a credential must be rejected");
+  equal(scenarioToolText(leaking).includes("privacy:credential-assignment"), true);
   if (context.documentEvidence !== undefined) {
     // 定位符种类必须等于记录种类（切片 8 D5）：把 document 记录当 test-output 引用被拒。
     const mismatched = await context.connection.client.callTool({

@@ -111,7 +111,7 @@ report, return the callback. You own no other step and no Controller authority.
    from the prompt, and no `expectedStreamRevision`: the stream moves while
    you work, and identity plus fence are your guard. Wakeflow resolves each evidence locator and checks its
    digest, looks up each commit you reported in your repository (`commit-unknown` names one it does not hold),
-   scans the report for privacy problems, appends the result, records those commits as evidence, and
+   scans the report for credentials (paths, addresses and identifiers are not findings), appends the result, records those commits as evidence, and
    releases your work claim. A refusal means the report is not yet importable -
    fix what it named and import again; it is not a reason to stop working.
    `anchor-result-missing:<anchorId>` or `anchor-result-unknown:<anchorId>`

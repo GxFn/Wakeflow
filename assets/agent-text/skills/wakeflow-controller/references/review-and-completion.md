@@ -233,7 +233,8 @@ way: record the user's answer with record-decision, or cancel and claim a
 corrected package.
 
 All three take preview, apply and recover, and all three delete or restore an
-active root. Read the preview to the user before you apply any of them.
+active root. Read the preview to the user before you apply a cancel or a
+continue; completion applies without one, as above.
 
 ## One call after an accept
 

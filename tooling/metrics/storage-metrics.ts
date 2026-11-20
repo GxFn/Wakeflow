@@ -19,7 +19,7 @@ import { isRecord, sha256 } from "../verification/files.js";
  * Wakeflow Tooling / Storage metrics：一次公共工具调用让服务进程做了多少次文件系统调用（ADR-0032）。
  *
  * 对一份制品副本起一个新的 stdio 进程，进程里预加载一段计数脚本：它包住 `node:fs` 的 Promise 接口、
- * 同步接口与文件句柄的方法，记下每一种调用的次数与耗时。每调用一次工具取一次计数并清零。结果只有计数与
+ * 同步接口、文件句柄与目录句柄的方法，记下每一种调用的次数与耗时。每调用一次工具取一次计数并清零。结果只有计数与
  * 毫秒，没有路径与内容。和 `mcp call` 一样调用的是新进程；变更类工具会真的改工作区，只对可丢弃工作区使用。
  * 耗时是各次调用耗时之和，调用并行时会超过墙钟——用来比较前后，不当作墙钟的分解。
  */
@@ -32,6 +32,8 @@ export interface StorageCallCounters {
   readonly reads: number;
   readonly writes: number;
   readonly directoryReads: number;
+  /** 逐项读目录（`Dir.read`）的次数：每个目录是它的项数加一。 */
+  readonly directoryEntryReads: number;
   /** 落盘同步（文件与目录的 fsync、fdatasync）的次数与耗时。 */
   readonly syncs: number;
   readonly syncMs: number;
@@ -112,6 +114,11 @@ const probe = await fs.promises.open(import.meta.filename, "r");
 const handlePrototype = Object.getPrototypeOf(probe);
 await probe.close();
 for (const name of ["stat", "read", "write", "sync", "datasync", "close", "chmod", "truncate", "readFile", "writeFile", "appendFile", "utimes"]) wrap(handlePrototype, name, "handle." + name);
+const directoryProbe = await fs.promises.opendir(path.dirname(import.meta.filename));
+const directoryPrototype = Object.getPrototypeOf(directoryProbe);
+await directoryProbe.close();
+for (const name of ["read", "readSync", "close", "closeSync", "entries"]) wrap(directoryPrototype, name, "dir." + name);
+wrap(directoryPrototype, Symbol.asyncIterator, "dir.entries");
 syncBuiltinESMExports();
 counters.clear();
 let sequence = 0;
@@ -162,6 +169,7 @@ export function summarizeStorageCounters(
     reads: sum(["handle.read", "handle.readFile", "readFile", "readFileSync", "readSync"]),
     writes: sum(["handle.write", "handle.writeFile", "writeFile", "writeFileSync", "writeSync"]),
     directoryReads: sum(["readdir", "opendir", "readdirSync"]),
+    directoryEntryReads: sum(["dir.read", "dir.readSync", "dir.entries"]),
     syncs: sum(SYNC_KEYS),
     syncMs: Math.round(SYNC_KEYS.reduce((total, name) => total + milliseconds(counters, name), 0)),
     renames: sum(["rename", "renameSync"]),

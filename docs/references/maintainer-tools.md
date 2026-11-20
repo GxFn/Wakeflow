@@ -512,6 +512,6 @@ npm run --silent wf -- metrics storage --candidate plugins/claude-code-wakeflow 
 npm run --silent wf -- metrics storage --candidate plugins/codex-wakeflow --root "<disposable-workspace>" --tool wakeflow_status --arguments '{"detail":"summary"}'
 ```
 
-ADR-0032 的前后对照由这条命令量出（`tooling/metrics/storage-metrics.ts`）。它像 `mcp call` 一样对一份制品副本起一个新的 stdio 进程，不同的是进程里预加载一段计数脚本，包住 `node:fs` 的 Promise 接口、同步接口与文件句柄的方法；每调用一次工具（缺省 `wakeflow_status`，`--runs` 是连续调用的次数，1 到 20）取一次计数并清零。每次调用给出：墙钟、文件系统调用总数、其中逐段核对路径的（lstat 与 realpath）、打开、读、写、列目录、落盘同步的次数与耗时、重命名、链接与删除的次数。
+ADR-0032 的前后对照由这条命令量出（`tooling/metrics/storage-metrics.ts`）。它像 `mcp call` 一样对一份制品副本起一个新的 stdio 进程，不同的是进程里预加载一段计数脚本，包住 `node:fs` 的 Promise 接口、同步接口、文件句柄与目录句柄的方法；每调用一次工具（缺省 `wakeflow_status`，`--runs` 是连续调用的次数，1 到 20）取一次计数并清零。每次调用给出：墙钟、文件系统调用总数、其中逐段核对路径的（lstat 与 realpath）、打开、读、写、列目录、逐项读目录（每个目录是它的项数加一）、落盘同步的次数与耗时、重命名、链接与删除的次数。它只数这一个服务进程：hook 观察器进程与发布到工作区的脚本做的调用不在内。
 
 读数时注意三点：`fileSystemMs` 与 `syncMs` 是各次调用耗时之和，调用并行时会超过墙钟，只用来比较前后；第一次调用带着进程刚启动的开销，比较时看第二次起；工具被拒（比如根不是 Wakeflow 工作区）也照样有计数，`toolStatus` 是 `failed`。结果里只有计数与毫秒，没有路径与内容。它不读也不改仓库状态、不进制品；变更类工具会真的改工作区，所以和 `mcp call` 一样只对可丢弃工作区使用。基线（1.4.0，一次性测试工作区，约 1,150 个状态文件）：`status` 76,619 次调用、其中 65,758 次是核对路径、1.8 秒；数字与量法记在 [1.4.1 存储层计划](../reviews/2026-11-19-1.4.1-storage-layer-plan.md)第 2 节。

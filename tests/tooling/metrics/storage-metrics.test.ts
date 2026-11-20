@@ -27,6 +27,8 @@ test("计数按用途归类：逐段核对路径的调用、落盘同步、读�
     "handle.sync": { n: 5, ms: 12.4 },
     fsyncSync: { n: 1, ms: 2.2 },
     readdir: { n: 2, ms: 1 },
+    "dir.read": { n: 6, ms: 1 },
+    "dir.close": { n: 2, ms: 0 },
     link: { n: 1, ms: 0.5 },
     rename: { n: 1, ms: 0.5 },
     unlink: { n: 2, ms: 1 },
@@ -34,18 +36,19 @@ test("计数按用途归类：逐段核对路径的调用、落盘同步、读�
     malformed: "not a counter",
   });
   deepEqual(summary, {
-    fileSystemCalls: 107,
+    fileSystemCalls: 115,
     pathChecks: 70,
     opens: 3,
     reads: 4,
     writes: 2,
     directoryReads: 2,
+    directoryEntryReads: 6,
     syncs: 6,
     syncMs: 15,
     renames: 1,
     links: 1,
     unlinks: 2,
-    fileSystemMs: 33,
+    fileSystemMs: 34,
   });
   deepEqual(summarizeStorageCounters({}).fileSystemCalls, 0);
 });
@@ -72,6 +75,7 @@ test("对一份制品起新进程量一次工具调用：每次调用一行计�
     equal(call.toolStatus, "failed");
     ok(call.fileSystemCalls > 0, "the refused call still touched the file system");
     ok(call.pathChecks > 0);
+    ok(call.directoryEntryReads >= 0);
     equal(call.syncs, 0, "a read-only call never syncs");
     ok(call.wallMs >= 0);
   }

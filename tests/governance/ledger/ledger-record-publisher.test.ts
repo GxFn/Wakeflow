@@ -2,6 +2,8 @@ import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
+  lstatSync,
+  mkdirSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -19,6 +21,7 @@ import {
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import { publishDirectoryTreeCandidateDurably } from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { acquireRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -45,6 +48,7 @@ import {
   LEDGER_DURABLE_FILE_MODE,
 } from "../../../src/governance/ledger/ledger-authority-storage-policy.js";
 import {
+  type LedgerAuthorityMemberInput,
   LedgerAuthorityStoreError,
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
@@ -56,6 +60,7 @@ import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_RECORDED_AT,
   FIXTURE_REQUIREMENT_ID,
+  type FixtureDocument,
   fixtureDocuments,
   requirementMembers,
   requirementRecordDraft,
@@ -63,7 +68,10 @@ import {
 
 useDisposableDurability();
 
-/** 直接覆盖单记录暂存发布编排：输入准入、首次提交、幂等复用、被打断之后的续做与锁门控。级别 1（组件）。 */
+/**
+ * 直接覆盖单记录暂存发布编排：输入准入、首次提交、幂等复用、被打断之后的续做、补不了的暂存残留
+ * 删掉重建一次（1.4.1 深审 directory-trees 的两条：0700 暂存与空的或短的成员）与锁门控。级别 1（组件）。
+ */
 
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const MEMBERS = requirementMembers();
@@ -109,15 +117,19 @@ function physical(rootPath: string, ref: string): string {
 function requirementRecord(
   title: string,
   requirementId: `requirement_${string}` = FIXTURE_REQUIREMENT_ID,
+  documents: readonly FixtureDocument[] = fixtureDocuments(),
 ): Readonly<RequirementRecord> {
-  return createRequirementRecord(requirementRecordDraft({ requirementId, title }), {
+  return createRequirementRecord(requirementRecordDraft({ requirementId, title }, documents), {
     clock: () => FIXTURE_RECORDED_AT,
   });
 }
 
-function publication(record: Readonly<RequirementRecord>) {
+function publication(
+  record: Readonly<RequirementRecord>,
+  members: readonly LedgerAuthorityMemberInput[] = MEMBERS,
+) {
   const files = [
-    ...MEMBERS.map((member) => ({
+    ...members.map((member) => ({
       path: member.path,
       bytes: member.bytes,
       mode: LEDGER_DURABLE_FILE_MODE,
@@ -138,6 +150,73 @@ function publication(record: Readonly<RequirementRecord>) {
       stageRef: ledgerRecordPublicationStageRef(record),
     },
   };
+}
+
+/** 一棵目录树的全部条目：相对路径、类型、权限位与文件字节（base64），按路径排序。 */
+function treeEntries(directory: string): readonly (readonly [string, string, number, string])[] {
+  const entries: (readonly [string, string, number, string])[] = [];
+  const walk = (relative: string): void => {
+    for (const name of readdirSync(path.join(directory, relative)).sort()) {
+      const child = relative === "" ? name : `${relative}/${name}`;
+      const childPath = path.join(directory, child);
+      const stat = lstatSync(childPath);
+      if (stat.isDirectory()) {
+        entries.push([child, "directory", stat.mode & 0o777, ""]);
+        walk(child);
+      } else {
+        entries.push([child, "file", stat.mode & 0o777, readFileSync(childPath, "base64")]);
+      }
+    }
+  };
+  walk("");
+  return entries;
+}
+
+/** 文档只有 requirement.md 与 landing.md 之外再带一个附件时，记录树里多一层 `attachments/` 子目录。 */
+const NESTED_DOCUMENTS: readonly FixtureDocument[] = [
+  ...fixtureDocuments(),
+  { role: "attachment", path: "attachments/notes.md", text: "附注正文。\n" },
+];
+
+/**
+ * 在暂存上造一份崩溃残留，再发同一个请求：发布成功，final 与干净发布逐字节相同（含权限位），
+ * `transactions/` 里剩下的与干净发布一样。干净发布在另一个一次性根上做。
+ */
+async function expectResidueRebuilt(
+  t: TestContext,
+  documents: readonly FixtureDocument[],
+  damage: (
+    root: RootedDirectory,
+    stagePath: string,
+    target: ReturnType<typeof publication>,
+  ) => Promise<void>,
+): Promise<void> {
+  const record = requirementRecord("示例需求", FIXTURE_REQUIREMENT_ID, documents);
+  const members = requirementMembers(documents);
+  const target = publication(record, members);
+  const clean = await ledgerRoot(t);
+  equal(
+    (await publishLedgerAuthorityRecord(clean.root, record, members, undefined)).wroteAuthority,
+    true,
+  );
+
+  const { rootPath, root } = await ledgerRoot(t);
+  await damage(root, physical(rootPath, target.refs.stageRef), target);
+  // 走的是删掉重建：整树删除恰好一次。
+  const removeTree = t.mock.method(filesystemMutation, "removeTree");
+  const published = await publishLedgerAuthorityRecord(root, record, members, undefined);
+  equal(removeTree.mock.callCount(), 1);
+  removeTree.mock.restore();
+  equal(published.wroteAuthority, true);
+  deepEqual(published.loaded.record, record);
+  deepEqual(
+    treeEntries(physical(rootPath, target.refs.finalRootRef)),
+    treeEntries(physical(clean.rootPath, target.refs.finalRootRef)),
+  );
+  deepEqual(
+    readdirSync(path.join(rootPath, "transactions")),
+    readdirSync(path.join(clean.rootPath, "transactions")),
+  );
 }
 
 test("publishes one requirement tree and idempotently reuses the exact committed record", async (t) => {
@@ -322,9 +401,14 @@ test("an interrupted publication is resumed from its stage by the same request, 
     encodeUtf8(renderLedgerAuthorityRecord(partial.record)),
     { mode: LEDGER_DURABLE_FILE_MODE },
   );
+  // 合法的部分暂存（已有成员完整且正确，只缺几项）是续做，不是删掉重建：已有成员的 inode 随改名进 final。
+  const stagedInode = statSync(physical(rootPath, `${partial.refs.stageRef}/record.json`)).ino;
+  const removeTree = t.mock.method(filesystemMutation, "removeTree");
   const resumed = await publishLedgerAuthorityRecord(root, partial.record, MEMBERS, undefined);
   equal(resumed.wroteAuthority, true);
   deepEqual(resumed.loaded.record, partial.record);
+  equal(removeTree.mock.callCount(), 0);
+  equal(statSync(physical(rootPath, `${partial.refs.finalRootRef}/record.json`)).ino, stagedInode);
   equal(existsSync(physical(rootPath, partial.refs.stageRef)), false);
   equal(
     readFileSync(physical(rootPath, `${partial.refs.finalRootRef}/landing.md`), "utf8"),
@@ -346,30 +430,117 @@ test("an interrupted publication is resumed from its stage by the same request, 
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
 });
 
-test("fails closed on a stage it cannot complete, and a stray stage beside a committed final does not block", async (t) => {
+test("a stage directory left at the 0700 birth mode is removed and rebuilt, empty or with complete members", async (t) => {
+  // mkdir 之后、chmod 之前进程被杀：空目录停在 0700。
+  await expectResidueRebuilt(t, fixtureDocuments(), async (_root, stagePath) => {
+    mkdirSync(stagePath, { mode: 0o700 });
+    chmodSync(stagePath, 0o700);
+  });
+  // 掉电时成员都写完了，但目录的 chmod 没有落盘（第 1 段起建造期间不同步目录）。
+  await expectResidueRebuilt(t, fixtureDocuments(), async (root, stagePath, target) => {
+    await createDirectoryTreeCandidateDurably(
+      root,
+      target.refs.stageRef,
+      target.files,
+      CANDIDATE_OPTIONS,
+    );
+    chmodSync(stagePath, 0o700);
+  });
+});
+
+test("a stage with an empty 0600 member, a short member or other bytes is removed and rebuilt", async (t) => {
+  const stageWithLanding = async (
+    root: RootedDirectory,
+    stagePath: string,
+    target: ReturnType<typeof publication>,
+    landing: string,
+    mode: number,
+  ): Promise<void> => {
+    await createDirectoryAtomically(root, target.refs.stageRef, {
+      mode: LEDGER_DURABLE_DIRECTORY_MODE,
+    });
+    await createFileCandidateDurably(
+      root,
+      parsePortableResourcePath(`${target.refs.stageRef}/record.json`),
+      encodeUtf8(renderLedgerAuthorityRecord(target.record)),
+      { mode: LEDGER_DURABLE_FILE_MODE },
+    );
+    writeFileSync(path.join(stagePath, "landing.md"), landing, { mode });
+    chmodSync(path.join(stagePath, "landing.md"), mode);
+  };
+  // 排他新建之后、写内容与 chmod 之前进程被杀：空的，权限位还是出生时的 0600。
+  await expectResidueRebuilt(t, fixtureDocuments(), (root, stagePath, target) =>
+    stageWithLanding(root, stagePath, target, "", 0o600),
+  );
+  // 掉电时 chmod 落盘了、内容只落了一半：短的，权限位已经是 0644。
+  await expectResidueRebuilt(t, fixtureDocuments(), (root, stagePath, target) =>
+    stageWithLanding(root, stagePath, target, FIXTURE_LANDING_MARKDOWN.slice(0, 10), 0o644),
+  );
+  // 长度对、内容不对（数据块没有落盘）同样是残留。
+  await expectResidueRebuilt(t, fixtureDocuments(), (root, stagePath, target) =>
+    stageWithLanding(
+      root,
+      stagePath,
+      target,
+      "x".repeat(encodeUtf8(FIXTURE_LANDING_MARKDOWN).byteLength),
+      0o644,
+    ),
+  );
+});
+
+test("a nested-document stage whose subdirectory is left at 0700 is removed and rebuilt", async (t) => {
+  await expectResidueRebuilt(t, NESTED_DOCUMENTS, async (root, stagePath, target) => {
+    await createDirectoryTreeCandidateDurably(
+      root,
+      target.refs.stageRef,
+      target.files,
+      CANDIDATE_OPTIONS,
+    );
+    chmodSync(path.join(stagePath, "attachments"), 0o700);
+  });
+});
+
+test("a residue stage that cannot be removed reports recovery-required, and a rebuild that fails again is a conflict without a second removal", async (t) => {
+  const { rootPath, root } = await ledgerRoot(t);
+  const { record, refs } = publication(requirementRecord("示例需求"));
+  const stagePath = physical(rootPath, refs.stageRef);
+  const publish = () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined);
+  mkdirSync(stagePath, { mode: 0o700 });
+  chmodSync(stagePath, 0o700);
+
+  // 删除失败：不报成功，暂存原样留着，同一个请求再发一次会重做。
+  const failing = t.mock.method(filesystemMutation, "removeTree", async () => {
+    throw Object.assign(new Error("permission denied"), { code: "EACCES" });
+  });
+  await expectStoreError(publish, "recovery-required", "$stage");
+  equal(failing.mock.callCount(), 1);
+  equal(existsSync(stagePath), true);
+  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
+  failing.mock.restore();
+
+  // 删除“成功”但目录还在：重建撞上它，照旧报冲突，不再删第二次（不循环）。
+  const vacuous = t.mock.method(filesystemMutation, "removeTree", async () => undefined);
+  await expectStoreError(publish, "conflict", "$stage");
+  equal(vacuous.mock.callCount(), 1);
+  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
+  vacuous.mock.restore();
+
+  equal((await publish()).wroteAuthority, true);
+  deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
+});
+
+test("fails closed on a stage node it did not build, and a stray stage beside a committed final does not block", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
   const { record, refs } = publication(requirementRecord("示例需求"));
   const stagePath = physical(rootPath, refs.stageRef);
   const publish = () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined);
 
-  // 暂存里已经是别的字节：不拿新输入去补，拒绝并且什么都不动。公共路径上走不到这里（标识由内容推出）。
-  await createDirectoryAtomically(root, refs.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  await createFileCandidateDurably(
-    root,
-    parsePortableResourcePath(`${refs.stageRef}/record.json`),
-    encodeUtf8(renderLedgerAuthorityRecord(requirementRecord("Drifted title"))),
-    { mode: LEDGER_DURABLE_FILE_MODE },
-  );
+  // 暂存路径上是个文件：发布器从不在那里造文件，拒绝并且什么都不动。
+  writeFileSync(stagePath, "not a stage", { mode: 0o600 });
   await expectStoreError(publish, "conflict", "$stage");
-  equal(existsSync(stagePath), true);
+  equal(readFileSync(stagePath, "utf8"), "not a stage");
   equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
-  rmSync(stagePath, { recursive: true });
-
-  // 形状不对的暂存（权限位不是持久目录的）同样拒绝。
-  await createDirectoryAtomically(root, refs.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  chmodSync(stagePath, 0o700);
-  await expectStoreError(publish, "conflict", "$stage");
-  rmSync(stagePath, { recursive: true });
+  rmSync(stagePath);
 
   equal((await publish()).wroteAuthority, true);
   // final 生效之后旁边多出一个同名暂存：它不属于任何进行中的发布，不挡住复用，也不被这里清理。

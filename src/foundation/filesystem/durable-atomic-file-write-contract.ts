@@ -7,6 +7,7 @@ import {
   Sha256Error,
 } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
   type FileNodeSnapshot,
@@ -20,7 +21,6 @@ import {
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 
@@ -31,15 +31,17 @@ export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
 
 /**
  * `fsync`：文件与父目录都同步到持久介质，权威事实必须用它；
+ * `content-only`：链接或重命名之前同步暂存内容，不同步父目录——目录项可能在断电后
+ * 丢失，但凡是可见的目标都有完整内容，供能自行退役的锁与租约使用；
  * `none`：只保证 rename/link 的原子可见性，不做任何同步，只用于可重建的派生检查点。
  */
-export type DurableAtomicFileDurability = "fsync" | "none";
+export type DurableAtomicFileDurability = "fsync" | "content-only" | "none";
 
 /**
- * 逐次写入的 `durability` 只是“这一条派生检查点放弃同步”的窄豁免，
+ * 逐次写入的 `durability` 只是“这一条记录放弃部分同步”的窄豁免，
  * 不是持久化级别的权威：级别由根决定（见 `rooted-directory.ts`）。
  * 两者取更弱的一档——根为 `none` 时整棵树都不同步，根为 `fsync` 时仍允许
- * 单次写入按可重建性放弃同步。
+ * 单次创建按记录种类降到 `content-only` 或 `none`。替换没有这个选项。
  */
 export interface DurableAtomicFileCreateOptions {
   readonly mode: number;
@@ -50,6 +52,7 @@ export interface DurableAtomicFileCreateOptions {
 /** 替换操作所需、与目标资源路径绑定的完整前序稳定读取事实。 */
 export type DurableAtomicFileExpectation = Readonly<StableFileSource>;
 
+/** 替换没有逐次 `durability`：档表没有要降档的替换（锁不替换），级别只跟随根。 */
 export interface DurableAtomicFileReplaceOptions {
   readonly mode: number;
   readonly expected: DurableAtomicFileExpectation;
@@ -146,6 +149,7 @@ interface ParsedDurableAtomicFileWriteOptions {
   readonly signal: AbortSignal | undefined;
 }
 
+/** 解析后的逐次级别缺省为 `fsync`；门面再按根的级别往下收。 */
 interface ParsedDurableAtomicFileCreateOptions extends ParsedDurableAtomicFileWriteOptions {
   readonly durability: DurableAtomicFileDurability;
 }
@@ -230,7 +234,7 @@ function parseSignal(value: unknown): AbortSignal | undefined {
 
 function parseDurability(value: unknown): DurableAtomicFileDurability {
   if (value === undefined) return "fsync";
-  if (value !== "fsync" && value !== "none") {
+  if (value !== "fsync" && value !== "content-only" && value !== "none") {
     failDurableAtomicFileWrite("input", "$options.durability");
   }
   return value;

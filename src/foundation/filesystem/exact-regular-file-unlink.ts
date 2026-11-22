@@ -1,7 +1,7 @@
-import { unlink } from "node:fs/promises";
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -9,8 +9,9 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -19,7 +20,6 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：指定普通文件路径名的耐久删除。
@@ -27,7 +27,8 @@ import { isAbortSignal } from "../node/abort-signal.js";
  * 调用方必须提供冻结的预期节点。本模块持有不跟随符号链接的源句柄和父目录句柄，
  * 并在提交前确认路径名、句柄和预期完全一致。默认结算策略要求删除后路径持续不存在；
  * 协调锁可以显式允许设备号或 inode 不同的后继资源立即取得原名。两种策略都要求
- * 已打开句柄仍指向原 inode、链接数精确减少 1，再同步 inode 和父目录并完成最终复验。
+ * 已打开句柄仍指向原 inode、链接数精确减少 1，再同步父目录并完成最终复验。`fsync` 级别
+ * 恰好一次同步（父目录）：被删的文件不再单独同步，删掉的是目录项，落盘靠父目录同步。
  *
  * 目标缺失不视为幂等成功，符号链接、目录和特殊节点都会被拒绝。删除调用后的失败
  * 不会尝试恢复路径名，也不会删除占据原名的后继资源。本基础操作必须在领域锁和恢复
@@ -40,7 +41,7 @@ export interface ExactRegularFileUnlinkOptions {
   readonly expectedNode: Readonly<FileNodeSnapshot>;
   /** 普通资源要求路径持续不存在；协调锁允许后继持有者立即取得同一路径名。 */
   readonly settlement?: "absent" | "replacement-allowed";
-  /** `none` 只用于退休可重建的派生检查点或候选残留，跳过文件与父目录同步。 */
+  /** `none` 只用于退休可重建的派生检查点或候选残留，跳过父目录同步。 */
   readonly durability?: "fsync" | "none";
   readonly signal?: AbortSignal;
 }
@@ -88,7 +89,7 @@ const ERROR_MESSAGES = {
   "source-changed": "Exact unlink source no longer matches its expectation.",
   "unlink-failure": "Exact unlink commit could not be executed safely.",
   "commit-uncertain": "Exact unlink commit result could not be proven safely.",
-  "durability-failure": "Exact unlink inode and parent could not be synchronized.",
+  "durability-failure": "Exact unlink parent directory could not be synchronized.",
   aborted: "Exact unlink was aborted before commit.",
   "close-failure": "An exact unlink handle could not be closed safely.",
 } as const satisfies Readonly<Record<ExactRegularFileUnlinkErrorReason, string>>;
@@ -288,12 +289,9 @@ async function closeParent(
 
 function mapExactSourceError(
   error: RootedExactResourceHandleError,
-  operation: "open" | "current" | "inspect-after-commit" | "sync-after-commit",
+  operation: "open" | "current" | "inspect-after-commit",
 ): never {
-  if (operation === "sync-after-commit" && error.reason === "sync-failure") {
-    fail("durability-failure", "$resourcePath");
-  }
-  if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
+  if (operation === "inspect-after-commit") {
     fail("commit-uncertain", "$resourcePath");
   }
   if (operation === "current") fail("source-changed", "$resourcePath");
@@ -353,17 +351,6 @@ async function inspectCommittedSource(
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
       mapExactSourceError(error, "inspect-after-commit");
-    }
-    throw error;
-  }
-}
-
-async function syncCommittedSource(source: RootedExactResourceHandle): Promise<void> {
-  try {
-    await source.syncOpenedNode();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapExactSourceError(error, "sync-after-commit");
     }
     throw error;
   }
@@ -448,7 +435,7 @@ export async function unlinkRegularFileExactly(
     assertNotAborted(parsed.signal);
 
     try {
-      await unlink(parent.resourceAbsolutePath);
+      await filesystemMutation.unlink(parent.resourceAbsolutePath);
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "ENOENT") {
         fail("source-changed", "$resourcePath", error);
@@ -463,10 +450,7 @@ export async function unlinkRegularFileExactly(
     if (!sameUnlinkedNode(nodeBefore, afterUnlink, remainingLinkCount)) {
       fail("commit-uncertain", "$resourcePath");
     }
-    if (parsed.durability === "fsync") {
-      await syncCommittedSource(source);
-      await syncParent(parent);
-    }
+    if (parsed.durability === "fsync") await syncParent(parent);
     replacementObserved =
       (await observeSettlement(parent, nodeBefore, parsed.settlement)) || replacementObserved;
     const settled = await inspectCommittedSource(source);

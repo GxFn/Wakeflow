@@ -21,6 +21,7 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -42,7 +43,21 @@ import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-fil
  * Level 1 (component): shared/exclusive admission on a disposable root — reader overlap, writer closure
  * and draining, cancellation, latch settlement failures, unknown owners, dead-reader retirement
  * (§13.161 F1/F2/F4) and lease settlement after the critical section (B10, open-items W8).
+ *
+ * Latch settlement failures are injected in two places. At the latch's unlink, through
+ * `filesystemMutation.unlink`: the injection performs the real unlink first and then reports a failure,
+ * so the directory entry change happened but its settlement did not, and the release never reaches the
+ * admission directory sync that follows every release (the latch and leases are light only at
+ * acquisition; replan section 3, path C). And at that sync itself, through the parent handle: the
+ * unlink settled and the sync that should make it durable fails. Both leave the same visible state and
+ * the same `release-failure`. The replacement test below injects at the unlink only. The sync counts are
+ * pinned in durability-class-counts.test.ts.
  */
+
+/** A settlement failure reported by the unlink after the directory entry change already happened. */
+function injectedUnlinkFailure(): Error {
+  return Object.assign(new Error("Injected latch unlink failure."), { code: "EIO" });
+}
 
 const AREA = parsePortableResourcePath("admission");
 async function fixture(t: TestContext) {
@@ -225,37 +240,50 @@ test("latch settlement failure releases acquired admission before propagating th
   timeout: 15000,
 }, async (t) => {
   if (loadSensitive(t, "real reader processes and latch waits")) return;
-  for (const [mode, releaseNumber] of [
-    ["shared", 1],
-    ["exclusive", 1],
-    ["exclusive", 2],
+  for (const [mode, releaseNumber, fault] of [
+    ["shared", 1, "unlink"],
+    ["exclusive", 1, "unlink"],
+    ["exclusive", 2, "unlink"],
+    ["shared", 1, "sync"],
+    ["exclusive", 1, "sync"],
+    ["exclusive", 2, "sync"],
   ] as const) {
-    await t.test(`${mode} latch release ${releaseNumber}`, async (t) => {
+    await t.test(`${mode} latch release ${releaseNumber}, failing at the ${fault}`, async (t) => {
       const f = await fixture(t);
-      const originalSync = RootedResourceParentHandle.prototype.sync;
+      const latch = path.join(f.area, "latch.lock");
       let settlements = 0;
       let injected = false;
       let entered = false;
-      t.mock.method(
-        RootedResourceParentHandle.prototype,
-        "sync",
-        async function (
-          this: RootedResourceParentHandle,
-          ...args: Parameters<typeof originalSync>
-        ) {
-          if (
-            this.resourceAbsolutePath === path.join(f.area, "latch.lock") &&
-            !existsSync(this.resourceAbsolutePath)
+      /** True on the latch release this subtest fails. */
+      const failsNow = (): boolean => {
+        settlements += 1;
+        injected ||= settlements === releaseNumber;
+        return settlements === releaseNumber;
+      };
+      if (fault === "unlink") {
+        const originalUnlink = filesystemMutation.unlink;
+        t.mock.method(filesystemMutation, "unlink", async (target: string): Promise<void> => {
+          await originalUnlink(target);
+          if (target === latch && failsNow()) throw injectedUnlinkFailure();
+        });
+      } else {
+        // The admission directory sync that follows the latch's unlink: the only parent sync of a light
+        // cycle, so "the latch is already gone" identifies it.
+        const originalSync = RootedResourceParentHandle.prototype.sync;
+        t.mock.method(
+          RootedResourceParentHandle.prototype,
+          "sync",
+          async function (
+            this: RootedResourceParentHandle,
+            ...args: Parameters<typeof originalSync>
           ) {
-            settlements += 1;
-            if (settlements === releaseNumber) {
-              injected = true;
+            if (this.resourceAbsolutePath === latch && !existsSync(latch) && failsNow()) {
               throw new RootedResourceParentHandleError("sync-failure", "$test");
             }
-          }
-          return originalSync.apply(this, args);
-        },
-      );
+            return originalSync.apply(this, args);
+          },
+        );
+      }
       await rejects(
         withRootedReadWriteScope(f.root, AREA, mode, async () => {
           entered = true;
@@ -285,7 +313,7 @@ test("latch failure cleanup cannot remove an unknown replacement of the acquired
   for (const mode of ["shared", "exclusive"] as const) {
     await t.test(mode, async (t) => {
       const f = await fixture(t);
-      const originalSync = RootedResourceParentHandle.prototype.sync;
+      const originalUnlink = filesystemMutation.unlink;
       const unknown = rootedExclusiveFileLockRecordTextForTest({
         pid: process.pid,
         threadId,
@@ -293,30 +321,19 @@ test("latch failure cleanup cannot remove an unknown replacement of the acquired
       });
       let replacement: string | undefined;
       let entered = false;
-      t.mock.method(
-        RootedResourceParentHandle.prototype,
-        "sync",
-        async function (
-          this: RootedResourceParentHandle,
-          ...args: Parameters<typeof originalSync>
-        ) {
-          if (
-            replacement === undefined &&
-            this.resourceAbsolutePath === path.join(f.area, "latch.lock") &&
-            !existsSync(this.resourceAbsolutePath)
-          ) {
-            const name = readdirSync(f.area).find(
-              (name) => name === "writer.lock" || name.startsWith("reader-"),
-            );
-            if (name === undefined) throw new Error("Missing acquired lease.");
-            replacement = path.join(f.area, name);
-            rmSync(replacement);
-            writeFileSync(replacement, unknown, { mode: 0o600 });
-            throw new RootedResourceParentHandleError("sync-failure", "$test");
-          }
-          return originalSync.apply(this, args);
-        },
-      );
+      t.mock.method(filesystemMutation, "unlink", async (target: string): Promise<void> => {
+        await originalUnlink(target);
+        if (replacement === undefined && target === path.join(f.area, "latch.lock")) {
+          const name = readdirSync(f.area).find(
+            (name) => name === "writer.lock" || name.startsWith("reader-"),
+          );
+          if (name === undefined) throw new Error("Missing acquired lease.");
+          replacement = path.join(f.area, name);
+          rmSync(replacement);
+          writeFileSync(replacement, unknown, { mode: 0o600 });
+          throw injectedUnlinkFailure();
+        }
+      });
       await rejects(
         withRootedReadWriteScope(f.root, AREA, mode, async () => {
           entered = true;

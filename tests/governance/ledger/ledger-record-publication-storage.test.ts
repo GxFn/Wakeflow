@@ -48,10 +48,11 @@ import {
 import {
   type LedgerRecordPublicationPlan,
   ledgerPublicationResourceNodeOrNull,
-  ledgerRecordPublicationStageNodeOrNull,
+  ledgerRecordPublicationStageState,
   loadExactPublishedLedgerRecord,
   prepareLedgerRecordPublicationLockRecovery,
   publishLedgerRecordStage,
+  retireLedgerRecordPublicationStage,
   withLedgerRecordPublicationLock,
 } from "../../../src/governance/ledger/ledger-record-publication-storage.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
@@ -177,7 +178,7 @@ test("a bare root without the ledger layout fails closed for every transaction r
   const { rootPath, root } = await ledgerRoot(t, false);
   const { plan } = publication(requirementRecord("示例需求"));
   const noop = async () => undefined;
-  equal(await ledgerRecordPublicationStageNodeOrNull(root, plan), null);
+  equal(await ledgerRecordPublicationStageState(root, plan), "absent");
   await prepareLedgerRecordPublicationLockRecovery(root, plan.lockRef);
   await expectStoreError(
     () => withLedgerRecordPublicationLock(root, plan.lockRef, undefined, noop),
@@ -192,31 +193,37 @@ test("a bare root without the ledger layout fails closed for every transaction r
   deepEqual(readdirSync(rootPath), []);
 });
 
-test("the stage lookup admits only a durable stage directory", async (t) => {
+test("the stage lookup resumes a durable stage directory, marks a wrong-mode one as residue, and rejects a non-directory", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
   const { plan } = publication(requirementRecord("示例需求"));
   const stagePath = physical(rootPath, plan.stageRef);
-  equal(await ledgerRecordPublicationStageNodeOrNull(root, plan), null);
+  equal(await ledgerRecordPublicationStageState(root, plan), "absent");
 
   await createDirectoryAtomically(root, plan.stageRef, { mode: LEDGER_DURABLE_DIRECTORY_MODE });
-  const stageNode = await ledgerRecordPublicationStageNodeOrNull(root, plan);
-  ok(stageNode !== null);
-  equal(stageNode.kind, "directory");
-  equal(stageNode.permissionBits, LEDGER_DURABLE_DIRECTORY_MODE);
+  equal(await ledgerRecordPublicationStageState(root, plan), "resumable");
 
+  // 0700 是 mkdir 的出生权限位：chmod 之前被杀或掉电没落盘的崩溃残留，交给发布器删掉重建。
   chmodSync(stagePath, 0o700);
-  await expectStoreError(
-    () => ledgerRecordPublicationStageNodeOrNull(root, plan),
-    "conflict",
-    "$stage",
-  );
+  equal(await ledgerRecordPublicationStageState(root, plan), "residue");
   rmSync(stagePath, { recursive: true });
+  // 不是目录的节点不是发布器造的，照旧冲突。
   writeTextFile(rootPath, plan.stageRef, "not a stage");
+  await expectStoreError(() => ledgerRecordPublicationStageState(root, plan), "conflict", "$stage");
+});
+
+test("stage retirement removes the whole stage tree, and an aborted signal removes nothing", async (t) => {
+  const { rootPath, root } = await ledgerRoot(t);
+  const { plan, files } = publication(requirementRecord("示例需求"));
+  const stagePath = physical(rootPath, plan.stageRef);
+  await createDirectoryTreeCandidateDurably(root, plan.stageRef, files, CANDIDATE_OPTIONS);
   await expectStoreError(
-    () => ledgerRecordPublicationStageNodeOrNull(root, plan),
-    "conflict",
-    "$stage",
+    () => retireLedgerRecordPublicationStage(root, plan, ABORTED),
+    "aborted",
+    "$signal",
   );
+  equal(existsSync(stagePath), true);
+  await retireLedgerRecordPublicationStage(root, plan, undefined);
+  deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
 });
 
 test("lock recovery retires inactive residues and leaves live or unsafe locks alone", async (t) => {

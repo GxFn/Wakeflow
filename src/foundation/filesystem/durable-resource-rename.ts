@@ -1,7 +1,7 @@
-import { rename } from "node:fs/promises";
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -9,12 +9,13 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -23,7 +24,6 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内真实文件或目录的持久化重命名。
@@ -523,7 +523,10 @@ export async function renameResourceDurably(
     assertNotAborted(parsed.signal);
 
     try {
-      await rename(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
+      await filesystemMutation.rename(
+        sourceParent.resourceAbsolutePath,
+        destinationParent.resourceAbsolutePath,
+      );
     } catch (error: unknown) {
       if (readNodeSystemErrorCode(error) === "EXDEV") {
         fail("cross-device", "$destinationResourcePath", error);

@@ -151,7 +151,7 @@ interface HookPayload {
   readonly sessionTitle: string | null;
   /** `model`：SessionStart 带的当前模型标识，可缺省（X28）。 */
   readonly model: string | null;
-  /** `source`：SessionStart 的来源（startup、resume、clear、compact），可缺省（B14）。 */
+  /** `source`：SessionStart 的来源（startup、resume、clear、compact、fork），可缺省（B14）。 */
   readonly startSource: string | null;
 }
 

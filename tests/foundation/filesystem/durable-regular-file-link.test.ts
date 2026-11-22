@@ -24,6 +24,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectLinkError(
   action: () => unknown | Promise<unknown>,
@@ -73,6 +74,32 @@ test("same-parent link publishes one exact no-replace linked pair", async () => 
     equal(readFileSync(path.join(rootPath, "source"), "utf8"), "payload");
     equal(readFileSync(path.join(rootPath, "destination"), "utf8"), "payload");
     equal(Object.isFrozen(result), true);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("fsync root: a link syncs only the destination parent, never the source inode again", {
+  concurrency: false,
+}, async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-link-count-"));
+  mkdirSync(path.join(rootPath, "from"));
+  mkdirSync(path.join(rootPath, "to"));
+  writeFileSync(path.join(rootPath, "from", "source"), "payload");
+  const root = await RootedDirectory.open(rootPath, "$root", { durability: "fsync" });
+  try {
+    const source = parsePortableResourcePath("from/source");
+    const expected = await root.inspectExistingResource(source);
+    const counted = await countFsyncs(() =>
+      linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath("to/destination"), {
+        expectedSourceNode: expected.node,
+      }),
+    );
+    // 源内容由调用方在链接前同步；本原语只让新目录项持久：一次，落在目标父目录上。
+    equal(counted.syncCount, 1);
+    equal(counted.directorySyncCount, 1);
+    equal(counted.result.destinationNode.linkCount, 2n);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

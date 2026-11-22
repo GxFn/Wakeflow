@@ -29,7 +29,22 @@ import {
 } from "./rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory, StableDirectoryReadError } from "./stable-directory-read.js";
 
-/** A caller-owned private directory contains only the latch, writer and reader leases. */
+/**
+ * A caller-owned private directory contains only the latch, writer and reader leases.
+ *
+ * 闩锁、写者锁与读者租约在获取时都用轻档（`durability: "content-only"`，1.4.1 第 1 段清单 2.1 节
+ * L1、L2，重排计划第 3 节路丙）：锁文件在链接之前同步一次内容，不同步准入目录。释放、退休失效持有者
+ * 与删掉属主已死的创建暂存都同步准入目录，所以每一次释放都让此前在准入目录里的所有目录项变更一起落盘。
+ * 掉电之后目录里能留下的：当时正被持有（释放尚未返回，或释放以 `release-failure` 结束）的闩锁与租约的
+ * 文件，内容完整、属主已死，带或
+ * 不带创建暂存（获取到一半的还可能只剩暂存）；以及自准入目录上次同步以来，每次在链接那一步输给别人或
+ * 在链接之前被中止的获取至多一份属主已死的创建暂存（它删自己的暂存时不同步，下一次释放或退休的同步把
+ * 这些删除落盘）。条目数以当时同时在场的持有者与获取者、加上这段时间里这样输掉的获取次数为上界，下一次
+ * 准入按"属主已死"退休它们。准入目录本身不在这里创建：它由维护范围经权威路径新建，本模块只读它的清点。
+ *
+ * 一次进出的同步次数（准入目录里没有残留时）：共享 4 次 = 闩锁周期 2（链接之前的内容，释放时的
+ * 准入目录）+ 读者租约周期 2；独占 6 次 = 准入闩锁 2 + 写者锁 2 + 排空闩锁 2。
+ */
 export type RootedReadWriteMode = "shared" | "exclusive";
 export interface RootedReadWriteScopeOptions {
   readonly signal?: AbortSignal;
@@ -228,6 +243,7 @@ export async function withRootedReadWriteScope<Result>(
     const remaining = monotonicDeadlineRemaining(deadline, readMonotonicClock());
     return {
       acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999_999n) / 1_000_000n)),
+      durability: "content-only" as const,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     };
   };

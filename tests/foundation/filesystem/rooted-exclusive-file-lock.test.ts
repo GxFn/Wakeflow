@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   existsSync,
   linkSync,
@@ -20,6 +20,7 @@ import { computeDurableAtomicFileStageTargetDigest } from "../../../src/foundati
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
+  acquireRootedExclusiveFileLock,
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
   type RootedExclusiveFileLockErrorReason,
@@ -28,6 +29,11 @@ import {
 } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
 import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
+
+/**
+ * Level 1 (component): 独占文件锁在一次性根上的获取、互斥、失效持有者的显式退休与不安全节点。
+ * 两档只在获取时不同；同步次数在 durability-class-counts.test.ts 里钉。
+ */
 
 async function expectLockError(
   action: () => unknown | Promise<unknown>,
@@ -283,6 +289,14 @@ test("explicit recovery retires an exact inactive-owner residue", async () => {
         }),
       "input",
     );
+    // 退休不分档：它总是同步父目录，不接受获取时的档位选项。
+    await expectLockError(
+      () =>
+        retireRootedExclusiveFileLockResidue(root, lockPath, observed, {
+          durability: "content-only",
+        } as never),
+      "input",
+    );
     await retireRootedExclusiveFileLockResidue(root, lockPath, observed);
     equal(existsSync(physicalLock), false);
     equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "absent");
@@ -365,12 +379,65 @@ test("unsafe lock nodes and decorated options fail closed", async () => {
     for (const options of [
       { acquireTimeoutMilliseconds: null },
       { retryDelayMilliseconds: null },
+      { durability: "none" },
+      { durability: null },
     ]) {
       await expectLockError(
         () => withRootedExclusiveFileLock(root, lockPath, () => undefined, options as never),
         "input",
       );
     }
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("a content-only lock keeps the record, mutual exclusion and dead-owner retirement of the default lock", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-lock-light-"));
+  mkdirSync(path.join(rootPath, "state"));
+  const physicalLock = path.join(rootPath, "state", "board.lock");
+  const root = await RootedDirectory.open(rootPath);
+  const lockPath = parsePortableResourcePath("state/board.lock");
+  try {
+    const lease = await acquireRootedExclusiveFileLock(root, lockPath, {
+      durability: "content-only",
+    });
+    const held = await inspectRootedExclusiveFileLock(root, lockPath);
+    if (held.status !== "held") throw new Error("Expected held lock.");
+    equal(held.ownerState, "active");
+    equal(held.node.permissionBits, 0o600);
+    equal(held.node.linkCount, 1n);
+    // 两档互斥：轻档持有时，默认档与轻档的竞争者都只能等到超时，且不删除它。
+    for (const durability of ["fsync", "content-only"] as const) {
+      await expectLockError(
+        () =>
+          withRootedExclusiveFileLock(root, lockPath, () => undefined, {
+            acquireTimeoutMilliseconds: 30,
+            retryDelayMilliseconds: 5,
+            durability,
+          }),
+        "timeout",
+      );
+    }
+    equal(existsSync(physicalLock), true);
+    await lease.release();
+    equal(existsSync(physicalLock), false);
+    deepEqual(readdirSync(path.join(rootPath, "state")), []);
+
+    writeFileSync(
+      physicalLock,
+      rootedExclusiveFileLockRecordTextForTest({
+        tokenUuid: "66666666-6666-4666-8666-666666666666",
+      }),
+      { mode: 0o600 },
+    );
+    const residue = await inspectRootedExclusiveFileLock(root, lockPath);
+    if (residue.status !== "held") throw new Error("Expected held residue.");
+    equal(residue.ownerState, "inactive");
+    // 失效轻档锁的退休与默认档是同一次调用：记录里没有档位，退休也不分档。
+    await retireRootedExclusiveFileLockResidue(root, lockPath, residue);
+    equal((await inspectRootedExclusiveFileLock(root, lockPath)).status, "absent");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

@@ -1,6 +1,4 @@
-import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { randomUUID } from "node:crypto";
-
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
@@ -11,21 +9,22 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, type JsonValue } from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { materializeDirectoryPath } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { createDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { retireDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import { publishDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import {
-  parsePortableResourcePath,
   type PortableResourcePath,
+  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
+import { RootedResourceParentHandle } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile } from "../../foundation/filesystem/stable-file-read.js";
 import {
@@ -52,6 +51,7 @@ import {
   demandArchivesRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
 } from "../../kernel/layout.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import {
   ARCHIVE_EXCLUDED_PREFIXES,
   computePayloadTreeDigest,
@@ -666,6 +666,13 @@ export interface RetireDemandRootOptions {
  * `residual` 由日志与已封归档授权，跳过摘要比对。
  * 这是本仓库唯一一处递归删除用户内容的地方（其余递归删除只清理本进程自建的候选目录与回执）；
  * 归档已经是这些字节的权威副本。
+ * 删除原语在返回前同步 Demand 根的父目录一次（1.4.1 第 1 段）：终态应用随后持久删除生命周期
+ * 日志，掉电之后不会出现日志已消失而 Demand 根又回来的状态。删除原语的任何失败（含父目录
+ * 打不开的 `parent-open-failure` 与同步失败）都报 io-failure。
+ * 根已不在（`absent`）时同样先同步它的父目录一次再返回：只有 recover 与并发删除者走到这里，
+ * 上一次删除可能已经让根离开命名空间、却在同步父目录之前被杀或同步失败；不补这次同步，
+ * 随后持久删除日志就又回到“日志没了、根掉电后回来”的顺序。打开、同步或关闭失败报同一个
+ * io-failure `demand-root-remove`。
  */
 export async function retireDemandRoot(
   workspaceRoot: RootedDirectory,
@@ -681,8 +688,28 @@ export async function retireDemandRoot(
       "$demandRoot",
     );
   } catch (error: unknown) {
-    if (isNotFound(error)) return "absent";
-    mapFoundationError(error, "demand-root-inspect", "$demandRoot");
+    if (!isNotFound(error)) mapFoundationError(error, "demand-root-inspect", "$demandRoot");
+    let parent: RootedResourceParentHandle | undefined;
+    let failure: unknown;
+    try {
+      parent = await RootedResourceParentHandle.open(
+        workspaceRoot,
+        demandFinalRootRef(demandId),
+        "$demandRoot",
+      );
+      await parent.sync();
+    } catch (cause: unknown) {
+      failure = cause;
+    }
+    try {
+      await parent?.close();
+    } catch (cause: unknown) {
+      failure ??= cause;
+    }
+    if (failure !== undefined) {
+      fail("io-failure", "demand-root-remove", "$demandRoot", { cause: failure });
+    }
+    return "absent";
   }
   if (observation.node.kind !== "directory") {
     fail("precondition-failed", "demand-root-not-directory", "$demandRoot");

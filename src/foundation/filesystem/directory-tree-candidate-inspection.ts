@@ -17,8 +17,13 @@ import {
   parseDirectoryTreeCandidatePlan,
 } from "./directory-tree-candidate-plan.js";
 import {
+  BoundedDirectoryTreeScanError,
+  scanBoundedResourceDirectoryTree,
+} from "./bounded-directory-tree-scan.js";
+import {
   type FileNodeSnapshot,
   FileNodeSnapshotError,
+  sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
@@ -29,7 +34,14 @@ import {
   StableResourceTreeReadError,
 } from "./stable-resource-tree-read.js";
 
-/** Wakeflow Foundation / Filesystem：目录树候选的稳定进度检查与清单闭合验证。 */
+/**
+ * Wakeflow Foundation / Filesystem：目录树候选的稳定进度检查与清单闭合验证。
+ *
+ * 进度检查与闭合验证读取并比对每个成员的字节：它们供恢复路径和上层检查遗留候选，
+ * 读内容是有意的。刚由本进程创建完的候选改用 `inspectCreatedDirectoryTreeCandidate`：
+ * 只按元数据核对清单闭合（条目集合、权限位、链接数、大小与创建时记下的节点身份），
+ * 不回读成员内容。
+ */
 
 function inspectionLimits(plan: Readonly<DirectoryTreeCandidatePlan>) {
   let largestFile = 0;
@@ -236,6 +248,74 @@ export async function inspectDirectoryTreeCandidate(
     plan: progress.plan,
     rootNode: progress.rootNode,
   });
+}
+
+/**
+ * 不读成员内容地证明刚创建完的候选清单闭合。
+ *
+ * `createdFiles` 是创建时从句柄与路径复验得到的成员节点；每个文件必须仍是同一节点、
+ * 同一大小与权限位且只有一个链接，目录集合与权限位必须与计划一致，不得有多余条目。
+ */
+export async function inspectCreatedDirectoryTreeCandidate(
+  root: RootedDirectory,
+  candidateRootPath: PortableResourcePath,
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  createdFiles: ReadonlyMap<PortableResourcePath, Readonly<FileNodeSnapshot>>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DirectoryTreeCandidateResult>> {
+  const limits = inspectionLimits(plan);
+  let tree: Awaited<ReturnType<typeof scanBoundedResourceDirectoryTree>>;
+  try {
+    tree = await scanBoundedResourceDirectoryTree(root, candidateRootPath, {
+      maximumEntries: limits.maximumEntries,
+      maximumDepth: limits.maximumDepth,
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof BoundedDirectoryTreeScanError) {
+      if (error.reason === "aborted") fail("aborted", "$signal");
+      if (error.reason === "source-changed") fail("source-changed", "$candidate");
+      fail("tree-conflict", "$candidate");
+    }
+    throw error;
+  }
+  if (
+    tree.treeRootNode.kind !== "directory" ||
+    tree.treeRootNode.permissionBits !== plan.directoryMode ||
+    tree.entries.length !== plan.directories.length + plan.files.length
+  ) {
+    fail("tree-conflict", "$candidate");
+  }
+  const expectedDirectories = new Set(plan.directories);
+  const expectedFiles = new Map(plan.files.map((file) => [file.path, file]));
+  const seen = new Set<PortableResourcePath>();
+  for (const entry of tree.entries) {
+    const relative = relativeFromCandidate(candidateRootPath, entry.resourcePath);
+    if (seen.has(relative)) fail("tree-conflict", "$candidate");
+    seen.add(relative);
+    if (entry.node.kind === "directory") {
+      if (!expectedDirectories.has(relative) || entry.node.permissionBits !== plan.directoryMode) {
+        fail("tree-conflict", "$candidate");
+      }
+      continue;
+    }
+    const expected = expectedFiles.get(relative);
+    const created = createdFiles.get(relative);
+    if (
+      expected === undefined ||
+      created === undefined ||
+      entry.node.kind !== "file" ||
+      entry.node.permissionBits !== expected.mode ||
+      entry.node.linkCount !== 1n ||
+      entry.node.byteCount !== expected.byteCount ||
+      !sameFileNodeIdentity(entry.node, created) ||
+      entry.node.byteCount !== created.byteCount
+    ) {
+      fail("tree-conflict", "$candidate");
+    }
+  }
+  assertDirectoryTreeCandidateNotAborted(signal);
+  return Object.freeze({ candidateRootPath, plan, rootNode: tree.treeRootNode });
 }
 
 /** 写入前验证已有暂存目录是输入计划的安全子集，且现有文件字节完全一致。 */

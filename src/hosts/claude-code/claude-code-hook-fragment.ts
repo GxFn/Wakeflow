@@ -10,16 +10,30 @@ import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/
  * 工作区由脚本按声明拓扑定位（D2），所以片段里没有工作区根，这五个观察事件都不设 matcher。
  *
  * 同步与异步（D5）：`SessionStart` 同步、5 秒；`UserPromptSubmit` 异步（只观察不控制，不给每次提示
- * 加启动延迟）；`Notification` 异步、5 秒（open-items A7，§13.167：等待权限、空闲等待、登录或用量提示
+ * 加启动延迟）；`Notification` 异步（open-items A7，§13.167：等待权限、空闲等待、登录或用量提示
  * 这些宿主阻塞状态只有它能看见，观察器只记类型）；`Stop` 同步、5 秒——它是结果接受的完成证据，异步 hook 会在 `-p` 收尾时被杀掉；
- * `SessionEnd` 同步、3 秒（插件 hook 抬不高 1.5 秒预算，靠脚本快）。渲染结果必须跨版本字节稳定：
- * 只含占位符，不含版本号或构建标识；键序固定、2 空格缩进、尾随换行。
+ * `SessionEnd` 同步、3 秒（插件 hook 抬不高 1.5 秒预算，靠脚本快）。两个异步处理器也写着 5 秒，但宿主
+ * 对 `async: true` 的 command hook 不执行 `timeout`（hooks 参考的 `timeout` 字段与"Run hooks in the
+ * background"一节），这两次运行的上限只来自观察器自己：有界的 stdin、配置与列举读取，窗口状态子进程
+ * 1 秒超时；它没有整体的墙钟期限。键留着：文档没说宿主从哪一版起不再执行它，仍执行的宿主上就是 5 秒。
+ * 渲染结果必须跨版本字节稳定：只含占位符，不含版本号或构建标识；键序固定、2 空格缩进、尾随换行。
  *
  * 第六个事件是控制而不是观察（ADR-0020 的 2026-11-16 补充，open-items X30）：`PreToolUse` 上、只对编辑工具
  * （matcher 是精确名字的列表）同步启动同一个脚本，带写守卫的标记；守卫只在已绑定的非 Controller 窗口要写
- * 受管路径时拒绝，其余放行。同步是必须的——异步 hook 的决定宿主不认；超时与故障在宿主那里都是放行，守卫
- * 因此不可能挡住一次它没判定的编辑。matcher 里的 `MultiEdit` 是给还带这个工具的旧宿主留的，没有它的
- * 宿主上这一项什么也不匹配。
+ * 受管路径时拒绝，其余放行。同步是必须的——异步 hook 的决定宿主不认。守卫起不来、被杀、意外退出或超时，
+ * 都由宿主处置：普通会话里这是非阻塞错误，调用照常走权限流程；实验性的 Code Mode（2.1.323 起，缺省关）
+ * 在 `onFailure` 未设时会拒绝那次调用：2.1.323 到 2.1.328 上，没给出决定的 `PreToolUse` hook（起不来、
+ * 被杀、意外退出码、超时）都让调用被拒；2.1.329 的更新日志把出错改成与普通会话一样放行，Code Mode 文档
+ * 写明超时（`the hook did not finish`）仍然被拒，要放行就设 `"onFailure": "continue"`。所以守卫的处理器
+ * 显式带 `onFailure: "continue"`（宿主 2.1.295 起认这个键）：两种模式、各个版本下守卫的故障与超时都放行，
+ * 守卫不可能挡住一次它没判定的编辑。比 2.1.295 早的宿主没有 Code Mode，不认这个键：hooks 文档没写它们
+ * 怎么处置未知键，没有一手文档可引；能找到的都指向忽略——宿主更新日志 2.1.274（修掉插件 hooks 文件顶层
+ * `$schema` 的 "unknown key" 提示，可见此前是提示而不是拒收），以及 2.1.197、2.1.229、2.1.267 上的第三方
+ * 报告（有的版本提示一句），本机 2.1.325 与 2.1.328 的 `claude plugin validate` 对不认识的处理器键也不报。
+ * 那里的缺省本来就是放行。认识这个键的宿主遇到非法取值会让 `PreToolUse` 所在的整份 hooks 不生效，所以
+ * 取值只能是 continue 或 block。
+ * 观察事件的处理器不带这个键：异步处理器上它不起作用，其余观察事件的缺省就是继续。matcher 里的
+ * `MultiEdit` 是给还带这个工具的旧宿主留的，没有它的宿主上这一项什么也不匹配。
  *
  * 本模块只依赖 foundation crypto：标记与宿主参数是与入口 `wakeflow-hook-observer.ts`、
  * `wakeflow-hook-write-guard.ts` 约定的字面量，宿主层不能反向导入入口，测试核对两处相等。
@@ -40,6 +54,8 @@ export interface ClaudeCodeHookHandler {
   /** 只在异步处理器上出现，且只取 true；同步处理器没有这个键。 */
   readonly async?: true;
   readonly timeout: number;
+  /** 只在写守卫的处理器上出现，且只取 continue：守卫的故障与超时在任何模式下都放行。 */
+  readonly onFailure?: "continue";
 }
 
 export interface ClaudeCodeHookMatcherGroup {
@@ -99,7 +115,10 @@ function group(entry: ClaudeCodeHookHandler): readonly ClaudeCodeHookMatcherGrou
   return Object.freeze([Object.freeze({ hooks: Object.freeze([entry]) })]);
 }
 
-/** 写守卫的组：键序 matcher、hooks；处理器同步，决定才作数。 */
+/**
+ * 写守卫的组：键序 matcher、hooks；处理器同步，决定才作数；处理器的键序 type、command、args、timeout、
+ * onFailure，`onFailure` 排在最后，前面的字节与观察事件的同步处理器同形。
+ */
 function writeGuardGroup(): readonly ClaudeCodeHookMatcherGroup[] {
   return Object.freeze([
     Object.freeze({
@@ -110,6 +129,7 @@ function writeGuardGroup(): readonly ClaudeCodeHookMatcherGroup[] {
           command: "node" as const,
           args: WRITE_GUARD_ARGS,
           timeout: WRITE_GUARD_TIMEOUT_SECONDS,
+          onFailure: "continue" as const,
         }),
       ]),
     }),

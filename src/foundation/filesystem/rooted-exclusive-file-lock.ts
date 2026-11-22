@@ -33,7 +33,7 @@ import { readDeterministicJsonFile } from "./deterministic-json-file.js";
 import {
   DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE,
   DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesForTargets,
+  recoverDurableAtomicFileStagesMatchingTargets,
 } from "./durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError } from "./durable-atomic-file-write.js";
 import {
@@ -72,14 +72,47 @@ import { StrictTextFileError } from "./strict-text-file.js";
  * 显式恢复职责所有者处理。本锁也不是分布式锁，不适用于不可靠的共享网络文件系统。
  * 同一 Node.js 进程和线程的职责所有者状态由内存活动令牌精确判断；其他线程或进程
  * 只能根据进程是否存在作保守判断，不能据此自动夺锁。
+ *
+ * 获取按锁的种类选一档持久性（选项 `durability`，只管获取；1.4.1 第 1 段清单 2.2 节，重排计划
+ * 第 3 节路丙）。缺省 `fsync`：新建同步暂存内容、链接之后与删暂存之后各同步一次父目录，共 3 次。
+ * `content-only`：只给下一次获取会按"属主已死"退休失效持有者的七类锁与租约（操作作用域的闩锁、
+ * 写者锁与读者租约，投影锁，看板锁，pod 变更锁，Demand 发布锁，账本记录锁）——链接之前同步一次
+ * 内容，不同步父目录，共 1 次。获取不需要父目录同步：掉电之后所有持有者都已死，一个仍在的锁文件
+ * 只表示"忙"，下一次获取按属主已死退休它。
+ *
+ * 释放与退休失效持有者不分档：都用缺省的精确删除，删掉锁文件之后同步一次父目录。这次同步也让
+ * 本周期此前在同一目录里的所有目录项变更（链接、删暂存）一起落盘，所以释放或退休返回之后，这把锁
+ * 不会因掉电重现。一个周期：缺省档 4 次，轻档 2 次（链接之前的内容，释放时的父目录）。退休一把
+ * 失效锁 1 次（父目录）；要先结算属主已死的创建暂存时更多（双链接的失效锁：结算锁文件内容与父目录
+ * 2 次、退役暂存 1 次、删锁 1 次）。
+ *
+ * 掉电之后能留下的锁文件两档相同，与 1.4.0 同一范围：只有掉电那一刻正被持有（释放尚未返回）的锁的
+ * 文件，内容完整（链接之前已同步），属主已死，带或不带它的创建暂存；获取到一半的还可能只剩一份属主
+ * 已死的暂存。轻档另多一种暂存：在链接那一步输给别人、或在链接之前被中止的获取，删掉自己的创建暂存时
+ * 不同步父目录，所以自该目录上次同步以来，每次这样的获取至多留下一份属主已死的暂存；同目录里下一次
+ * 释放或退休的那次同步把这些删除一起落盘。下一次获取或退休按属主已死清掉锁文件，暂存由暂存恢复退役。
+ * 两档的记录格式、互斥判断、失效持有者的退休规则与可见步骤的顺序完全相同，差别只在获取时的同步。
+ *
+ * 释放与退休里不同步父目录的情形（两档都有，与 1.4.0 相同）：删除这一步没有干净地落定时不再同步——
+ * unlink 调用自己报错（`unlink-failure`），或删除前后的核对对不上（同一个节点仍在路径上，节点的模式、
+ * 大小或时间变了，查看父目录或源节点 fstat 失败，链接数对不上，报 `commit-uncertain`）。释放报
+ * `release-failure`。目录项若其实已经删掉，此后掉电这把锁可能重现，属主已死，下一次获取退休它。
  */
 
 const ROOTED_EXCLUSIVE_LOCK_DEFAULT_TIMEOUT_MILLISECONDS = 2_000;
 const ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS = 25;
 const ROOTED_EXCLUSIVE_LOCK_MAXIMUM_RECORD_BYTES = 4 * 1024;
 
+/** 获取锁文件时的持久性档位；名字沿用原子写入的 `DurableAtomicFileDurability` 词汇。 */
+export type RootedExclusiveFileLockDurability = "fsync" | "content-only";
+
 export interface RootedExclusiveFileLockOptions {
   readonly acquireTimeoutMilliseconds?: number;
+  /**
+   * 只决定获取：缺省 `fsync`（权威）；`content-only` 只给会被下一次获取退休的七类锁与租约。
+   * 释放不看它，总是同步父目录。
+   */
+  readonly durability?: RootedExclusiveFileLockDurability;
   readonly retryDelayMilliseconds?: number;
   readonly signal?: AbortSignal;
   /** 仅供需要把领域 operation 与锁 token 关联的内部 owner 注入。 */
@@ -156,6 +189,7 @@ export class RootedExclusiveFileLockError extends Error {
 
 interface ParsedOptions {
   readonly acquireTimeoutMilliseconds: number;
+  readonly durability: RootedExclusiveFileLockDurability;
   readonly retryDelayMilliseconds: number;
   readonly signal: AbortSignal | undefined;
   readonly tokenUuidFactory: UuidV4Factory | undefined;
@@ -224,6 +258,12 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
+function parseDurability(value: unknown, path: string): RootedExclusiveFileLockDurability {
+  if (value === undefined) return "fsync";
+  if (value !== "fsync" && value !== "content-only") fail("input", path);
+  return value;
+}
+
 function parsePositiveMilliseconds(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
     fail("input", path);
@@ -241,6 +281,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   }
   const allowed = new Set([
     "acquireTimeoutMilliseconds",
+    "durability",
     "retryDelayMilliseconds",
     "signal",
     "tokenUuidFactory",
@@ -264,6 +305,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
         : record.acquireTimeoutMilliseconds,
       "$options.acquireTimeoutMilliseconds",
     ),
+    durability: parseDurability(record.durability, "$options.durability"),
     retryDelayMilliseconds: parsePositiveMilliseconds(
       record.retryDelayMilliseconds === undefined
         ? ROOTED_EXCLUSIVE_LOCK_DEFAULT_RETRY_MILLISECONDS
@@ -523,7 +565,17 @@ export async function inspectRootedExclusiveFileLock(
  *
  * 调用方必须先持有自己的领域恢复证据；本函数不读取恢复意图记录，不根据
  * `mtime` 猜测锁是否过期，也不接受自行构造的观察结果。调用方声明的相关目标与
- * lockPath 必须位于同一父目录；发现集合外 stage 时保持锁和该 stage 不变。
+ * lockPath 必须位于同一父目录。退休之前只恢复 lockPath 与相关目标自己的 stage：其中有
+ * 属主仍活动或无法判断的 stage 时保持锁不变；属主已死的先结算或退役。同目录里其他目标的
+ * stage（同住一个目录的别的锁、租约或文件留下的）不挡退休，原样留给它们自己目标的下一次
+ * 获取或写入去清（1.4.1 第 1 段清单 2.5 节前两行：看板、pod 变更、Demand 发布、账本事务与
+ * 操作作用域的准入目录都是多把锁同住一个目录）。
+ *
+ * 这条恢复入口会跳过并计数"不可识别"的暂存条目（带暂存前缀，却名字不合法、节点种类或模式
+ * 不对、或不属于当前用户）。被杀进程的正常遗留总是可识别的，不可识别的条目不是崩溃遗留，
+ * 所以回执报告任何一个（`unrecognizedEntryCount` 非零，按整个父目录计数）时退休以
+ * residue-changed 失败：锁与那个条目原样保留，交给人或领域恢复判断。这一检查在恢复之后做，
+ * 本目标与相关目标中属主已死的可识别暂存此时可能已经结算或退役——它们本来就是可清的崩溃遗留。
  *
  * 持有者死在锁已链接、它的创建暂存尚未退役的那一刻时，观察到的锁节点是双链接的（open-items B9，
  * §13.242）：这里先结算并退役那份暂存，锁节点的链接数与 ctime 随之改变，所以这种情形下只比节点身份——
@@ -549,8 +601,15 @@ export async function retireRootedExclusiveFileLockResidue(
   if (observation.ownerState !== "inactive") fail("owner-active", "$lock");
   let linkedStageSettled = false;
   try {
-    const stageRecovery = await recoverDurableAtomicFileStagesForTargets(root, retirementTargets);
-    if (stageRecovery.activeStageCount !== 0 || stageRecovery.unknownStageCount !== 0) {
+    const stageRecovery = await recoverDurableAtomicFileStagesMatchingTargets(
+      root,
+      retirementTargets,
+    );
+    if (
+      stageRecovery.activeStageCount !== 0 ||
+      stageRecovery.unknownStageCount !== 0 ||
+      stageRecovery.unrecognizedEntryCount !== 0
+    ) {
       fail("residue-changed", "$lock");
     }
     linkedStageSettled =
@@ -630,9 +689,9 @@ async function lockTargetExists(
 async function tryAcquire(
   root: RootedDirectory,
   lockPath: PortableResourcePath,
-  signal: AbortSignal | undefined,
-  tokenUuidFactory: UuidV4Factory | undefined,
+  options: Readonly<ParsedOptions>,
 ): Promise<Readonly<AcquiredLock> | null> {
+  const { signal, tokenUuidFactory, durability } = options;
   // 竞争热点路径先执行一次不跟随符号链接的目标观察，避免每轮重试都扫描父目录。
   if (await lockTargetExists(root, lockPath)) return null;
   const candidate = await createLockCandidate(tokenUuidFactory);
@@ -640,6 +699,7 @@ async function tryAcquire(
   try {
     const created = await createFileAtomically(root, lockPath, candidate.bytes, {
       mode: 0o600,
+      durability,
       ...(signal === undefined ? {} : { signal }),
     });
     return Object.freeze({
@@ -728,7 +788,7 @@ async function acquire(
     if (isMonotonicDeadlineReached(deadline, readLockMonotonicClock())) {
       fail("timeout", "$lock");
     }
-    const acquired = await tryAcquire(root, lockPath, options.signal, options.tokenUuidFactory);
+    const acquired = await tryAcquire(root, lockPath, options);
     if (acquired !== null) return acquired;
     await assertSafeExistingLock(root, lockPath);
     await waitForRetry(

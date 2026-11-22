@@ -1,10 +1,12 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { open as openFileHandle } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
 import {
+  createDirectoryTreeMemberFileDurably,
   createFileCandidateDurably,
   DurableFileCandidateError,
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
@@ -12,6 +14,15 @@ import { parsePortableResourcePath } from "../../../src/foundation/filesystem/po
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { countFsyncs } from "./fsync-count-probe.js";
+
+/**
+ * Level 1 (component): the named, non-authoritative file candidate - exclusive create, input
+ * admission, parent mapping, and its sync levels (1.4.1 stage 1): the default level syncs the
+ * content and the parent (2), `content-only` only the content (1), a root at `none` nothing; a
+ * directory-tree member syncs its content once, never its parent, and reads nothing back. The
+ * counting cases open their roots with explicit durability; this file does not call
+ * `useDisposableDurability`.
+ */
 
 test("durable file candidate 直接创建具名非权威文件且不产生匿名 stage", async () => {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-candidate-"));
@@ -164,4 +175,54 @@ test("根的持久化级别与候选自己的 content-only 取更弱的一档", 
     await durableRoot.close();
     await disposableRoot.close();
   }
+});
+
+test("a directory-tree member syncs its content once, not its parent, and reads no bytes back", {
+  concurrency: false,
+}, async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-candidate-member-"));
+  t.after(() => rmSync(rootPath, { recursive: true, force: true }));
+  const root = await RootedDirectory.open(rootPath, "$root", { durability: "fsync" });
+  t.after(() => root.close());
+  const bytes = encodeUtf8("member\n");
+
+  const probe = await openFileHandle(process.execPath, "r");
+  const prototype = Object.getPrototypeOf(probe) as { read: (...args: unknown[]) => unknown };
+  await probe.close();
+  let reads = 0;
+  const originalRead = prototype.read;
+  prototype.read = function countedRead(this: unknown, ...args: unknown[]) {
+    reads += 1;
+    return originalRead.apply(this, args);
+  };
+  let member: Awaited<ReturnType<typeof countFsyncs>>;
+  try {
+    member = await countFsyncs(() =>
+      createDirectoryTreeMemberFileDurably(root, parsePortableResourcePath("member.txt"), bytes, {
+        mode: 0o644,
+      }),
+    );
+  } finally {
+    prototype.read = originalRead;
+  }
+  equal(member.syncCount, 1);
+  equal(member.directorySyncCount, 0);
+  equal(reads, 0);
+  deepEqual(readFileSync(path.join(rootPath, "member.txt")), Buffer.from(bytes));
+  equal(statSync(path.join(rootPath, "member.txt")).mode & 0o777, 0o644);
+
+  await rejects(
+    createDirectoryTreeMemberFileDurably(root, parsePortableResourcePath("member.txt"), bytes, {
+      mode: 0o644,
+    }),
+    (error: unknown) =>
+      error instanceof DurableFileCandidateError && error.reason === "target-exists",
+  );
+  await rejects(
+    createDirectoryTreeMemberFileDurably(root, parsePortableResourcePath("other.txt"), bytes, {
+      mode: 0o644,
+      durability: "fsync",
+    } as never),
+    (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
+  );
 });

@@ -12,10 +12,14 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import {
+  RootedDirectory,
+  RootedDirectoryError,
+} from "../../src/foundation/filesystem/rooted-directory.js";
+import { RootedResourceParentHandle } from "../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../src/kernel/error.js";
+import { podReceiptRootRef } from "../../src/kernel/layout.js";
 import {
   admitPodWorktreeObservation,
   candidateWorktreePaths,
@@ -32,6 +36,7 @@ import {
   retirePodWorktreeReceipt,
   writePodWorktreeReceipt,
 } from "../../src/kernel/pod-worktree-receipts.js";
+import { countFsyncs } from "../foundation/filesystem/fsync-count-probe.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 
 useDisposableDurability();
@@ -39,7 +44,8 @@ useDisposableDurability();
 /**
  * 1 级（组件）：worktree 回执（§13.91 D4）：porcelain 解析、用 `.git` 指针文件与 admin 目录核对的
  * 准入、0700/0600 回执存储；跨宿主列举按仓库合并、同仓库两宿主都有回执即 receipt-conflict，全部宿主
- * 的回执目录一次清除（open-items W9、W7）。宿主由测试代替：真实 `git worktree add` 造出检出。
+ * 的回执目录一次清除（open-items W9、W7），退役时没能检查不冒充目录不在（G7 的规则，§13.167）。
+ * 宿主由测试代替：真实 `git worktree add` 造出检出。
  */
 
 const POD_ID = "pod_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -320,8 +326,25 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   equal(await retirePodWorktreeReceipt(root, "codex", POD_ID, REPOSITORY_ID), false);
   equal(await readPodWorktreeReceipt(root, "codex", POD_ID, REPOSITORY_ID), null);
   await writePodWorktreeReceipt(root, receipt);
-  equal(await retirePodReceipts(root, "codex", POD_ID), true);
-  equal(existsSync(path.dirname(path.dirname(file))), false);
+  // 回执目录是权威记录：删除原语总在树消失之后同步它的父目录恰好一次（1.4.1 第 1 段）。
+  const podReceiptDirectory = path.dirname(path.dirname(file));
+  const originalParentSync = RootedResourceParentHandle.prototype.sync;
+  const parentSyncs: string[] = [];
+  RootedResourceParentHandle.prototype.sync = async function observedSync() {
+    parentSyncs.push(
+      `${path.dirname(this.resourceAbsolutePath)} ${
+        existsSync(this.resourceAbsolutePath) ? "present" : "absent"
+      }`,
+    );
+    return originalParentSync.call(this);
+  };
+  try {
+    equal(await retirePodReceipts(root, "codex", POD_ID), true);
+  } finally {
+    RootedResourceParentHandle.prototype.sync = originalParentSync;
+  }
+  deepEqual(parentSyncs, [`${realpathSync(path.dirname(podReceiptDirectory))} absent`]);
+  equal(existsSync(podReceiptDirectory), false);
   equal(await retirePodReceipts(root, "codex", POD_ID), false);
   // 全部宿主的回执目录一次清除（W7）：两个宿主目录都在即 2，再来即 0。
   await writePodWorktreeReceipt(root, receipt);
@@ -333,4 +356,84 @@ test("回执存储：0700 目录 0600 文件，读回一致，换代替换，退
   equal(await retirePodReceiptsAllHosts(root, POD_ID), 0);
   git(fixture.main, "worktree", "remove", "--force", fixture.linked);
   equal(await observeWorktreeCheckout(receipt), "absent");
+});
+
+test("回执目录退役（fsync 根）：删除恰好一次同步；不在即 false；父目录打不开是 io-failure 而不是 false", {
+  concurrency: false,
+}, async (t) => {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-receipt-retire-")));
+  const root = await RootedDirectory.open(base, "$root", { durability: "fsync" });
+  t.after(async () => {
+    await root.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+  const receiptDirectory = path.join(base, podReceiptRootRef("codex", POD_ID));
+  const seedReceiptDirectory = () => {
+    mkdirSync(path.join(receiptDirectory, "worktrees"), { recursive: true, mode: 0o700 });
+    writeFileSync(path.join(receiptDirectory, "worktrees", `${REPOSITORY_ID}.json`), "{}\n");
+  };
+
+  seedReceiptDirectory();
+  const counted = await countFsyncs(() => retirePodReceipts(root, "codex", POD_ID));
+  equal(counted.result, true);
+  equal(counted.syncCount, 1);
+  equal(counted.directorySyncCount, 1);
+  equal(existsSync(receiptDirectory), false);
+
+  const absent = await countFsyncs(() => retirePodReceipts(root, "codex", POD_ID));
+  equal(absent.result, false);
+  equal(absent.syncCount, 0);
+
+  // 父目录句柄打不开：不冒充"目录不在"，按 io-failure 报出，回执原样留着，pod 关闭不会报已关闭。
+  seedReceiptDirectory();
+  const open = t.mock.method(RootedResourceParentHandle, "open", async () => {
+    throw Object.assign(new Error("injected parent open failure"), { code: "EACCES" });
+  });
+  await rejects(
+    retirePodReceipts(root, "codex", POD_ID),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "io-failure" &&
+      error.reason === "receipt-retire-directory",
+  );
+  equal(open.mock.callCount(), 1);
+  equal(existsSync(path.join(receiptDirectory, "worktrees", `${REPOSITORY_ID}.json`)), true);
+});
+
+test("回执目录退役：没能检查（not-found 之外的观察失败）是 io-failure 而不是 false，回执原样留着", async (t) => {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-receipt-inspect-")));
+  const root = await RootedDirectory.open(base, "$root");
+  t.after(async () => {
+    await root.close();
+    rmSync(base, { recursive: true, force: true });
+  });
+  const receiptFile = path.join(
+    base,
+    podReceiptRootRef("codex", POD_ID),
+    "worktrees",
+    `${REPOSITORY_ID}.json`,
+  );
+  mkdirSync(path.dirname(receiptFile), { recursive: true, mode: 0o700 });
+  writeFileSync(receiptFile, "{}\n");
+  // 例如 `pods/` 失去搜索权限时 lstat 报 EACCES，根作用域把它归为 inspection-failure。
+  const inspections = t.mock.method(
+    RootedDirectory.prototype,
+    "inspectExistingResource",
+    async () => {
+      throw new RootedDirectoryError("inspection-failure", "$receipt", {
+        cause: Object.assign(new Error("injected inspection failure"), { code: "EACCES" }),
+      });
+    },
+  );
+  const opens = t.mock.method(RootedResourceParentHandle, "open");
+  await rejects(
+    retirePodReceipts(root, "codex", POD_ID),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "io-failure" &&
+      error.reason === "receipt-retire-directory",
+  );
+  equal(inspections.mock.callCount(), 1);
+  equal(opens.mock.callCount(), 0);
+  equal(existsSync(receiptFile), true);
 });

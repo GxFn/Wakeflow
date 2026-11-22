@@ -114,7 +114,8 @@ const EXPECTED_WRITE_GUARD_BLOCK: string = [
   '              "--host",',
   '              "claude-code"',
   "            ],",
-  '            "timeout": 5',
+  '            "timeout": 5,',
+  '            "onFailure": "continue"',
   "          }",
   "        ]",
   "      }",
@@ -164,10 +165,13 @@ test("片段恰好覆盖五个观察事件与写守卫的 PreToolUse（键序固
     equal(handler.type, "command");
     equal(handler.command, "node", "exec 形：command 是可执行名，不经 shell");
     equal("matcher" in handler, false);
+    // onFailure 只在写守卫上：异步处理器上它不起作用，其余观察事件的缺省就是继续。
+    equal("onFailure" in handler, false, event);
   }
 });
 
 test("同步与异步按 D5：SessionStart 5 秒同步、UserPromptSubmit 与 Notification 异步 5 秒、Stop 5 秒同步、SessionEnd 3 秒同步；async 键只在异步处理器上出现且键序固定", () => {
+  // 异步处理器的 5 秒当前宿主不执行（只对仍执行它的宿主有效），钉住的是字节，不是上限。
   equal(handlerOf("SessionStart").timeout, 5);
   equal(handlerOf("UserPromptSubmit").timeout, 5);
   equal(handlerOf("Notification").timeout, 5);
@@ -197,7 +201,7 @@ test("args 是插件根占位符脚本路径加入口约定的固定 argv，占�
   equal(CLAUDE_CODE_HOOK_OBSERVER_SCRIPT_PATH, "hooks/observe.mjs");
 });
 
-test("写守卫的组：PreToolUse 上只对编辑工具、同步 5 秒、带守卫的标记启动同一个脚本；matcher 是精确名字的列表", () => {
+test("写守卫的组：PreToolUse 上只对编辑工具、同步 5 秒、onFailure 为 continue、带守卫的标记启动同一个脚本；matcher 是精确名字的列表", () => {
   const groups = CLAUDE_CODE_HOOK_FRAGMENT.hooks.PreToolUse;
   equal(groups.length, 1);
   const group = groups[0];
@@ -212,8 +216,10 @@ test("写守卫的组：PreToolUse 上只对编辑工具、同步 5 秒、带守
   equal(handler.command, "node");
   // 同步：异步 hook 的决定宿主不认，拒绝就不作数了。
   equal("async" in handler, false);
-  deepEqual(Object.keys(handler), ["type", "command", "args", "timeout"]);
+  // onFailure 排在最后；continue 让守卫的故障与超时在 Code Mode 里也放行（ADR-0020 决定 6 补记的"拿不准就放行"）。
+  deepEqual(Object.keys(handler), ["type", "command", "args", "timeout", "onFailure"]);
   equal(handler.timeout, 5);
+  equal(handler.onFailure, "continue");
   deepEqual(handler.args, [
     `${PLUGIN_ROOT_PLACEHOLDER}/hooks/observe.mjs`,
     "--wakeflow-write-guard-v1",

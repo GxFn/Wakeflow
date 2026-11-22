@@ -214,6 +214,8 @@ async function runLocked<Result>(
       operation,
       {
         acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+        // Demand 发布锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L6）。
+        durability: "content-only",
         ...(signal === undefined ? {} : { signal }),
       },
     );

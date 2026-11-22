@@ -61,8 +61,10 @@ export async function withPodMutation<Result>(
     if (lock.status === "held" && lock.ownerState === "inactive") {
       await retireRootedExclusiveFileLockResidue(root, ref, lock);
     }
+    // pod 变更锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L5）。
     return await withRootedExclusiveFileLock(root, ref, operation, {
       acquireTimeoutMilliseconds: 10_000,
+      durability: "content-only",
       ...options,
     });
   } catch (error: unknown) {

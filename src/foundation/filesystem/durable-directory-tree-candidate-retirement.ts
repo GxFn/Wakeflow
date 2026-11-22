@@ -1,7 +1,7 @@
-import { rmdir } from "node:fs/promises";
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   directoryTreeCandidateMaximumPathDepth,
@@ -25,15 +25,16 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import {
+  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
@@ -48,7 +49,6 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "./stable-file-read.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：已关闭目录树candidate的精确、可续接退休。
@@ -549,7 +549,7 @@ export async function removeEmptyDirectoryExactly(
     await source.assertPathCurrent();
     assertNotAborted(signal);
     try {
-      await rmdir(parent.resourceAbsolutePath);
+      await filesystemMutation.rmdir(parent.resourceAbsolutePath);
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "ENOTEMPTY" || code === "EEXIST") {

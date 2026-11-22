@@ -1,7 +1,7 @@
-import { link } from "node:fs/promises";
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -9,12 +9,13 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -23,15 +24,19 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：普通文件的不替换目标持久化硬链接。
  *
  * 调用方必须提供冻结且完全一致的源节点预期。本模块打开并复验源、目标父目录和
  * 不跟随符号链接的源句柄，然后只跨越一次硬链接提交点。链接成功后，源路径与目标
- * 路径必须构成指向同一 inode 的精确链接对，链接数在原值上增加 1；随后同步源 inode
- * 和目标父目录，并完成最终复验。
+ * 路径必须构成指向同一 inode 的精确链接对，链接数在原值上增加 1；随后只同步目标
+ * 父目录（一次 fsync），并完成最终复验。
+ *
+ * 源内容不在这里再同步一次：调用方必须在链接之前已经同步源内容。唯一的调用方
+ * Demand 事件追加以 `content-only` 创建候选，内容在链接前已经落盘（1.4.1 第 1 段，
+ * 清单 2.1“事件追加”）；新的调用方同样必须先同步源内容，否则提交后的目标可能在
+ * 掉电后指向未落盘的内容。
  *
  * 成功结果会有意保留两个路径名。本能力不删除或重命名源路径，也不把链接对描述为
  * 资源已经移动完成。后续暂存文件分离和精确删除必须由领域恢复意图分步编排；链接
@@ -47,7 +52,7 @@ export interface DurableRegularFileLinkOptions {
   readonly signal?: AbortSignal;
 }
 
-/** 成功结果描述已经完成 inode 与目标父目录同步的精确链接对。 */
+/** 成功结果描述目标父目录已经同步的精确链接对（源内容由调用方在链接前同步）。 */
 interface DurableRegularFileLinkResult {
   readonly sourceResourcePath: PortableResourcePath;
   readonly destinationResourcePath: PortableResourcePath;
@@ -313,12 +318,9 @@ async function closeParent(
 
 function mapExactSourceError(
   error: RootedExactResourceHandleError,
-  operation: "open" | "current" | "inspect-after-commit" | "sync-after-commit",
+  operation: "open" | "current" | "inspect-after-commit",
 ): never {
-  if (operation === "sync-after-commit" && error.reason === "sync-failure") {
-    fail("durability-failure", "$destinationResourcePath");
-  }
-  if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
+  if (operation === "inspect-after-commit") {
     fail("commit-uncertain", "$destinationResourcePath");
   }
   if (operation === "current") fail("source-changed", "$sourceResourcePath");
@@ -378,17 +380,6 @@ async function inspectCommittedSource(
   } catch (error: unknown) {
     if (error instanceof RootedExactResourceHandleError) {
       mapExactSourceError(error, "inspect-after-commit");
-    }
-    throw error;
-  }
-}
-
-async function syncCommittedSource(source: RootedExactResourceHandle): Promise<void> {
-  try {
-    await source.syncOpenedNode();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapExactSourceError(error, "sync-after-commit");
     }
     throw error;
   }
@@ -530,7 +521,10 @@ export async function linkRegularFileWithoutReplacement(
     assertNotAborted(parsed.signal);
 
     try {
-      await link(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
+      await filesystemMutation.link(
+        sourceParent.resourceAbsolutePath,
+        destinationParent.resourceAbsolutePath,
+      );
     } catch (error: unknown) {
       const code = readNodeSystemErrorCode(error);
       if (code === "EEXIST") fail("destination-exists", "$destinationResourcePath", error);
@@ -545,7 +539,7 @@ export async function linkRegularFileWithoutReplacement(
       destinationParent,
       linkedPairLinkCount,
     );
-    await syncCommittedSource(source);
+    // 源内容已由调用方在链接前同步；这里只让新目录项持久。
     await syncParent(destinationParent, "$destinationResourcePath");
     await assertParentCurrent(sourceParent, "$sourceResourcePath", true);
     await assertParentCurrent(destinationParent, "$destinationResourcePath", true);

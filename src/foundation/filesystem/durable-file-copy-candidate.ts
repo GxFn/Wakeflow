@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import { type FileHandle, open as openFileHandle, unlink } from "node:fs/promises";
+import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
 import type { Sha256Digest } from "../crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
@@ -25,6 +25,7 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import {
   type RootedDirectory,
@@ -493,7 +494,7 @@ export async function copyFileToCandidateDurably(
       fail("target-exists", "$candidateResourcePath");
     }
     try {
-      candidateHandle = await openFileHandle(
+      candidateHandle = await filesystemMutation.openExclusive(
         parent.resourceAbsolutePath,
         candidateOpenFlags(),
         0o600,
@@ -601,7 +602,7 @@ export async function copyFileToCandidateDurably(
       ) {
         fail("cleanup-failure", "$candidate");
       }
-      await unlink(parent.resourceAbsolutePath);
+      await filesystemMutation.unlink(parent.resourceAbsolutePath);
       const retired = await snapshotHandle(candidateHandle, "cleanup-failure", "$candidate");
       if (!sameRetiredCandidateNode(opened, retired)) {
         fail("cleanup-failure", "$candidate");

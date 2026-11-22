@@ -126,6 +126,7 @@ export async function applyDemandRuntimeRecovery(
     if (lock.status === "held" && lock.ownerState === "inactive") {
       await retireRootedExclusiveFileLockResidue(workspaceRoot, lockRef, lock);
     }
+    // 与发布服务同一把 Demand 发布锁，同为轻档（1.4.1 第 1 段清单 2.1 节 L6）。
     await withRootedExclusiveFileLock(
       workspaceRoot,
       lockRef,
@@ -143,7 +144,7 @@ export async function applyDemandRuntimeRecovery(
           await root.close();
         }
       },
-      options,
+      { ...options, durability: "content-only" },
     );
   }
   return Object.freeze(recovered);

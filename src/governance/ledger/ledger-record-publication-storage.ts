@@ -15,6 +15,10 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
+  RootedDirectoryTreeRemovalError,
+  removeRootedDirectoryTree,
+} from "../../foundation/filesystem/rooted-directory-tree-removal.js";
+import {
   inspectRootedExclusiveFileLock,
   RootedExclusiveFileLockError,
   retireRootedExclusiveFileLockResidue,
@@ -49,8 +53,9 @@ import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.
  * 本模块负责暂存目录、逐记录锁和最终目标回读校验，不解析调用方提供的成员输入。
  *
  * 发布不记日志（1.4 第 5 段 5a 的 A 行，ADR-0031）：需求包的身份由内容推出，同一个标识的暂存目录
- * 只可能装着同样的字节，所以被打断的发布由同一个请求再发一次续上——暂存补齐，改名生效。此前另有
- * 一份发布意图文件和一套不带原文档的恢复函数，现场里一次都没有用上，已经删掉。
+ * 只可能装着同样的字节，所以被打断的发布由同一个请求再发一次续上——暂存补齐（补不了的崩溃残留删掉
+ * 重建一次），改名生效。此前另有一份发布意图文件和一套不带原文档的恢复函数，现场里一次都没有用上，
+ * 已经删掉。
  */
 
 /** 一次发布在内存里的计划：记录、它的三个路径与目录树的精确清单。不落盘。 */
@@ -96,25 +101,55 @@ export async function ledgerPublicationResourceNodeOrNull(
   }
 }
 
-function assertTransactionStageNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserIdOrNull();
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== LEDGER_DURABLE_DIRECTORY_MODE ||
-    (userId !== null && node.userId !== userId)
-  ) {
-    fail("conflict", "$stage");
-  }
-}
-
-/** 这条记录的暂存目录；不在即 null。它只可能是同一份内容被打断的发布留下的。 */
-export async function ledgerRecordPublicationStageNodeOrNull(
+/**
+ * 这条记录的暂存目录处在哪种状态。它只可能是同一份内容被打断的发布留下的。
+ *
+ * - `absent`：不在。
+ * - `resumable`：当前用户的目录、权限位是持久目录的，交给补齐路径续做。
+ * - `residue`：当前用户的目录，但权限位不对。进程 umask 把请求的权限位收窄时，mkdir 以收窄后的
+ *   权限位出生、再经句柄 chmod：chmod 之前进程被杀，或者掉电时 chmod 没有落盘（第 1 段起建造期间
+ *   不同步目录），都会留下它；发布器把它删掉重建。不被收窄时（常见的 umask 022）目录以请求的
+ *   权限位出生，新的建造不会留下这种状态；1.4.0 的建造被打断留下的暂存（那时一律以 0700 出生）仍是它。
+ *
+ * 不是目录、或属于别的用户的节点不是本发布器造的，照旧报冲突。
+ */
+export async function ledgerRecordPublicationStageState(
   root: RootedDirectory,
   plan: Readonly<LedgerRecordPublicationPlan>,
-): Promise<Readonly<FileNodeSnapshot> | null> {
+): Promise<"absent" | "resumable" | "residue"> {
   const stageNode = await ledgerPublicationResourceNodeOrNull(root, plan.stageRef);
-  if (stageNode !== null) assertTransactionStageNode(stageNode);
-  return stageNode;
+  if (stageNode === null) return "absent";
+  const userId = currentUserIdOrNull();
+  if (stageNode.kind !== "directory" || (userId !== null && stageNode.userId !== userId)) {
+    fail("conflict", "$stage");
+  }
+  return stageNode.permissionBits === LEDGER_DURABLE_DIRECTORY_MODE ? "resumable" : "residue";
+}
+
+/**
+ * 删掉这条记录的暂存目录整棵树，删除之后同步 `transactions/` 一次再返回。只由发布器在记录锁内、
+ * final 不在时调用（安全论证在发布器里）。删不掉报 `recovery-required`：树可能删了一半，同一个
+ * 请求再发一次会重新判断，续做或者再删。
+ */
+export async function retireLedgerRecordPublicationStage(
+  root: RootedDirectory,
+  plan: Readonly<LedgerRecordPublicationPlan>,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    await removeRootedDirectoryTree(
+      root,
+      plan.stageRef,
+      signal === undefined ? undefined : { signal },
+      "$stage",
+    );
+  } catch (error: unknown) {
+    if (error instanceof RootedDirectoryTreeRemovalError) {
+      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      fail("recovery-required", "$stage", error);
+    }
+    throw error;
+  }
 }
 
 export async function prepareLedgerRecordPublicationLockRecovery(
@@ -165,6 +200,8 @@ export async function withLedgerRecordPublicationLock<Result>(
   try {
     return await withRootedExclusiveFileLock(root, lockRef, action, {
       acquireTimeoutMilliseconds: LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+      // 账本记录锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L7）。
+      durability: "content-only",
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {

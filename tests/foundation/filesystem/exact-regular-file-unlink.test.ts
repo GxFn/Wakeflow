@@ -1,5 +1,6 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
+  existsSync,
   linkSync,
   mkdirSync,
   mkdtempSync,
@@ -9,6 +10,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -24,7 +26,34 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  RootedExactResourceHandle,
+  RootedExactResourceHandleError,
+} from "../../../src/foundation/filesystem/rooted-exact-resource-handle.js";
+import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { countFsyncs } from "./fsync-count-probe.js";
+
+/**
+ * Level 1 (component): 指定普通文件路径名的耐久删除——2→1 与 1→0 的链接数转换、结算策略、过时预期、
+ * 不合格的源与父目录链、被动准入的选项，以及持久性：`fsync` 级别恰好一次同步、落在父目录上且发生在
+ * 删除之后（同步时路径已经不在），`none` 不同步；父目录同步失败报 `durability-failure`、源句柄关闭失败
+ * 报 `close-failure`，两者都不把已经发生的删除说成成功（1.4.1 第 1 段清单 2.1 节）。数同步的用例在
+ * 真实同步的根上打开。
+ */
+
+interface FileHandleSyncPrototype {
+  sync: (this: FileHandle) => Promise<void>;
+}
+
+/** `FileHandle` 没有公开构造器，只能从一个真实句柄取到原型；探针文件建完即删。 */
+async function fileHandlePrototype(scratchDirectory: string): Promise<FileHandleSyncPrototype> {
+  const probePath = path.join(scratchDirectory, ".file-handle-probe");
+  const probe = await openFileHandle(probePath, "w");
+  const prototype = Object.getPrototypeOf(probe) as FileHandleSyncPrototype;
+  await probe.close();
+  rmSync(probePath);
+  return prototype;
+}
 
 async function expectUnlinkError(
   action: () => unknown | Promise<unknown>,
@@ -102,6 +131,105 @@ test("last pathname removal proves the exact 1 to 0 transition", async () => {
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("fsync durability syncs only the parent directory, exactly once, after the pathname is gone", {
+  concurrency: false,
+}, async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-fsync-"));
+  writeFileSync(path.join(rootPath, "only"), "parent-sync");
+  const root = await RootedDirectory.open(rootPath, "$root", { durability: "fsync" });
+  const resourcePath = parsePortableResourcePath("only");
+  const resourceAbsolutePath = path.join(root.absolutePath, resourcePath);
+  // 每次父目录同步时路径名还在不在：同步挪到删除之前，这里会记下 present。
+  const atParentSync: string[] = [];
+  const originalSync = RootedResourceParentHandle.prototype.sync;
+  t.mock.method(
+    RootedResourceParentHandle.prototype,
+    "sync",
+    async function observedSync(this: RootedResourceParentHandle) {
+      if (this.resourceAbsolutePath === resourceAbsolutePath) {
+        atParentSync.push(existsSync(resourceAbsolutePath) ? "present" : "absent");
+      }
+      return originalSync.call(this);
+    },
+  );
+  try {
+    const expected = await root.inspectExistingResource(resourcePath);
+    const counted = await countFsyncs(() =>
+      unlinkRegularFileExactly(root, resourcePath, { expectedNode: expected.node }),
+    );
+    // 被删的文件不再单独同步：唯一的一次落在父目录上，且在删除之后。
+    equal(counted.syncCount, 1);
+    equal(counted.directorySyncCount, 1);
+    deepEqual(atParentSync, ["absent"]);
+    equal(counted.result.nodeAfterUnlink.linkCount, 0n);
+    equal(statSync(path.join(rootPath, "only"), { throwIfNoEntry: false }), undefined);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("a failed parent sync after the unlink reports durability-failure, never a receipt", {
+  concurrency: false,
+}, async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-sync-failure-"));
+  t.after(() => rmSync(rootPath, { recursive: true, force: true }));
+  writeFileSync(path.join(rootPath, "only"), "sync-failure");
+  const root = await RootedDirectory.open(rootPath, "$root", { durability: "fsync" });
+  const prototype = await fileHandlePrototype(rootPath);
+  const originalSync = prototype.sync;
+  t.mock.method(prototype, "sync", async function failingDirectorySync(this: FileHandle) {
+    if ((await this.stat()).isDirectory()) {
+      throw Object.assign(new Error("injected directory sync failure"), { code: "EIO" });
+    }
+    return originalSync.call(this);
+  });
+  try {
+    const resourcePath = parsePortableResourcePath("only");
+    const expected = await root.inspectExistingResource(resourcePath);
+    await expectUnlinkError(
+      () => unlinkRegularFileExactly(root, resourcePath, { expectedNode: expected.node }),
+      "durability-failure",
+      "$resourcePath",
+    );
+    // 删除已经发生；没有落盘的保证，所以调用方拿到的是失败而不是回执。
+    equal(statSync(path.join(rootPath, "only"), { throwIfNoEntry: false }), undefined);
+  } finally {
+    await root.close();
+  }
+});
+
+test("a failed source handle close after the unlink reports close-failure", {
+  concurrency: false,
+}, async (t) => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-close-failure-"));
+  t.after(() => rmSync(rootPath, { recursive: true, force: true }));
+  writeFileSync(path.join(rootPath, "only"), "close-failure");
+  const root = await RootedDirectory.open(rootPath);
+  // 源句柄照样关掉（不泄漏描述符），再报出关闭失败。
+  const originalClose = RootedExactResourceHandle.prototype.close;
+  t.mock.method(
+    RootedExactResourceHandle.prototype,
+    "close",
+    async function failingClose(this: RootedExactResourceHandle) {
+      await originalClose.call(this);
+      throw new RootedExactResourceHandleError("close-failure", "$resourcePath");
+    },
+  );
+  try {
+    const resourcePath = parsePortableResourcePath("only");
+    const expected = await root.inspectExistingResource(resourcePath);
+    await expectUnlinkError(
+      () => unlinkRegularFileExactly(root, resourcePath, { expectedNode: expected.node }),
+      "close-failure",
+      "$resourcePath",
+    );
+    equal(statSync(path.join(rootPath, "only"), { throwIfNoEntry: false }), undefined);
+  } finally {
+    await root.close();
   }
 });
 

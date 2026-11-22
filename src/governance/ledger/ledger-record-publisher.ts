@@ -17,6 +17,11 @@ import {
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
+  ledgerAuthorityRootRef,
+  ledgerRecordPublicationLockRef,
+  ledgerRecordPublicationStageRef,
+} from "./ledger-authority-paths.js";
+import {
   type LedgerAuthorityRecord,
   LedgerAuthorityRecordError,
   parseLedgerAuthorityRecord,
@@ -34,11 +39,6 @@ import {
   LEDGER_DURABLE_FILE_MODE,
 } from "./ledger-authority-storage-policy.js";
 import {
-  ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
-  ledgerRecordPublicationStageRef,
-} from "./ledger-authority-paths.js";
-import {
   throwLedgerAuthorityStoreError as fail,
   type LedgerAuthorityMemberInput,
   type LedgerAuthorityPublicationResult,
@@ -46,10 +46,11 @@ import {
 import {
   type LedgerRecordPublicationPlan,
   ledgerPublicationResourceNodeOrNull,
-  ledgerRecordPublicationStageNodeOrNull,
+  ledgerRecordPublicationStageState,
   loadExactPublishedLedgerRecord,
   prepareLedgerRecordPublicationLockRecovery,
   publishLedgerRecordStage,
+  retireLedgerRecordPublicationStage,
   withLedgerRecordPublicationLock,
 } from "./ledger-record-publication-storage.js";
 
@@ -195,41 +196,93 @@ function preparePublication(
   }
 }
 
-async function createOrSettleStage(
+function mapStageError(error: unknown): never {
+  if (error instanceof DurableDirectoryTreeCandidateError) {
+    if (error.reason === "aborted") fail("aborted", "$signal", error);
+    if (error.reason === "capacity") fail("capacity", "$stage", error);
+    fail("conflict", "$stage", error);
+  }
+  throw error;
+}
+
+async function createStage(
   root: RootedDirectory,
   prepared: Readonly<PreparedPublication>,
-  stageNodePresent: boolean,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
   try {
-    return stageNodePresent
-      ? await settleDirectoryTreeCandidateDurably(
-          root,
-          prepared.plan.stageRef,
-          prepared.candidateFiles,
-          candidateOptions(signal),
-        )
-      : await createDirectoryTreeCandidateDurably(
-          root,
-          prepared.plan.stageRef,
-          prepared.candidateFiles,
-          candidateOptions(signal),
-        );
+    return await createDirectoryTreeCandidateDurably(
+      root,
+      prepared.plan.stageRef,
+      prepared.candidateFiles,
+      candidateOptions(signal),
+    );
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      if (error.reason === "capacity") fail("capacity", "$stage", error);
-      fail("conflict", "$stage", error);
-    }
-    throw error;
+    mapStageError(error);
   }
+}
+
+/** 补齐已有的暂存；树不是计划的安全子集（`tree-conflict`）时返回 `residue`，其余错误照旧映射。 */
+async function settleStageOrResidue(
+  root: RootedDirectory,
+  prepared: Readonly<PreparedPublication>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DirectoryTreeCandidateResult> | "residue"> {
+  try {
+    return await settleDirectoryTreeCandidateDurably(
+      root,
+      prepared.plan.stageRef,
+      prepared.candidateFiles,
+      candidateOptions(signal),
+    );
+  } catch (error: unknown) {
+    if (error instanceof DurableDirectoryTreeCandidateError && error.reason === "tree-conflict") {
+      return "residue";
+    }
+    mapStageError(error);
+  }
+}
+
+/**
+ * 备好这条记录的暂存：不在就新建；在且是计划的安全子集（已有的成员完整且字节、权限位都对，只是
+ * 缺几项）就补齐续做；否则把它当作同一条记录的崩溃残留，删掉之后从头新建一次。
+ *
+ * 残留的来路：进程 umask 收窄了目录的权限位时，mkdir 以收窄后的权限位出生、chmod 之前进程被杀
+ * （不被收窄时目录以请求的权限位出生，新的建造没有这一种；1.4.0 一律以 0700 出生，它被打断的建造
+ * 留下的也算）；成员排他新建之后、写完或 chmod 之前进程被杀
+ * （空的或短的、权限位还是 0600）；掉电时目录的 chmod 或成员内容没有落盘（第 1 段起建造期间不同步
+ * 目录）。这些状态补齐路径都不认，过去每次重发都报冲突，没有任何代码删它。
+ *
+ * 为什么删掉是安全的（调用方持有记录锁，并且已经确认 final 不在）：
+ * - `transactions/` 是私有目录（0700、当前用户），暂存路径由记录标识推出，标识由内容推出，所以
+ *   这个目录里只可能是同一条记录被打断的建造；
+ * - 记录锁排除了并发的建造者，而只有本发布器把这个暂存改名生效；
+ * - final 不在，就没有任何东西引用这个暂存：删掉它不丢任何已生效的状态，新暂存完全由这次已经校验过
+ *   的输入建成。
+ *
+ * 删除走根作用域的整树删除（先确认目标在根内且是目录，删后同步 `transactions/`）。重建只做一次，
+ * 不循环：重建出来的暂存再失败就照旧报冲突。
+ */
+async function stageCandidate(
+  root: RootedDirectory,
+  prepared: Readonly<PreparedPublication>,
+  signal: AbortSignal | undefined,
+): Promise<Readonly<DirectoryTreeCandidateResult>> {
+  const state = await ledgerRecordPublicationStageState(root, prepared.plan);
+  if (state === "absent") return await createStage(root, prepared, signal);
+  if (state === "resumable") {
+    const settled = await settleStageOrResidue(root, prepared, signal);
+    if (settled !== "residue") return settled;
+  }
+  await retireLedgerRecordPublicationStage(root, prepared.plan, signal);
+  return await createStage(root, prepared, signal);
 }
 
 /**
  * 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。
  *
- * 不记日志：final 在就逐字节核对后复用；不在就把暂存补齐（上一次被打断留下的同一份内容）或新建，
- * 然后改名生效。被打断的发布由同一个请求再发一次续上。
+ * 不记日志：final 在就逐字节核对后复用；不在就把暂存补齐（上一次被打断留下的同一份内容）、
+ * 删掉补不了的残留重建，或新建，然后改名生效。被打断的发布由同一个请求再发一次续上。
  */
 export async function publishLedgerAuthorityRecord(
   root: RootedDirectory,
@@ -244,8 +297,7 @@ export async function publishLedgerAuthorityRecord(
       const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
       return Object.freeze({ wroteAuthority: false, loaded });
     }
-    const stageNode = await ledgerRecordPublicationStageNodeOrNull(root, prepared.plan);
-    const candidate = await createOrSettleStage(root, prepared, stageNode !== null, signal);
+    const candidate = await stageCandidate(root, prepared, signal);
     await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
     const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
     return Object.freeze({ wroteAuthority: true, loaded });

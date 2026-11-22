@@ -13,10 +13,14 @@ import path from "node:path";
  * `FileHandle` 没有公开构造器，只能从一个真实句柄取到原型；补丁是进程全局的，所以
  * 安装期间同一进程里不得有其他会发出 `fsync` 的工作（例如并发的子测试）同时运行，
  * 并且总在 `finally` 里还原。
+ *
+ * 每次同步之前对同一个句柄做一次 fstat，把目录句柄上的同步另计为 `directorySyncCount`：
+ * 原子写的协议按"文件内容几次、父目录几次"钉住，只数总数分不出两者。
  */
 
 interface FileHandleSyncPrototype {
   sync: (this: unknown) => Promise<void>;
+  stat: (this: unknown) => Promise<{ isDirectory(): boolean }>;
 }
 
 let cachedPrototype: FileHandleSyncPrototype | undefined;
@@ -35,22 +39,27 @@ async function fileHandleSyncPrototype(): Promise<FileHandleSyncPrototype> {
 export interface CountedFsyncRun<Result> {
   readonly result: Result;
   readonly syncCount: number;
+  /** 其中发生在目录句柄上的次数（父目录同步）。 */
+  readonly directorySyncCount: number;
 }
 
-/** 执行 `run`，返回它的结果与期间发生的 `fsync` 次数。 */
+/** 执行 `run`，返回它的结果、期间发生的 `fsync` 次数，以及其中目录句柄上的次数。 */
 export async function countFsyncs<Result>(
   run: () => Promise<Result>,
 ): Promise<Readonly<CountedFsyncRun<Result>>> {
   const prototype = await fileHandleSyncPrototype();
   const original = prototype.sync;
+  const stat = prototype.stat;
   let syncCount = 0;
+  let directorySyncCount = 0;
   prototype.sync = async function countedSync(this: unknown): Promise<void> {
     syncCount += 1;
+    if ((await stat.call(this)).isDirectory()) directorySyncCount += 1;
     return original.call(this);
   };
   try {
     const result = await run();
-    return Object.freeze({ result, syncCount });
+    return Object.freeze({ result, syncCount, directorySyncCount });
   } finally {
     prototype.sync = original;
   }

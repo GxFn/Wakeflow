@@ -97,8 +97,10 @@ async function withBoardLock(root, lockRef, signal, operation, mapLockError) {
             // 看板 owner 只退休已证明失活且仍匹配的锁；活动或未知 owner 仍由 acquire 等待。
             await retireRootedExclusiveFileLockResidue(root, lockRef, observed);
         }
+        // 看板锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L4）。
         return await withRootedExclusiveFileLock(root, lockRef, operation, {
             acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS,
+            durability: "content-only",
             ...signalOptions(signal),
         });
     }

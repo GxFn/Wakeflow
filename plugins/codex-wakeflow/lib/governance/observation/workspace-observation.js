@@ -267,7 +267,12 @@ async function hookDirectoryState(root, hostId) {
         throw error;
     }
 }
-/** 在同一个宿主进程里继续会话的 SessionStart 来源：不重新装载运行时。别的词（含今后的新词）与缺省都算启动。 */
+/**
+ * 在同一个宿主进程里继续会话的 SessionStart 来源：不重新装载运行时。别的词（含今后的新词）与缺省都算启动。
+ * `resume` 与 `fork` 也覆盖会话内的 `/resume`、`/branch` 一类切换，这里假定它们重新装载了运行时——宿主文档
+ * 没有写会话内的切换是否重启插件的 MCP 服务。对复制安装的插件无害（hook 仍指向旧版本的目录，摘要与旧服务一致）；
+ * 就地装载的插件在重建之后被这样切换时，可能把仍跑旧制品的会话判为当前。
+ */
 const IN_PROCESS_START_SOURCES = Object.freeze(["clear", "compact"]);
 function sessionStartLoadsRuntime(startSource) {
     return startSource === null || !IN_PROCESS_START_SOURCES.includes(startSource);

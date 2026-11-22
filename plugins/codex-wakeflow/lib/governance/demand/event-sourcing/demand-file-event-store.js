@@ -47,6 +47,10 @@ function indexableCommit(commit) {
  * 状态演进，不解析 Ledger/看板引用，也不发布 Demand 根目录。同一进程内对同一
  * canonical Demand root 的append短事务串行；跨进程/线程竞争仍由exclusive link与
  * candidate owner/recovery合同处理。
+ *
+ * 一次提交的追加恰好三次 fsync，可见步骤依次为：候选内容（`content-only` 创建，候选
+ * 目录项不同步）；link 进 commits/ 后同步 commits/ 目录；删除候选后同步
+ * append-candidates/ 目录。link 不再同步源 inode，因为候选内容在链接前已经落盘。
  */
 const ACTIVE_APPEND_CANDIDATE_TOKENS = new Set();
 /** 同一进程内按canonical Demand root串行append；不保存业务权威。 */
@@ -237,11 +241,11 @@ export class DemandFileEventStore {
             throw error;
         }
     }
-    async #retireCandidate(ref, node, signal, durability = "fsync") {
+    async #retireCandidate(ref, node, signal) {
         try {
+            // 每次退役都是同步删除（缺省 `fsync`，一次父目录同步）。
             await unlinkRegularFileExactly(this.#root, ref, {
                 expectedNode: node,
-                durability,
                 ...(signal === undefined ? {} : { signal }),
             });
         }
@@ -452,8 +456,10 @@ export class DemandFileEventStore {
             if (linkedNode === null) {
                 fail("commit-uncertain", "$commit");
             }
-            // 提交已由 link 持久化；候选残留即使在崩溃后留下，也由候选恢复按双链接结算。
-            await this.#retireCandidate(candidateRef, linkedNode, undefined, "none");
+            // 提交已由 link 持久化。候选按同步删除退役（一次 fsync：append-candidates/ 目录）：追加
+            // 返回之后，掉电不能让双链接候选复活，否则 Demand 根清单要求的空候选目录会让每次读取
+            // 失败直到维护对账（1.4.1 第 1 段）。追加前崩溃留下的残留仍由候选恢复按双链接结算。
+            await this.#retireCandidate(candidateRef, linkedNode, undefined);
             const committed = await readDemandFileEventCommitOrNull(this.#root, commitRef, undefined);
             if (committed === null || !sameDemandEventStreamCommit(committed.commit, commit)) {
                 fail("commit-uncertain", "$commit");

@@ -11,8 +11,8 @@ import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomicall
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../foundation/filesystem/durable-directory-materialization.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectoryTreeRemovalError, removeRootedDirectoryTree, } from "../foundation/filesystem/rooted-directory-tree-removal.js";
 import { RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
+import { RootedDirectoryTreeRemovalError, removeRootedDirectoryTree, } from "../foundation/filesystem/rooted-directory-tree-removal.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
@@ -599,16 +599,29 @@ export async function retirePodReceiptsAllHosts(root, podId) {
     }
     return removed;
 }
-/** 删除一个 pod 的整个回执目录（Wakeflow 自己的私有文件）；不存在即 false。 */
+/**
+ * 删除一个 pod 的整个回执目录（Wakeflow 自己的私有文件）；不存在即 false。
+ *
+ * 删除原语在返回前同步回执目录的父目录一次（1.4.1 第 1 段，清单 2.1“整目录删除”）。这次同步
+ * 是防御性的：之后没有哪个持久步骤以回执目录已经消失为前提（pod 关闭完成时这是最后一步，
+ * recover 的孤儿分支删完即返回）。它只让已关闭 pod 的回执目录掉电之后不再回来；同步之前被杀
+ * 或掉电而留下、回来的回执目录，pod 已不在配置里，是孤儿，由 pod recover 清掉。
+ *
+ * false 只有两种：目录不在（`resource-not-found`），或那里是一个不是目录的节点（它不是回执
+ * 目录，不占用检出）。
+ * 没能检查（`inspection-failure`：EACCES、EIO、祖先被换成链接或文件……）与父目录打不开
+ * （`parent-open-failure`）都不是“目录不在”，按 io-failure 报出，回执不会被当作已经退役——
+ * 与 open-items G7（§13.167）对检出观察定下的“没能检查不冒充不在”一致。
+ */
 export async function retirePodReceipts(root, hostId, podId) {
     const ref = podReceiptRootRef(hostId, podId);
     try {
         return ((await removeRootedDirectoryTree(root, ref, { missing: "ignore" }, "$receipt")) === "removed");
     }
     catch (error) {
-        // 不是目录或无法观察：与之前 `stat` 失败即 false 一致（§13.166；open-items G7 留给批次 2）。
-        if (error instanceof RootedDirectoryTreeRemovalError &&
-            (error.reason === "not-directory" || error.reason === "inspection-failure")) {
+        // 只有“不是目录”是 false；`inspection-failure`、`parent-open-failure`、`removal-failure`、
+        // `durability-failure` 等其余原因都落到 io-failure。
+        if (error instanceof RootedDirectoryTreeRemovalError && error.reason === "not-directory") {
             return false;
         }
         fail("io-failure", "receipt-retire-directory", "$receipt", { cause: error });

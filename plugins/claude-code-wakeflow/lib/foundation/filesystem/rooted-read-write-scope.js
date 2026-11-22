@@ -178,6 +178,7 @@ export async function withRootedReadWriteScope(root, area, mode, operation, valu
         const remaining = monotonicDeadlineRemaining(deadline, readMonotonicClock());
         return {
             acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999999n) / 1000000n)),
+            durability: "content-only",
             ...(options.signal === undefined ? {} : { signal: options.signal }),
         };
     };

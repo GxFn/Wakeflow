@@ -1,12 +1,12 @@
-import { unlink } from "node:fs/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Exact regular file unlink input is invalid.",
     "root-scope": "Exact unlink could not establish its rooted scope.",
@@ -22,7 +22,7 @@ const ERROR_MESSAGES = {
     "source-changed": "Exact unlink source no longer matches its expectation.",
     "unlink-failure": "Exact unlink commit could not be executed safely.",
     "commit-uncertain": "Exact unlink commit result could not be proven safely.",
-    "durability-failure": "Exact unlink inode and parent could not be synchronized.",
+    "durability-failure": "Exact unlink parent directory could not be synchronized.",
     aborted: "Exact unlink was aborted before commit.",
     "close-failure": "An exact unlink handle could not be closed safely.",
 };
@@ -195,10 +195,7 @@ async function closeParent(parent) {
     }
 }
 function mapExactSourceError(error, operation) {
-    if (operation === "sync-after-commit" && error.reason === "sync-failure") {
-        fail("durability-failure", "$resourcePath");
-    }
-    if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
+    if (operation === "inspect-after-commit") {
         fail("commit-uncertain", "$resourcePath");
     }
     if (operation === "current")
@@ -250,17 +247,6 @@ async function inspectCommittedSource(source) {
     catch (error) {
         if (error instanceof RootedExactResourceHandleError) {
             mapExactSourceError(error, "inspect-after-commit");
-        }
-        throw error;
-    }
-}
-async function syncCommittedSource(source) {
-    try {
-        await source.syncOpenedNode();
-    }
-    catch (error) {
-        if (error instanceof RootedExactResourceHandleError) {
-            mapExactSourceError(error, "sync-after-commit");
         }
         throw error;
     }
@@ -324,7 +310,7 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
         await assertSourceCurrent(source);
         assertNotAborted(parsed.signal);
         try {
-            await unlink(parent.resourceAbsolutePath);
+            await filesystemMutation.unlink(parent.resourceAbsolutePath);
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "ENOENT") {
@@ -339,10 +325,8 @@ export async function unlinkRegularFileExactly(root, resourcePath, options) {
         if (!sameUnlinkedNode(nodeBefore, afterUnlink, remainingLinkCount)) {
             fail("commit-uncertain", "$resourcePath");
         }
-        if (parsed.durability === "fsync") {
-            await syncCommittedSource(source);
+        if (parsed.durability === "fsync")
             await syncParent(parent);
-        }
         replacementObserved =
             (await observeSettlement(parent, nodeBefore, parsed.settlement)) || replacementObserved;
         const settled = await inspectCommittedSource(source);

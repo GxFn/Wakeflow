@@ -1,18 +1,37 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { mkdir, open as openFileHandle } from "node:fs/promises";
+import { open as openFileHandle } from "node:fs/promises";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { PortableResourcePathError, parsePortableResourcePath, splitPortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 /**
  * Wakeflow Foundation / Filesystem：根作用域目录的持久化创建与逐级建立。
  *
  * `createDirectoryAtomically` 只跨越一次“目标不存在 → 目录存在”的独占 `mkdir`
- * 边界，随后通过不跟随符号链接的句柄设置最终权限位、同步新目录与父目录，并复验
- * 路径名、句柄和 `RootedDirectory` 仍指向同一文件系统节点。
+ * 边界，随后通过不跟随符号链接的句柄核对权限位、同步父目录，并复验路径名、句柄和
+ * `RootedDirectory` 仍指向同一文件系统节点。请求的权限位含属主读写进入（0700 各位）
+ * 时，`mkdir` 直接以请求的权限位创建；进程 umask 只能把它收窄，所以新目录从出生起
+ * 就不比请求更宽。句柄上看到的权限位等于请求时不再 chmod，也不另同步新目录：条目与
+ * 权限位由同一次 `mkdir` 写下，同步父目录一次（常见 umask 022 下的 0755、0700 都是
+ * 一次）。权限位不等于请求时（收窄的 umask），经句柄 chmod 到请求的权限位，并在同步
+ * 父目录之前先同步新目录自身，共两次。请求的权限位缺少属主读写进入时（例如 0），
+ * 新目录仍以 0700 出生再经句柄 chmod，同样两次。
+ *
+ * 剩下的窗口：只在需要 chmod 的那两种情形里。进程在 `mkdir` 与 chmod 之间被杀，
+ * 目录以出生时的权限位留下，不需要断电；从 `mkdir` 到新目录自身同步完成之间断电，
+ * 条目可能因别人对父目录的同步或文件系统自己的刷写先落盘而 chmod 未落盘，结果相同。
+ * 本层不修复已有目录的权限位：下一次逐级建立把它当作已有目录原样留下，由上层的布局
+ * 检查拒绝。出生的权限位等于请求时没有这个窗口：条目与权限位由同一次 `mkdir` 写下。
+ *
+ * `createTreeCandidateDirectoryAtomically` 只供目录树候选使用：创建规则、chmod 与
+ * 复验完全相同，但一次都不同步。目录树候选在全部成员写完之后逐个同步树内的每个目录
+ * 一次，再由发布的重命名同步暂存与目标的父目录，所以“建好就同步父目录”在树内不适用。
+ * 以请求的权限位出生的树内目录没有未覆盖的权限位改动；需要 chmod 时，上面的窗口在树内
+ * 一直延续到树同步这个目录为止。
  *
  * `materializeDirectoryPath` 按可移植路径分段逐级组合该基础操作：已经存在的真实
  * 目录只观察而不修改权限，缺失段逐一持久创建。整条路径不是原子事务；中途失败时，
@@ -22,8 +41,15 @@ import { isAbortSignal } from "../node/abort-signal.js";
  * 的权限、目录是否为空、布局权威、恢复意图或多目录事务。Node.js 没有暴露
  * `mkdirat`，因此路径名竞态边界与 `RootedDirectory` 保持一致。
  */
-/** 新目录在设置最终权限位前只允许当前用户进入。 */
+/**
+ * 请求的权限位缺少属主读写进入时的出生权限位：新目录先只允许当前用户进入，打开句柄
+ * 之后再 chmod 到请求的权限位。
+ */
 const PRIVATE_DIRECTORY_MODE = 0o700;
+/** 含属主读写进入的请求以自身出生（umask 只会收窄它），否则以 0700 出生。 */
+function birthMode(mode) {
+    return (mode & PRIVATE_DIRECTORY_MODE) === PRIVATE_DIRECTORY_MODE ? mode : PRIVATE_DIRECTORY_MODE;
+}
 const ERROR_MESSAGES = {
     input: "Durable directory materialization input is invalid.",
     "root-scope": "Directory target could not establish its rooted scope.",
@@ -214,7 +240,7 @@ function sameDirectoryFacts(left, right) {
         left.userId === right.userId &&
         left.groupId === right.groupId);
 }
-async function performAtomicCreate(root, resourcePath, options) {
+async function performAtomicCreate(root, resourcePath, options, parentEntry) {
     const parent = await openResourceParent(root, resourcePath);
     let targetHandle;
     let primaryError;
@@ -227,8 +253,8 @@ async function performAtomicCreate(root, resourcePath, options) {
         }
         assertNotAborted(options.signal);
         try {
-            await mkdir(parent.resourceAbsolutePath, {
-                mode: PRIVATE_DIRECTORY_MODE,
+            await filesystemMutation.mkdir(parent.resourceAbsolutePath, {
+                mode: birthMode(options.mode),
                 recursive: false,
             });
         }
@@ -255,11 +281,15 @@ async function performAtomicCreate(root, resourcePath, options) {
             !sameFileNodeIdentity(opened, pathBefore)) {
             fail("commit-uncertain", "$resourcePath");
         }
-        try {
-            await targetHandle.chmod(options.mode);
-        }
-        catch (cause) {
-            fail("commit-uncertain", "$resourcePath", cause);
+        // 出生的权限位已等于请求时不 chmod：条目与权限位由同一次 `mkdir` 写下。
+        const chmodNeeded = opened.permissionBits !== options.mode;
+        if (chmodNeeded) {
+            try {
+                await targetHandle.chmod(options.mode);
+            }
+            catch (cause) {
+                fail("commit-uncertain", "$resourcePath", cause);
+            }
         }
         const hardened = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
         if (hardened.kind !== "directory" ||
@@ -267,9 +297,14 @@ async function performAtomicCreate(root, resourcePath, options) {
             !sameFileNodeIdentity(opened, hardened)) {
             fail("commit-uncertain", "$resourcePath");
         }
-        // 新目录 inode 与父目录条目的同步由根的持久化级别决定；`none` 只省掉这两次
-        // `fsync`，`mkdir`、权限收紧与提交后复验都照常执行。
-        if (root.durability === "fsync") {
+        // 上面的 chmod 只记在新目录自己的 inode 上，父目录同步不覆盖它。单独新建的目录
+        // chmod 过就先同步自己、再同步父目录：顺序反过来，断电可能留下条目而权限位退回
+        // 出生时的值。没有 chmod 的目录不另同步。
+        // 目录树候选传 `deferred`，两次都不发：树在成员写完之后逐个同步每个目录一次，
+        // 那一次同时覆盖它的权限位，父目录交给发布的重命名同步。
+        // 同步与否只由根的持久化级别决定（`none` 只省掉 `fsync` 本身）；`mkdir`、权限收紧
+        // 与提交后复验在各档都照常执行。
+        if (parentEntry === "sync" && root.durability === "fsync" && chmodNeeded) {
             try {
                 await targetHandle.sync();
             }
@@ -277,7 +312,8 @@ async function performAtomicCreate(root, resourcePath, options) {
                 fail("durability-failure", "$resourcePath", cause);
             }
         }
-        await syncParent(parent);
+        if (parentEntry === "sync")
+            await syncParent(parent);
         await assertParentCurrent(parent);
         const afterHandle = await snapshotHandle(targetHandle, "commit-uncertain", "$resourcePath");
         const afterPath = await inspectParentTarget(parent, "commit-uncertain");
@@ -385,7 +421,19 @@ export async function createDirectoryAtomically(root, resourcePath, options) {
     assertRoot(root);
     const parsed = parseOptions(options);
     assertNotAborted(parsed.signal);
-    return performAtomicCreate(root, resourcePath, parsed);
+    return performAtomicCreate(root, resourcePath, parsed, "sync");
+}
+/**
+ * 与 `createDirectoryAtomically` 相同地创建并复验一个目录，但不发出任何同步。
+ *
+ * 只供目录树候选使用：调用方负责在这个目录的成员全部写完之后同步它一次，并保证
+ * 目录树在发布前不被当作权威事实；目录树之外的调用方应使用 `createDirectoryAtomically`。
+ */
+export async function createTreeCandidateDirectoryAtomically(root, resourcePath, options) {
+    assertRoot(root);
+    const parsed = parseOptions(options);
+    assertNotAborted(parsed.signal);
+    return performAtomicCreate(root, resourcePath, parsed, "deferred");
 }
 /**
  * 按顺序幂等物化一个根内目录路径。
@@ -411,7 +459,7 @@ export async function materializeDirectoryPath(root, resourcePath, options) {
             continue;
         }
         try {
-            const created = await performAtomicCreate(root, prefix, parsed);
+            const created = await performAtomicCreate(root, prefix, parsed, "sync");
             observations.push(Object.freeze({
                 resourcePath: prefix,
                 disposition: created.disposition,

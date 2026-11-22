@@ -1,13 +1,13 @@
-import { rename } from "node:fs/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Durable resource rename input is invalid.",
     "root-scope": "Resource rename could not establish its rooted scope.",
@@ -351,7 +351,7 @@ export async function renameResourceDurably(root, sourceResourcePath, destinatio
         }
         assertNotAborted(parsed.signal);
         try {
-            await rename(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
+            await filesystemMutation.rename(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
         }
         catch (error) {
             if (readNodeSystemErrorCode(error) === "EXDEV") {

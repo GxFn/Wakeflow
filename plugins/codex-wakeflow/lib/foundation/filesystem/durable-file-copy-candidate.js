@@ -1,10 +1,11 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import { open as openFileHandle, unlink } from "node:fs/promises";
+import { open as openFileHandle } from "node:fs/promises";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { assertDurableFileCopyNotAborted, assertDurableFileCopyRoot, DurableFileCopyCandidateError, failDurableFileCopyCandidate as fail, parseDurableFileCopyExpectation, parseDurableFileCopyOptions, parseDurableFileCopyPath, snapshotDurableFileCopyNode, } from "./durable-file-copy-candidate-contract.js";
 import { sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { RootedDirectoryError, } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES = 512 * 1024;
@@ -390,7 +391,7 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
             fail("target-exists", "$candidateResourcePath");
         }
         try {
-            candidateHandle = await openFileHandle(parent.resourceAbsolutePath, candidateOpenFlags(), 0o600);
+            candidateHandle = await filesystemMutation.openExclusive(parent.resourceAbsolutePath, candidateOpenFlags(), 0o600);
             candidateCreated = true;
         }
         catch (error) {
@@ -474,7 +475,7 @@ export async function copyFileToCandidateDurably(sourceRootValue, destinationRoo
                 !sameFileNodeSnapshot(opened, current)) {
                 fail("cleanup-failure", "$candidate");
             }
-            await unlink(parent.resourceAbsolutePath);
+            await filesystemMutation.unlink(parent.resourceAbsolutePath);
             const retired = await snapshotHandle(candidateHandle, "cleanup-failure", "$candidate");
             if (!sameRetiredCandidateNode(opened, retired)) {
                 fail("cleanup-failure", "$candidate");

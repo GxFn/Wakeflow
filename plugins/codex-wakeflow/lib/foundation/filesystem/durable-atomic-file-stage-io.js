@@ -1,15 +1,20 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { lstat, open as openFileHandle, unlink } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import nodePath from "node:path";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { DurableAtomicFileStageAddressError, issueDurableAtomicFileStageAddress, releaseDurableAtomicFileStageAddress, } from "./durable-atomic-file-stage-address.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesMatchingTargets, } from "./durable-atomic-file-stage-recovery.js";
 import { assertDurableAtomicFileNotAborted, DurableAtomicFileWriteError, failDurableAtomicFileWrite as fail, } from "./durable-atomic-file-write-contract.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
-/** 耐久原子写入中，自描述暂存文件的 I/O 生命周期。 */
+import { filesystemMutation } from "./filesystem-mutation.js";
+/**
+ * 耐久原子写入中，自描述暂存文件的 I/O 生命周期。
+ *
+ * 暂存写完之后只同步一次内容（由门面按持久化级别决定要不要同步），不读回比对：
+ * 内容在发布之前落盘一次，之后的检查只比较句柄与路径名上的节点，不再重读字节。
+ */
 const PRIVATE_STAGE_MODE = 0o600;
 const STAGE_CREATE_ATTEMPTS = 4;
-const VERIFY_CHUNK_BYTES = 512 * 1024;
 function requiredStageOpenFlags() {
     const noFollow = fileSystemConstants.O_NOFOLLOW;
     if (typeof noFollow !== "number")
@@ -19,14 +24,6 @@ function requiredStageOpenFlags() {
 export async function snapshotDurableAtomicFileHandle(handle, reason, path) {
     try {
         return createFileNodeSnapshot(await handle.stat({ bigint: true }), path);
-    }
-    catch (cause) {
-        fail(reason, path, cause);
-    }
-}
-function allocateVerificationBuffer(byteLength, reason, path) {
-    try {
-        return Buffer.allocUnsafe(byteLength);
     }
     catch (cause) {
         fail(reason, path, cause);
@@ -47,7 +44,7 @@ export async function createExclusiveDurableAtomicFileStage(parent, operation, r
         }
         const physicalPath = nodePath.join(parent.parentAbsolutePath, address.fileName);
         try {
-            const handle = await openFileHandle(physicalPath, flags, PRIVATE_STAGE_MODE);
+            const handle = await filesystemMutation.openExclusive(physicalPath, flags, PRIVATE_STAGE_MODE);
             return Object.freeze({ physicalPath, handle, address });
         }
         catch (error) {
@@ -102,53 +99,7 @@ async function writeExactBytes(handle, bytes, signal) {
         offset += bytesWritten;
     }
 }
-export async function verifyDurableAtomicFileHandleBytes(handle, input, signal, reason) {
-    const errorPath = reason === "stage-changed" ? "$stage/bytes" : "$resourcePath";
-    const before = await snapshotDurableAtomicFileHandle(handle, reason, errorPath);
-    const scratch = allocateVerificationBuffer(Math.min(VERIFY_CHUNK_BYTES, input.byteCount || 1), reason, errorPath);
-    let position = 0;
-    while (position < input.byteCount) {
-        if (reason === "stage-changed") {
-            assertDurableAtomicFileNotAborted(signal);
-        }
-        const length = Math.min(scratch.byteLength, input.byteCount - position);
-        let bytesRead;
-        try {
-            ({ bytesRead } = await handle.read(scratch, 0, length, position));
-        }
-        catch (cause) {
-            if (reason === "stage-changed") {
-                assertDurableAtomicFileNotAborted(signal);
-            }
-            fail(reason, errorPath, cause);
-        }
-        if (bytesRead <= 0 || bytesRead > length)
-            fail(reason, errorPath);
-        if (!scratch.subarray(0, bytesRead).equals(input.bytes.subarray(position, position + bytesRead))) {
-            fail(reason, errorPath);
-        }
-        position += bytesRead;
-    }
-    const growthProbe = allocateVerificationBuffer(1, reason, errorPath);
-    try {
-        const probe = await handle.read(growthProbe, 0, 1, input.byteCount);
-        if (probe.bytesRead !== 0)
-            fail(reason, errorPath);
-    }
-    catch (error) {
-        if (error instanceof DurableAtomicFileWriteError)
-            throw error;
-        if (reason === "stage-changed") {
-            assertDurableAtomicFileNotAborted(signal);
-        }
-        fail(reason, errorPath, error);
-    }
-    const after = await snapshotDurableAtomicFileHandle(handle, reason, errorPath);
-    if (!sameFileNodeSnapshot(before, after))
-        fail(reason, errorPath);
-    return after;
-}
-export async function prepareDurableAtomicFileStage(exclusive, input, mode, signal, durability) {
+export async function prepareDurableAtomicFileStage(exclusive, input, mode, signal, syncContent) {
     await writeExactBytes(exclusive.handle, input.bytes, signal);
     assertDurableAtomicFileNotAborted(signal);
     try {
@@ -164,7 +115,7 @@ export async function prepareDurableAtomicFileStage(exclusive, input, mode, sign
         beforeSync.permissionBits !== mode) {
         fail("stage-write-failure", "$stage");
     }
-    if (durability === "fsync") {
+    if (syncContent) {
         try {
             await exclusive.handle.sync();
         }
@@ -224,7 +175,7 @@ export async function unlinkOwnedDurableAtomicFileStage(stage) {
         fail("stage-cleanup-failure", "$stage");
     }
     try {
-        await unlink(stage.physicalPath);
+        await filesystemMutation.unlink(stage.physicalPath);
     }
     catch (error) {
         if (readNodeSystemErrorCode(error) === "ENOENT")

@@ -853,9 +853,9 @@ async function retireInactiveLock(root) {
     if (lock.status !== "held" || lock.ownerState !== "inactive")
         return false;
     try {
-        // 退休先在锁的父目录内做 stage 恢复，集合外的 stage 一律拒绝。工作区索引与锁同住
-        // `.wakeflow-active/`，崩溃留下的索引 stage 因此必须一起声明：否则恢复恰好在它存在的
-        // 那一轮（也就是恢复存在的理由）以 residue-changed 失败，失活的锁再也退不掉。
+        // 退休先恢复锁与声明的相关目标自己的 stage；同目录其他目标的 stage 不挡退休。工作区
+        // 索引与锁同住 `.wakeflow-active/`，把它声明为相关目标，是为了让崩溃留下的、属主已死的
+        // 索引 stage 与锁一起结算并退役；属主仍活动的索引 stage 照旧让退休以 residue-changed 失败。
         await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, lock, {
             relatedTargetResourcePaths: [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF],
         });
@@ -954,6 +954,8 @@ export async function publishActiveProjection(root, render, options = {}) {
     try {
         return await withRootedExclusiveFileLock(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, () => renderAndPublishLocked(root, render, effectiveOptions), {
             acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
+            // 投影锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L3）。
+            durability: "content-only",
             ...signalOptions(signal),
         });
     }

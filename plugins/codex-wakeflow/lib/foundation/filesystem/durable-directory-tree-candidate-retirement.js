@@ -1,17 +1,17 @@
-import { rmdir } from "node:fs/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { directoryTreeCandidateMaximumPathDepth, joinDirectoryTreeCandidatePath, } from "./directory-tree-candidate-plan.js";
 import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, inspectDirectoryTreeCandidateProgress, parseDirectoryTreeCandidatePlan, } from "./durable-directory-tree-candidate.js";
 import { ExactRegularFileUnlinkError, unlinkRegularFileExactly, } from "./exact-regular-file-unlink.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
-import { RootedDirectoryError, isRootedDirectory, } from "./rooted-directory.js";
+import { isRootedDirectory, RootedDirectoryError, } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 import { readStableFileDigest, StableFileReadError, } from "./stable-file-read.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Directory tree candidate retirement input is invalid.",
     "root-scope": "Directory tree candidate retirement lost its root scope.",
@@ -380,7 +380,7 @@ export async function removeEmptyDirectoryExactly(root, resourcePath, expectedId
         await source.assertPathCurrent();
         assertNotAborted(signal);
         try {
-            await rmdir(parent.resourceAbsolutePath);
+            await filesystemMutation.rmdir(parent.resourceAbsolutePath);
         }
         catch (error) {
             const code = readNodeSystemErrorCode(error);

@@ -1,11 +1,11 @@
 import { types } from "node:util";
 import { computeSha256Digest, parseSha256Digest, Sha256Error, } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { FileNodeSnapshotError, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
 export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(64 * 1024 * 1024, "$durableAtomicFile.maximumBytes");
 const ERROR_MESSAGES = {
@@ -97,7 +97,7 @@ function parseSignal(value) {
 function parseDurability(value) {
     if (value === undefined)
         return "fsync";
-    if (value !== "fsync" && value !== "none") {
+    if (value !== "fsync" && value !== "content-only" && value !== "none") {
         failDurableAtomicFileWrite("input", "$options.durability");
     }
     return value;

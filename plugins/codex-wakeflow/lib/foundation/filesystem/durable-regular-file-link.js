@@ -1,13 +1,13 @@
-import { link } from "node:fs/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { isAbortSignal } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { PortableResourcePathError, parsePortableResourcePath, } from "./portable-resource-path.js";
 import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedExactResourceHandle, RootedExactResourceHandleError, } from "./rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
 const ERROR_MESSAGES = {
     input: "Durable regular file link input is invalid.",
     "root-scope": "Regular file link could not establish its rooted scope.",
@@ -203,10 +203,7 @@ async function closeParent(parent, errorPath) {
     }
 }
 function mapExactSourceError(error, operation) {
-    if (operation === "sync-after-commit" && error.reason === "sync-failure") {
-        fail("durability-failure", "$destinationResourcePath");
-    }
-    if (operation === "inspect-after-commit" || operation === "sync-after-commit") {
+    if (operation === "inspect-after-commit") {
         fail("commit-uncertain", "$destinationResourcePath");
     }
     if (operation === "current")
@@ -258,17 +255,6 @@ async function inspectCommittedSource(source) {
     catch (error) {
         if (error instanceof RootedExactResourceHandleError) {
             mapExactSourceError(error, "inspect-after-commit");
-        }
-        throw error;
-    }
-}
-async function syncCommittedSource(source) {
-    try {
-        await source.syncOpenedNode();
-    }
-    catch (error) {
-        if (error instanceof RootedExactResourceHandleError) {
-            mapExactSourceError(error, "sync-after-commit");
         }
         throw error;
     }
@@ -357,7 +343,7 @@ export async function linkRegularFileWithoutReplacement(root, sourceResourcePath
         }
         assertNotAborted(parsed.signal);
         try {
-            await link(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
+            await filesystemMutation.link(sourceParent.resourceAbsolutePath, destinationParent.resourceAbsolutePath);
         }
         catch (error) {
             const code = readNodeSystemErrorCode(error);
@@ -370,7 +356,7 @@ export async function linkRegularFileWithoutReplacement(root, sourceResourcePath
         const nodeBefore = source.initialNodeSnapshot;
         const linkedPairLinkCount = nodeBefore.linkCount + 1n;
         const linked = await inspectLinkedPair(source, sourceParent, destinationParent, linkedPairLinkCount);
-        await syncCommittedSource(source);
+        // 源内容已由调用方在链接前同步；这里只让新目录项持久。
         await syncParent(destinationParent, "$destinationResourcePath");
         await assertParentCurrent(sourceParent, "$sourceResourcePath", true);
         await assertParentCurrent(destinationParent, "$destinationResourcePath", true);

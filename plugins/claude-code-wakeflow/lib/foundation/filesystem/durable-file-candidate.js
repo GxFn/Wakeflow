@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
-import { open as openFileHandle, unlink } from "node:fs/promises";
 import { types } from "node:util";
 import { computeSha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
@@ -8,6 +7,7 @@ import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
 import { createFileNodeSnapshot, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { filesystemMutation } from "./filesystem-mutation.js";
 import { isRootedDirectory } from "./rooted-directory.js";
 import { RootedResourceParentHandle, RootedResourceParentHandleError, } from "./rooted-resource-parent-handle.js";
 const ERROR_MESSAGES = {
@@ -266,6 +266,30 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
     const options = parseOptions(optionsValue);
     assertNotAborted(options.signal);
     const input = snapshotInput(bytesValue);
+    return performCreate(root, resourcePath, input, options, "candidate");
+}
+/**
+ * 创建目录树候选的一个成员文件：内容同步一次，不同步父目录，不回读字节。
+ *
+ * 只供目录树候选使用；成员所在目录由树在全部成员写完之后同步。
+ */
+export async function createDirectoryTreeMemberFileDurably(root, resourcePath, bytesValue, optionsValue) {
+    assertRoot(root);
+    if (typeof optionsValue === "object" &&
+        optionsValue !== null &&
+        Object.hasOwn(optionsValue, "durability")) {
+        fail("input", "$options");
+    }
+    const options = parseOptions(optionsValue);
+    assertNotAborted(options.signal);
+    const input = snapshotInput(bytesValue);
+    return performCreate(root, resourcePath, input, Object.freeze({ ...options, durability: "content-only" }), "tree-member");
+}
+async function performCreate(root, resourcePath, input, options, profile) {
+    // 候选档写后、同步后、目录项同步后各回读一次字节；成员档只看句柄元数据。
+    const observe = (handle) => profile === "candidate"
+        ? verifyBytes(handle, input, options.signal)
+        : snapshotHandle(handle, "candidate-changed");
     let parent;
     try {
         parent = await RootedResourceParentHandle.open(root, resourcePath);
@@ -290,7 +314,7 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
             fail("target-exists", "$resourcePath");
         }
         try {
-            handle = await openFileHandle(parent.resourceAbsolutePath, openFlags(), 0o600);
+            handle = await filesystemMutation.openExclusive(parent.resourceAbsolutePath, openFlags(), 0o600);
             created = true;
         }
         catch (error) {
@@ -307,7 +331,7 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
         catch (cause) {
             fail("write-failure", "$candidate", cause);
         }
-        let prepared = await verifyBytes(handle, input, options.signal);
+        let prepared = await observe(handle);
         if (prepared.kind !== "file" ||
             prepared.linkCount !== 1n ||
             prepared.permissionBits !== options.mode ||
@@ -324,18 +348,22 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
                 fail("sync-failure", "$candidate", cause);
             }
         }
-        prepared = await verifyBytes(handle, input, options.signal);
+        prepared = await observe(handle);
         await assertParentCurrent(parent, "candidate-changed", "$candidate");
         const pathNode = await inspectParentTarget(parent, "candidate-changed", "$candidate");
         if (pathNode === null || !sameFileNodeSnapshot(prepared, pathNode)) {
             fail("candidate-changed", "$candidate");
         }
-        if (options.durability === "fsync")
-            await syncParent(parent);
-        const finalHandle = await verifyBytes(handle, input, options.signal);
-        const finalPath = await inspectParentTarget(parent, "candidate-changed", "$candidate");
-        if (finalPath === null || !sameFileNodeSnapshot(finalHandle, finalPath)) {
-            fail("candidate-changed", "$candidate");
+        let finalPath = pathNode;
+        if (profile === "candidate") {
+            if (options.durability === "fsync")
+                await syncParent(parent);
+            const finalHandle = await verifyBytes(handle, input, options.signal);
+            const finalPathNode = await inspectParentTarget(parent, "candidate-changed", "$candidate");
+            if (finalPathNode === null || !sameFileNodeSnapshot(finalHandle, finalPathNode)) {
+                fail("candidate-changed", "$candidate");
+            }
+            finalPath = finalPathNode;
         }
         result = Object.freeze({
             resourcePath,
@@ -358,7 +386,7 @@ export async function createFileCandidateDurably(root, resourcePath, bytesValue,
                 !sameFileNodeSnapshot(opened, current)) {
                 fail("cleanup-failure", "$candidate");
             }
-            await unlink(parent.resourceAbsolutePath);
+            await filesystemMutation.unlink(parent.resourceAbsolutePath);
             const retired = await snapshotHandle(handle, "cleanup-failure");
             if (!sameRetiredCandidateNode(opened, retired)) {
                 fail("cleanup-failure", "$candidate");

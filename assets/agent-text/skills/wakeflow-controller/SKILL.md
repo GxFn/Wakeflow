@@ -155,9 +155,13 @@ another maintenance is running, wait and read status again, never recover it;
 reconcile; `conflict` or `unknown` - stop and report it to the user. An
 unavailable gate is unchecked, not passing.
 
-For Demand inventory errors after an interrupted write, preview `reconcile`;
-follow "Interrupted writes and cancellation" in
-`references/workspace-maintenance.md` without deleting files by hand.
+When `next` or `nextActions` names `demand-recovery`, or a refusal is
+`recovery-required` with `details.tool`, call that tool with `mode: recover` and
+the Demand id as `operationId` (as `demandId` for `wakeflow_record_evidence`;
+for `wakeflow_maintain_workspace`: preview and apply `reconcile`), then repeat
+the refused call or read status again. Preview `reconcile` for a Demand
+inventory error only when nothing names a route; see "Interrupted writes and
+cancellation" in `references/workspace-maintenance.md`. Never delete files by hand.
 
 `server-outdated` (`runtime-artifact-outdated` in `next`) concerns this MCP
 server; `windows-stale:<n>` names peer sessions started under an older artifact;

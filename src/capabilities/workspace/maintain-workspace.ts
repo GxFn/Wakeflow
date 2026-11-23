@@ -228,7 +228,11 @@ interface RuntimeRecoveryPlan {
   readonly recovery: Readonly<DemandRuntimeRecoveryPlan>;
   readonly view: Readonly<{
     kind: "WakeflowDemandRuntimeRecoveryPlan";
-    demands: readonly Readonly<{ demandId: string; candidateCount: number }>[];
+    demands: readonly Readonly<{
+      demandId: string;
+      candidateCount: number;
+      stageResidueCount: number;
+    }>[];
   }>;
 }
 
@@ -991,8 +995,8 @@ async function planRuntimeRecovery(
         view: Object.freeze({
           kind: "WakeflowDemandRuntimeRecoveryPlan",
           demands: Object.freeze(
-            recovery.demands.map(({ demandId, candidateCount }) =>
-              Object.freeze({ demandId, candidateCount }),
+            recovery.demands.map(({ demandId, candidateCount, stageResidueCount }) =>
+              Object.freeze({ demandId, candidateCount, stageResidueCount }),
             ),
           ),
         }),

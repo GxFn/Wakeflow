@@ -66,6 +66,15 @@ export class RootedReadWriteScopeError extends Error {
 
 const READER =
   /^reader-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.lock$/u;
+
+/**
+ * Whether `name` is one of this scope's own lock files in its area: the admission latch, the
+ * writer lock or a reader lease. Read-only inspectors use it to tell this protocol's residue from
+ * foreign content; it grants nothing.
+ */
+export function isRootedReadWriteScopeLockName(name: string): boolean {
+  return name === "latch.lock" || name === "writer.lock" || READER.test(name);
+}
 const MAXIMUM_ENTRIES = 1024;
 const RETRY_MILLISECONDS = 20;
 /** Shared-only workloads never drain readers: retire dead ones once this many leases pile up (§13.161 F4). */

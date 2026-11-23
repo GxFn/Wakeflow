@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   RootedResourceParentHandle,
@@ -301,6 +302,104 @@ test("Recovery在目标Event前CAS过期时退休partial stage与journal", async
     equal(recovered.loaded.aggregate.state.lifecycle, "cancelled");
     equal(existsSync(physical(rootPath, plan.candidateRootPath)), false);
     equal(existsSync(physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF)), false);
+  } finally {
+    if (demandRoot !== undefined) await demandRoot.close();
+    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
+  }
+});
+
+test("过期清退沿用“候选树已经不在”之前先落盘：上一次清退死在删候选根之后、同步之前，recover 先同步 managed-evidence 再删事务文件（1.4.1 段 1b）", async (t) => {
+  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
+  let demandRoot: RootedDirectory | undefined;
+  try {
+    const prepared = await createTransaction(fixture);
+    const rootPath = demandRootPath(fixture);
+    demandRoot = await RootedDirectory.open(rootPath);
+    await createManagedEvidencePublicationTransactionJournal(demandRoot, prepared.transaction);
+    const plan = deriveManagedEvidencePublicationRecordTreePlan(prepared.transaction);
+    mkdirSync(physical(rootPath, MANAGED_EVIDENCE_ROOT_REF), { mode: 0o700 });
+    mkdirSync(physical(rootPath, plan.candidateRootPath), { mode: 0o700 });
+    await executeDemandEventSourcingCommand(
+      new DemandEventSourcingRepository(demandRoot),
+      {
+        commandType: "lifecycle.cancel-demand",
+        commandVersion: 1,
+        demandId: fixture.demandId,
+        eventId: CANCELLATION_EVENT_ID,
+        recordedAt: parseUtcInstant("2026-09-01T21:01:00.000Z"),
+        reason: "测试过期清退的同步顺序",
+      },
+      {
+        commitId: CANCELLATION_COMMIT_ID,
+        expectedStreamRevision:
+          prepared.transaction.demandEventSourcingAppend.expectedStreamRevision,
+      },
+    );
+    await demandRoot.close();
+    demandRoot = undefined;
+
+    const canonicalRoot = path.join(
+      fixture.publication.workspaceRoot.absolutePath,
+      ".wakeflow-active",
+      "current",
+      fixture.demandId,
+    );
+    const relative = (absolute: string) =>
+      path.relative(canonicalRoot, absolute).split(path.sep).join("/");
+    const managedRoot = MANAGED_EVIDENCE_ROOT_REF;
+    const events: string[] = [];
+    let loseNextManagedRootSync = false;
+    const originalRmdir = filesystemMutation.rmdir;
+    t.mock.method(filesystemMutation, "rmdir", async (target: string) => {
+      await originalRmdir.call(filesystemMutation, target);
+      events.push(`rmdir ${relative(target)}`);
+      if (relative(target) === plan.candidateRootPath) loseNextManagedRootSync = true;
+    });
+    const originalUnlink = filesystemMutation.unlink;
+    t.mock.method(filesystemMutation, "unlink", async (target: string) => {
+      await originalUnlink.call(filesystemMutation, target);
+      events.push(`unlink ${relative(target)}`);
+    });
+    const originalSync = RootedResourceParentHandle.prototype.sync;
+    t.mock.method(
+      RootedResourceParentHandle.prototype,
+      "sync",
+      async function observedSync(this: RootedResourceParentHandle) {
+        const directory = relative(path.dirname(this.resourceAbsolutePath));
+        if (loseNextManagedRootSync && directory === managedRoot) {
+          loseNextManagedRootSync = false;
+          events.push(`sync-lost ${directory}`);
+          throw Object.assign(new Error("injected parent sync loss"), { code: "EIO" });
+        }
+        events.push(`sync ${directory}`);
+        return originalSync.call(this);
+      },
+    );
+
+    const service = new ManagedEvidencePublicationApplicationService(
+      fixture.publication.workspaceRoot,
+    );
+    // 注入的是同步"没有发生"：这一次 recover 以失败结束，留下的盘面与进程恰在这里被杀相同。
+    await rejects(service.recover(fixture.demandId));
+    equal(events.includes(`sync-lost ${managedRoot}`), true, events.join(" | "));
+    equal(existsSync(physical(rootPath, plan.candidateRootPath)), false, "候选根已经删掉");
+    equal(
+      existsSync(physical(rootPath, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF)),
+      true,
+      "事务文件必须留给下一次 recover",
+    );
+
+    const start = events.length;
+    const recovered = await service.recover(fixture.demandId);
+    equal(recovered.disposition, "retired-stale");
+    const after = events.slice(start);
+    const settled = after.indexOf(`sync ${managedRoot}`);
+    const retired = after.indexOf(`unlink ${MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF}`);
+    equal(
+      settled >= 0 && retired > settled,
+      true,
+      `recover 删事务文件之前没有同步 ${managedRoot}：${after.join(" | ")}`,
+    );
   } finally {
     if (demandRoot !== undefined) await demandRoot.close();
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);

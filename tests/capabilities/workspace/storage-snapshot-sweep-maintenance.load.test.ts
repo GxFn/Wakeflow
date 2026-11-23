@@ -12,15 +12,23 @@ import {
   ledgerRootOf,
   lockFamiliesOf,
   lockResidueOf,
+  powerLossLockResidueOf,
+  powerLossRecoveryResidueOf,
+  powerLossVerdictsOf,
   previewThenApply,
+  recoveryResidueOf,
   runSnapshotSweep,
-  type SnapshotSweepScope,
-  type SnapshotSweepStuckRow,
   signpostedRecoveryOf,
+  SNAPSHOT_SWEEP_READER_LEASE,
   snapshotSweepAllPoints,
   snapshotSweepRowDiagnostics,
+  type SnapshotSweepScope,
   snapshotSweepSpan,
+  type SnapshotSweepStuckRow,
   snapshotSweepStuckRows,
+  stageResidueOf,
+  statusNamedRecoveryOf,
+  statusUnnamedOf,
   stuckRowsOf,
   summarizeSnapshotSweep,
   sweptIndicesOf,
@@ -34,15 +42,18 @@ import { freshSnapshotSweepWorkspace } from "../../support/snapshot-sweep-worksp
  *
  * 子进程经真实 MCP 入口做一次改名的 reconfigure apply（维护门 L9 加独占的操作作用域 L1），每经过一次变更接缝
  * 就拷一份快照（`tests/support/snapshot-sweep-process.ts`）；本进程按顺序把每一份摆回原处，跑一次只读的
- * status 和再一次 reconfigure，归为 healed、signposted-recovery、unsignposted-recovery 或 stuck
- * （`snapshot-sweep-harness.ts`）。维护的 recover 要 status 给出的操作 id，已经在有路标的出口里；场景不另提供
- * 恢复调用，没有"没有路标的路"可试。
+ * status 和再一次 reconfigure，归为 healed、signposted-recovery、
+ * status-named-recovery、unsignposted-recovery 或 stuck
+ * （`snapshot-sweep-harness.ts`）。维护的 recover 要 status 给出的操作 id；场景不另提供恢复调用。
  *
- * 每一份快照上跑一轮：status、变更跟进（不管 status 的结局）、跟进成功之后再一次 status；失败时依次走有路标的
- * 出口（重试、维护的 recover、公开的 reconcile）；治好之后查 L1–L7 的锁残留（再一次 reconfigure 拿独占作用域，
- * 死掉的读者租约在排空时退休，今天没有残留）。范围见 `snapshot-sweep-harness.ts`：`locks`（缺省）摆回 L1–L7 锁
- * 操作的前后，要求一份都不卡住；`all`（`WAKEFLOW_SNAPSHOT_SWEEP_SCOPE=all`）摆回每一份并加上内容同步之后的那些，
- * 断言卡住的恰好是显式表里的那些、走出口的恰好是出口表里的那些；以后的修复让表变短。
+ * 每一份快照上跑一轮：status、变更跟进（不管 status 的结局）、跟进成功之后再一次 status；失败时只跟被点名的
+ * 恢复，最多三跳——可重试的拒绝重试一次，`recovery-required` 的拒绝照 `details.tool` 与 `details.operationId`
+ * 走，status 点了名的照 status 走（`snapshot-sweep-harness.ts`）。什么都没点名时才从重新摆回的快照试没有路标的
+ * 路，试通的一律记作没有路标；1.4.1 段 1b 之后每个扫点文件都断言没有这样的点。治好之后查 L1–L7 的锁残留、
+ * 留下的恢复记录与 Demand 根三个目录里的暂存。范围见 `snapshot-sweep-harness.ts`：`locks`（缺省）摆回 L1–L7
+ * 锁操作的前后，要求一份都不卡住；`all`（`WAKEFLOW_SNAPSHOT_SWEEP_SCOPE=all`）摆回每一份并加上内容同步之后的
+ * 那些，场景开了的话另跑掉电的盘面（`snapshot-sweep-powerloss.ts`）。显式表按 `all` 范围写，`locks` 只取摆回过
+ * 的序号；断言见文件末尾的测试。
  *
  * 摆回的是什么：每一个暂存、候选或树成员都在两个时刻摆回——排他新建刚返回、内容还没写的空文件，以及它被
  * 链接或改名之后；`all` 范围另在经接缝排他新建的每个文件内容同步之后摆回一次（内容完整、权限位已改、还没
@@ -56,20 +67,16 @@ import { freshSnapshotSweepWorkspace } from "../../support/snapshot-sweep-worksp
 useDisposableDurability();
 
 /**
- * 今天卡住的快照（`all` 范围）：工作区根上的两把权威锁在进程死后留在原处，没有失效持有者的清理（第 1 段清单 2.5 节
- * "配置、`.gitignore` 重组、程序指令重组三把锁"一行，已登记）。status 照常回答；再一次 reconfigure 的预览以
- * `maintenance-protocol-recovery-required` 被阻塞（维护门残留，
- * `src/workspace/maintenance/wakeflow-static-materialization-preview.ts:1188`），维护的 recover 在碰到这把锁的那一步
- * 等满 10 秒后超时（程序指令锁 `src/workspace/managed-integration/wakeflow-program-instruction-recomposition-contract.ts:316`，
- * 配置权威锁 `src/configuration/wakeflow-config-authority-replacement-contract.ts:510`），事务把步骤失败报成 `step`
- * （`src/workspace/maintenance/wakeflow-maintenance-execution-transaction.ts:530`），公共工具报 `io-failure/step`
- * （原因理由也是 `step`，不带 `retryable`）；reconcile 的预览同样被维护门残留阻塞。场景不另提供恢复调用，没有
- * 公开调用治好它们。
- * 19–22：程序指令锁 `.wakeflow-program-instruction-codex.lock` 已链接，直到 `AGENTS.md` 改名之后还在（21.1 是
- * `AGENTS.md` 的替换暂存写完并同步、还没改名的那一刻，结局与 21 相同；22 时新的
- * `AGENTS.md` 已经落地，预览另报 `program-instruction-unknown-managed-body`）；35–37：配置权威锁
- * `.wakeflow-config-authority.lock` 已链接（这时各支持面的 `AGENTS.md` 已改写，预览另报
- * `support-memory-unadmitted-source`；37.1 是配置的替换暂存写完并同步、还没改名的那一刻，结局与 37 相同）；38：配置已经改名，recover 走完，再一次 reconfigure 的 apply 照样卡在这把锁上。
+ * 显式表：1.4.1 段 1b 之后的样子。表按 `all` 范围写，`locks` 范围只取摆回过的序号；改过存储路径之后的
+ * 重钉办法见 `snapshot-sweep-harness.ts` 的 `WAKEFLOW_SNAPSHOT_SWEEP_DUMP`。
+ */
+
+/**
+ * 没有任何公开调用治得好的快照（`all` 范围；`locks` 范围里一个都不许有），与段 1b 之前相同：19–22 是程序指令
+ * 重组的锁与它的替换暂存，35–38 是配置权威的锁与它的替换暂存。这两把锁没有失效持有者的清理
+ * （`wakeflow-program-instruction-recomposition.ts`、`wakeflow-config-authority-replacement.ts`），维护的 recover
+ * 走到那一步就以 `io-failure/step` 失败（第 38 点 recover 自己过了，之后的 reconfigure 在同一处失败），
+ * reconcile 的预览被维护协议挡住。不在段 1b 的范围里，登记在 L10。
  */
 const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
   ...snapshotSweepStuckRows(
@@ -77,8 +84,8 @@ const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
       status: "ok",
       followUp: "preview-blocked/maintenance-protocol-recovery-required",
       routes: [
-        "maintenance:recover:io-failure/step<-step",
-        "maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required",
+        "maintenance:recover:status:io-failure/step<-step",
+        "unsignposted:maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required",
       ],
       final: "status ok; follow-up preview-blocked/maintenance-protocol-recovery-required",
     },
@@ -95,8 +102,8 @@ const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
       followUp:
         "preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body",
       routes: [
-        "maintenance:recover:io-failure/step<-step",
-        "maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body",
+        "maintenance:recover:status:io-failure/step<-step",
+        "unsignposted:maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body",
       ],
       final:
         "status ok; follow-up preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body",
@@ -109,8 +116,8 @@ const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
       followUp:
         "preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body,support-memory-unadmitted-source",
       routes: [
-        "maintenance:recover:io-failure/step<-step",
-        "maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body,support-memory-unadmitted-source",
+        "maintenance:recover:status:io-failure/step<-step",
+        "unsignposted:maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body,support-memory-unadmitted-source",
       ],
       final:
         "status ok; follow-up preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body,support-memory-unadmitted-source",
@@ -127,8 +134,8 @@ const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
       status: "ok",
       followUp: "preview-blocked/maintenance-protocol-recovery-required",
       routes: [
-        "maintenance:recover:ok",
-        "maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required,program-instruction-unknown-managed-body,support-memory-unadmitted-source",
+        "maintenance:recover:status:ok",
+        "unsignposted:maintenance:reconcile:preview-blocked/maintenance-protocol-recovery-required",
       ],
       final: "status ok; follow-up io-failure/step<-step",
     },
@@ -136,44 +143,55 @@ const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [
   ),
 ];
 
+/** 被拒绝点了名、照点名的恢复走通的快照：`[序号, 出口]`；两跳的出口用 `>` 连起来。 */
+const SIGNPOSTED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [];
+
 /**
- * 今天走有路标的出口才恢复的快照（`all` 范围）：`[序号, 出口]`。所有点上 status 都照常回答，再一次 reconfigure 的
- * 预览以维护门残留被阻塞。status 列出可恢复的维护操作（事务意图已落地）时维护的 recover 治好它；没有时（意图还
- * 没链接，或已经退役）公开 reconcile 收掉维护门。1–15：维护门与独占作用域（L1）拿着、意图还没落地；16–18、
- * 23–34、39–41：意图在；42、43：意图已退役，写者锁与维护门还在。带小数的序号是同一段里某个文件写完并同步、
- * 还没发布的那一刻（`all` 才有），结局与所在的段相同。
+ * 拒绝没有点名、只有 status 点了名，照它走通的快照：`[序号, 出口]`。reconfigure 的预览被维护协议挡住
+ * （`maintenance-protocol-recovery-required`），这个阻塞项不带出口；status 的维护一栏说了是哪一种。
+ * `maintenance:recover`：意图文件已经记下，维护一栏列着一个可恢复的操作，照它的操作标识 recover。
+ * `maintenance:reconcile`：维护进程死在记下意图之前（1–15.1）或意图已经删掉之后（42、43），协议停在
+ * `recovery-required` 而没有可恢复的操作；Controller 技能写明这时预览 reconcile，它给出收掉死闩的计划。
  */
-const SIGNPOSTED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [
-  ...[1, 1.1, 2, 3, 4, 4.1, 5, 6, 7, 7.1, 8, 9, 10, 11, 11.1, 12, 13, 14, 15, 15.1].map(
+const STATUS_NAMED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [
+  ...[...snapshotSweepSpan(1, 15), 42, 43, ...[1.1, 4.1, 7.1, 11.1, 15.1]].map(
     (index) => [index, "maintenance:reconcile"] as const,
   ),
-  ...[16, 17, 18, 18.1, 23, 24, 24.1, 25, 26, 26.1, 27, 28, 28.1, 29, 30, 30.1].map(
-    (index) => [index, "maintenance:recover"] as const,
-  ),
-  ...[31, 32, 32.1, 33, 34, 34.1, 39, 40, 40.1, 41].map(
-    (index) => [index, "maintenance:recover"] as const,
-  ),
-  [42, "maintenance:reconcile"],
-  [43, "maintenance:reconcile"],
-];
+  ...[
+    ...snapshotSweepSpan(16, 18),
+    ...snapshotSweepSpan(23, 34),
+    ...snapshotSweepSpan(39, 41),
+    ...[18.1, 24.1, 26.1, 28.1, 30.1, 32.1, 34.1, 40.1],
+  ].map((index) => [index, "maintenance:recover"] as const),
+].sort(([left], [right]) => left - right);
 
-/** 今天第一轮 status 被拒、变更跟进治好的快照（`all` 范围）：`[序号, status 的 code/reason]`。 */
+/** 第一跳由拒绝点了名、而第一轮的 status 没有点着同一条工具的快照：`[序号, 出口]`。 */
+const STATUS_UNNAMED_ON_TODAY: readonly (readonly [number, string])[] = [];
+
+/** 第一轮 status 被拒、变更跟进治好的快照：`[序号, status 的 code/reason]`。 */
 const HEALED_AFTER_STATUS_REFUSAL_ON_TODAY: readonly (readonly [number, string])[] = [];
 
-/** 治好之后仍留着的 L1–L7 锁文件或锁暂存：`[序号, 路径, 个数]`。今天没有。 */
+/** 治好之后仍留着的 L1–L7 锁文件或锁暂存：`[路径, 个数, 序号]`。 */
 const LOCK_RESIDUE_ON_TODAY: readonly (readonly [number, string, number])[] = [];
 
-function desiredConfig(root: string, displayName: string): Record<string, unknown> {
-  const config = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")) as {
-    program: { displayName: string };
-  };
-  config.program.displayName = displayName;
-  return config;
-}
+/** 治好之后仍留着的恢复记录（退役根、恢复用的暂存根、日志、发布标记、发布暂存树）：`[序号, 路径]`。 */
+const RECOVERY_RESIDUE_ON_TODAY: readonly (readonly [number, string])[] = [];
+
+/** 治好之后 Demand 根的三个目录里仍留着的原子暂存：`[路径, 个数, 序号]`。 */
+const STAGE_RESIDUE_ON_TODAY: readonly (readonly [number, string, number])[] = [];
+
+/** 掉电的盘面（只在 `all` 范围生成）：`[归类, 位置…]`，位置是“第几步之后的第几次目录同步”。 */
+const POWER_LOSS_ON_TODAY: readonly (readonly [string, string])[] = [];
+
+/** 掉电的盘面治好之后仍留着的锁，读者租约之外的：`[位置, 路径, 个数]`。 */
+const POWER_LOSS_LOCK_RESIDUE_ON_TODAY: readonly (readonly [string, string, number])[] = [];
+
+/** 掉电的盘面治好之后仍留着的恢复记录：`[位置, 路径]`。 */
+const POWER_LOSS_RECOVERY_RESIDUE_ON_TODAY: readonly (readonly [string, string])[] = [];
 
 /**
- * 摆回过的序号，按范围钉住（`sweptIndicesOf`）：`locks` 是第 0 份与 L1–L7 锁操作前后的那些，`all` 是每一份加上
- * 内容同步之后带小数的那些。一轮就治好的点不在上面任何一张表里，靠这里看住它们确实摆回过。
+ * 摆回过的序号，按范围钉住（`sweptIndicesOf`）：`locks` 是对照点、L1–L7 锁操作前后的那些与场景另列的路线
+ * 代表点（`routePoints`），`all` 是每一份加上内容同步之后带小数的那些。一轮就治好的点不在上面任何一张表里，靠这里看住它们确实摆回过。
  */
 const SWEPT_POINTS_ON_TODAY: Readonly<Record<SnapshotSweepScope, readonly number[]>> = {
   locks: [
@@ -190,6 +208,14 @@ const SWEPT_POINTS_ON_TODAY: Readonly<Record<SnapshotSweepScope, readonly number
     ],
   ),
 };
+
+function desiredConfig(root: string, displayName: string): Record<string, unknown> {
+  const config = JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")) as {
+    program: { displayName: string };
+  };
+  config.program.displayName = displayName;
+  return config;
+}
 
 test("快照扫点：reconfigure 的每一步之后进程死亡，下一条 status 与 reconfigure 照常完成或走维护出口", {
   timeout: 900_000,
@@ -241,7 +267,15 @@ test("快照扫点：reconfigure 的每一步之后进程死亡，下一条 stat
     signpostedRecoveryOf(report),
     withinSweptPoints(report, SIGNPOSTED_RECOVERY_ON_TODAY, ([index]) => index),
   );
-  // 维护的 recover 要 status 给出的操作 id，已经是有路标的出口；场景不另提供恢复调用，没有"没有路标的路"可试。
+  deepEqual(
+    statusNamedRecoveryOf(report),
+    withinSweptPoints(report, STATUS_NAMED_RECOVERY_ON_TODAY, ([index]) => index),
+  );
+  deepEqual(
+    statusUnnamedOf(report),
+    withinSweptPoints(report, STATUS_UNNAMED_ON_TODAY, ([index]) => index),
+  );
+  // 段 1b 的结论：能恢复的快照都有路标（拒绝或 status 点了名）；出现一个没有路标的就是回退。
   deepEqual(unsignpostedRecoveryOf(report), []);
   deepEqual(
     healedAfterStatusRefusalOf(report),
@@ -250,6 +284,31 @@ test("快照扫点：reconfigure 的每一步之后进程死亡，下一条 stat
   deepEqual(
     lockResidueOf(report),
     withinSweptPoints(report, LOCK_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  deepEqual(
+    recoveryResidueOf(report),
+    withinSweptPoints(report, RECOVERY_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  deepEqual(
+    stageResidueOf(report),
+    withinSweptPoints(report, STAGE_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  // 掉电的盘面只在 `all` 范围生成。读者租约（L2）每个位置至多留一个——子进程自己的那个，死读者租约只有
+  // 独占获取才清（L10）；多出来就是跟进自己漏了租约。别的锁按显式表。
+  deepEqual(powerLossVerdictsOf(report), report.scope === "all" ? POWER_LOSS_ON_TODAY : []);
+  deepEqual(
+    powerLossLockResidueOf(report).filter(
+      ([, entry, count]) => entry === SNAPSHOT_SWEEP_READER_LEASE && count > 1,
+    ),
+    [],
+  );
+  deepEqual(
+    powerLossLockResidueOf(report).filter(([, entry]) => entry !== SNAPSHOT_SWEEP_READER_LEASE),
+    report.scope === "all" ? POWER_LOSS_LOCK_RESIDUE_ON_TODAY : [],
+  );
+  deepEqual(
+    powerLossRecoveryResidueOf(report),
+    report.scope === "all" ? POWER_LOSS_RECOVERY_RESIDUE_ON_TODAY : [],
   );
   // 放在最后：前面的表先各自比对，摆回的点对不上时再报这一条。
   deepEqual(sweptIndicesOf(report), SWEPT_POINTS_ON_TODAY[report.scope]);

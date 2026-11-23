@@ -34,11 +34,41 @@ test("fault matrix selects existing source regressions and never claims native o
 
 /** 不变式的原文：按扫点与锁残留组合测试真正断言的写，改断言就要改这里（与套件目录逐字相同）。 */
 const STORAGE_SWEEP_INVARIANT =
-  "Each replayed kill point of a snapshot-sweep file falls in exactly one of four classes, and each file pins the points of the last three by index: healed by the first round (status, the mutating follow-up, status again; a point whose first status is refused while the follow-up still heals it is pinned in the file's healed-after-status-refusal table); healed through a signposted route (a retry when the refusal is retryable, the scenario's own recover on recovery-required - also when it only works from the restored kill point although a refusal there already pointed at it, pinned with a restored: prefix - maintenance recover on a maintenance residue, or reconcile); healed through an unsignposted route (the scenario's own recover, alone or after reconcile, from the restored kill point once every signposted route failed and no refusal pointed at that recover); or stuck, listed with the refusal that no public call gets past. A follow-up that calls nothing never counts as healing. At every point that is not stuck, the L1-L7 lock and lease files left, and the atomic stages that point at them, equal the file's pinned residue table, path and count. Each file also pins the indices it replayed in each scope. The lock-residue-combinations files assert that the next acquisition or scope entry clears every combination of dead locks, leases and create stages they leave, except dead reader leases under shared entry, and leaves live owners untouched.";
+  "Each replayed kill point of a snapshot-sweep file falls in exactly one of five classes: healed by the first round (status, the mutating follow-up, status again, and that last status names no recovery; a point whose first status is refused while the follow-up still heals it is pinned in the file's healed-after-status-refusal table); healed by following named recoveries only, at most three hops - a retry when the refusal is retryable, the tool a recovery-required refusal names in details.tool with the id it gives (details.operationId, or details.demandId for the evidence tool; it must be the scenario's declared Demand), or for the maintenance tool its recover or reconcile (signposted, pinned by index with its route); healed the same way where at least one hop was named only by a status result - maintenance first: a recoverable maintenance residue or a maintenance protocol left in recovery-required; then next naming demand-recovery (it counts only when status was asked with the Demand id) or a nextActions entry naming it for the Demand (status-named, pinned by index); healed only by a route nothing named, tried from the restored kill point (unsignposted: every file asserts there is none); or stuck, pinned with the refusal that no public call gets past and asserted empty in the default scope. A follow-up that calls nothing never counts as healing. Each file also pins the points whose first hop a refusal named while the first status did not name the same tool. At every point that is not stuck, each file pins what is left after healing: by index, path and count the L1-L7 lock and lease files and the atomic stages that point at them; by index and path the recovery records (a renamed-away root, a restore candidate, the lifecycle journal, the publication marker, the publication stage tree); by index, path and count the atomic stages in the Demand root's index, snapshot and task-package directories. Each file also pins the indices it replayed in each scope, and in the full scope the class of one power-loss state per directory sync that covers a new entry change, with at most one reader lease, the locks other than reader leases and the recovery records left after healing it. The lock-residue-combinations files assert that the next acquisition or scope entry clears every combination of dead locks, leases and create stages they leave, except dead reader leases under shared entry, and leaves live owners untouched.";
 
-/** 扫点文件在缺省范围里断言零卡住点的写法：卡住的表整个为空，或 `locks` 范围里为空。 */
-const ZERO_STUCK_IN_DEFAULT_SCOPE =
-  /deepEqual\(stuckRowsOf\(report\), (?:\[\]|report\.scope === "locks" \? \[\] : STUCK_ON_TODAY)\);/u;
+/**
+ * 每个扫点文件末尾那一段断言的全文（去掉注释、空白与多行写法的尾逗号之后）：从卡住的表到摆回的序号，
+ * 一条不多一条不少，右边就是这里写的那一项。注释掉的、被范围条件包住的、或自己比自己的断言都对不上。
+ */
+const SWEEP_ASSERTIONS: readonly string[] = [
+  'deepEqual(stuckRowsOf(report), report.scope === "locks" ? [] : STUCK_ON_TODAY);',
+  "deepEqual(signpostedRecoveryOf(report), withinSweptPoints(report, SIGNPOSTED_RECOVERY_ON_TODAY, ([index]) => index));",
+  "deepEqual(statusNamedRecoveryOf(report), withinSweptPoints(report, STATUS_NAMED_RECOVERY_ON_TODAY, ([index]) => index));",
+  "deepEqual(statusUnnamedOf(report), withinSweptPoints(report, STATUS_UNNAMED_ON_TODAY, ([index]) => index));",
+  "deepEqual(unsignpostedRecoveryOf(report), []);",
+  "deepEqual(healedAfterStatusRefusalOf(report), withinSweptPoints(report, HEALED_AFTER_STATUS_REFUSAL_ON_TODAY, ([index]) => index));",
+  "deepEqual(lockResidueOf(report), withinSweptPoints(report, LOCK_RESIDUE_ON_TODAY, ([index]) => index));",
+  "deepEqual(recoveryResidueOf(report), withinSweptPoints(report, RECOVERY_RESIDUE_ON_TODAY, ([index]) => index));",
+  "deepEqual(stageResidueOf(report), withinSweptPoints(report, STAGE_RESIDUE_ON_TODAY, ([index]) => index));",
+  'deepEqual(powerLossVerdictsOf(report), report.scope === "all" ? POWER_LOSS_ON_TODAY : []);',
+  "deepEqual(powerLossLockResidueOf(report).filter(([, entry, count]) => entry === SNAPSHOT_SWEEP_READER_LEASE && count > 1), []);",
+  'deepEqual(powerLossLockResidueOf(report).filter(([, entry]) => entry !== SNAPSHOT_SWEEP_READER_LEASE), report.scope === "all" ? POWER_LOSS_LOCK_RESIDUE_ON_TODAY : []);',
+  'deepEqual(powerLossRecoveryResidueOf(report), report.scope === "all" ? POWER_LOSS_RECOVERY_RESIDUE_ON_TODAY : []);',
+  "deepEqual(sweptIndicesOf(report), SWEPT_POINTS_ON_TODAY[report.scope]);",
+  "});",
+];
+
+/** 去掉整行注释、全部空白与多行写法里收尾的逗号：只留下可以逐字比较的代码。 */
+function compactCode(source: string): string {
+  return source
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("//"))
+    .join("")
+    .replace(/\s+/gu, "")
+    .replace(/,(?=[)\]])/gu, "");
+}
+
+const SWEEP_ASSERTIONS_START = "\n  deepEqual(stuckRowsOf(report)";
 
 test("storage-sweep suite lists every snapshot-sweep and lock-residue file, names the full-sweep variable and states exactly what the files assert", () => {
   const suite = listFaultSuites().suites.find((entry) => entry.name === "storage-sweep");
@@ -60,41 +90,30 @@ test("storage-sweep suite lists every snapshot-sweep and lock-residue file, name
   );
   ok(suite.description.includes("WAKEFLOW_SNAPSHOT_SWEEP_SCOPE=all"));
   equal(suite.invariant, STORAGE_SWEEP_INVARIANT);
-  // 不变式点名的五张表与摆回的序号，每个扫点文件都要真的断言。
+  // 不变式点名的每一张表与摆回的序号，每个扫点文件都要真的断言：文件末尾那一段逐字就是上面的清单。
   const zeroStuck: string[] = [];
-  const pinnedStuck: string[] = [];
+  const expected = compactCode(SWEEP_ASSERTIONS.join("\n"));
   for (const file of sweeps) {
     const source = readFileSync(path.resolve(file), "utf8");
-    for (const table of [
-      "stuckRowsOf",
-      "signpostedRecoveryOf",
-      "unsignpostedRecoveryOf",
-      "healedAfterStatusRefusalOf",
-      "lockResidueOf",
-      "sweptIndicesOf",
-    ]) {
-      ok(
-        new RegExp(`deepEqual\\(\\s*${table}\\(report\\),`, "u").test(source),
-        `${file}: ${table}`,
-      );
-    }
+    const start = source.indexOf(SWEEP_ASSERTIONS_START);
+    ok(start > 0 && source.indexOf(SWEEP_ASSERTIONS_START, start + 1) === -1, file);
+    equal(compactCode(source.slice(start)), expected, file);
     const scenario =
       /^tests\/capabilities\/workspace\/storage-snapshot-sweep-(.*)\.load\.test\.ts$/u.exec(
         file,
       )?.[1];
     ok(scenario !== undefined);
-    (ZERO_STUCK_IN_DEFAULT_SCOPE.test(source) ? zeroStuck : pinnedStuck).push(scenario);
+    // 清单里卡住的表在 `locks` 范围里为空：每个场景都在"缺省范围零卡住点"之列。哪个文件改成钉住的行，
+    // 上面的逐字比较先失败，那时这里与描述要一起改。
+    zeroStuck.push(scenario);
   }
-  // 描述里点名哪些场景在缺省范围断言零卡住点、哪些断言钉住的卡住行，与文件里的断言逐一对上；没有后一类时
-  // 描述里也没有那一句。
+  // 描述里点名哪些场景在缺省范围断言零卡住点，与文件里的断言逐一对上；没有钉住卡住行的场景，描述里
+  // 也没有那一句。
   const listed = (label: string) =>
     new RegExp(`${label}: ([a-z, ]*)\\.`, "u").exec(suite.description)?.[1]?.split(", ").sort() ??
     null;
   deepEqual(listed("zero stuck points in the default scope"), zeroStuck.sort());
-  deepEqual(
-    listed("pinned stuck rows in the default scope"),
-    pinnedStuck.length === 0 ? null : pinnedStuck.sort(),
-  );
+  equal(listed("pinned stuck rows in the default scope"), null);
 });
 
 test("the sweep's helpers: residue is counted per normalized path, full-scope tables are not filtered", () => {

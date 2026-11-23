@@ -88,6 +88,17 @@ test("归档负载排除可重建检查点，树摘要与顺序无关，只有�
   equal(isArchivePayloadPath("identity.json"), true);
   equal(isArchivePayloadPath("event-sourcing/snapshots/0000000001.json"), false);
   equal(isArchivePayloadPath("event-sourcing/index/0000000001.json"), false);
+  // 任务包目录里死写者留下的原子暂存不是任务包（1.4.1 段 1b）；别处同样前缀的名字不受影响。
+  const stageName =
+    ".wakeflow-atomic-create-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.tmp";
+  equal(isArchivePayloadPath(`artifacts/task-packages/${stageName}`), false);
+  equal(
+    isArchivePayloadPath(
+      "artifacts/task-packages/task-package_11111111-1111-4111-8111-111111111111.json",
+    ),
+    true,
+  );
+  equal(isArchivePayloadPath(`artifacts/managed-evidence/${stageName}`), true);
   equal(isArchivePayloadPath("event-sourcing/append-candidates"), false);
   const files = [
     { resourcePath: parsePortableResourcePath("identity.json"), byteCount: 10, digest: DIGEST_A },

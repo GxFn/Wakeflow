@@ -139,6 +139,28 @@ export function copySnapshotSweepSet(set: Readonly<SnapshotSweepSet>, destinatio
   copyRootAttributes(set.workspace, workspace);
 }
 
+/**
+ * 把一份已经拷出的快照目录（`workspace/` 与 `ledger/`）原样再拷一份到 `destination`（新建），保留权限位、
+ * 时间与集内的硬链接；掉电盘面的生成从这样一份副本改起（`snapshot-sweep-powerloss.ts`）。
+ */
+export function copySnapshotSweepSnapshot(snapshot: string, destination: string): void {
+  const links: LinkMap = new Map();
+  mkdirSync(destination, { recursive: true, mode: 0o700 });
+  for (const name of ["workspace", "ledger"]) {
+    copyNode(path.join(snapshot, name), path.join(destination, name), links);
+  }
+}
+
+/** 把一个文件或一棵树从一处原样拷到另一处（目标必须不存在），保留权限位、时间与树内的硬链接。 */
+export function copySnapshotSweepNode(source: string, destination: string): void {
+  copyNode(source, destination, new Map());
+}
+
+/** 删除一个文件或一棵树；不存在就什么都不做。0500 的目录先放开再删。 */
+export function removeSnapshotSweepNode(target: string): void {
+  removeNode(target);
+}
+
 /** 把一个根目录自己的权限位与时间照到另一个目录上（成员都摆好之后调用，否则写成员会改掉时间）。 */
 function copyRootAttributes(from: string, onto: string): void {
   const root = lstatSync(from);

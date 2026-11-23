@@ -134,3 +134,55 @@ export async function publishedSnapshotSweepWorkspace(
     throw new Error("Expected a publication.");
   return Object.freeze({ workspace, requirementId: applied.package.requirementId });
 }
+
+/**
+ * 在一个已经初始化的工作区里再发布一份需求包，返回它的 id。草稿写在设计面的 `drafts/sweep-second/` 下，
+ * 标题与正文都与夹具里的第一份不同，所以是另一条记录。取消 Demand 的扫点用它：第一个 Demand 归档之后，
+ * 跟进从这一份新建一个 Demand，只有待恢复的日志不再占着 pod 时才成功。
+ */
+export async function publishSecondSnapshotSweepPackage(root: string): Promise<string> {
+  const config = parseWakeflowConfig(
+    JSON.parse(readFileSync(path.join(root, "wakeflow.config.json"), "utf8")),
+  );
+  const design = config.topology.supportSurfaces.find((surface) => surface.capability === "design");
+  const designWindow = config.topology.windows.find((window) => window.role === "design");
+  if (design === undefined || designWindow === undefined)
+    throw new Error("The workspace lacks a design surface.");
+  const drafts = path.join(root, design.path, "drafts", "sweep-second");
+  mkdirSync(drafts, { recursive: true });
+  writeFileSync(
+    path.join(drafts, "requirement.md"),
+    `${FIXTURE_REQUIREMENT_MARKDOWN}\n第二份需求包：取消之后从它新建 Demand。\n`,
+    { mode: 0o644 },
+  );
+  writeFileSync(path.join(drafts, "landing.md"), FIXTURE_LANDING_MARKDOWN, { mode: 0o644 });
+  const request = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: {
+      designSurfaceId: design.surfaceId,
+      title: "快照扫点：第二份需求",
+      demandType: "requirement",
+      priority: "P1",
+      originWindowId: designWindow.windowId,
+      testingDecision: { mode: "controller-only", summary: "聚焦测试加场景验收。" },
+      requirementPath: "drafts/sweep-second/requirement.md",
+      landingPath: "drafts/sweep-second/landing.md",
+      confirmation: { confirmedAt: snapshotSweepConfirmedAt() },
+    },
+  };
+  const ready = await executeRequirementPublicationRequest(request);
+  if (ready.kind !== "WakeflowRequirementPublicationPreview" || ready.planDigest === null)
+    throw new Error(
+      `Expected a ready second publication preview: ${JSON.stringify(ready).slice(0, 600)}`,
+    );
+  const applied = await executeRequirementPublicationRequest({
+    ...request,
+    mode: "apply",
+    planDigest: ready.planDigest,
+  });
+  if (applied.kind !== "WakeflowRequirementPublicationMutation")
+    throw new Error("Expected the second publication.");
+  return applied.package.requirementId;
+}

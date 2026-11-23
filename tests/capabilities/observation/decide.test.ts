@@ -92,7 +92,8 @@ function healthyFacts(overrides: Partial<WorkspaceGateFacts> = {}): WorkspaceGat
         writer: OBSERVED_WRITER,
       },
     ],
-    strayJournals: [],
+    pendingJournals: [],
+    recoveries: [],
     maintenanceWriter: OBSERVED_WRITER,
     claims: [{ windowId: WINDOW_A, orphan: false }],
     claimsUnreadable: 0,
@@ -453,6 +454,120 @@ test("hostAssetsNeedRepair 与 host-settings-assets 门是同一个判断；veri
   );
 });
 
+test("deriveNextActions：被打断的 Demand 事务各出一条 demand-recovery（按 demandId），排在维护之后、登记与前沿之前；这些 Demand 不再出自己的前沿，空闲动作也不出现", () => {
+  const frontier = (demandId: string) => ({
+    demandId,
+    placement: "primary" as const,
+    disposition: "work-available",
+    frontier: "implementation-delivery-planning",
+    owner: "controller" as const,
+    suggestedTool: "wakeflow_prepare_delivery",
+  });
+  const actions = deriveNextActions(
+    nextInput({
+      maintenance: true,
+      unregisteredWindows: [
+        { windowId: WINDOW_A, podId: POD_MAIN, placement: "primary", podActive: true },
+      ],
+      demands: [frontier(DEMAND_A), frontier(DEMAND_B)],
+      recoveries: [
+        { demandId: DEMAND_B, tool: "wakeflow_continue_demand" },
+        { demandId: "demand_00000000-0000-4000-8000-000000000000", tool: "wakeflow_create_demand" },
+        { demandId: DEMAND_B, tool: "wakeflow_continue_demand" },
+      ],
+    }),
+  );
+  deepEqual(
+    actions.map((action) => [action.reason, action.tool, action.subject]),
+    [
+      ["workspace-maintenance", "wakeflow_maintain_workspace", null],
+      ["demand-recovery", "wakeflow_create_demand", "demand_00000000-0000-4000-8000-000000000000"],
+      ["demand-recovery", "wakeflow_continue_demand", DEMAND_B],
+      ["pod-window-registration", "wakeflow_register_window_binding", WINDOW_A],
+      ["implementation-delivery-planning", "wakeflow_prepare_delivery", DEMAND_A],
+    ],
+  );
+  equal(
+    actions.every((action) => action.reason !== "demand-recovery" || action.owner === "controller"),
+    true,
+  );
+  // 只有一条恢复时它就是下一步，不退回"去写需求"。
+  deepEqual(
+    deriveNextActions(
+      nextInput({ recoveries: [{ demandId: DEMAND_A, tool: "wakeflow_complete_demand" }] }),
+    ),
+    [
+      {
+        owner: "controller",
+        tool: "wakeflow_complete_demand",
+        reason: "demand-recovery",
+        subject: DEMAND_A,
+      },
+    ],
+  );
+});
+
+test("verifyNext：有 Demand 停在被打断的事务上时，排在制品之后、窗口与维护之前指向它的 recover，标识放在 blockers 里；门全过时不指向", () => {
+  const failing = (name: string, code: string | null): VerifyGate => ({
+    name,
+    owner: "demand-stream",
+    status: "fail",
+    code,
+    evidence: [],
+  });
+  const recoveries = [
+    { demandId: DEMAND_A, tool: "wakeflow_complete_demand" },
+    { demandId: DEMAND_B, tool: "wakeflow_maintain_workspace" },
+  ];
+  deepEqual(
+    verifyNext([failing("append-candidates-clear", `journal:${DEMAND_A}`)], "user", recoveries),
+    {
+      frontier: "demand-recovery",
+      owner: "controller",
+      suggestedTool: "wakeflow_complete_demand",
+      blockers: [
+        "append-candidates-clear:fail",
+        `demand-recovery:${DEMAND_A}`,
+        `demand-recovery:${DEMAND_B}`,
+      ],
+    },
+  );
+  // 先于过期窗口与维护。
+  equal(
+    verifyNext(
+      [failing("runtime-artifact", "windows-stale:2"), failing("demand-root-audit", DEMAND_A)],
+      "controller",
+      recoveries,
+    ).frontier,
+    "demand-recovery",
+  );
+  // 本进程过期仍然最先：换不了代的服务进程做不了恢复。
+  equal(
+    verifyNext([failing("runtime-artifact", "server-outdated")], "user", recoveries).frontier,
+    "runtime-artifact-outdated",
+  );
+  equal(verifyNext([], "user", recoveries).frontier, null);
+});
+
+test("verifyNext：blockers 不超过结果 Schema 的 64 条；门的条目在前，suggestedTool 对着的那个 Demand 总在里面", () => {
+  const gate: VerifyGate = {
+    name: "append-candidates-clear",
+    owner: "demand-stream",
+    status: "fail",
+    code: null,
+    evidence: [],
+  };
+  const recoveries = Array.from({ length: 70 }, (_, index) => ({
+    demandId: `demand_${String(index).padStart(8, "0")}-0000-4000-8000-000000000000`,
+    tool: index === 0 ? "wakeflow_cancel_demand" : "wakeflow_complete_demand",
+  }));
+  const next = verifyNext([gate], "user", recoveries);
+  equal(next.suggestedTool, "wakeflow_cancel_demand");
+  equal(next.blockers.length, 64);
+  equal(next.blockers[0], "append-candidates-clear:fail");
+  equal(next.blockers[1], `demand-recovery:${recoveries[0]?.demandId}`);
+});
+
 test("deriveNextActions：空闲工作区的下一步是用户在 Design 窗口起草需求（§13.188 I1），任何别的动作在场时不出现", () => {
   deepEqual(deriveNextActions(nextInput()), [
     { owner: "user", tool: null, reason: IDLE_REQUIREMENT_AUTHORING, subject: null },
@@ -650,7 +765,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
         writer: { status: "unavailable", newestVersion: null },
       },
     ],
-    strayJournals: ["demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+    pendingJournals: ["demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
   });
   deepEqual(verdictOf(failingDemand, "demand-root-audit"), ["fail", `${DEMAND_A},${DEMAND_B}`]);
   // 未通过的 Demand 全部列出：fail 与 unavailable 都不是 pass，状态取最坏的 fail。
@@ -660,7 +775,7 @@ test("deriveWorkspaceGates：每门从事实得出 fail 与 unavailable 并带�
     "journal:demand_cccccccc-cccc-4ccc-8ccc-cccccccccccc",
   ]);
   // 日志目录读不出：门 unavailable 而不是 pass（读失败不能变成通过）。
-  deepEqual(verdictOf(healthyFacts({ strayJournals: null }), "append-candidates-clear"), [
+  deepEqual(verdictOf(healthyFacts({ pendingJournals: null }), "append-candidates-clear"), [
     "unavailable",
     "journals:unreadable",
   ]);

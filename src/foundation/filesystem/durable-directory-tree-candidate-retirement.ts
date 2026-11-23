@@ -16,6 +16,10 @@ import {
   parseDirectoryTreeCandidatePlan,
 } from "./durable-directory-tree-candidate.js";
 import {
+  DurableResourceEntrySettlementError,
+  settleObservedResourceEntry,
+} from "./durable-resource-entry-settlement.js";
+import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
 } from "./exact-regular-file-unlink.js";
@@ -660,6 +664,25 @@ async function retireDirectories(
   return retired + 1;
 }
 
+/** 候选根"已经不在"这个观察落盘：同步它的父目录，前后各核对一次它仍然不在。 */
+async function settleAbsentCandidate(
+  root: RootedDirectory,
+  candidateRootPath: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    await settleObservedResourceEntry(root, candidateRootPath, "absent", {
+      errorPath: "$candidate",
+      ...(signal === undefined ? {} : { signal }),
+    });
+  } catch (error: unknown) {
+    if (!(error instanceof DurableResourceEntrySettlementError)) throw error;
+    if (error.reason === "aborted") fail("aborted", "$signal", error);
+    if (error.reason === "observation-changed") fail("source-changed", "$candidate", error);
+    fail("durability-failure", "$candidate", error);
+  }
+}
+
 async function settleRetirement(
   root: RootedDirectory,
   candidateRootPath: PortableResourcePath,
@@ -667,6 +690,9 @@ async function settleRetirement(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DirectoryTreeCandidateRetirementReceipt>> {
   if (!(await candidateExists(root, candidateRootPath))) {
+    // 沿用"已经不在"之前先落盘（1.4.1 段 1b）：上一次退休可能死在删掉候选根与同步它的父目录之间，
+    // 调用方拿到 absent 之后会去删别的目录里的恢复记录。
+    await settleAbsentCandidate(root, candidateRootPath, signal);
     return Object.freeze({
       disposition: "absent",
       candidateRootPath,

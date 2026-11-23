@@ -4,6 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
@@ -206,4 +210,83 @@ test("unsafe gate without maintenance/ is a conflict, not a bootstrap prefix", a
   equal(inspected.local.status, "conflict");
   equal(inspected.local.freshCompatible, false);
   equal(inspected.issueCodes.includes("maintenance-gate-unsafe"), true);
+});
+
+test("操作准入目录里只有死进程留下的锁与 create 暂存时仍算全新；活着的、不认识的或节点不对的条目照旧不算（1.4.1 段 1b）", async (t) => {
+  const { absolutePath, root } = await fixture(t);
+  materializeProtocol(absolutePath, 2);
+  const admission = path.join(protocolPaths(absolutePath).runtime, "operation-admission");
+  mkdirSync(admission, { mode: 0o700 });
+  const fresh = async () => (await inspectWakeflowWorkspaceCoreLayout(root)).local.freshCompatible;
+  const deadLock = (tokenUuid: string) => rootedExclusiveFileLockRecordTextForTest({ tokenUuid });
+  equal(await fresh(), true, "空的准入目录");
+
+  // 全新初始化的应用死在独占范围里留下的：准入闩、写者锁，可能还有读者租约与闩的 create 暂存。
+  writeFileSync(
+    path.join(admission, "latch.lock"),
+    deadLock("11111111-1111-4111-8111-111111111111"),
+    {
+      mode: 0o600,
+    },
+  );
+  writeFileSync(
+    path.join(admission, "writer.lock"),
+    deadLock("22222222-2222-4222-8222-222222222222"),
+    {
+      mode: 0o600,
+    },
+  );
+  writeFileSync(
+    path.join(admission, "reader-33333333-3333-4333-8333-333333333333.lock"),
+    deadLock("33333333-3333-4333-8333-333333333333"),
+    { mode: 0o600 },
+  );
+  const stage = issueDurableAtomicFileStageAddress(
+    "create",
+    ".wakeflow-local/runtime/operation-admission/latch.lock",
+    `sha256:${"4".repeat(64)}`,
+    0o600,
+  );
+  const stagePath = path.join(admission, stage.fileName);
+  writeFileSync(stagePath, "", { mode: 0o600 });
+  equal(await fresh(), false, "本进程还持有这个暂存地址：写者活着");
+  releaseDurableAtomicFileStageAddress(stage);
+  equal(await fresh(), true, "都是死进程留下的");
+
+  // 持有者不是确定已死：记录写着本进程的进程号（出生证据对得上读作活着，对不上读作判断不出，两样都
+  // 不算全新）。
+  const live = path.join(admission, "reader-55555555-5555-4555-8555-555555555555.lock");
+  writeFileSync(
+    live,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "55555555-5555-4555-8555-555555555555",
+      pid: process.pid,
+    }),
+    { mode: 0o600 },
+  );
+  equal(await fresh(), false, "持有者活着或判断不出");
+  rmSync(live);
+  equal(await fresh(), true);
+
+  // 不认识的名字。
+  const unknown = path.join(admission, "notes.txt");
+  writeFileSync(unknown, "x", { mode: 0o600 });
+  equal(await fresh(), false, "不认识的条目");
+  rmSync(unknown);
+
+  // 读不出的锁记录。
+  writeFileSync(path.join(admission, "writer.lock"), "not a lock record\n", { mode: 0o600 });
+  equal(await fresh(), false, "锁记录不安全");
+  writeFileSync(
+    path.join(admission, "writer.lock"),
+    deadLock("22222222-2222-4222-8222-222222222222"),
+    {
+      mode: 0o600,
+    },
+  );
+  equal(await fresh(), true);
+
+  // 节点策略不对。
+  chmodSync(path.join(admission, "latch.lock"), 0o644);
+  equal(await fresh(), false, "权限位不对");
 });

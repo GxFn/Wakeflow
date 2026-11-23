@@ -1,9 +1,11 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { DemandAggregateState } from "../../governance/demand/model/demand-aggregate-state.js";
+import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../../governance/tasking/task-package-projection-paths.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import type { RequirementClaimState } from "../../kernel/requirement-board.js";
@@ -60,7 +62,20 @@ export const ARCHIVE_EXCLUDED_PREFIXES = Object.freeze([
   "event-sourcing/append-candidates",
 ] as const);
 
+/**
+ * `artifacts/task-packages/` 里死掉的写者留下的原子暂存文件（1.4.1 段 1b）：根的清点容忍它们，但它们不是
+ * 任务包。不排除的话，带着这种残留完成的 Demand 会把暂存文件封进不可变的归档，续接再把它放回来。另外
+ * 两个容忍残留的目录（`snapshots`、`index`）本来就整个不进负载。
+ */
+function isTaskPackageStageResidue(path: string): boolean {
+  return (
+    path.startsWith(`${TASK_PACKAGE_PROJECTIONS_ROOT_REF}/`) &&
+    hasDurableAtomicFileStagePrefix(path.slice(path.lastIndexOf("/") + 1))
+  );
+}
+
 export function isArchivePayloadPath(path: string): boolean {
+  if (isTaskPackageStageResidue(path)) return false;
   return !ARCHIVE_EXCLUDED_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );

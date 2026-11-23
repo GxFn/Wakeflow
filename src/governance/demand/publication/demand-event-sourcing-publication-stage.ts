@@ -1,4 +1,8 @@
 import {
+  DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesInDirectory,
+} from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../../../foundation/filesystem/durable-directory-materialization.js";
@@ -34,18 +38,20 @@ import {
   inspectDemandEventSourcingRootInventory,
 } from "../event-sourcing/demand-event-sourcing-root-inventory.js";
 import { computeDemandEventStreamCommitDigest } from "../event-sourcing/demand-event-stream-commit.js";
-import {
-  DemandFileEventSnapshotStore,
-  DemandFileEventSnapshotStoreError,
-} from "../event-sourcing/demand-file-event-snapshot-store.js";
+import { DemandFileEventSnapshotStoreError } from "../event-sourcing/demand-file-event-snapshot-store.js";
 import {
   DemandFileEventStore,
   DemandFileEventStoreError,
 } from "../event-sourcing/demand-file-event-store.js";
+import {
+  DemandStageResidueError,
+  retireDemandCacheStageResidue,
+} from "../event-sourcing/demand-stage-residue.js";
 import { renderDemandAuthority } from "../model/demand-authority.js";
 import { renderDemandIdentity } from "../model/demand-identity.js";
 import {
   DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
+  DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE,
   DemandEventSourcingPublicationServiceError,
   failDemandEventSourcingPublication as fail,
 } from "./demand-event-sourcing-publication-contract.js";
@@ -64,6 +70,13 @@ import { DEMAND_PUBLICATION_MARKER_REF } from "./demand-publication-paths.js";
 
 function mapStageError(error: unknown): never {
   if (error instanceof DemandEventSourcingPublicationServiceError) throw error;
+  if (
+    error instanceof DurableAtomicFileStageRecoveryError ||
+    error instanceof DemandStageResidueError
+  ) {
+    if (error.reason === "aborted") fail("aborted", "$signal");
+    fail("recovery-required", "$stage");
+  }
   if (
     error instanceof DemandFileEventStoreError ||
     error instanceof DemandFileEventSnapshotStoreError ||
@@ -87,7 +100,30 @@ function mapStageError(error: unknown): never {
  *
  * 标记最先写（1.4 第 5 段 5a 的 B 行，ADR-0031）：它带着完整的事务，是这次创建唯一落盘的记录——
  * 暂存里只要有别的内容，就读得到它，被打断的创建据此续做。此前根外面另有一份同样的副本，已经删掉。
+ *
+ * 重入时先结算上一次被杀的创建留下的原子暂存（1.4.1 段 1b）：身份与权威两份文件走目录级恢复，成对的
+ * 核对目标确实是写出去的那一份再退役暂存（标记的那一对在读标记之前已经这样回收过）；`index/` 与
+ * `snapshots/` 是缓存，成对的连目标一起丢掉，后面的步骤会重新写出来。以前这些残留让同一个创建请求一直
+ * 以冲突被拒绝。
  */
+/**
+ * 暂存根自己这一层（身份与权威两份文件）里死写者的原子暂存；还有活着或认不出的就不往下做。标记自己的
+ * 暂存在 `transactions/` 里，进到这里之前已经由同一把发布锁里的 `readPendingPublication` 回收过。
+ */
+async function settlePublicationStageFiles(
+  stageRoot: RootedDirectory,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const receipt = await recoverDurableAtomicFileStagesInDirectory(
+    stageRoot,
+    null,
+    signal === undefined ? undefined : { signal },
+  );
+  if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
+    fail("recovery-required", "$stage");
+  }
+}
+
 async function populateDemandPublicationStage(
   stageRoot: RootedDirectory,
   transaction: Readonly<DemandEventSourcingPublicationTransaction>,
@@ -97,6 +133,7 @@ async function populateDemandPublicationStage(
     mode: DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
     ...(signal === undefined ? {} : { signal }),
   });
+  await settlePublicationStageFiles(stageRoot, signal);
   await ensurePublicationTransaction(stageRoot, DEMAND_PUBLICATION_MARKER_REF, transaction, signal);
   const eventStore = new DemandFileEventStore(stageRoot);
   await eventStore.initialize(signal === undefined ? undefined : { signal });
@@ -125,8 +162,11 @@ async function populateDemandPublicationStage(
     signal,
   );
   await eventStore.recoverAppendCandidates(signal === undefined ? undefined : { signal });
-  const snapshotStore = new DemandFileEventSnapshotStore(stageRoot);
-  await snapshotStore.recoverPublicationStages(signal === undefined ? undefined : { signal });
+  await retireDemandCacheStageResidue(
+    stageRoot,
+    DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE,
+    signal === undefined ? {} : { signal },
+  );
   const repository = new DemandEventSourcingRepository(stageRoot);
   // 有意不盖写者戳（C11）：初始提交由事务用 planDemandEventStreamCommit 规划并以 initialCommitDigest
   // 绑定，戳进提交摘要链，带戳重算的摘要就对不上下面的比对；Demand 的后续提交才带戳。

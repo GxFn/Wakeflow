@@ -50,6 +50,7 @@ import {
   renderDemandEventSourcingPublicationTransaction,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import {
+  DEMAND_PUBLICATION_MARKER_REF,
   demandFinalRootRef,
   demandPublicationLockRef,
   demandPublicationStageRef,
@@ -329,9 +330,10 @@ test("publication recovery 回收标记自己留下的 inactive 原子暂存，�
     );
     const targetRef = demandStagePublicationMarkerRef(DEMAND_ID);
     const intendedBytes = encodeUtf8(renderDemandEventSourcingPublicationTransaction(transaction));
+    // 真实的写者经暂存根写标记，暂存名里的目标摘要按根内路径算；文件在标记旁边。
     const address = issueDurableAtomicFileStageAddress(
       "create",
-      targetRef,
+      DEMAND_PUBLICATION_MARKER_REF,
       computeSha256Digest(intendedBytes),
       0o600,
     );

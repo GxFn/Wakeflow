@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -29,6 +29,10 @@ import {
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import {
+  RootedResourceParentHandle,
+  RootedResourceParentHandleError,
+} from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 
 const STAGE_REF = parsePortableResourcePath("transactions/.managed-evidence.wakeflow-stage");
@@ -316,5 +320,61 @@ test("部分candidate可由恢复入口退休但不能伪装成首次完整candi
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("候选根已经不在：报 absent 之前同步它的父目录一次；这次同步失败就不报 absent（1.4.1 段 1b）", async (t) => {
+  const fixture = await createFixture();
+  try {
+    await settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, fixture.plan);
+    equal(existsSync(stagePath(fixture.rootPath)), false);
+    const syncs: string[] = [];
+    let failNext = false;
+    const originalSync = RootedResourceParentHandle.prototype.sync;
+    t.mock.method(
+      RootedResourceParentHandle.prototype,
+      "sync",
+      async function (this: RootedResourceParentHandle, ...args: Parameters<typeof originalSync>) {
+        syncs.push(this.resourceAbsolutePath);
+        if (failNext) {
+          failNext = false;
+          throw new RootedResourceParentHandleError("sync-failure", "$test");
+        }
+        return originalSync.apply(this, args);
+      },
+    );
+    const absent = await settleDirectoryTreeCandidateRetirement(
+      fixture.root,
+      STAGE_REF,
+      fixture.plan,
+    );
+    equal(absent.disposition, "absent");
+    // 同步的是候选根所在的目录（句柄记的是真实路径，临时目录在 macOS 上带 /private 前缀）。
+    deepEqual(
+      syncs.map((entry) => entry.endsWith(`/${STAGE_REF}`)),
+      [true],
+    );
+    failNext = true;
+    await rejects(
+      settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, fixture.plan),
+      (error: unknown) =>
+        error instanceof DurableDirectoryTreeCandidateRetirementError &&
+        error.reason === "durability-failure",
+    );
+    equal(syncs.length, 2);
+
+    // 候选根所在的目录从没建过（一份没有物化过暂存的事务）：照样是 absent，同步的是最近一个还在的上级
+    // 目录。这里曾经报 durability-failure，过期的证据事务的 recover 因此一直被拒。
+    const neverBuilt = parsePortableResourcePath("never-built/.managed-evidence.wakeflow-stage");
+    const missing = await settleDirectoryTreeCandidateRetirement(
+      fixture.root,
+      neverBuilt,
+      fixture.plan,
+    );
+    equal(missing.disposition, "absent");
+    equal(syncs.length, 3);
+    equal(syncs[2]?.endsWith("/never-built"), true, syncs[2]);
+  } finally {
+    await cleanupFixture(fixture);
   }
 });

@@ -4,7 +4,7 @@ import {
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
 } from "../../kernel/layout.js";
-import type { NextProjection } from "../../kernel/next-projection.js";
+import { DEMAND_RECOVERY_FRONTIER, type NextProjection } from "../../kernel/next-projection.js";
 import {
   compareWakeflowArtifactVersions,
   newestWakeflowArtifactVersion,
@@ -194,6 +194,17 @@ export interface NextActionInput {
    * 加的东西（1.3.0 终验：先重启、后 reconcile，七个窗口都没有带上写拒绝规则）。
    */
   readonly hostAssetsNeedRepair?: boolean;
+  /**
+   * 停在被打断的事务上的 Demand 与接手它的工具（1.4.1 段 1b）：发布标记、证据事务、追加候选或生命周期
+   * 日志还留着。它们各出一条 `demand-recovery` 动作，并且不再出自己的前沿——恢复没做完之前，前沿指的
+   * 那一步要么被拒绝，要么会在半个事务上接着做。
+   */
+  readonly recoveries?: readonly Readonly<DemandRecoveryAction>[];
+}
+
+export interface DemandRecoveryAction {
+  readonly demandId: string;
+  readonly tool: string;
 }
 
 const NEXT_ACTIONS_MAXIMUM = 64;
@@ -268,10 +279,24 @@ function staleWindowActions(staleWindows: NextActionInput["staleWindows"]): read
   ];
 }
 
+/** 被打断的 Demand 事务各出一条恢复动作，按 demandId。 */
+function demandRecoveryActions(
+  recoveries: readonly Readonly<DemandRecoveryAction>[],
+): readonly NextAction[] {
+  return [...recoveries]
+    .sort((left, right) => left.demandId.localeCompare(right.demandId))
+    .map((recovery) => ({
+      owner: "controller" as const,
+      tool: recovery.tool,
+      reason: DEMAND_RECOVERY_FRONTIER,
+      subject: recovery.demandId,
+    }));
+}
+
 /**
  * 顺序：制品过期（用户）> 宿主资产待修（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
- * 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按 demandId）> 待认领需求包 > 权限模式不一致的窗口
- * （排在最后，不抢前沿）；去重，上限 64。
+ * 被打断的 Demand 事务的恢复（按 demandId）> 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按
+ * demandId）> 待认领需求包 > 权限模式不一致的窗口（排在最后，不抢前沿）；去重，上限 64。
  */
 export function deriveNextActions(
   input: Readonly<NextActionInput>,
@@ -302,6 +327,9 @@ export function deriveNextActions(
   if (input.hostAssetsNeedRepair === true) actions.push(maintenance);
   actions.push(...staleWindowActions(input.staleWindows));
   if (input.maintenance) actions.push(maintenance);
+  const recoveries = demandRecoveryActions(input.recoveries ?? []);
+  actions.push(...recoveries);
+  const recovering = new Set(recoveries.map((recovery) => recovery.subject));
   for (const window of [...input.unregisteredWindows]
     .filter((entry) => entry.podActive)
     .sort((left, right) => left.windowId.localeCompare(right.windowId))) {
@@ -312,10 +340,12 @@ export function deriveNextActions(
       subject: window.windowId,
     });
   }
-  const demands = [...input.demands].sort((left, right) => {
-    if (left.placement !== right.placement) return left.placement === "primary" ? -1 : 1;
-    return left.demandId.localeCompare(right.demandId);
-  });
+  const demands = input.demands
+    .filter((demand) => !recovering.has(demand.demandId))
+    .sort((left, right) => {
+      if (left.placement !== right.placement) return left.placement === "primary" ? -1 : 1;
+      return left.demandId.localeCompare(right.demandId);
+    });
   for (const demand of demands) {
     if (demand.disposition === "terminal" || demand.frontier === null) continue;
     actions.push({
@@ -477,7 +507,13 @@ export interface WorkspaceGateFacts {
     }>;
   }>[];
   /** 非活动 Demand 的生命周期日志；目录读不出为 null。 */
-  readonly strayJournals: readonly string[] | null;
+  /**
+   * 还留着的生命周期日志：Demand 不在活动集合里的（游离），以及活动 Demand 名下、点得出恢复出口的
+   * （续接的事件已追加、认领还没回来）。读不出为 null。
+   */
+  readonly pendingJournals: readonly string[] | null;
+  /** 停在被打断的事务上的 Demand 与接手它的工具，按 demandId 排序；verify 的下一步先指向它们。 */
+  readonly recoveries: readonly Readonly<DemandRecoveryAction>[];
   /** 维护日志（事务残留）里写者戳版本的最高值（C11）：没有日志或没有戳为 null；维护协议读不出即 unavailable。 */
   readonly maintenanceWriter: Readonly<{
     readonly status: "observed" | "unavailable";
@@ -719,13 +755,13 @@ function demandGates(facts: WorkspaceGateFacts): readonly Readonly<VerifyGate>[]
     ...unavailable.map(() => "unavailable" as const),
   ]);
   const evidence = aggregate(facts.demands.map((demand) => demand.evidence));
-  // 这道门只查游离的生命周期日志。残留的追加候选不在这里数：有它的 Demand 根盘点读不出，由上一道门报出。
+  // 这道门只查还留着的生命周期日志。残留的追加候选不在这里数：有它的 Demand 根盘点读不出，由上一道门报出。
   const strayCode = [
-    ...(facts.strayJournals ?? []).map((demandId) => `journal:${demandId}`),
-    ...(facts.strayJournals === null ? ["journals:unreadable"] : []),
+    ...(facts.pendingJournals ?? []).map((demandId) => `journal:${demandId}`),
+    ...(facts.pendingJournals === null ? ["journals:unreadable"] : []),
   ];
   const strayStatus =
-    facts.strayJournals === null ? "unavailable" : verdict(strayCode.length === 0, false);
+    facts.pendingJournals === null ? "unavailable" : verdict(strayCode.length === 0, false);
   return [
     gate(
       "demand-root-audit",
@@ -1154,10 +1190,19 @@ export function summarizeGates(
  * verify 的 next：不通过时列出未通过的门。runtime-artifact 失败先于维护：`server-outdated`
  * 只能由用户重连服务；artifact-older-than-stream 的 `stream-newer:<版本>` 是同一件事从流的
  * 一侧看到，走同一条出路。Peer runtime 缺证据时只报告，不能用 hook 代替；可修的其他门先交给维护。
+ * 有 Demand 停在被打断的事务上时，排在制品之后、窗口与维护之前指向它的恢复：维护修不了那几道门，
+ * 接手的是那个事务自己的 recover。结果的 `subject` 要求流修订号，这里未必读得出根，所以 Demand 标识
+ * 以 `demand-recovery:<demandId>` 放在 blockers 里；blockers 在结果的 Schema 里最多 64 条，门的条目
+ * 在前，Demand 的条目填到满为止（排在最前、`suggestedTool` 对着的那一个总在里面）。维护占着工作区（闩被占
+ * 或留着维护的事务文件）时调用方不传 recoveries：那时任何 Demand 的 recover 都会被维护的保留挡下，
+ * 先做的是维护。
  */
+const VERIFY_NEXT_BLOCKERS_MAXIMUM = 64;
+
 export function verifyNext(
   gates: readonly Readonly<VerifyGate>[],
   artifactServerRefreshOwner: Extract<NextActionOwner, "controller" | "user">,
+  recoveries: readonly Readonly<DemandRecoveryAction>[] = [],
 ): Readonly<NextProjection> {
   const failing = gates.filter((entry) => entry.status !== "pass");
   if (failing.length === 0) {
@@ -1195,6 +1240,20 @@ export function verifyNext(
       owner: artifactServerRefreshOwner,
       suggestedTool: null,
       blockers,
+    });
+  }
+  const firstRecovery = recoveries[0];
+  if (firstRecovery !== undefined) {
+    return Object.freeze({
+      frontier: DEMAND_RECOVERY_FRONTIER,
+      owner: "controller",
+      suggestedTool: firstRecovery.tool,
+      blockers: Object.freeze(
+        [
+          ...blockers,
+          ...recoveries.map((recovery) => `${DEMAND_RECOVERY_FRONTIER}:${recovery.demandId}`),
+        ].slice(0, VERIFY_NEXT_BLOCKERS_MAXIMUM),
+      ),
     });
   }
   // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。

@@ -390,6 +390,58 @@ test("readPublicationTransactionAt 把节点、表示与解析失败都归为 co
   await rejects(readTransactionAt(root, ref, await nodeOf(root, ref), abortedSignal()), aborted);
 });
 
+test("readPublicationTransactionAt 读得出与死写者的暂存成对的标记；写者还活着、暂存记的是别的路径、第二个名字在别处时照旧是 conflict", async (t) => {
+  const { root, physical } = await openWorkspace(t, "wakeflow-publication-paired-");
+  await initializeStorage(root, undefined);
+  const transaction = transactionFixture();
+  const bytes = encodeUtf8(render(transaction));
+  const marker = physical(FINAL_MARKER_REF);
+  mkdirSync(path.dirname(marker), { recursive: true, mode: 0o700 });
+  const conflict = isServiceError("conflict", "$transaction");
+  const read = async () =>
+    readTransactionAt(root, FINAL_MARKER_REF, await nodeOf(root, FINAL_MARKER_REF), undefined);
+  // 暂存名里的目标摘要按 `addressed` 算；写完之后硬链接成标记（写者死在 link 与 unlink 之间的样子）。
+  const plant = (addressed: PortableResourcePath) => {
+    const address = issueDurableAtomicFileStageAddress(
+      "create",
+      addressed,
+      computeSha256Digest(bytes),
+      0o600,
+    );
+    const stage = physical(durableAtomicFileStageRefForTest(FINAL_MARKER_REF, address));
+    writeFileSync(stage, bytes, { mode: 0o600 });
+    linkSync(stage, marker);
+    return { address, stage };
+  };
+
+  // 真实写者的摆法：摘要按标记在它所在的根里的路径算。写者活着时不认，死了才认。
+  const own = plant(DEMAND_PUBLICATION_MARKER_REF);
+  try {
+    await rejects(read(), conflict);
+  } finally {
+    releaseDurableAtomicFileStageAddress(own.address);
+  }
+  equal(statSync(marker).nlink, 2);
+  deepEqual((await read()).transaction, transaction);
+  rmSync(own.stage);
+  rmSync(marker);
+
+  // 暂存名里记的是工作区相对路径：不是这个标记的写者留下的。
+  const elsewhere = plant(FINAL_MARKER_REF);
+  releaseDurableAtomicFileStageAddress(elsewhere.address);
+  await rejects(read(), conflict);
+  rmSync(elsewhere.stage);
+  rmSync(marker);
+
+  // 两个链接，第二个名字不在 `transactions/` 里：没有暂存为它作证。
+  writeFileSync(marker, bytes, { mode: 0o600 });
+  const outside = path.join(path.dirname(path.dirname(marker)), "elsewhere.json");
+  linkSync(marker, outside);
+  await rejects(read(), conflict);
+  rmSync(outside);
+  deepEqual((await read()).transaction, transaction);
+});
+
 test("retirePublicationFile 只按目录准入精确退休事务文件", async (t) => {
   const { root, physical } = await openWorkspace(t, "wakeflow-publication-retire-");
   await initializeStorage(root, undefined);
@@ -456,10 +508,14 @@ test("initializePublicationStorage 只在当前活动布局下幂等建立私有
   );
 });
 
-test("recoverPublicationTransactionStages 只回滚本事务不再活动的原子暂存", async (t) => {
+test("recoverPublicationTransactionStages 经标记所在的根认暂存：只回收本事务不再活动的那些，按工作区路径算摘要的与别的 Demand 的都不碰", async (t) => {
   const { root, physical } = await openWorkspace(t, "wakeflow-publication-stages-");
   const recoveryRequired = isServiceError("recovery-required", "$transaction/stage");
-  await rejects(recoverStages(root, FINAL_MARKER_REF, undefined), recoveryRequired);
+  // 标记所在的根还不在：没有什么可回收的，按根不可用拒绝（服务先看目录在不在，走不到这里）。
+  await rejects(
+    recoverStages(root, FINAL_MARKER_REF, undefined),
+    isServiceError("conflict", "$demandRoot"),
+  );
   await initializeStorage(root, undefined);
   const otherMarkerRef = demandFinalPublicationMarkerRef(OTHER_DEMAND_ID);
   for (const ref of [FINAL_MARKER_REF, otherMarkerRef]) {
@@ -467,31 +523,41 @@ test("recoverPublicationTransactionStages 只回滚本事务不再活动的原�
   }
   await recoverStages(root, FINAL_MARKER_REF, undefined);
 
-  const stage = async (target: PortableResourcePath, text: string) => {
+  // 暂存名里的目标摘要按 `addressed` 算，文件放在 `marker` 旁边。
+  const stage = async (
+    marker: PortableResourcePath,
+    addressed: PortableResourcePath,
+    text: string,
+  ) => {
     const bytes = encodeUtf8(text);
     const address = issueDurableAtomicFileStageAddress(
       "create",
-      target,
+      addressed,
       computeSha256Digest(bytes),
       0o600,
     );
-    const stageRef = durableAtomicFileStageRefForTest(target, address);
+    const stageRef = durableAtomicFileStageRefForTest(marker, address);
     await createFileCandidateDurably(root, stageRef, bytes, { mode: 0o600 });
     return { address, stageRef };
   };
-  const own = await stage(FINAL_MARKER_REF, "partial");
+  // 写者经标记所在的根写入，摘要按根内路径算。
+  const own = await stage(FINAL_MARKER_REF, DEMAND_PUBLICATION_MARKER_REF, "partial");
   try {
-    // 本进程仍持有暂存地址：活写者不得被回滚。
+    // 本进程仍持有暂存地址：活写者不得被回收。
     await rejects(recoverStages(root, FINAL_MARKER_REF, undefined), recoveryRequired);
     equal(existsSync(physical(own.stageRef)), true);
   } finally {
     releaseDurableAtomicFileStageAddress(own.address);
   }
-  const foreign = await stage(otherMarkerRef, "foreign");
+  // 同一个目录里按工作区相对路径算摘要的暂存：不是这个标记的写者留下的。
+  const workspaceAddressed = await stage(FINAL_MARKER_REF, FINAL_MARKER_REF, "elsewhere");
+  releaseDurableAtomicFileStageAddress(workspaceAddressed.address);
+  const foreign = await stage(otherMarkerRef, DEMAND_PUBLICATION_MARKER_REF, "foreign");
   releaseDurableAtomicFileStageAddress(foreign.address);
   await rejects(recoverStages(root, FINAL_MARKER_REF, abortedSignal()), aborted);
   await recoverStages(root, FINAL_MARKER_REF, undefined);
   equal(existsSync(physical(own.stageRef)), false);
+  equal(existsSync(physical(workspaceAddressed.stageRef)), true);
   equal(existsSync(physical(foreign.stageRef)), true);
 });
 

@@ -10,16 +10,25 @@ import {
   ledgerRootOf,
   lockFamiliesOf,
   lockResidueOf,
+  powerLossLockResidueOf,
+  powerLossRecoveryResidueOf,
+  powerLossVerdictsOf,
   previewThenApply,
+  recoveryResidueOf,
   runSnapshotSweep,
-  SNAPSHOT_SWEEP_READER_LEASE,
-  type SnapshotSweepOutcome,
-  type SnapshotSweepScope,
   signpostedRecoveryOf,
+  SNAPSHOT_SWEEP_READER_LEASE,
   snapshotSweepAllPoints,
+  type SnapshotSweepOutcome,
+  snapshotSweepPowerLossRows,
   snapshotSweepResidueRows,
   snapshotSweepRowDiagnostics,
+  type SnapshotSweepScope,
   snapshotSweepSpan,
+  type SnapshotSweepStuckRow,
+  stageResidueOf,
+  statusNamedRecoveryOf,
+  statusUnnamedOf,
   stuckRowsOf,
   summarizeSnapshotSweep,
   sweptIndicesOf,
@@ -37,87 +46,104 @@ import {
  *
  * 子进程经真实 MCP 入口做一次发布的 apply（账本记录锁 L7、看板锁 L4、需求记录树的暂存与改名），每经过一次
  * 变更接缝拷一份快照（`tests/support/snapshot-sweep-process.ts`）；本进程逐份摆回原处，跑只读的 status 与变更
- * 跟进，归为 healed、signposted-recovery、unsignposted-recovery 或 stuck（`snapshot-sweep-harness.ts`）。变更跟进是
+ * 跟进，归为 healed、signposted-recovery、
+ * status-named-recovery、unsignposted-recovery 或 stuck（`snapshot-sweep-harness.ts`）。变更跟进是
  * "同一个请求再发一次"（ADR-0031：被打断的发布靠重发做完），再撤回同一个包：记录已在时重放不进 L7 与 L4，
  * 撤回才在 L4 里改写看板状态，留下的死看板锁由它清。
  *
- * 每一份快照上跑一轮：status、变更跟进（不管 status 的结局）、跟进成功之后再一次 status；失败时依次走有路标的
- * 出口（重试、发布的 `mode: recover`、维护的 recover、公开的 reconcile），都走不通再从重新摆回的快照试没有路标的
- * 路（发布的 `mode: recover`，reconcile 之后的 `mode: recover`）；治好之后查 L1–L7 的锁残留。范围见
- * `snapshot-sweep-harness.ts`：`locks`（缺省）摆回 L1–L7 锁操作的前后，`all`（`WAKEFLOW_SNAPSHOT_SWEEP_SCOPE=all`）
- * 摆回每一份并加上内容同步之后的那些。两个范围都要求一份都不卡住，并断言走有路标的出口、走没有路标的路
- * 与留着锁残留的恰好是各自表里的那些（`locks` 只取摆回过的序号）。
+ * 每一份快照上跑一轮：status、变更跟进（不管 status 的结局）、跟进成功之后再一次 status；失败时只跟被点名的
+ * 恢复，最多三跳——可重试的拒绝重试一次，`recovery-required` 的拒绝照 `details.tool` 与 `details.operationId`
+ * 走，status 点了名的照 status 走（`snapshot-sweep-harness.ts`）。什么都没点名时才从重新摆回的快照试没有路标的
+ * 路，试通的一律记作没有路标；1.4.1 段 1b 之后每个扫点文件都断言没有这样的点。治好之后查 L1–L7 的锁残留、
+ * 留下的恢复记录与 Demand 根三个目录里的暂存。范围见 `snapshot-sweep-harness.ts`：`locks`（缺省）摆回 L1–L7
+ * 锁操作的前后，要求一份都不卡住；`all`（`WAKEFLOW_SNAPSHOT_SWEEP_SCOPE=all`）摆回每一份并加上内容同步之后的
+ * 那些，场景开了的话另跑掉电的盘面（`snapshot-sweep-powerloss.ts`）。显式表按 `all` 范围写，`locks` 只取摆回过
+ * 的序号；断言见文件末尾的测试。
  *
  * 摆回的是什么：每一个暂存、候选或树成员都在两个时刻摆回——排他新建刚返回、内容还没写的空文件，以及它被
  * 链接或改名之后；`all` 范围另在经接缝排他新建的每个文件内容同步之后摆回一次（内容完整、权限位已改、还没
  * 发布；序号是前一次接缝调用的序号加一位小数，例如 12.1）。中间的状态——内容写了一半、写完还没改权限位，
  * 以及 `locks` 范围里内容同步之后的那一刻——不摆回。不覆盖的：递归删除整棵目录树是一次接缝调用，删到一半的
- * 样子挂不到；快照只在接缝调用或那次内容同步成功之后取，进程死在一次系统调用中途不在内；掉电后目录项与
- * 内容乱序落盘也不在内（那是第 3 步的组合状态）。工作区的 `.git` 与产品检出不在快照集里，各份快照共用
+ * 样子挂不到；快照只在接缝调用或那次内容同步成功之后取，进程死在一次系统调用中途不在内。掉电之后的
+ * 盘面另由 `all` 范围生成（局限见 `snapshot-sweep-powerloss.ts` 的文件头）。工作区的 `.git` 与产品检出不在快照集里，各份快照共用
  * （`snapshot-sweep-copy.ts`）。
  */
 
 useDisposableDurability();
 
-/*
- * 今天卡住的快照：没有（两个范围都断言卡住的表为空）。上一轮钉住的 11–14（需求记录树的暂存目录
- * `transactions/.<id>.stage` 刚 mkdir——那时它以 0700 出生、权限位还没改，现在不被 umask 收窄时直接以
- * 请求的权限位出生——或成员刚排他新建、内容为空）现在第一轮就治好：重放拿到
- * 记录锁、final 不在时，发布者把补不了的暂存整棵删掉、用这次已校验的输入重建
- * （`src/governance/ledger/ledger-record-publisher.ts` 的 `stageCandidate`）。21 改记为重试治好，见下表。
+/**
+ * 显式表：1.4.1 段 1b 之后的样子。表按 `all` 范围写，`locks` 范围只取摆回过的序号；改过存储路径之后的
+ * 重钉办法见 `snapshot-sweep-harness.ts` 的 `WAKEFLOW_SNAPSHOT_SWEEP_DUMP`。
  */
+
+/** 没有任何公开调用治得好的快照（`all` 范围；`locks` 范围里一个都不许有）。 */
+const STUCK_ON_TODAY: readonly SnapshotSweepStuckRow[] = [];
 
 /**
- * 今天走有路标的出口才恢复的快照（`all` 范围）：`[序号, 出口]`。
- * 21：看板状态文件刚从创建暂存链接出来、暂存还没退役（两个链接）时进程死了。重放照常成功；撤回在看板锁里
- * 整文件替换，写入之前先退役同一目标的遗留暂存（`src/foundation/filesystem/durable-atomic-file-write.ts:174`），
- * 目标的链接数从 2 变 1，替换的预检于是看到目标节点已不是读到的那一个（`expectation-changed`，同文件 `:147`），
- * `src/kernel/requirement-board.ts:600` 报成可重试的 `concurrency-conflict/claim-state-changed`。照信封重试一次，
- * 重读到的是退役之后的节点，撤回成功。上一轮把它钉成卡住，因为扫点从不重试。
+ * 被拒绝点了名、照点名的恢复走通的快照：`[序号, 出口]`。21：看板认领状态文件刚链接出来、创建暂存还没退役；
+ * 重发以可重试的 `concurrency-conflict/claim-state-changed` 被拒，照信封重试一次就过（L10）。
  */
-const SIGNPOSTED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [[21, "retry"]];
+const SIGNPOSTED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [
+  ...[21].map((index) => [index, "retry"] as const),
+].sort(([left], [right]) => left - right);
 
-/** 今天有路标的出口都走不通、走没有路标的路才恢复的快照（`all` 范围）：没有。 */
-const UNSIGNPOSTED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [];
+/** 拒绝没有点名、只有 status 点了名，照它走通的快照：`[序号, 出口]`。 */
+const STATUS_NAMED_RECOVERY_ON_TODAY: readonly (readonly [number, string])[] = [];
 
-/** 今天第一轮 status 被拒、变更跟进治好的快照（`all` 范围）：`[序号, status 的 code/reason]`。 */
+/** 第一跳由拒绝点了名、而第一轮的 status 没有点着同一条工具的快照：`[序号, 出口]`。 */
+const STATUS_UNNAMED_ON_TODAY: readonly (readonly [number, string])[] = [];
+
+/** 第一轮 status 被拒、变更跟进治好的快照：`[序号, status 的 code/reason]`。 */
 const HEALED_AFTER_STATUS_REFUSAL_ON_TODAY: readonly (readonly [number, string])[] = [];
 
 /**
- * 治好之后仍留着的 L1–L7 锁文件或锁暂存：`[路径, 个数, 序号]`（两个范围都断言，`locks` 只取摆回过的序号），
- * 都是产品上的发现：
- * - 读者租约（L2），每点一个：子进程在 5 链接自己的读者租约、30 才删。死掉的读者租约只有独占获取才清（排空时
- *   `src/foundation/filesystem/rooted-read-write-scope.ts:285` 经 `held` 退休失效的租约），共享获取只在租约攒到
- *   64 个时才清（同文件 `:264`）。跟进全是共享作用域，所以它留到下一次维护。带小数的序号是内容同步之后的那些
- *   点（`all` 范围才有）。
- * - 账本记录锁（L7）：15 时记录目录已改名到位、锁还拿着。重放读到已有记录就返回（`ensureRecord`，
- *   `src/capabilities/requirement/service.ts:709`），不进账本存储的锁恢复
- *   （`src/governance/ledger/ledger-record-publisher.ts:292`）；这把锁按记录标识命名、标识由内容推出，之后没有
- *   任何公开调用会再拿它，死锁文件永久留在 `transactions/` 里。释放与清理重新同步父目录（第 1 段的锁裁决）
- *   不改变这一点：被杀的进程根本没走到释放。
+ * 治好之后仍留着的 L1–L7 锁文件或锁暂存：`[路径, 个数, 序号]`，是产品上的发现。子进程自己的读者租约（L2）从
+ * 链接出来到它删掉之间每点留一个：死掉的读者租约只有独占获取才清，这里的跟进与恢复都是共享作用域（L10）。
+ * 走 reconcile 治好的点没有残留（维护拿独占作用域）。
+ * 15：账本记录锁。记录发布完、锁还没删进程死了；同一条记录不再发布，没有人再拿它（L10）。
  */
 const LOCK_RESIDUE_ON_TODAY: readonly (readonly [number, string, number])[] =
   snapshotSweepResidueRows([
     [
       SNAPSHOT_SWEEP_READER_LEASE,
       1,
-      [...snapshotSweepSpan(5, 29), 8.1, 12.1, 13.1, 14.1, 17.1, 20.1, 24.1, 27.1],
+      [...snapshotSweepSpan(5, 29), ...[8.1, 12.1, 13.1, 14.1, 17.1, 20.1, 24.1, 27.1]],
     ],
     ["ledger:transactions/requirement_<uuid>.lock", 1, [15]],
   ]);
 
+/** 治好之后仍留着的恢复记录（退役根、恢复用的暂存根、日志、发布标记、发布暂存树）：`[序号, 路径]`。 */
+const RECOVERY_RESIDUE_ON_TODAY: readonly (readonly [number, string])[] = [];
+
+/** 治好之后 Demand 根的三个目录里仍留着的原子暂存：`[路径, 个数, 序号]`。 */
+const STAGE_RESIDUE_ON_TODAY: readonly (readonly [number, string, number])[] = [];
+
+/** 掉电的盘面（只在 `all` 范围生成）：`[归类, 位置…]`，位置是“第几步之后的第几次目录同步”。 */
+const POWER_LOSS_ON_TODAY: readonly (readonly [string, string])[] = snapshotSweepPowerLossRows([
+  ["healed", "7~1 14~1 15~1 15~2 16~1 22~1 23~1 28~1 29~1 30~1".split(" ")],
+  ["signposted:retry", "21~1".split(" ")],
+]);
+
 /**
- * 摆回过的序号，按范围钉住（`sweptIndicesOf`）：`locks` 是第 0 份与 L1–L7 锁操作前后的那些，`all` 是每一份加上
- * 内容同步之后带小数的那些。一轮就治好的点不在上面任何一张表里，靠这里看住它们确实摆回过。
+ * 掉电的盘面治好之后仍留着的锁，读者租约之外的：`[位置, 路径, 个数]`。15~2 与被杀的第 15 点是同一件事。
+ */
+const POWER_LOSS_LOCK_RESIDUE_ON_TODAY: readonly (readonly [string, string, number])[] = [
+  ["15~2", "ledger:transactions/requirement_<uuid>.lock", 1],
+];
+
+/** 掉电的盘面治好之后仍留着的恢复记录：`[位置, 路径]`。 */
+const POWER_LOSS_RECOVERY_RESIDUE_ON_TODAY: readonly (readonly [string, string])[] = [];
+
+/**
+ * 摆回过的序号，按范围钉住（`sweptIndicesOf`）：`locks` 是对照点、L1–L7 锁操作前后的那些与场景另列的路线
+ * 代表点（`routePoints`），`all` 是每一份加上内容同步之后带小数的那些。一轮就治好的点不在上面任何一张表里，靠这里看住它们确实摆回过。
  */
 const SWEPT_POINTS_ON_TODAY: Readonly<Record<SnapshotSweepScope, readonly number[]>> = {
   locks: [
     ...snapshotSweepSpan(0, 10),
     ...snapshotSweepSpan(15, 19),
     ...snapshotSweepSpan(22, 26),
-    28,
-    29,
-    30,
+    ...snapshotSweepSpan(28, 30),
   ],
   all: snapshotSweepAllPoints(30, [1.1, 4.1, 8.1, 12.1, 13.1, 14.1, 17.1, 20.1, 24.1, 27.1]),
 };
@@ -172,6 +198,8 @@ test("快照扫点：发布需求包的每一步之后进程死亡，下一条 s
       name: WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,
       arguments: { root, mode: "recover", operationId: requirementId },
     }),
+    // 跟进按盘面上看到的状态走（重放，再撤回），不看序号，所以掉电的盘面也能跑。
+    powerLoss: true,
   });
   t.diagnostic(summarizeSnapshotSweep(report));
   for (const line of snapshotSweepRowDiagnostics(report)) t.diagnostic(line);
@@ -181,15 +209,21 @@ test("快照扫点：发布需求包的每一步之后进程死亡，下一条 s
     "L4 board locks",
     "L7 ledger record lock",
   ]);
-  deepEqual(stuckRowsOf(report), []);
+  deepEqual(stuckRowsOf(report), report.scope === "locks" ? [] : STUCK_ON_TODAY);
   deepEqual(
     signpostedRecoveryOf(report),
     withinSweptPoints(report, SIGNPOSTED_RECOVERY_ON_TODAY, ([index]) => index),
   );
   deepEqual(
-    unsignpostedRecoveryOf(report),
-    withinSweptPoints(report, UNSIGNPOSTED_RECOVERY_ON_TODAY, ([index]) => index),
+    statusNamedRecoveryOf(report),
+    withinSweptPoints(report, STATUS_NAMED_RECOVERY_ON_TODAY, ([index]) => index),
   );
+  deepEqual(
+    statusUnnamedOf(report),
+    withinSweptPoints(report, STATUS_UNNAMED_ON_TODAY, ([index]) => index),
+  );
+  // 段 1b 的结论：能恢复的快照都有路标（拒绝或 status 点了名）；出现一个没有路标的就是回退。
+  deepEqual(unsignpostedRecoveryOf(report), []);
   deepEqual(
     healedAfterStatusRefusalOf(report),
     withinSweptPoints(report, HEALED_AFTER_STATUS_REFUSAL_ON_TODAY, ([index]) => index),
@@ -197,6 +231,31 @@ test("快照扫点：发布需求包的每一步之后进程死亡，下一条 s
   deepEqual(
     lockResidueOf(report),
     withinSweptPoints(report, LOCK_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  deepEqual(
+    recoveryResidueOf(report),
+    withinSweptPoints(report, RECOVERY_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  deepEqual(
+    stageResidueOf(report),
+    withinSweptPoints(report, STAGE_RESIDUE_ON_TODAY, ([index]) => index),
+  );
+  // 掉电的盘面只在 `all` 范围生成。读者租约（L2）每个位置至多留一个——子进程自己的那个，死读者租约只有
+  // 独占获取才清（L10）；多出来就是跟进自己漏了租约。别的锁按显式表。
+  deepEqual(powerLossVerdictsOf(report), report.scope === "all" ? POWER_LOSS_ON_TODAY : []);
+  deepEqual(
+    powerLossLockResidueOf(report).filter(
+      ([, entry, count]) => entry === SNAPSHOT_SWEEP_READER_LEASE && count > 1,
+    ),
+    [],
+  );
+  deepEqual(
+    powerLossLockResidueOf(report).filter(([, entry]) => entry !== SNAPSHOT_SWEEP_READER_LEASE),
+    report.scope === "all" ? POWER_LOSS_LOCK_RESIDUE_ON_TODAY : [],
+  );
+  deepEqual(
+    powerLossRecoveryResidueOf(report),
+    report.scope === "all" ? POWER_LOSS_RECOVERY_RESIDUE_ON_TODAY : [],
   );
   // 放在最后：前面的表先各自比对，摆回的点对不上时再报这一条。
   deepEqual(sweptIndicesOf(report), SWEPT_POINTS_ON_TODAY[report.scope]);

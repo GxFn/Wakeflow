@@ -57,7 +57,7 @@ const CODE_GUIDANCE: Readonly<Record<RefusalCode, readonly [string, string]>> = 
   ],
   "recovery-required": [
     "an earlier write was interrupted",
-    'Finish that operation\'s recovery before anything else. For maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; a requirement publish or a Demand create that was cut short is finished by sending the same request again (once the package shows as claimed, by `mode: recover` with the id of that Demand instead); the other Demand tools and the evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-maintenance.md`.',
+    'Finish that operation\'s recovery before anything else. When `details.tool` is present it names the call that finishes it, even if you called a different tool: call it with `mode: recover` and the id the refusal gives (`operationId` = `details.operationId`; for `wakeflow_record_evidence`, `demandId` = `details.demandId`); `wakeflow_maintain_workspace` without an `operationId` means preview and apply `reconcile`. Then repeat the refused call or read status again - the next refusal or `next` names the step after. Without `details.tool`: for maintenance, `details.operationId` goes to maintenance recover and, without one, preview reconcile; a requirement publish or a Demand create that was cut short is finished by sending the same request again (once the package shows as claimed, by `mode: recover` with the id of that Demand instead); the other Demand tools and the evidence and pod tools take `mode: recover` themselves, with the operation the refusal names. See "Interrupted writes and cancellation" in `workspace-maintenance.md`.',
   ],
 });
 
@@ -81,6 +81,14 @@ const REASON_NOTES: Readonly<Record<string, string>> = Object.freeze({
     "the pod already carries an active Demand, or an interrupted Demand publication still reserves it. One Demand per pod: complete, cancel or recover that one, or claim into another pod.",
   "hook-evidence-missing":
     "no hook record proves the session named in the observation started in that window. Launch or resume the window with the host procedure, then register again - never register a handle the host did not report.",
+  "lifecycle-journal-pending":
+    "a complete, cancel or continue of this Demand was cut short. `details.tool` names which one - it may not be the tool you called; recover with it before anything else on this Demand.",
+  "append-candidates-pending":
+    "an event append on this Demand was cut short. Preview and apply `reconcile`, then repeat the call - it may then name a second step.",
+  "evidence-publication-pending":
+    "an evidence recording on this Demand was cut short. Call `wakeflow_record_evidence` with `mode: recover` and `demandId` = `details.demandId` (this tool's recover takes no `operationId`), then repeat the call.",
+  "demand-publication":
+    "the creation of this Demand was cut short. With `details.tool`, recover with `wakeflow_create_demand` and the Demand id. Without it the create tool itself refused (apply or `mode: recover`): a writer of that creation may still be running - wait, then send the same request again.",
   "authority-reference-unknown":
     "the task package cites a ledger member that the Demand's requirement packages do not contain. Use the member references the inspection of the requirement returned.",
 });

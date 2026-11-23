@@ -26,12 +26,17 @@ import {
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import {
   type PortableResourcePath,
+  parsePortableResourcePath,
   splitPortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
+import {
+  readStableResourceDirectory,
+  StableDirectoryReadError,
+} from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
@@ -49,6 +54,11 @@ import {
   createDemandEventSourcingResourceCatalog,
   WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG,
 } from "../demand-resource-catalog.js";
+import { DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
+import {
+  classifyDemandStageDirectory,
+  DemandStageDirectoryError,
+} from "../event-sourcing/demand-stage-residue.js";
 import {
   DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE,
   DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE,
@@ -142,13 +152,96 @@ export function assertPrivatePublicationNode(
   }
 }
 
+/** 标记所在的根相对 `root` 的位置；`ref` 就是根内的标记引用时为 null（`root` 本身就是那个根）。 */
+function markerContainerRef(ref: PortableResourcePath): PortableResourcePath | null {
+  if (ref === DEMAND_PUBLICATION_MARKER_REF) return null;
+  const suffix = `/${DEMAND_PUBLICATION_MARKER_REF}`;
+  if (!ref.endsWith(suffix)) fail("operation-failure", "$catalog");
+  return parsePortableResourcePath(ref.slice(0, -suffix.length));
+}
+
+/** 在标记所在的根上执行；`root` 不是那个根时打开它，用完关上。 */
+async function withMarkerContainer<Result>(
+  root: RootedDirectory,
+  ref: PortableResourcePath,
+  operation: (container: RootedDirectory) => Promise<Result>,
+): Promise<Result> {
+  const containerRef = markerContainerRef(ref);
+  if (containerRef === null) return operation(root);
+  const container = await openDemandPublicationRoot(root, containerRef);
+  let failure: { readonly error: unknown } | undefined;
+  let result: Result | undefined;
+  try {
+    result = await operation(container);
+  } catch (error: unknown) {
+    failure = { error };
+  }
+  try {
+    await container.close();
+  } catch (error: unknown) {
+    // 先发生的错误优先；关不掉句柄本身报成操作失败，不让基础层的错误原样漏出去。
+    failure ??= {
+      error: new DemandEventSourcingPublicationServiceError(
+        "operation-failure",
+        "$demandRoot/close",
+        "unknown",
+        { cause: error },
+      ),
+    };
+  }
+  if (failure !== undefined) throw failure.error;
+  return result as Result;
+}
+
+/**
+ * 标记有两个链接时它是不是一个死写者留下的那一对（1.4.1 段 1b）：标记经 `link(暂存, 标记)` 再
+ * `unlink(暂存)` 建成，进程死在两步之间，标记与暂存共用一个节点。只读路径（同一个创建请求重发时先读
+ * 标记、沿用它的时间）必须读得出这样的标记；以前它被当成冲突，那个请求从此一直被拒绝。判断用根清点的
+ * 同一条规则；暂存名里的目标摘要按标记在它所在的根里的路径算，所以目录要经那个根来读。
+ */
+async function markerPairedWithDeadStage(
+  root: RootedDirectory,
+  ref: PortableResourcePath,
+  node: Readonly<FileNodeSnapshot>,
+  signal: AbortSignal | undefined,
+): Promise<boolean> {
+  try {
+    return await withMarkerContainer(root, ref, async (container) => {
+      const listing = await readStableResourceDirectory(
+        container,
+        DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF,
+        { maximumEntries: 16, ...(signal === undefined ? {} : { signal }) },
+      );
+      const { residue } = classifyDemandStageDirectory(
+        listing.entries,
+        DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE,
+      );
+      return residue.some(
+        (stage) =>
+          stage.member?.resourcePath === DEMAND_PUBLICATION_MARKER_REF &&
+          sameFileNodeIdentity(stage.member.node, node),
+      );
+    });
+  } catch (error: unknown) {
+    if (error instanceof StableDirectoryReadError && error.reason === "aborted") {
+      fail("aborted", "$signal");
+    }
+    if (error instanceof StableDirectoryReadError || error instanceof DemandStageDirectoryError) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 export async function readPublicationTransactionAt(
   root: RootedDirectory,
   ref: PortableResourcePath,
   node: Readonly<FileNodeSnapshot>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredDemandEventSourcingPublicationTransaction>> {
-  assertPrivatePublicationNode(node, "file", "$transaction");
+  const paired =
+    node.linkCount === 2n && (await markerPairedWithDeadStage(root, ref, node, signal));
+  assertPrivatePublicationNode(node, "file", "$transaction", paired ? [1n, 2n] : [1n]);
   let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     read = await readDeterministicJsonFile(root, ref, {
@@ -316,17 +409,23 @@ export async function initializePublicationStorage(
   }
 }
 
-/** 回收发布标记自己的、写者已经不在的原子暂存文件。 */
+/**
+ * 回收发布标记自己的、写者已经不在的原子暂存文件。暂存名里记的目标摘要按写入时的路径算，而标记是经它
+ * 所在的根（暂存根，改名之后是 Demand 根）写的，所以这里也经那个根去认；拿工作区相对路径去比，摘要
+ * 永远对不上，什么都收不掉（1.4.1 段 1b 之前就是这样）。
+ */
 export async function recoverPublicationTransactionStages(
   root: RootedDirectory,
   transactionRef: PortableResourcePath,
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
-    const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
-      root,
-      Object.freeze([transactionRef]),
-      signal === undefined ? undefined : { signal },
+    const receipt = await withMarkerContainer(root, transactionRef, (container) =>
+      recoverDurableAtomicFileStagesMatchingTargets(
+        container,
+        Object.freeze([DEMAND_PUBLICATION_MARKER_REF]),
+        signal === undefined ? undefined : { signal },
+      ),
     );
     if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
       fail("recovery-required", "$transaction/stage");

@@ -507,10 +507,12 @@ test("角色工具归属表与技能正文点名的工具逐一相同，且每�
 
 /** I4：渲染后的 Controller 技能按宿主各有预算——宿主取值表的膨胀在这里被抓住，源预算（D7）管不到它。 */
 // 1.4 第 4 段（同上）：14 KiB → 15 KiB；实测 Claude Code 渲染后 14,571 字节。词数上限不动。
+// 1.4.1 段 1b：2,200 → 2,300 词。"被打断的 Demand 事务怎么找到出口"那一段进了技能正文之后，Claude Code
+// 渲染实测 2,215 词；按 2026-11-18 的裁决以一个写明的步长放宽，不为凑数删掉指路的话（清单 8.3 第十一件）。
 const MAXIMUM_RENDERED_CONTROLLER_SKILL_BYTES = 15 * 1024;
-const MAXIMUM_RENDERED_CONTROLLER_SKILL_WORDS = 2_200;
+const MAXIMUM_RENDERED_CONTROLLER_SKILL_WORDS = 2_300;
 
-test("渲染后的 Controller SKILL.md 每宿主不超过 2,200 词与 15 KiB，且不剩占位符（I4：渲染预算）", () => {
+test("渲染后的 Controller SKILL.md 每宿主不超过 2,300 词与 15 KiB，且不剩占位符（I4：渲染预算）", () => {
   const source = SOURCES.find((entry) => entry.path === "skills/wakeflow-controller/SKILL.md");
   ok(source !== undefined, "Controller SKILL.md source missing");
   for (const [host, rendered] of [

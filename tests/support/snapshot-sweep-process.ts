@@ -38,18 +38,49 @@ export interface SnapshotSweepSeamCall {
   readonly index: number;
   readonly method: string;
   readonly paths: readonly string[];
+  /**
+   * 只在记掉电记录时有：与 `paths` 对齐，每个路径的父目录的 inode（快照集之外的路径、或父目录查不到时为
+   * null）。掉电盘面的生成按它认"这一步改的是哪个目录"（`snapshot-sweep-powerloss.ts`）。
+   */
+  readonly dirs?: readonly (number | null)[];
+}
+
+/** 子进程记下的一次目录同步：发生在第 `after` 次接缝调用之后，是那之后的第 `ordinal` 次，同步的是 `ino`。 */
+export interface SnapshotSweepDirectorySync {
+  readonly after: number;
+  readonly ordinal: number;
+  readonly ino: number;
 }
 
 export interface SnapshotSweepProcess {
   readonly client: Client;
   /** 关闭 stdin、等子进程退出并核对它正常退出，返回接缝日志（第 i 项对应快照目录 `<i>`）。 */
   close(): Promise<readonly SnapshotSweepSeamCall[]>;
+  /** 子进程退出之后读它记下的目录同步；没有让它记（`powerLoss` 为假）时为空。 */
+  directorySyncs(): readonly SnapshotSweepDirectorySync[];
 }
 
+function readJsonLines<Line>(file: string): readonly Line[] {
+  if (!existsSync(file)) return Object.freeze([]);
+  return Object.freeze(
+    readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => JSON.parse(line) as Line),
+  );
+}
+
+/**
+ * `powerLoss` 为真时子进程另记两样（掉电盘面的生成要用）：每次接缝调用的 `dirs`，以及每一次目录同步——
+ * 在文件句柄的原型上包一次 `sync`，同步完成之后看句柄是不是目录，是就往 `sync.jsonl` 记一行。`src/` 里每一次
+ * 同步最终都落到文件句柄的 `sync` 上，所以这一处钩子盖住全部目录同步；内容同步经同一个方法，句柄是普通
+ * 文件，不记。
+ */
 export async function startSnapshotSweepProcess(
   snapshotDirectory: string,
   set: Readonly<SnapshotSweepSet>,
   contentSync: boolean,
+  powerLoss = false,
 ): Promise<Readonly<SnapshotSweepProcess>> {
   const mutationModule = new URL(
     "../../src/foundation/filesystem/filesystem-mutation.js",
@@ -58,12 +89,13 @@ export async function startSnapshotSweepProcess(
   const copyModule = new URL("./snapshot-sweep-copy.js", import.meta.url);
   const entrypoint = new URL("../../src/entrypoints/codex-wakeflow-mcp.js", import.meta.url);
   const program = `
-    import { appendFileSync, writeFileSync } from "node:fs";
+    import { appendFileSync, lstatSync, writeFileSync } from "node:fs";
+    import { open } from "node:fs/promises";
     import path from "node:path";
     import { filesystemMutation } from ${JSON.stringify(mutationModule.href)};
     import { copySnapshotSweepSet } from ${JSON.stringify(copyModule.href)};
     import { runCodexWakeflowMcpStdio } from ${JSON.stringify(entrypoint.href)};
-    const [directory, workspace, ledger, contentSync] = process.argv.slice(1);
+    const [directory, workspace, ledger, contentSync, powerLoss] = process.argv.slice(1);
     const signals = [];
     for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.prependListener(signal, () => signals.push(signal));
     process.on("exit", (code) => {
@@ -75,19 +107,51 @@ export async function startSnapshotSweepProcess(
       if (value === workspace || value.startsWith(workspace + path.sep)) return "workspace:" + path.relative(workspace, value);
       return "outside:" + path.basename(value);
     };
-    const record = (key, method, paths) => {
+    const record = (key, method, paths, dirs) => {
       copySnapshotSweepSet({ workspace, ledger }, path.join(directory, String(key)));
-      appendFileSync(path.join(directory, "seam.jsonl"), JSON.stringify({ index: key, method, paths }) + "\\n");
+      const line = dirs === undefined ? { index: key, method, paths } : { index: key, method, paths, dirs };
+      appendFileSync(path.join(directory, "seam.jsonl"), JSON.stringify(line) + "\\n");
+    };
+    const parentInode = (value) => {
+      if (label(value).startsWith("outside:")) return null;
+      try {
+        return lstatSync(path.dirname(value)).ino;
+      } catch {
+        return null;
+      }
     };
     let index = 0;
     let ordinal = 0;
+    let directorySyncOrdinal = 0;
+    if (powerLoss === "true") {
+      const probe = await open(directory);
+      const prototype = Object.getPrototypeOf(probe);
+      await probe.close();
+      const sync = prototype.sync;
+      prototype.sync = async function (...syncArgs) {
+        // 序号在同步发出时取：同步完成之前若又过了一次接缝调用，它盖不住那一次。
+        const after = index;
+        const synced = await sync.apply(this, syncArgs);
+        const node = await this.stat();
+        if (node.isDirectory()) {
+          directorySyncOrdinal += 1;
+          appendFileSync(
+            path.join(directory, "sync.jsonl"),
+            JSON.stringify({ after, ordinal: directorySyncOrdinal, ino: node.ino }) + "\\n",
+          );
+        }
+        return synced;
+      };
+    }
     for (const method of Object.keys(filesystemMutation)) {
       const original = filesystemMutation[method];
       filesystemMutation[method] = async function (...args) {
         const result = await original.apply(this, args);
         index += 1;
         ordinal = 0;
-        record(index, method, args.map(label).filter((entry) => entry !== null));
+        directorySyncOrdinal = 0;
+        const named = args.filter((entry) => typeof entry === "string");
+        record(index, method, named.map(label), powerLoss === "true" ? named.map(parentInode) : undefined);
         const created = method === "openExclusive" && contentSync === "true" ? label(args[0]) : null;
         if (created !== null && !created.startsWith("outside:")) {
           const sync = result.sync;
@@ -114,6 +178,7 @@ export async function startSnapshotSweepProcess(
       set.workspace,
       set.ledger,
       String(contentSync),
+      String(powerLoss),
     ],
     stderr: "pipe",
   });
@@ -124,14 +189,10 @@ export async function startSnapshotSweepProcess(
     async close() {
       await client.close();
       assertNormalExit(path.join(snapshotDirectory, "exit.json"));
-      const log = path.join(snapshotDirectory, "seam.jsonl");
-      if (!existsSync(log)) return Object.freeze([]);
-      return Object.freeze(
-        readFileSync(log, "utf8")
-          .split("\n")
-          .filter((line) => line !== "")
-          .map((line) => JSON.parse(line) as SnapshotSweepSeamCall),
-      );
+      return readJsonLines<SnapshotSweepSeamCall>(path.join(snapshotDirectory, "seam.jsonl"));
+    },
+    directorySyncs() {
+      return readJsonLines<SnapshotSweepDirectorySync>(path.join(snapshotDirectory, "sync.jsonl"));
     },
   });
 }

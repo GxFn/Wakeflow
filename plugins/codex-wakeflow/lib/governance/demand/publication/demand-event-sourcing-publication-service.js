@@ -1,6 +1,7 @@
 import { types } from "node:util";
 import { parseWakeflowDurableIdOfKind, WakeflowDurableIdError, } from "../../../contracts/identity/wakeflow-durable-id.js";
 import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
+import { DurableResourceEntrySettlementError, settleObservedResourceEntry, } from "../../../foundation/filesystem/durable-resource-entry-settlement.js";
 import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -67,6 +68,31 @@ export async function initializeDemandEventSourcingPublication(root, options) {
     assertRoot(root);
     await initializePublicationStorage(root, parseSignal(options));
 }
+/**
+ * Demand 根已经在它的最终位置、这一次没有做改名时，先把那次改名落盘再往下做（1.4.1 段 1b，“沿用之前先
+ * 落盘”）：上一次可能死在 `stages/<id> → current/<id>` 的改名之后、同步两个父目录之前，不留别的痕迹；
+ * 接下来要认领需求包、删掉发布标记，不补这两次同步，掉电之后根可以退回暂存目录，而标记已经没有了。
+ * 先确认旧名字不在（同步 `stages/`），再确认新名字在（同步 `current/`），与改名自己的同步同一个先后。
+ */
+async function settleReusedDemandRoot(root, transaction, finalNode, signal) {
+    const options = signal === undefined ? {} : { signal };
+    try {
+        await settleObservedResourceEntry(root, transaction.stageRef, "absent", options);
+        await settleObservedResourceEntry(root, transaction.finalRootRef, "present", {
+            expectedNode: finalNode,
+            ...options,
+        });
+    }
+    catch (error) {
+        if (!(error instanceof DurableResourceEntrySettlementError))
+            throw error;
+        if (error.reason === "aborted")
+            fail("aborted", "$signal");
+        if (error.reason === "observation-changed")
+            fail("cas-mismatch", "$demandRoot");
+        fail("recovery-required", "$demandRoot");
+    }
+}
 async function applyPublication(root, ledgerStore, transaction, signal) {
     const before = await inspectPackageForDemandPublication(root, transaction, signal);
     const alreadyClaimed = exactClaimedPackage(before, transaction);
@@ -85,6 +111,9 @@ async function applyPublication(root, ledgerStore, transaction, signal) {
         stageNode = await publicationNodeOrNull(root, transaction.stageRef);
         if (finalNode === null || stageNode !== null)
             fail("conflict", "$publication");
+    }
+    else {
+        await settleReusedDemandRoot(root, transaction, finalNode, signal);
     }
     assertPrivatePublicationNode(finalNode, "directory", "$demandRoot");
     const markerRef = demandFinalPublicationMarkerRef(transaction.demandId);
@@ -132,9 +161,9 @@ function mapLockError(error) {
     }
     fail("recovery-required", "$lock");
 }
-async function runLocked(root, transaction, signal, operation) {
+async function runLocked(root, demandId, signal, operation) {
     try {
-        return await withRootedExclusiveFileLock(root, demandPublicationLockRef(transaction.demandId), operation, {
+        return await withRootedExclusiveFileLock(root, demandPublicationLockRef(demandId), operation, {
             acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
             // Demand 发布锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L6）。
             durability: "content-only",
@@ -243,7 +272,7 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
     try {
         await initializePublicationStorage(root, signal);
         await retireInactivePublicationLock(root, transaction.demandId, signal);
-        return await runLocked(root, transaction, signal, async () => {
+        return await runLocked(root, transaction.demandId, signal, async () => {
             const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
             if (idempotent !== null)
                 return idempotent;
@@ -323,6 +352,17 @@ async function readPendingPublication(root, demandId, signal, settleStages) {
     }
     return null;
 }
+/** 标记可能在的两个目录（最终根与暂存根里的 `transactions/`）有没有哪一个在：在才有暂存可回收。 */
+async function publicationResidueMayExist(root, demandId) {
+    for (const ref of [
+        demandFinalPublicationMarkerRef(demandId),
+        demandStagePublicationMarkerRef(demandId),
+    ]) {
+        if ((await publicationNodeOrNull(root, parentOf(ref))) !== null)
+            return true;
+    }
+    return false;
+}
 /** 只读：这个 Demand 有没有一次还没收尾的创建；有就交回它的事务（调用方据此沿用原来的时间）。 */
 export async function readPendingDemandPublication(root, demandIdValue, options) {
     assertRoot(root);
@@ -359,19 +399,24 @@ export async function recoverDemandPublication(root, ledgerStore, demandIdValue,
     }
     let transaction = null;
     try {
-        const stored = await readPendingPublication(root, demandId, signal, true);
-        if (stored === null)
+        // 锁外只读：回收标记自己的暂存要在发布锁里做（那把锁的持有者才可以动这个事务的文件）。没有标记、
+        // 也没有可能留着标记暂存的 `transactions/` 目录时，没有可恢复的创建，什么都不建、不拿锁。
+        const observed = await readPendingPublication(root, demandId, signal, false);
+        if (observed === null && !(await publicationResidueMayExist(root, demandId))) {
             fail("not-found", "$transaction");
-        transaction = stored.transaction;
+        }
+        transaction = observed?.transaction ?? null;
         await initializePublicationStorage(root, signal);
         await retireInactivePublicationLock(root, demandId, signal);
-        return await runLocked(root, stored.transaction, signal, async () => {
+        return await runLocked(root, demandId, signal, async () => {
             const fresh = await readPendingPublication(root, demandId, signal, true);
             if (fresh === null)
                 fail("not-found", "$transaction");
-            if (!samePublicationTransaction(fresh.transaction, stored.transaction)) {
+            if (observed !== null &&
+                !samePublicationTransaction(fresh.transaction, observed.transaction)) {
                 fail("conflict", "$transaction");
             }
+            transaction = fresh.transaction;
             return applyPublication(root, ledgerStore, fresh.transaction, signal);
         });
     }

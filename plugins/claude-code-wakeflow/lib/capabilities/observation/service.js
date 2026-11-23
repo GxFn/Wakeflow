@@ -5,6 +5,7 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
+import { demandRecoveryReason, demandRecoveryTool, inspectDemandRecoveryRoute, } from "../../governance/demand/demand-interruption.js";
 import { closeDemandOperationRoot, openDemandOperationRoot, } from "../../governance/demand/demand-operation-authority-context.js";
 import { demandWindowIds, evaluateVerifyGates, } from "../../governance/demand/demand-verify-gates.js";
 import { DemandEventSourcingRepository } from "../../governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -17,7 +18,7 @@ import { deriveOverallStatus, observeWorkspace, orphanWorkClaims, selectObservat
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";
-import { deriveNextProjection } from "../../kernel/next-projection.js";
+import { DEMAND_RECOVERY_FRONTIER, deriveNextProjection, } from "../../kernel/next-projection.js";
 import { readRequirementClaimState, supplementAttachTarget, } from "../../kernel/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import { configuredWakeflowWorkspaceHostTransport, selectWakeflowWorkspaceHostResourceProfile, } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
@@ -226,6 +227,14 @@ async function openContext(root, hostFacade, options) {
 function maintenancePending(maintenance) {
     return maintenance.status === "observed" && maintenance.protocol !== "idle";
 }
+/**
+ * 维护的闩被占着，或者留着维护的事务文件：这两种协议状态下任何变更（含 Demand 的 recover）都会被操作
+ * 范围的 `assertNoMaintenanceReservation` 挡下，所以 verify 的下一步不指向 Demand 的恢复。
+ */
+function maintenanceReservesWorkspace(maintenance) {
+    return (maintenance.status === "observed" &&
+        (maintenance.protocol === "busy" || maintenance.protocol === "recovery-required"));
+}
 function overallOf(context) {
     if (context.detached)
         return "detached";
@@ -288,8 +297,92 @@ function boardView(observation) {
         skipped: board?.skipped ?? 0,
     };
 }
-function demandView(demand) {
-    const next = demand.route === null ? null : deriveNextProjection(demand.route);
+const NO_DEMAND_RECOVERIES = new Map();
+/** 生命周期日志目录里每一份日志的 Demand；目录不在是空，读不出为 null。 */
+async function journalDemandIds(context) {
+    try {
+        const listing = await readStableResourceDirectory(context.root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, {
+            maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
+            ...signalOptions(context.options.signal),
+        });
+        return listing.entries
+            .map((entry) => JOURNAL_FILE_PATTERN.exec(entry.name)?.[1])
+            .filter((demandId) => demandId !== undefined)
+            .sort();
+    }
+    catch (error) {
+        if (error instanceof StableDirectoryReadError && error.reason === "not-found")
+            return [];
+        failIfAborted(error);
+        return null;
+    }
+}
+/**
+ * 哪些 Demand 停在被打断的事务上（1.4.1 段 1b）。判断在治理层的 `inspectDemandRecoveryRoute`，与生命
+ * 周期命令的拒绝用的是同一个；这里只决定问谁：读不出的活动根都问；读得出的根只在名下有日志时问（根能
+ * 打开就没有发布标记、证据事务与挡路的追加候选）；不在活动集合里而日志还在的按根不在问。每次调用多读
+ * 一次日志目录，其余的读只发生在有日志或有读不出的根的时候。
+ */
+async function demandRecoveries(context, journals) {
+    const domain = context.observation.demands;
+    if (context.detached || domain.status !== "observed")
+        return NO_DEMAND_RECOVERIES;
+    const demands = domain.value ?? [];
+    const journalIds = new Set(journals ?? []);
+    const recoveries = new Map();
+    const ask = async (demandId, reading, streamRevision) => {
+        const route = await inspectDemandRecoveryRoute(context.root, context.ledgerRoot, demandId, reading, signalOptions(context.options.signal));
+        if (route === null)
+            return;
+        recoveries.set(demandId, Object.freeze({
+            demandId,
+            tool: demandRecoveryTool(route),
+            reason: demandRecoveryReason(route),
+            streamRevision,
+        }));
+    };
+    for (const demand of demands) {
+        if (demand.loaded === null) {
+            await ask(demand.demandId, { root: "unloadable" }, null);
+        }
+        else if (journalIds.has(demand.demandId)) {
+            await ask(demand.demandId, { root: "loads", lifecycle: demand.loaded.aggregate.state.lifecycle }, demand.loaded.aggregate.streamRevision);
+        }
+    }
+    const active = new Set(demands.map((demand) => demand.demandId));
+    for (const demandId of journalIds) {
+        if (!active.has(demandId))
+            await ask(demandId, { root: "absent" }, null);
+    }
+    return recoveries;
+}
+function recoveryActions(recoveries) {
+    return [...recoveries.values()]
+        .map((recovery) => ({ demandId: recovery.demandId, tool: recovery.tool }))
+        .sort((left, right) => left.demandId.localeCompare(right.demandId));
+}
+/** status 带 demandId 时的下一步：这个 Demand 的恢复出口；根读得出才带 subject。 */
+function recoveryNext(recovery) {
+    return Object.freeze({
+        frontier: DEMAND_RECOVERY_FRONTIER,
+        owner: "controller",
+        suggestedTool: recovery.tool,
+        blockers: Object.freeze([recovery.reason]),
+        ...(recovery.streamRevision === null
+            ? {}
+            : {
+                subject: Object.freeze({
+                    demandId: recovery.demandId,
+                    streamRevision: recovery.streamRevision,
+                }),
+            }),
+    });
+}
+function demandView(demand, recovery) {
+    const routed = demand.route === null ? null : deriveNextProjection(demand.route);
+    const next = recovery === undefined
+        ? routed
+        : { frontier: DEMAND_RECOVERY_FRONTIER, owner: "controller", suggestedTool: recovery.tool };
     return {
         demandId: demand.demandId,
         status: demand.status,
@@ -741,7 +834,7 @@ function projectionView(projection) {
         })),
     };
 }
-function nextActionInput(context, runtime) {
+function nextActionInput(context, runtime, recoveries) {
     const { observation, snapshot } = context;
     const overall = overallOf(context);
     const bound = new Set(observation.bindings.flatMap((host) => host.bindings.map((binding) => binding.windowId)));
@@ -794,6 +887,7 @@ function nextActionInput(context, runtime) {
             })
             : [],
         demands,
+        recoveries: recoveryActions(recoveries),
         pendingPackages: (observation.board.value?.states ?? [])
             .filter((state) => state.status === "pending")
             .map((state) => {
@@ -805,9 +899,28 @@ function nextActionInput(context, runtime) {
         }),
     });
 }
-async function routeSection(context, demandId) {
+/** 已归档 Demand 的下一步：根已退役而日志还在时先把被打断的事务收尾，再谈续接。 */
+function archivedNext(recovery, continuable) {
+    if (recovery !== undefined)
+        return recoveryNext(recovery);
+    return continuable
+        ? Object.freeze({
+            frontier: "demand-continuation",
+            owner: "controller",
+            suggestedTool: "wakeflow_continue_demand",
+            blockers: Object.freeze([]),
+        })
+        : Object.freeze({
+            frontier: null,
+            owner: "none",
+            suggestedTool: null,
+            blockers: Object.freeze([]),
+        });
+}
+async function routeSection(context, demandId, recoveries) {
     if (demandId === undefined)
         return Object.freeze({ route: null, archive: null, next: null });
+    const recovery = recoveries.get(demandId);
     // demands 域读不出时"不在活动集合里"不是事实：别让一个还活着的 Demand 显示成 not-found。
     const domain = context.observation.demands;
     if (domain.status !== "observed") {
@@ -815,6 +928,10 @@ async function routeSection(context, demandId) {
     }
     const active = (domain.value ?? []).find((demand) => demand.demandId === demandId);
     if (active !== undefined) {
+        // 停在被打断的事务上：读不出的根不再只是拒绝，下一步指向接手的 recover（有路线时路线照给）。
+        if (recovery !== undefined) {
+            return Object.freeze({ route: active.route, archive: null, next: recoveryNext(recovery) });
+        }
         if (active.route === null) {
             fail("precondition-failed", `demand-${active.issue ?? "unavailable"}`, "$request.demandId");
         }
@@ -851,19 +968,7 @@ async function routeSection(context, demandId) {
             verify: archive.verify,
             acceptedTargets: readback.acceptedTargets,
         },
-        next: continuable
-            ? Object.freeze({
-                frontier: "demand-continuation",
-                owner: "controller",
-                suggestedTool: "wakeflow_continue_demand",
-                blockers: Object.freeze([]),
-            })
-            : Object.freeze({
-                frontier: null,
-                owner: "none",
-                suggestedTool: null,
-                blockers: Object.freeze([]),
-            }),
+        next: archivedNext(recovery, continuable),
     });
 }
 /** 每个域的观察状态都要看得见（§13.94 D1）：空列表与"读不出"必须能分辨，而不是只有 overall 暗示。 */
@@ -916,15 +1021,20 @@ async function assembleStatus(context, request) {
     const { observation, snapshot } = context;
     const runtime = readRuntime(context);
     // 终态没有下一步动作：工作区已停用，next 无 owner（ADR-0024）。
-    const actions = context.detached ? [] : deriveNextActions(nextActionInput(context, runtime));
-    const section = await routeSection(context, request.demandId);
+    const recoveries = context.detached
+        ? NO_DEMAND_RECOVERIES
+        : await demandRecoveries(context, await journalDemandIds(context));
+    const actions = context.detached
+        ? []
+        : deriveNextActions(nextActionInput(context, runtime, recoveries));
+    const section = await routeSection(context, request.demandId, recoveries);
     const claims = claimViews(observation);
     const repositories = repositoryViews(observation);
     const unmergedAccepted = unmergedAcceptedViews(observation);
     // 每个数组都有 wire 上限：越界的结果会被整份拒绝，所以先确定性排序再截断并报出略去的条数。
     const demands = capStatusList([...(observation.demands.value ?? [])]
         .sort((left, right) => left.demandId.localeCompare(right.demandId))
-        .map(demandView), STATUS_LIST_MAXIMUMS.demands);
+        .map((demand) => demandView(demand, recoveries.get(demand.demandId))), STATUS_LIST_MAXIMUMS.demands);
     const everyWindow = windowViews(context);
     const summary = request.detail === "summary";
     const listedWindows = summary ? everyWindow.filter(windowNeedsHandling) : everyWindow;
@@ -1099,23 +1209,14 @@ function primaryCheckoutsOf(repositories) {
     return unobserved ? null : true;
 }
 /** 非活动 Demand 的生命周期日志；目录缺失为空，读不出为 null（门报 unavailable）。 */
-async function strayJournals(context, activeDemandIds) {
-    try {
-        const listing = await readStableResourceDirectory(context.root, DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, {
-            maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
-            ...signalOptions(context.options.signal),
-        });
-        return listing.entries
-            .map((entry) => JOURNAL_FILE_PATTERN.exec(entry.name)?.[1])
-            .filter((demandId) => demandId !== undefined && !activeDemandIds.has(demandId))
-            .sort();
-    }
-    catch (error) {
-        if (error instanceof StableDirectoryReadError && error.reason === "not-found")
-            return [];
-        failIfAborted(error);
+/**
+ * verify 的"还留着的日志"：Demand 不在活动集合里的，加上活动 Demand 名下点得出恢复出口的。活动 Demand
+ * 名下点不出出口的日志（终态事件没有提交的旧意图）不算：下一次完成、取消或续接会改写它。
+ */
+function pendingJournals(journals, activeDemandIds, recoveries) {
+    if (journals === null)
         return null;
-    }
+    return journals.filter((demandId) => !activeDemandIds.has(demandId) || recoveries.has(demandId));
 }
 const UNREADABLE_WRITER = Object.freeze({
     status: "unavailable",
@@ -1186,7 +1287,7 @@ function gateStatus(report, name) {
     const found = report?.gates.find((entry) => entry.gate === name);
     return found?.status ?? "unavailable";
 }
-async function gateFacts(context, readings) {
+async function gateFacts(context, readings, journals, recoveries) {
     const { observation, snapshot } = context;
     const demands = observation.demands.value ?? [];
     const activeIds = new Set(demands.map((demand) => demand.demandId));
@@ -1245,7 +1346,8 @@ async function gateFacts(context, readings) {
                 writer: reading.writer,
             };
         }),
-        strayJournals: await strayJournals(context, activeIds),
+        pendingJournals: pendingJournals(journals, activeIds, recoveries),
+        recoveries: recoveryActions(recoveries),
         maintenanceWriter: await maintenanceWriterFacts(context),
         claims: (observation.claims.value?.claims ?? []).map((claim) => ({
             windowId: claim.windowId,
@@ -1344,14 +1446,20 @@ async function assembleVerify(context, request) {
     const readings = new Map();
     for (const demand of demands)
         readings.set(demand.demandId, await readDemandForVerify(context, demand));
+    const journals = context.detached ? [] : await journalDemandIds(context);
+    const recoveries = await demandRecoveries(context, journals);
     // 终态只报一门且通过（ADR-0024）：已停用的工作区不再评布局、投影与宿主资产。
     const gates = context.detached
         ? detachedWorkspaceGates(WAKEFLOW_DETACHED_CONFIG_FILE_REF, context.snapshot.configDigest)
-        : deriveWorkspaceGates(await gateFacts(context, readings));
+        : deriveWorkspaceGates(await gateFacts(context, readings, journals, recoveries));
     const { ok, summary } = summarizeGates(gates);
     const demandSection = request.demandId === undefined
         ? null
         : await verifyDemandSection(context, request.demandId, readings);
+    // 维护占着工作区时不点 Demand 的恢复：它会被维护的保留挡下，先做的是维护。
+    const namedRecoveries = maintenanceReservesWorkspace(context.maintenance)
+        ? []
+        : recoveryActions(recoveries);
     return admitVerifyResult({
         kind: "WakeflowVerification",
         schemaVersion: WAKEFLOW_OBSERVATION_PUBLIC_SCHEMA_VERSION,
@@ -1366,7 +1474,7 @@ async function assembleVerify(context, request) {
         observationDigest: computeGatesDigest(gates),
         next: context.detached
             ? DETACHED_WORKSPACE_NEXT
-            : verifyNext(gates, artifactServerRefreshOwnerOf(context)),
+            : verifyNext(gates, artifactServerRefreshOwnerOf(context), namedRecoveries),
     });
 }
 /**

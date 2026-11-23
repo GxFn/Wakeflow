@@ -1,3 +1,4 @@
+import { DEMAND_LIFECYCLE_JOURNAL_KIND, DEMAND_LIFECYCLE_JOURNAL_MAXIMUM_BYTES, inspectDemandRecoveryRoute, } from "../../governance/demand/demand-interruption.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
 import { assertNoActiveDemand, readDemandPodId, } from "../../governance/demand/publication/demand-active-guard.js";
 import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
@@ -8,8 +9,8 @@ import { parseJsonValue } from "../../foundation/data/json-value.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { createFileAtomically, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { materializeDirectoryPath } from "../../foundation/filesystem/durable-directory-materialization.js";
+import { settleObservedResourceEntry } from "../../foundation/filesystem/durable-resource-entry-settlement.js";
 import { unlinkRegularFileExactly } from "../../foundation/filesystem/exact-regular-file-unlink.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
@@ -23,10 +24,11 @@ import { refreshLedgerReadingPagesQuietly } from "../../governance/observation/l
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, demandArchiveRef, demandLifecycleJournalRef, } from "../../kernel/layout.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
+import { DEMAND_RECOVERY_TOOLS } from "../../kernel/next-projection.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { archiveRequirementClaim, claimRequirementPackage, readRequirementClaimState, reclaimRequirementPackage, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
-import { createArchiveManifest, findLatestDemandArchive, manifestDigest, manifestPath, mapFoundationError, readArchivePayload, readDemandRootSnapshot, readPayloadFiles, restoreDemandRoot, retireDemandRoot, sealDemandArchive, payloadTexts, } from "./archive.js";
-import { closeSliceContext, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, publicationEnvelope, releaseDemandHandle, signalOptions, } from "./context.js";
+import { createArchiveManifest, findLatestDemandArchive, manifestDigest, manifestPath, mapFoundationError, readArchivePayload, readDemandRootSnapshot, readPayloadFiles, restoreDemandRoot, retireDemandRoot, sealDemandArchive, settleSealedArchive, payloadTexts, } from "./archive.js";
+import { closeSliceContext, demandRootExists, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, publicationEnvelope, releaseDemandHandle, signalOptions, } from "./context.js";
 import { admitDemandCancellationResult, admitDemandCompletionResult, admitDemandContinuationResult, parseDemandCancellationRequest, parseDemandCompletionRequest, parseDemandContinuationRequest, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
 import { cancellationReasonBlockers, computePayloadTreeDigest, demandWindowIds, deriveCancellationWithdrawalReason, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, textPrivacyBlockers, } from "./decide.js";
 import { activeDemandOnPod, loadPackage } from "./service.js";
@@ -39,8 +41,8 @@ import { evaluateVerifyGates } from "./verify.js";
  */
 const JOURNAL_FILE_MODE = 0o600;
 const JOURNAL_DIRECTORY_MODE = 0o700;
-const JOURNAL_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$journal.maximumBytes");
-const JOURNAL_KIND = "WakeflowDemandLifecycleJournal";
+const JOURNAL_MAXIMUM_BYTES = DEMAND_LIFECYCLE_JOURNAL_MAXIMUM_BYTES;
+const JOURNAL_KIND = DEMAND_LIFECYCLE_JOURNAL_KIND;
 function planDigest(plan) {
     return computeCanonicalJsonSha256Digest(parseJsonValue(plan, "$plan"));
 }
@@ -67,6 +69,23 @@ function packageReceipt(source, lineage) {
         revision: source.state.revision,
         stateDigest: source.digest,
     });
+}
+/**
+ * 认领状态已经是这一步要的样子、这一次不必再写时，先把这个名字落盘再沿用（1.4.1 段 1b，“沿用之前先
+ * 落盘”）：上一次替换可能死在改名之后、同步 `board/` 之前，不留别的痕迹；调用方接着删活动根或删日志，
+ * 不补这一次同步，掉电之后认领状态可以退回旧的一份，而能把它重做一遍的日志已经没有了。
+ */
+async function settleReusedClaimState(context, source) {
+    try {
+        await settleObservedResourceEntry(context.root, source.read.resourcePath, "present", {
+            expectedNode: source.read.node,
+            ...signalOptions(context.signal),
+            errorPath: "$board",
+        });
+    }
+    catch (error) {
+        mapFoundationError(error, "claim-settle", "$board");
+    }
 }
 // ---- 步骤日志 ------------------------------------------------------------
 async function readJournal(context, demandId) {
@@ -245,17 +264,69 @@ function completionOf(route) {
         testingMode: route.nextStage.testingClosure.mode,
     });
 }
+/**
+ * 这个 Demand 停在一个被打断的事务上时，生命周期命令不按自己的规则回答，改为点名接手的出口（1.4.1 段
+ * 1b）：`details.tool` 是带 `mode: "recover"` 去调的工具，`details` 里的另一项就是那次调用要带的参数，
+ * 名字照那个工具的请求来——创建、完成、取消、续接是 `operationId`，证据工具的 recover 只认 `demandId`。
+ * 追加候选归工作区维护（reconcile），不带标识。四个都不可原样重试。判断在 `inspectDemandRecoveryRoute`，
+ * 这里只把回答写成拒绝；只在本来就要拒绝或挡住的路径上调用，recover 自己的路径不经过这里，所以一个
+ * recover 不会点名自己。
+ */
+async function failIfDemandInterrupted(context, demandId, reading) {
+    const route = await inspectDemandRecoveryRoute(context.root, context.ledgerRoot, demandId, reading, signalOptions(context.signal));
+    if (route === null)
+        return;
+    if (route.kind === "publication") {
+        fail("recovery-required", "demand-publication", "$demandRoot", {
+            details: { tool: DEMAND_RECOVERY_TOOLS.publication, operationId: demandId },
+        });
+    }
+    if (route.kind === "evidence") {
+        fail("recovery-required", "evidence-publication-pending", "$demandRoot", {
+            details: { tool: DEMAND_RECOVERY_TOOLS.evidence, demandId },
+        });
+    }
+    if (route.kind === "append-candidates") {
+        fail("recovery-required", "append-candidates-pending", "$demandRoot", {
+            details: { tool: DEMAND_RECOVERY_TOOLS["append-candidates"] },
+        });
+    }
+    fail("recovery-required", "lifecycle-journal-pending", "$journal", {
+        details: { tool: DEMAND_RECOVERY_TOOLS[route.action], operationId: demandId },
+    });
+}
+/**
+ * 计划阶段打开 Demand 根：根在但打不开（`demand-authority-…`）时先看它是不是停在被打断的事务上，是就
+ * 点名出口；不是，原来的拒绝照旧。根自己不安全（符号链接、不是目录，`demand-root-…`）不替换。
+ */
+async function openDemandHandleOrSignpost(context, demandId) {
+    try {
+        return await openDemandHandle(context, demandId);
+    }
+    catch (error) {
+        if (error instanceof WakeflowError &&
+            error.code === "precondition-failed" &&
+            error.reason.startsWith("demand-authority-")) {
+            await failIfDemandInterrupted(context, demandId, { root: "unloadable" });
+        }
+        throw error;
+    }
+}
 async function terminalBlockedWithoutRoot(context, demandId) {
+    await failIfDemandInterrupted(context, demandId, { root: "absent" });
     const archive = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
     return blockedPlan(archive === null ? ["demand-root-absent"] : [`already-archived:${archive.manifest.outcome}`]);
 }
 async function planTerminal(context, input, facts) {
     const demandId = parseDemandId(input.demandId);
-    const handle = await openDemandHandle(context, demandId);
+    const handle = await openDemandHandleOrSignpost(context, demandId);
     if (handle === null)
         return terminalBlockedWithoutRoot(context, demandId);
     const { loaded } = handle;
     const state = loaded.aggregate.state;
+    if (state.lifecycle !== "active") {
+        await failIfDemandInterrupted(context, demandId, { root: "loads", lifecycle: state.lifecycle });
+    }
     const route = await postAcceptanceStage(handle, context.signal);
     const claim = await readClaim(context, loaded.identity.source.requirementId);
     const supplements = await Promise.all((state.supplements ?? []).map(async (lineage) => Object.freeze({ lineage, claim: await readClaim(context, lineage.requirementId) })));
@@ -302,6 +373,11 @@ async function planTerminal(context, input, facts) {
     });
     // 只有 complete 依赖接受后路由；cancel 在路由不可用时照常进行（路由不可用对 complete 已是阻塞项）。
     if (blockers.length > 0 || claim === null || (input.action === "complete" && route === null)) {
+        // 根是 active 而命令被挡住：续接的事件已经追加、认领还没回来时就是这样，出口是 continue 的 recover。
+        // 终态的根在上面已经问过一次。
+        if (state.lifecycle === "active") {
+            await failIfDemandInterrupted(context, demandId, { root: "loads", lifecycle: "active" });
+        }
         return blockedPlan(blockers);
     }
     const ids = deriveLifecycleIds(demandId, input.action, loaded.aggregate.streamRevision);
@@ -528,8 +604,10 @@ async function settlePackage(context, plan, member) {
     const settled = plan.action === "complete"
         ? state.status === "archived" && state.archive?.demandId === plan.demandId
         : state.status === "withdrawn";
-    if (settled)
+    if (settled) {
+        await settleReusedClaimState(context, source);
         return packageReceipt(source, lineage);
+    }
     if (state.status !== "claimed" || state.claim?.demandId !== plan.demandId) {
         fail("precondition-failed", `package-claim:${state.status}`, "$board");
     }
@@ -559,17 +637,47 @@ async function releaseClaims(context, plan) {
     }
     return released;
 }
-async function applyTerminal(context, plan, verify, disposition) {
-    const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
+/** 在这个 Demand 所属 pod 的变更锁内执行；配置在拿到锁之后复核。 */
+async function withDemandPodMutation(context, demandId, operation) {
+    const podId = await readDemandPodId(context.root, demandId, context.signal);
     if (podId === null)
         fail("precondition-failed", "pod-unknown", "$demandRoot");
     return withPodMutation(context.root, podId, async () => {
         await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
-        return applyTerminalLocked(context, plan, verify, disposition);
+        return operation(podId);
     }, context.signal);
+}
+/** 这份计划是不是已经记在日志里：是的话它已经被接受过一次，重入照做。 */
+async function journalHoldsPlan(context, demandId, digest) {
+    return (await readJournal(context, demandId))?.planDigest === digest;
+}
+/** 锁外算的计划进锁之后已经过期：让调用方重新读 status，从它点名的那一步接着做。 */
+function failPlanStale() {
+    fail("concurrency-conflict", "stream-advanced", "$demandRoot", { retryable: true });
+}
+/**
+ * 应用带进 pod 锁的计划是在锁外算的（1.4.1 段 1b；与 recover 在锁内读日志是同一件事的另一半）。等锁期间
+ * 别的调用可能已经完成、取消或续接了这个 Demand；照旧计划做下去，会把那份日志改写成这一份，而“绑定本
+ * 计划的归档已封”认的是按动作与修订号派生的提交标识，认得出上一轮完成封的归档，于是把续接之后还活着
+ * 的根当残根删掉。所以写日志之前核对一次：日志里已经是这份计划（上一次应用没做完的重入）就照做；否则
+ * 根必须还打得开、仍是 active，流的修订号与状态摘要就是计划里的那两个。
+ */
+async function assertTerminalPlanCurrent(context, plan) {
+    if (await journalHoldsPlan(context, plan.demandId, planDigest(plan)))
+        return;
+    const handle = await openDemandHandle(context, parseDemandId(plan.demandId), { reload: true });
+    const aggregate = handle?.loaded.aggregate;
+    if (aggregate === undefined ||
+        aggregate.state.lifecycle !== "active" ||
+        aggregate.streamRevision !== plan.expectedStreamRevision ||
+        aggregate.stateDigest !== plan.expectedStateDigest) {
+        failPlanStale();
+    }
 }
 async function applyTerminalLocked(context, plan, verify, disposition) {
     const demandId = parseDemandId(plan.demandId);
+    if (disposition === "apply")
+        await assertTerminalPlanCurrent(context, plan);
     await writeJournal(context, {
         kind: JOURNAL_KIND,
         schemaVersion: 1,
@@ -610,12 +718,14 @@ async function applyTerminalLocked(context, plan, verify, disposition) {
 }
 /**
  * 步骤 1 与 2：终态事件与归档包。绑定本计划的归档已封时两者都从清单取回，不再打开活动根（W19）；
- * 根已删而归档在，同样取清单；否则追加（或找回）终态事件并封档。
+ * 根已删而归档在，同样取清单；否则追加（或找回）终态事件并封档。沿用已经在盘面上的归档之前先把它的
+ * 名字落盘（`settleSealedArchive`）：后面的步骤删活动根、删日志，都以归档还在为前提。
  */
 async function settleTerminalAndArchive(context, plan, verify) {
     const demandId = parseDemandId(plan.demandId);
     const sealed = await sealedArchiveOfPlan(context, plan);
     if (sealed !== null) {
+        await settleSealedArchive(context.ledgerRoot, plan.demandId, sealed.archiveRef, context.signal);
         return Object.freeze({
             terminal: sealed.manifest.terminalEvent,
             archive: archiveReceipt(sealed.archiveRef, sealed.manifest),
@@ -628,6 +738,7 @@ async function settleTerminalAndArchive(context, plan, verify) {
         const located = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
         if (located === null)
             fail("recovery-required", "demand-root-and-archive-absent", "$demandRoot");
+        await settleSealedArchive(context.ledgerRoot, plan.demandId, located.archiveRef, context.signal);
         return Object.freeze({
             terminal: located.manifest.terminalEvent,
             archive: archiveReceipt(located.archiveRef, located.manifest),
@@ -665,16 +776,31 @@ async function sealedArchiveOfPlan(context, plan) {
         manifest.terminalEvent.commitId === plan.commitId;
     return bound ? located : null;
 }
-/** recover：有日志按日志重放；无日志而归档已在，说明事务已经收尾。 */
-async function recoverTerminal(context, action, operationId) {
-    const demandId = parseDemandId(operationId, "$request.operationId");
-    const journal = await readJournal(context, demandId);
-    if (journal !== null) {
+/**
+ * recover 按日志重放：重放哪一份，以拿到 pod 锁之后读到的为准（1.4.1 段 1b）。锁外读到的只是“有日志”
+ * 这条线索：等锁期间别的调用可能已经把那一份收尾并删掉，甚至已经续接了这个 Demand；拿着锁外的旧副本
+ * 重放，会把日志重新写回去、把续接之后还活着的根当残根删掉。锁内日志已不在时返回 null，由调用方按
+ * 无日志的情形回答。
+ */
+async function replayTerminalJournal(context, action, demandId) {
+    return withDemandPodMutation(context, demandId, async () => {
+        const journal = await readJournal(context, demandId);
+        if (journal === null)
+            return null;
         if (journal.plan.action !== action)
             fail("precondition-failed", `journal-action:${journal.plan.action}`, "$journal");
         if (journal.verify === null)
             fail("recovery-required", "journal-verify-missing", "$journal");
-        return applyTerminal(context, journal.plan, journal.verify, "recover");
+        return applyTerminalLocked(context, journal.plan, journal.verify, "recover");
+    });
+}
+/** recover：有日志按日志重放；无日志而归档已在，说明事务已经收尾。 */
+async function recoverTerminal(context, action, operationId) {
+    const demandId = parseDemandId(operationId, "$request.operationId");
+    if ((await readJournal(context, demandId)) !== null) {
+        const replayed = await replayTerminalJournal(context, action, demandId);
+        if (replayed !== null)
+            return replayed;
     }
     const handle = await openDemandHandle(context, demandId);
     if (handle !== null)
@@ -756,7 +882,7 @@ async function executeTerminal(action, tool, parse, admit, value, options) {
             if (facts.verify === null)
                 fail("unexpected", "verify-missing", "$plan");
             const verify = facts.verify;
-            return afterMutationRefresh(context.root, context.signal, () => applyTerminal(context, plan, verify, "apply"));
+            return afterMutationRefresh(context.root, context.signal, () => withDemandPodMutation(context, plan.demandId, () => applyTerminalLocked(context, plan, verify, "apply")));
         },
         recover: (context, operationId) => recoverTerminal(context, action, operationId),
         next: async (context, phase) => phase.mode === "preview"
@@ -786,7 +912,15 @@ function configuredPod(context, podId) {
 }
 async function planContinue(context, input) {
     const demandId = parseDemandId(input.demandId);
-    const handle = await openDemandHandle(context, demandId);
+    const handle = await openDemandHandleOrSignpost(context, demandId);
+    // 根在时续接本来就被挡住；它若停在被打断的事务上，点名出口。根不在时不问：续接可以接手“根已退役、
+    // 终态日志还在”的状态，自己改写那份日志。
+    if (handle !== null) {
+        await failIfDemandInterrupted(context, demandId, {
+            root: "loads",
+            lifecycle: handle.loaded.aggregate.state.lifecycle,
+        });
+    }
     const archive = await findLatestDemandArchive(context.ledgerRoot, demandId, context.signal);
     const claim = archive === null ? null : await readClaim(context, archive.manifest.requirementId);
     const requested = input.continuation.requirementId ?? null;
@@ -885,8 +1019,14 @@ function plannedAttached(attached) {
 }
 async function planDecision(context, input) {
     const demandId = parseDemandId(input.demandId);
-    const handle = await openDemandHandle(context, demandId);
+    const handle = await openDemandHandleOrSignpost(context, demandId);
     const state = handle?.loaded.aggregate.state;
+    if (state === undefined) {
+        await failIfDemandInterrupted(context, demandId, { root: "absent" });
+    }
+    else if (state.lifecycle !== "active") {
+        await failIfDemandInterrupted(context, demandId, { root: "loads", lifecycle: state.lifecycle });
+    }
     const blockers = deriveDecisionBlockers({
         rootPresent: handle !== null,
         lifecycle: state?.lifecycle ?? null,
@@ -931,6 +1071,7 @@ async function claimPackageForDemand(context, plan, member, transition) {
         fail("recovery-required", "claim-state-vanished", "$board");
     const lineage = { recordRef: member.recordRef, recordDigest: member.recordDigest };
     if (source.state.status === "claimed" && source.state.claim?.demandId === plan.demandId) {
+        await settleReusedClaimState(context, source);
         return packageReceipt(source, lineage);
     }
     const next = transition === "reclaim"
@@ -942,18 +1083,33 @@ async function claimPackageForDemand(context, plan, member, transition) {
         fail("recovery-required", "claim-state-vanished", "$board");
     return packageReceipt(reread, lineage);
 }
-async function applyContinue(context, plan, disposition) {
-    const podId = await readDemandPodId(context.root, plan.demandId, context.signal);
-    if (podId === null)
-        fail("precondition-failed", "pod-unknown", "$demandRoot");
-    return withPodMutation(context.root, podId, async () => {
-        await assertDemandOperationConfigCurrentOrFail(context.root, context.snapshot, context.signal);
+async function applyContinue(context, plan) {
+    return withDemandPodMutation(context, plan.demandId, async (podId) => {
         await assertNoActiveDemand(context.root, context.signal, plan.demandId, podId);
-        return applyContinueLocked(context, plan, disposition);
-    }, context.signal);
+        return applyContinueLocked(context, plan, "apply");
+    });
+}
+/**
+ * 续接的计划同样是锁外算的（见 `assertTerminalPlanCurrent`）：过期的续接会把更早的归档放回到一个之后又
+ * 完成或取消过的 Demand 上。写日志之前核对：日志里已经是这份计划就照做；否则根必须不在，最近的归档就是
+ * 计划要放回的那一份。
+ */
+async function assertContinuePlanCurrent(context, plan) {
+    if (await journalHoldsPlan(context, plan.demandId, planDigest(plan)))
+        return;
+    if (await demandRootExists(context.root, plan.demandId))
+        failPlanStale();
+    const latest = await findLatestDemandArchive(context.ledgerRoot, plan.demandId, context.signal);
+    if (latest === null ||
+        latest.archiveRef !== plan.archiveRef ||
+        latest.manifest.manifestDigest !== plan.archiveManifestDigest) {
+        failPlanStale();
+    }
 }
 async function applyContinueLocked(context, plan, disposition) {
     const demandId = parseDemandId(plan.demandId);
+    if (disposition === "apply")
+        await assertContinuePlanCurrent(context, plan);
     await writeJournal(context, {
         kind: JOURNAL_KIND,
         schemaVersion: 1,
@@ -1043,11 +1199,20 @@ async function applyDecision(context, plan) {
 }
 async function recoverContinuation(context, operationId) {
     const demandId = parseDemandId(operationId, "$request.operationId");
-    const journal = await readJournal(context, demandId);
-    if (journal === null || journal.plan.action !== "continue") {
+    const observed = await readJournal(context, demandId);
+    if (observed === null || observed.plan.action !== "continue") {
         fail("not-found", "journal-absent", "$request.operationId");
     }
-    return applyContinue(context, journal.plan, "recover");
+    // 重放哪一份以锁内读到的为准，理由见 `replayTerminalJournal`：拿锁外的旧副本重放，会把更早的归档
+    // 盖回到一个之后又完成过的 Demand 上。
+    return withDemandPodMutation(context, demandId, async (podId) => {
+        const journal = await readJournal(context, demandId);
+        if (journal === null || journal.plan.action !== "continue") {
+            fail("not-found", "journal-absent", "$request.operationId");
+        }
+        await assertNoActiveDemand(context.root, context.signal, demandId, podId);
+        return applyContinueLocked(context, journal.plan, "recover");
+    });
 }
 function assembleContinuationResult(envelope, input, phase, next) {
     const base = {
@@ -1099,9 +1264,7 @@ export async function executeDemandContinuationRequest(value, options = {}) {
                 ? planContinue(context, input)
                 : planDecision(context, input);
         },
-        apply: (context, _input, plan) => afterMutationRefresh(context.root, context.signal, () => plan.action === "continue"
-            ? applyContinue(context, plan, "apply")
-            : applyDecision(context, plan)),
+        apply: (context, _input, plan) => afterMutationRefresh(context.root, context.signal, () => plan.action === "continue" ? applyContinue(context, plan) : applyDecision(context, plan)),
         recover: (context, operationId) => recoverContinuation(context, operationId),
         next: async (context, phase) => phase.mode === "preview"
             ? previewNext(WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, "demand-continuation-apply", phase.planned)

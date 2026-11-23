@@ -95,6 +95,20 @@ export const NEXT_FRONTIER_TABLE = Object.freeze({
     "pod-window-decommission": { owner: "controller", tool: "wakeflow_register_window_binding" },
     "pod-worktree-disposal": { owner: "controller", tool: null },
 });
+/**
+ * 一个 Demand 停在被打断的事务上时的前沿与出口（1.4.1 段 1b）。前沿不在上面的表里：它不是路线推出来的，
+ * 是盘面上留着的恢复记录点出来的；哪一类记录由哪个工具的 recover 接手写在这里，demand 切片的拒绝与
+ * observation 切片的 status、verify 用同一张表，不互相引用。工具名与各切片自己导出的常量相等，由测试钉住。
+ */
+export const DEMAND_RECOVERY_FRONTIER = "demand-recovery";
+export const DEMAND_RECOVERY_TOOLS = Object.freeze({
+    publication: "wakeflow_create_demand",
+    evidence: "wakeflow_record_evidence",
+    "append-candidates": "wakeflow_maintain_workspace",
+    complete: "wakeflow_complete_demand",
+    cancel: "wakeflow_cancel_demand",
+    continue: "wakeflow_continue_demand",
+});
 function subjectOf(route, first) {
     if (route.demandId === undefined || route.observedEventStream === undefined)
         return {};

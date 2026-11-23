@@ -1,10 +1,11 @@
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { isRootedReadWriteScopeLockName } from "../../foundation/filesystem/rooted-read-write-scope.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
-import { requireCurrentUserId } from "../../foundation/node/current-user.js";
+import { ownedByAnotherUser, requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "./wakeflow-maintenance-operation-id.js";
@@ -180,6 +181,54 @@ function prefixProtocolStatus(lockState, stagePresent) {
         return "busy";
     return lockState !== "absent" || stagePresent ? "recovery-required" : "bootstrap-prefix";
 }
+/** 准入目录里的一个条目是不是确定由死掉的进程留下的：本协议的锁文件或 create 暂存，所有者已不在。 */
+async function deadAdmissionEntry(root, entry) {
+    const node = entry.node;
+    if (node.kind !== "file" || node.permissionBits !== 0o600 || ownedByAnotherUser(node.userId)) {
+        return false;
+    }
+    if (isRootedReadWriteScopeLockName(entry.name)) {
+        try {
+            const lock = await inspectRootedExclusiveFileLock(root, entry.resourcePath);
+            return lock.status === "absent" || lock.ownerState === "inactive";
+        }
+        catch (error) {
+            if (!(error instanceof RootedExclusiveFileLockError))
+                throw error;
+            if (error.reason === "aborted")
+                fail("aborted", "$signal", error);
+            return false;
+        }
+    }
+    if (!hasDurableAtomicFileStagePrefix(entry.name))
+        return false;
+    try {
+        const stage = parseDurableAtomicFileStageFileName(entry.name);
+        return (stage.operation === "create" &&
+            stage.mode === 0o600 &&
+            readDurableAtomicFileStageOwnerState(stage, node) === "inactive");
+    }
+    catch (error) {
+        if (error instanceof DurableAtomicFileStageAddressError)
+            return false;
+        throw error;
+    }
+}
+/**
+ * 操作准入目录里是不是只有死掉的进程留下的东西（1.4.1 段 1b，清单第 3 项第 3 行）。全新初始化的应用死在
+ * 独占范围里，会留下写者锁与准入闩；以前目录里只要有任何条目就不算全新，于是那次初始化再也预览不出来，
+ * 而能收掉这些锁的正是它自己——应用在维护闩之下进入独占范围时，准入会退役死掉的闩、写者锁、读者租约
+ * 与 create 暂存。这里只读、不删；认的是那个准入认的同一个封闭集合，活着的、判断不出的、不认识的条目
+ * 都照旧算不兼容。
+ */
+async function admissionHoldsOnlyDeadResidue(root, admissionRef, signal) {
+    const contents = await readDirectory(root, admissionRef, signal);
+    for (const entry of contents.entries) {
+        if (!(await deadAdmissionEntry(root, entry)))
+            return false;
+    }
+    return true;
+}
 async function inspectLocal(root, signal, issueCodes) {
     const localResource = await optionalResource(root, WAKEFLOW_LOCAL_ROOT_REF);
     if (localResource === null) {
@@ -239,10 +288,8 @@ async function inspectLocal(root, signal, issueCodes) {
     if (admission !== null) {
         if (!validPrivateDirectory(admission.node))
             freshCompatible = false;
-        else {
-            const contents = await readDirectory(root, admission.resourcePath, signal);
-            if (contents.entries.length !== 0)
-                freshCompatible = false;
+        else if (!(await admissionHoldsOnlyDeadResidue(root, admission.resourcePath, signal))) {
+            freshCompatible = false;
         }
     }
     const stagePresent = runtime.entries.some((entry) => hasDurableAtomicFileStagePrefix(entry.name));

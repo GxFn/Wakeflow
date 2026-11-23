@@ -609,7 +609,7 @@ async function planRuntimeRecovery(context) {
                 recovery,
                 view: Object.freeze({
                     kind: "WakeflowDemandRuntimeRecoveryPlan",
-                    demands: Object.freeze(recovery.demands.map(({ demandId, candidateCount }) => Object.freeze({ demandId, candidateCount }))),
+                    demands: Object.freeze(recovery.demands.map(({ demandId, candidateCount, stageResidueCount }) => Object.freeze({ demandId, candidateCount, stageResidueCount }))),
                 }),
             }),
         });

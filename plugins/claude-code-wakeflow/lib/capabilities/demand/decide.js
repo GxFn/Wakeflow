@@ -1,6 +1,8 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { JsonValueError, parseJsonValue } from "../../foundation/data/json-value.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
+import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../../governance/tasking/task-package-projection-paths.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { scanPrivacy } from "../../kernel/privacy-scan.js";
 /** 认领即创建：同一需求包与同一认领状态派生同一个 Demand 身份，重试不会造出第二个。 */
@@ -26,7 +28,18 @@ export const ARCHIVE_EXCLUDED_PREFIXES = Object.freeze([
     "event-sourcing/index",
     "event-sourcing/append-candidates",
 ]);
+/**
+ * `artifacts/task-packages/` 里死掉的写者留下的原子暂存文件（1.4.1 段 1b）：根的清点容忍它们，但它们不是
+ * 任务包。不排除的话，带着这种残留完成的 Demand 会把暂存文件封进不可变的归档，续接再把它放回来。另外
+ * 两个容忍残留的目录（`snapshots`、`index`）本来就整个不进负载。
+ */
+function isTaskPackageStageResidue(path) {
+    return (path.startsWith(`${TASK_PACKAGE_PROJECTIONS_ROOT_REF}/`) &&
+        hasDurableAtomicFileStagePrefix(path.slice(path.lastIndexOf("/") + 1)));
+}
 export function isArchivePayloadPath(path) {
+    if (isTaskPackageStageResidue(path))
+        return false;
     return !ARCHIVE_EXCLUDED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 /** 负载树摘要：路径与内容摘要的规范 JSON；与文件权限位、时间无关。 */

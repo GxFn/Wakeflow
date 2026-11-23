@@ -1,6 +1,5 @@
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data/passive-own-data.js";
-import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import { sameFileNodeSnapshot, } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory, readStableRootDirectory, StableDirectoryReadError, } from "../../../foundation/filesystem/stable-directory-read.js";
@@ -10,6 +9,7 @@ import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME } from "../../eviden
 import { parseTaskPackageProjectionFileName, TASK_PACKAGE_PROJECTIONS_ROOT_REF, TaskPackageProjectionPathError, } from "../../tasking/task-package-projection-paths.js";
 import { DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF, DEMAND_EVENT_SOURCING_ARTIFACTS_ROOT_REF, DEMAND_EVENT_SOURCING_ROOT_REF, DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, DEMAND_EVENT_STREAM_COMMITS_ROOT_REF, DEMAND_EVENT_STREAM_INDEX_ROOT_REF, DEMAND_PERMIT_PROMPT_KINDS, DEMAND_PERMIT_PROMPTS_ROOT_REF, DemandEventSourcingPathError, demandPermitPromptKindRootRef, parseDemandEventStreamCommitFileName, parseDemandPermitPromptFileName, parseDemandPermitPromptKind, } from "./demand-event-sourcing-paths.js";
 import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE, DEMAND_FILE_EVENT_STORE_FILE_MODE, DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS, } from "./demand-file-event-store.js";
+import { classifyDemandStageDirectory, DemandStageDirectoryError } from "./demand-stage-residue.js";
 const ERROR_MESSAGES = {
     input: "Demand Event Sourcing root inventory input is invalid.",
     "root-scope": "Demand Event Sourcing root changed during inventory.",
@@ -208,28 +208,22 @@ async function inspectPermitPrompts(root, artifacts, signal) {
     return count;
 }
 /**
- * 快照目录里 foundation 自己的原子暂存文件不是快照，也不是未知资源（§13.161 B3-2 的同一分类）：
- * 写者还活着 → 一次检查点正在落盘，按 source-changed 让调用方稍后重来；写者已死 → 残留由下一次
- * 同目标写入回收，这里容忍、不计入快照数也不删除；所有者未知或名字畸形 → 仍按 tree-shape 拒绝。
+ * `index/`、`snapshots/` 与 `task-packages/` 的成员（1.4.1 段 1b）：这三个目录的文件经原子写入建成，死掉的
+ * 写者留下的暂存文件、以及与暂存共用一个节点的目标，按 `classifyDemandStageDirectory` 的规则放行：暂存
+ * 文件不算成员，成对的目标照常算成员（照常被读、被计数），两样都不删除（清除归工作区维护的
+ * reconcile）。写者还活着是 `source-changed`，调用方稍后重来；认不出的形状仍按 `tree-shape` 或
+ * `node-policy` 拒绝。其余目录没有这条放行。
  */
-function isToleratedSnapshotStageResidue(name, path, node) {
-    if (!hasDurableAtomicFileStagePrefix(name))
-        return false;
-    let stage;
+function stageDirectoryMembers(read, path) {
     try {
-        stage = parseDurableAtomicFileStageFileName(name);
+        return classifyDemandStageDirectory(read.entries, DEMAND_FILE_EVENT_STORE_FILE_MODE).members;
     }
     catch (error) {
-        if (error instanceof DurableAtomicFileStageAddressError)
-            fail("tree-shape", path, error);
+        if (error instanceof DemandStageDirectoryError) {
+            fail(error.reason, `${path}/${error.index}`, error);
+        }
         throw error;
     }
-    const owner = readDurableAtomicFileStageOwnerState(stage, node);
-    if (owner === "active")
-        fail("source-changed", path);
-    if (owner === "unknown")
-        fail("tree-shape", path);
-    return true;
 }
 /** 稳定证明一个 normal-load Demand root 的完整允许集合。 */
 export async function inspectDemandEventSourcingRootInventory(root, options) {
@@ -282,8 +276,8 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     const transactions = await readResource(root, DEMAND_EVENT_SOURCING_TRANSACTIONS_ROOT_REF, 1, signal, requiredEntryNode(before, "transactions", "$transactions"));
     assertEmpty(candidates, "$append-candidates");
     assertDirectory(taskPackages.directoryNode, "$task-packages");
-    taskPackages.entries.forEach((entry, index) => {
-        assertFile(entry.node, `$task-packages/${index}`);
+    const taskPackageMembers = stageDirectoryMembers(taskPackages, "$task-packages");
+    taskPackageMembers.forEach((entry, index) => {
         try {
             parseTaskPackageProjectionFileName(entry.name);
         }
@@ -352,11 +346,8 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
             fail("tree-shape", `$commits/${index}`);
         }
     });
-    let snapshotCount = 0;
-    snapshots.entries.forEach((entry, index) => {
-        assertFile(entry.node, `$snapshots/${index}`);
-        if (isToleratedSnapshotStageResidue(entry.name, `$snapshots/${index}`, entry.node))
-            return;
+    const snapshotMembers = stageDirectoryMembers(snapshots, "$snapshots");
+    snapshotMembers.forEach((entry, index) => {
         try {
             parseDemandEventStreamCommitFileName(entry.name);
         }
@@ -366,11 +357,9 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
             }
             throw error;
         }
-        snapshotCount += 1;
     });
     assertDirectory(indexes.directoryNode, "$index");
-    indexes.entries.forEach((entry, index) => {
-        assertFile(entry.node, `$index/${index}`);
+    stageDirectoryMembers(indexes, "$index").forEach((entry, index) => {
         try {
             parseDemandEventStreamCommitFileName(entry.name);
         }
@@ -402,8 +391,8 @@ export async function inspectDemandEventSourcingRootInventory(root, options) {
     }
     return Object.freeze({
         commitCount: commits.entries.length,
-        snapshotCount,
-        artifactCount: taskPackages.entries.length + managedEvidence.recordCount + permitCount,
+        snapshotCount: snapshotMembers.length,
+        artifactCount: taskPackageMembers.length + managedEvidence.recordCount + permitCount,
         transactionCount: transactions.entries.length,
         appendCandidateCount: 0,
         managedEvidence,

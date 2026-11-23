@@ -265,9 +265,14 @@ An accept can carry the step that follows it, so it does not cost another turn:
   it holds the archive and `next`, so no status read is needed after it);
   `blocked` lists the completion preview's blockers and the accept stands.
   Use it when this accept is the last thing the Demand needs - a quick Demand
-  always ends this way. If the call is cut after the archive was sealed, a
-  retry is refused because the Demand is no longer active: read
-  `wakeflow_status` with the Demand id, it shows the archive.
+  always ends this way. If the call is cut during the completion, read
+  `wakeflow_status` with the Demand id before anything else. A `next` that
+  names `demand-recovery` gives the tool that finishes the cut step
+  (`wakeflow_maintain_workspace`: preview and apply `reconcile`;
+  `wakeflow_complete_demand`: `mode: recover` with the Demand id as
+  `operationId`) - do it and read status again. A Demand that is still active
+  was not completed: complete it with `wakeflow_complete_demand`. Otherwise
+  the result shows the archive.
 
 Both need `decision: "accept"`; they do not combine, and neither changes what
 the accept itself requires.

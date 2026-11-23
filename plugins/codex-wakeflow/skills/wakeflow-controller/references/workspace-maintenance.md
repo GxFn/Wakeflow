@@ -166,16 +166,33 @@ runtime does not handle that format and offers no upgrade path: tell the user to
 ## Interrupted writes and cancellation
 
 `reconcile` can first return a `WakeflowDemandRuntimeRecoveryPlan` for known
-event append residues: its preview is read-only, its apply rechecks the plan and
-owner facts, retires uncommitted candidates or settles already linked commits,
+event append residues and for stage files a dead writer left in a Demand's
+index, snapshot or task-package directory (`stageResidueCount`): its preview is
+read-only, its apply rechecks the plan and owner facts, retires uncommitted
+candidates or settles already linked commits, removes the dead stage files,
 and preserves committed event bytes; re-preview afterwards for ordinary layout
-maintenance. Two more first plans work the same way. A `WakeflowMaintenanceGateResiduePlan` appears when `maintenance.protocol` is `recovery-required` and no residue is recoverable: a maintenance process died holding the gate before it recorded an operation, so there is nothing to recover; apply retires the dead gate lock and the orphan stage files, and refuses with `maintenance-gate-residue` when an owner may still be alive - wait and preview again. A `WakeflowHookStageResiduePlan` appears when verify reports `<host>:stage-residue-<n>` on the hook evidence gate: apply removes the stale stage files it counted as retirable; the directories and links it only counts as kept are the user's to remove. `<host>:write-failures-<n>:last-<UTC time>` on the same gate is information, not a failure: the hook observer could not write n records in the last seven days, most recently at that time; the incident files under `.wakeflow-local/runtime/incidents/` name the failing check (`chain[].reason` and `path`), and the code clears by itself after seven days without a new one - report it once, do not chase it every step. `demand-candidates-busy:<demandId>` means the writer may still be
+maintenance. `demand-stage-residue-busy:<demandId>` means such a writer may
+still be active - wait and preview again;
+`demand-stage-residue-unknown:<demandId>` means a writer cannot be told dead
+or alive - preview again later, and report it to the user if it stays. Stage
+files that are not provably a dead writer's are left alone and not listed. Two more first plans work the same way. A `WakeflowMaintenanceGateResiduePlan` appears when `maintenance.protocol` is `recovery-required` and no residue is recoverable: a maintenance process died holding the gate before it recorded an operation, so there is nothing to recover; apply retires the dead gate lock and the orphan stage files, and refuses with `maintenance-gate-residue` when an owner may still be alive - wait and preview again. A `WakeflowHookStageResiduePlan` appears when verify reports `<host>:stage-residue-<n>` on the hook evidence gate: apply removes the stale stage files it counted as retirable; the directories and links it only counts as kept are the user's to remove. `<host>:write-failures-<n>:last-<UTC time>` on the same gate is information, not a failure: the hook observer could not write n records in the last seven days, most recently at that time; the incident files under `.wakeflow-local/runtime/incidents/` name the failing check (`chain[].reason` and `path`), and the code clears by itself after seven days without a new one - report it once, do not chase it every step. `demand-candidates-busy:<demandId>` means the writer may still be
 active - wait and inspect again. Unknown owners, unknown files and changed
 resources are not permission to force cleanup. Board and projection writers
 retire a proven inactive lock before retrying; a lock with a live or unknown
 owner stays protected. A pending Demand publication or lifecycle journal keeps
 reserving its pod after the process exits: finish that operation's documented
-recovery before claiming another requirement or closing the pod. Cancelling a
+recovery before claiming another requirement or closing the pod. Where that
+Demand's root is in place, status names it as `demand-recovery` on that Demand
+(`nextActions` gives the tool and the Demand id as `subject`; verify lists
+`demand-recovery:<id>` in `next.blockers` and suggests the first one's tool,
+after an outdated runtime artifact and after a pending maintenance), and a
+call on that Demand is refused `recovery-required` with `details.tool` and the
+id to pass (`details.operationId`; `details.demandId` for
+`wakeflow_record_evidence`). `pod-busy` carries only `details.demandId`: read
+status with that id. An active Demand there simply occupies the pod;
+`demand-recovery` names its unfinished operation; when status does not know
+that Demand, a create was cut before its root was in place - finish it with
+`wakeflow_create_demand`, `mode: recover`, that id as `operationId`. Cancelling a
 tool call stops work before its next commit point, and a disconnected or
 cancelled response does not prove that nothing was committed: inspect the stored
 outcome and reuse the original idempotency key for an append retry; never resend

@@ -3,7 +3,7 @@
 > 状态：`active`
 > 建立日期：2026-09-04
 > 上位文档：[plan §8.1 P0、§9](../plan/typescript-reimplementation-plan.md)、[能力卡](../requirements/capabilities/)
-> 运行入口：`npm run scenario:acceptance`，即聚焦运行 `tests/scenarios/`：链在 `wakeflow-scenario-acceptance.chain.ts`，`wakeflow-scenario-acceptance-claude-code-desktop.test.ts` 登记 Claude Code 桌面组合；全量 `npm test` 也包含它。Codex 与 Claude Code tmux 两个组合的登记文件在 1.4.2 的验证瘦身里删掉了（open-items D13），下文提到“两个宿主组合各跑一遍”的地方以此为准
+> 运行入口：`npm run scenario:acceptance`，即聚焦运行 `tests/scenarios/`：链在 `wakeflow-scenario-acceptance.chain.ts`，`wakeflow-scenario-acceptance-claude-code-desktop.test.ts` 登记 Claude Code 桌面组合；全量 `npm test` 也包含它。Codex 与 Claude Code tmux 两个组合的登记文件在 1.4.2 的验证瘦身里删掉了（open-items D13），下文提到“两个宿主组合各跑一遍”的地方以此为准；脚本里按宿主、按传输分叉的路随后也删掉了（gate-log §13.280），断言只按 Claude Code 桌面会话组合写
 > 说明：场景来自能力卡的场景块。骨架在一次性工作区上经公共 MCP 工具端到端运行，并在两个宿主组合上各跑一遍（见 §1 开头），不与旧实现比较磁盘状态、文件路径或错误堆栈。结论只能是四类之一：`pass` 通过、`intentionally-dropped` 有意放弃、`pending-user-decision` 待用户决定、`defect` 新实现缺陷；尚未接线的记 `not-run`，不能算通过。报告从不包含临时路径。
 
 ## 1. 已接线场景

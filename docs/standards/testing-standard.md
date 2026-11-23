@@ -19,7 +19,7 @@
 | 0 纯逻辑 | 85 | 353 | 5 秒 | `foundation/{data,time,crypto,text,numeric,identity,schema,event-sourcing}`、`contracts`、各层的 `decide`/`contract` 测试 |
 | 1 组件 | 103 | 509 | 669 秒 | `foundation/filesystem`、`kernel`、`governance/*` 的存储与发布 |
 | 2 能力 | 76 | 386 | 2259 秒 | `capabilities/*`、`workspace/*`、`hosts/*`、`configuration` |
-| 3 公共工具 | 13 | 98 | 1158 秒 | `entrypoints`（单工具协议）、`scenarios`（两条场景链） |
+| 3 公共工具 | 13 | 98 | 1158 秒 | `entrypoints`（单工具协议）、`scenarios`（场景链，1.4.2 起一条） |
 | 4 维护者工具 | 31 | 127 | 611 秒 | `tooling/*` |
 | 5 制品与发布 | 9 | 54 | 19 秒 | `artifacts`、`codegen`、`release` |
 
@@ -63,7 +63,7 @@
 ## 5. 负载敏感与道
 
 - 真实子进程、墙钟等待、外部 CLI、上万条目的真实目录树，或曾在 8 worker 下超时的用例，在用例开头调用 `loadSensitive(t, reason)`（`tests/support/load-sensitive.ts`），返回 `true` 时直接 `return`。原因写清楚是什么负载。
-- 运行器按静态导入闭包找到带标签的文件（夹具带标签则经它的测试文件也算），把它们放进 2 worker 的隔离道，与两条场景链同时开始；其余文件等隔离道结束后再开始（§13.204）。标签不改变断言，`WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 只给开发机，门与 CI 从不设置。
+- 运行器按静态导入闭包找到带标签的文件（夹具带标签则经它的测试文件也算），把它们放进 2 worker 的隔离道，与场景链同时开始；其余文件等隔离道结束后再开始（§13.204）。标签不改变断言，`WAKEFLOW_TEST_SKIP_LOAD_SENSITIVE=1` 只给开发机，门与 CI 从不设置。
 - 把标签当成"这段测试占机器"的声明，而不是"这段测试不稳定"的借口：偶发失败先用 `wf test flaky` 复现，再修根因。
 
 ## 6. 门里的禁止项

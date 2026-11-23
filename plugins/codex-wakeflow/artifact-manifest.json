@@ -4,7 +4,7 @@
   "hostId": "codex",
   "pluginName": "wakeflow",
   "packageName": "wakeflow",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/codex-wakeflow-mcp.ts",
@@ -193,7 +193,7 @@
     {
       "path": ".codex-plugin/plugin.json",
       "bytes": 2317,
-      "sha256": "sha256:eb40fb4304eb659ec57eab9c93c34fbc820286ab0052077e0643e85c60bfa89b",
+      "sha256": "sha256:ebb80fe563c63ace548f743887f3837b236212e2365039b9c954fc0f6a7f1f59",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -3567,7 +3567,7 @@
     {
       "path": "mcp/server.mjs",
       "bytes": 1726,
-      "sha256": "sha256:608b906680ebe8db3dd9c3bb29887dca0573a4242212128366d6994c7143f31d",
+      "sha256": "sha256:5a792ac3bd7032abc0b3bad22d702e7249dc5b75b5f56c63e221b8dcf288cc65",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -6815,7 +6815,7 @@
     {
       "path": "package.json",
       "bytes": 1363,
-      "sha256": "sha256:63984f480cfbdf75c3e182c17ce3c55f8e959455106775af08231722b32da843",
+      "sha256": "sha256:fc5e9f74f51023340769c0cb627de9bcfbca86a33ea20ac4e4fc35a8e23a9103",
       "mode": "0644",
       "scope": "metadata"
     },

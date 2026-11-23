@@ -595,7 +595,10 @@ export async function executeDemandCreationRequest(
       },
       apply: (context, _input, plan) =>
         afterMutationRefresh(context.root, context.signal, () => applyCreate(context, plan)),
-      recover: (context, operationId) => recoverCreate(context, operationId),
+      recover: (context, operationId) =>
+        afterMutationRefresh(context.root, context.signal, () =>
+          recoverCreate(context, operationId),
+        ),
       next: async (context, phase) =>
         phase.mode === "preview"
           ? previewNext(

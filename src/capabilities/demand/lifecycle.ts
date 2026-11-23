@@ -1332,7 +1332,10 @@ async function executeTerminal<Request extends TerminalRequest, Result>(
           ),
         );
       },
-      recover: (context, operationId) => recoverTerminal(context, action, operationId),
+      recover: (context, operationId) =>
+        afterMutationRefresh(context.root, context.signal, () =>
+          recoverTerminal(context, action, operationId),
+        ),
       next: async (context, phase) =>
         phase.mode === "preview"
           ? previewNext(tool, `demand-${action}-apply`, phase.planned)
@@ -1904,7 +1907,10 @@ export async function executeDemandContinuationRequest(
         afterMutationRefresh(context.root, context.signal, () =>
           plan.action === "continue" ? applyContinue(context, plan) : applyDecision(context, plan),
         ),
-      recover: (context, operationId) => recoverContinuation(context, operationId),
+      recover: (context, operationId) =>
+        afterMutationRefresh(context.root, context.signal, () =>
+          recoverContinuation(context, operationId),
+        ),
       next: async (context, phase) =>
         phase.mode === "preview"
           ? previewNext(

@@ -672,7 +672,10 @@ export async function executeRecordEvidenceRequest(
         afterMutationRefresh(context.root, context.options.signal, () =>
           applyEvidence(context, input, plan),
         ),
-      recover: recoverEvidence,
+      recover: (context, operationId) =>
+        afterMutationRefresh(context.root, context.options.signal, () =>
+          recoverEvidence(context, operationId),
+        ),
       next: async (context, phase) =>
         phase.mode === "preview"
           ? evidencePreviewNext(phase.planned)

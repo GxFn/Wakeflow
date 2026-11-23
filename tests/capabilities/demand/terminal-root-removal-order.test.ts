@@ -8,6 +8,7 @@ import { filesystemMutation } from "../../../src/foundation/filesystem/filesyste
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
 import {
@@ -283,6 +284,19 @@ test("删退役根中途失败：根已不在自己的名字下，半棵退役�
   equal(retiredRootNames(scenario).length, 1, "半棵退役根应留在 current 里");
 
   assertRecoverClearedRetiredRoot(scenario, await recoverCompletion(scenario));
+});
+
+test("recover 补完终态事务之后活动投影已经重算：再刷新一次没有页面要改", async (t) => {
+  const scenario = await terminalCase(t);
+  scenario.recorded.failRetiredRootRemoval();
+  await applyFailingRootRemoval(scenario);
+  await recoverCompletion(scenario);
+  const root = await RootedDirectory.open(scenario.workspace, "$root");
+  try {
+    equal((await refreshActiveProjection(root)).disposition, "current");
+  } finally {
+    await root.close();
+  }
 });
 
 test("根的顶层在快照之后变过：改名之前拒绝为可重试的 demand-root-drift，根与日志原样；recover 走残根清除完成", async (t) => {

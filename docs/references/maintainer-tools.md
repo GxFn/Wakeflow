@@ -351,6 +351,15 @@ npm run locked -- npm run build:artifacts:committed
 
 所有会编译进 `.build/` 或改写 `plugins/` 的命令都应持有同一把仓库构建锁：两个 `tsc -b` 写同一个输出目录，或一次聚焦编译落在正在读 `.build/` 的完整门中间，都会产生混合字节与偶发失败（§13.161）。声明是 `mkdir .build/locks/build.lock`，目录内的 `owner.json` 写明 pid、令牌、命令和开始时间；持有者进程已退出的声明视为陈旧，由等待者回收：先在目录里独占创建 `reclaim` 标记，重读目录身份与 owner 仍与刚才的观察一致才把目录改名后删除，所以两个等待者读到同一个死 owner 时不会互删对方刚建立的活锁，标记已存在就等别人回收完（open-items W24）；没有 `owner.json` 的目录 10 秒内当作声明者正在写 owner 等待，超过 10 秒才按同样方式回收，写 owner 失败的声明者立刻撤掉自己的目录（W25）；回收者恰在建好标记之后、删除之前被杀时标记会留下，所有等待者都把它当作回收进行中直到预算用完，确认没有回收者在跑后手动删除 `.build/locks/build.lock`。活着的持有者则等待，每 30 秒在 stderr 报告一次，`WAKEFLOW_BUILD_LOCK_TIMEOUT_SECONDS`（缺省 3600）用完后以 75 退出。被包装的命令继承 `WAKEFLOW_BUILD_LOCK_TOKEN`，同令牌的嵌套调用直接重入。`wf verify` 与 `wf handoff` 的 `build:check` 自带这把锁，所以 `npm run wf -- verify gate` 不必再包一层；`npm run wf` 本身先编译 tooling 的那一步仍在锁外，它只写 `.build/tooling`，并且是增量的。PID 复用只会让等待变长，不会让两个写者同时进入；这不是跨仓库或跨机器的锁。
 
+### 沙盒门
+
+```sh
+npm run gate:sandbox            # 对 HEAD
+npm run gate:sandbox -- <提交>
+```
+
+完整门不在开发工作树里跑（open-items D13）。`tooling/sandbox-gate.mjs` 对一个提交在开发工作树旁边开一个临时的独立检出（`git worktree`，只含已提交的文件，自己的 `.build/` 与构建锁），用写时复制克隆这里的 `node_modules`（约一秒，不占额外磁盘），在里面以较低的优先级跑普通的 `wf verify gate`。放到后台启动，开发工作树照常改、照常跑快速核对；其间不要再跑别的重测试，门里怕机器忙的测试仍然共用这台机器。凭据对应的是那个提交，运行目录拷到 `.build/sandbox-gate/<提交>/`。通过的运行删掉它的检出，失败的留着供查看并打印位置。
+
 ## 14. 受影响测试与聚焦选择
 
 ```sh

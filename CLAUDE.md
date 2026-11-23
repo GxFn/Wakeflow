@@ -194,8 +194,14 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
 - When another session or agent may be compiling or testing in this tree,
   run every `.build/`- or `plugins/`-writing command under the repository
   build lock: `npm run locked -- npm test`. `wf verify` and `wf handoff`
-  hold that lock themselves. Never start another build, scan or test run while
-  a tier 2 gate is running: its load-sensitive tests fail under contention.
+  hold that lock themselves.
+- The full gate runs on a commit, in a throwaway checkout beside the
+  development tree: `npm run gate:sandbox` (optionally `-- <commit>`), started
+  in the background. The development tree stays free for edits and tier 0
+  runs meanwhile; hold back other heavy test runs, because the gate's
+  load-sensitive tests still share the machine. The receipt belongs to that
+  commit and is copied to `.build/sandbox-gate/<commit>/`; a failing run keeps
+  its checkout for inspection.
 - `npm run wf -- handoff` runs the read-only handoff checklist (whitespace,
   private content, `build:check`, version-bytes, docs pointers, Git state, and
   the remote gate's latest result for the current branch); run it before

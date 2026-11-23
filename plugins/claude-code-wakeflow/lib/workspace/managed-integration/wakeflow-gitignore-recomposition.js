@@ -1,6 +1,6 @@
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { RootedExclusiveFileLockError, retireDeadRootedExclusiveFileLock, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { inspectWakeflowWorkspaceGitignore, WakeflowGitignoreInspectionError, } from "./wakeflow-gitignore-inspection.js";
 import { admitWakeflowGitignoreRecompositionLockOperations, assertCurrentUserWakeflowGitignoreRecompositionRoot, assertWakeflowGitignoreRecompositionNotAborted, assertWakeflowGitignoreRecompositionRoot, currentWakeflowGitignoreRecompositionUserId, failWakeflowGitignoreRecomposition as fail, mapWakeflowGitignoreRecompositionLockError, parseWakeflowGitignoreRecompositionOptions, parseWakeflowGitignoreRecompositionRequest, WAKEFLOW_GITIGNORE_FILE_MODE, WakeflowGitignoreRecompositionError, wakeflowGitignoreInspectionRequest, wakeflowGitignoreRecompositionLockOptions, } from "./wakeflow-gitignore-recomposition-contract.js";
 import { WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, WAKEFLOW_GITIGNORE_REF, } from "./wakeflow-managed-integration-resource-catalog.js";
@@ -175,6 +175,10 @@ export async function recomposeWakeflowWorkspaceGitignore(rootValue, requestValu
     await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
     let committed = false;
     try {
+        // 上一个重组 `.gitignore` 的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
+        await retireDeadRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, {
+            relatedTargetResourcePaths: [WAKEFLOW_GITIGNORE_REF],
+        });
         return await withRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
             committed = true;
         }), wakeflowGitignoreRecompositionLockOptions(options));

@@ -1,6 +1,6 @@
 import { DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { RootedExclusiveFileLockError, retireDeadRootedExclusiveFileLock, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { assertCurrentUserWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthorityDesiredPlacements, assertWakeflowConfigAuthorityNotAborted, assertWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthoritySourcePolicy, currentWakeflowConfigAuthorityUserId, failWakeflowConfigAuthorityReplacement as fail, mapWakeflowConfigAuthorityLockError, matchesWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityReplacementOptions, prepareWakeflowConfigAuthorityDesired, readCurrentWakeflowConfigAuthority, sameWakeflowConfigAuthoritySource, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
 import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, } from "./wakeflow-config-authority-snapshot.js";
 /**
@@ -119,6 +119,10 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
     assertWakeflowConfigAuthorityNotAborted(parsed.signal);
     let committed = false;
     try {
+        // 上一个替换配置的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
+        await retireDeadRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, {
+            relatedTargetResourcePaths: [WAKEFLOW_CONFIG_FILE_REF],
+        });
         return await withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, () => replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
             committed = true;
         }), wakeflowConfigAuthorityLockOptions(parsed));

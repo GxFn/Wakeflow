@@ -231,7 +231,6 @@ export async function inspectDemandStageResidue(root, fileMode, options = {}) {
     return Object.freeze({
         entries: Object.freeze(entries),
         activeCount: entries.filter((entry) => entry.owner === "active").length + busyDirectories,
-        unknownCount: entries.filter((entry) => entry.owner === "unknown").length,
         retirable,
     });
 }

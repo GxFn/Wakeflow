@@ -474,6 +474,28 @@ export async function retireRootedExclusiveFileLockResidue(root, lockPath, obser
         throw error;
     }
 }
+/**
+ * 获取之前清掉确定已死的持有者留下的锁（1.4.2）。自己会在获取时清死锁的只有那七族锁；其余的锁被死
+ * 持有者占住之后没有任何路径去清，下一个要拿它的操作从此一直失败。持有者活着或判断不出时不动。清不掉
+ * （残留在这期间变了、旁边有活着的暂存）也不在这里报错：随后的获取会按"被占用"给出它自己的结论。
+ * `relatedTargetResourcePaths` 是这把锁保护的、与它同目录的目标：它们自己留下的死暂存一并结算。
+ */
+export async function retireDeadRootedExclusiveFileLock(root, lockPath, options) {
+    try {
+        const observation = await inspectRootedExclusiveFileLock(root, lockPath);
+        if (observation.status === "held" && observation.ownerState === "inactive") {
+            await retireRootedExclusiveFileLockResidue(root, lockPath, observation, options);
+        }
+    }
+    catch (error) {
+        if (error instanceof RootedExclusiveFileLockError &&
+            error.reason !== "input" &&
+            error.reason !== "aborted") {
+            return;
+        }
+        throw error;
+    }
+}
 function mapCreateError(error) {
     if (error.reason === "target-exists")
         return "contended";

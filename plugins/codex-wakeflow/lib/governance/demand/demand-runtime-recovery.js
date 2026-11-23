@@ -103,10 +103,9 @@ async function planDemandRecovery(workspaceRoot, root, demandId, config, options
             ? [`demand-candidates-busy:${demandId}`]
             : []),
         ...(residue.activeCount > 0 ? [`demand-stage-residue-busy:${demandId}`] : []),
-        ...(residue.unknownCount > 0 ? [`demand-stage-residue-unknown:${demandId}`] : []),
     ];
-    // 清得掉的残留才进计划。写者都死了却清不掉的（形状不认识、成对的任务包内容对不上、目录自己不对）
-    // 不进计划也不挡别的维护：应用清不动它，挡在这里只会让整个工作区的 reconcile 停住；根因此打不开时
+    // 清得掉的残留才进计划。清不掉的（写者判断不出死活、形状不认识、成对的任务包内容对不上、目录自己
+    // 不对）不进计划也不挡别的维护：应用清不动它，挡在这里只会让整个工作区的 reconcile 停住；根因此打不开时
     // 由 status 与 verify 报出。
     const stageResidue = residue.retirable || blockers.length > 0 ? residue.entries : [];
     if (candidates.length === 0 && stageResidue.length === 0 && blockers.length === 0)

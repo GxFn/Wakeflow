@@ -217,6 +217,23 @@ test("intermediate symlinks and non-directory ancestors fail closed", async () =
       "ancestor-type",
       "$.ref",
     );
+    // 目标不在时也一样：隔着符号链接祖先看过去的"不在"不算数（1.4.2 的单遍检查曾把它报成不存在）。
+    await expectRootedDirectoryError(
+      () => rooted.inspectExistingResource(parsePortableResourcePath("alias/missing"), "$.ref"),
+      "ancestor-symlink",
+      "$.ref",
+    );
+    // 父目录是规范路径时，不在就是不在；更上面一级就不在的也是。
+    await expectRootedDirectoryError(
+      () => rooted.inspectExistingResource(parsePortableResourcePath("missing"), "$.ref"),
+      "resource-not-found",
+      "$.ref",
+    );
+    await expectRootedDirectoryError(
+      () => rooted.inspectExistingResource(parsePortableResourcePath("missing/deeper"), "$.ref"),
+      "resource-not-found",
+      "$.ref",
+    );
   } finally {
     await rooted.close();
     rmSync(rootPath, { recursive: true, force: true });

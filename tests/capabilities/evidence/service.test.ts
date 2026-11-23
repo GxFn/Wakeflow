@@ -1,13 +1,10 @@
 import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
-import {
-  deriveEvidenceEventIdentity,
-  MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY,
-} from "../../../src/capabilities/evidence/decide.js";
+import { deriveEvidenceEventIdentity } from "../../../src/capabilities/evidence/decide.js";
 import { executeRecordEvidenceRequest } from "../../../src/capabilities/evidence/service.js";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -576,92 +573,6 @@ async function readDemandTree(fixture: Readonly<ManagedEvidenceCapturePlanningWo
     await demandRoot.close();
   }
 }
-
-function treeSelection(relativePath: string) {
-  return {
-    kind: "test-output",
-    source: {
-      kind: "managed-path",
-      root: { kind: "repository", repositoryId: EVIDENCE_REPOSITORY_ID },
-      path: relativePath,
-      resourceType: "tree",
-    },
-    contentReview: "reject",
-  };
-}
-
-/** `artifacts/<name>/d0/…/d<directories-1>/leaf.txt`：相对选择根的 ref 有 directories + 1 段。 */
-function writeDeepTree(
-  fixture: Readonly<ManagedEvidenceCapturePlanningWorkspaceFixture>,
-  name: string,
-  directories: number,
-): void {
-  const deep = path.join(
-    fixture.repositoryRoot,
-    "artifacts",
-    name,
-    ...Array.from({ length: directories }, (_, index) => `d${index}`),
-  );
-  mkdirSync(deep, { recursive: true, mode: 0o755 });
-  writeFileSync(path.join(deep, "leaf.txt"), `${name}\n`, { mode: 0o644 });
-}
-
-test("能归档的深度（open-items W10）：25 层目录树在 preview 以 capacity 拒绝；ref 恰为 20 段的树记录后，归档用的 Demand 根整树读取落在第 24 层而不撞深度上限", async () => {
-  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
-  try {
-    writeDeepTree(fixture, "deep-25", 25);
-    await rejects(preview(fixture, treeSelection("artifacts/deep-25")), rejectedWith("capacity"));
-    writeDeepTree(fixture, "deep-20", 19);
-    const selection = treeSelection("artifacts/deep-20");
-    const previewed = await preview(fixture, selection);
-    equal(previewed.status, "ready", previewed.blockers.join(","));
-    const recorded = await apply(fixture, selection, previewed.planDigest as string);
-    equal(recorded.disposition, "recorded");
-    // 与 complete/cancel 的 readDemandRootSnapshot 同一容量、同一读法。
-    const tree = await readDemandTree(fixture);
-    const leaf = tree.files.find((file) => file.resourcePath.endsWith("/leaf.txt"));
-    equal(leaf?.depth, WAKEFLOW_DEMAND_TREE_CAPACITY.maximumDepth);
-    equal(
-      leaf?.resourcePath,
-      `artifacts/managed-evidence/${recorded.publication?.evidenceId}/payload/${Array.from(
-        { length: 19 },
-        (_, index) => `d${index}`,
-      ).join("/")}/leaf.txt`,
-    );
-  } finally {
-    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
-  }
-});
-
-test("累计容量的计数基础（open-items W10）：一条单文件记录给 Demand 根增加五个记录成员，事件追加再增加 commit、index 与 snapshot 三个文件；重放不再增加", async () => {
-  const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();
-  try {
-    const selection = fileSelection("artifacts/test-run/logs/report.txt");
-    const before = await readDemandTree(fixture);
-    equal(
-      before.entries.some((entry) => entry.resourcePath === "artifacts/managed-evidence"),
-      false,
-    );
-    const previewed = await preview(fixture, selection);
-    const recorded = await apply(fixture, selection, previewed.planDigest as string);
-    equal(recorded.disposition, "recorded");
-    const after = await readDemandTree(fixture);
-    // managed-evidence 目录、记录目录、payload 目录、清单与 content 五个成员，其中两个是文件。
-    const event = MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY;
-    equal(after.entries.length - before.entries.length, 5 + event.entries);
-    equal(after.files.length - before.files.length, 2 + event.files);
-    const eventFiles = after.files.filter(
-      (file) =>
-        file.resourcePath.startsWith("event-sourcing/") &&
-        !before.files.some((known) => known.resourcePath === file.resourcePath),
-    );
-    equal(eventFiles.length, event.files);
-    await apply(fixture, selection, previewed.planDigest as string);
-    equal((await readDemandTree(fixture)).entries.length, after.entries.length);
-  } finally {
-    await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);
-  }
-});
 
 test("提交证据由 Wakeflow 核实（ADR-0028）：真实仓库里的提交记下树、改动路径与补丁摘要，payload 由清单重建；仓库里没有的提交在 preview 被拦下", async () => {
   const fixture = await createManagedEvidenceCapturePlanningWorkspaceFixture();

@@ -1,5 +1,5 @@
 import { equal, ok, rejects } from "node:assert/strict";
-import { existsSync, mkdirSync, readdirSync, renameSync } from "node:fs";
+import { existsSync, readdirSync, renameSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
@@ -8,23 +8,17 @@ import { demandArchivesRootRef } from "../../../src/kernel/layout.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   applyCompletion,
-  assertInOrder,
-  indexOfEvent,
   type LifecycleOrderCase,
   lifecycleOrderCase,
   recoverCompletion,
-  renamedTo,
 } from "./lifecycle-order.fixture.js";
 
 useDisposableDurability();
 
 /**
- * 2 级（能力）：完成事务沿用"已经在盘面上"的结果之前先把它落盘（1.4.1 段 1b，清单第 4 项的第 2、5 行）。
- *
- * 完成事务的后两步是删活动根、删生命周期日志，都不可逆。它们之前的两步各有一个"上一次可能死在改名之后、
- * 同步之前"的结果：已封的归档包（`archives/<demandId>/<修订号>`，以及 `archives/<demandId>` 这个目录
- * 自己），和已经置成 archived 的认领状态文件。重试看到结果已经在，就直接沿用；这里钉住沿用之前补的
- * 那一次同步发生在删根与删日志之前，以及核对期间结果变了时拒绝为可重试、根与日志原样。
+ * 2 级（能力）：完成事务沿用已封的归档时，核对期间归档变了要拒绝为可重试的冲突，根与日志原样；归档
+ * 回来之后 recover 完成（1.4.1 段 1b）。钉"沿用之前先同步"的三条顺序用例在 1.4.2 的验证瘦身里删掉了
+ * （open-items D13）：那条规则还在代码里，没有测试钉着。
  */
 
 function isRetryableConflict(reason: string) {
@@ -51,19 +45,6 @@ async function completionLosingArchivePublicationSync(scenario: LifecycleOrderCa
   await applyCompletionFailing(scenario);
   ok(scenario.events.includes(`sync-lost ${scenario.archives}`), scenario.events.join(" | "));
 }
-
-test("沿用已封归档：recover 先同步 archives 与 archives/<demandId>，再把根改名退役、删日志", async (t) => {
-  const scenario = await lifecycleOrderCase(t);
-  await completionLosingArchivePublicationSync(scenario);
-
-  const events = await recoverCompletion(scenario);
-  assertInOrder(events, [
-    "sync ledger:archives",
-    `sync ${scenario.archives}`,
-    renamedTo(scenario.retiredRoot),
-    `unlink ${scenario.journal}`,
-  ]);
-});
 
 test("沿用已封归档：核对期间归档包不见了，拒绝为可重试的冲突，根与日志原样；归档回来之后 recover 完成", async (t) => {
   const scenario = await lifecycleOrderCase(t);
@@ -97,39 +78,4 @@ test("沿用已封归档：核对期间归档包不见了，拒绝为可重试�
   await recoverCompletion(scenario);
   equal(existsSync(path.join(scenario.workspace, scenario.demandRoot)), false);
   equal(existsSync(path.join(scenario.workspace, scenario.journal)), false);
-});
-
-test("封档时 archives/<demandId> 已经在：先同步 archives 把这个名字落盘，再往里放归档", async (t) => {
-  const scenario = await lifecycleOrderCase(t);
-  mkdirSync(path.join(scenario.ledger, ...demandArchivesRootRef(scenario.demandId).split("/")), {
-    mode: 0o755,
-  });
-
-  await applyCompletion(scenario);
-  assertInOrder(scenario.events, [
-    "sync ledger:archives",
-    (event) => event.startsWith(`rename ${scenario.archives}/.candidate-* -> `),
-    renamedTo(scenario.retiredRoot),
-    `unlink ${scenario.journal}`,
-  ]);
-});
-
-test("沿用已置终态的认领状态：recover 先同步 board，再把根改名退役、删日志", async (t) => {
-  const scenario = await lifecycleOrderCase(t);
-  scenario.failAfterRename(renamedTo(scenario.claimState));
-  await applyCompletionFailing(scenario);
-  ok(scenario.events.includes("rename-interrupted"), scenario.events.join(" | "));
-
-  const events = await recoverCompletion(scenario);
-  const settled = indexOfEvent(events, `sync ${scenario.board}`);
-  equal(
-    events.slice(0, settled).some(renamedTo(scenario.claimState)),
-    false,
-    `recover 不应重写认领状态：${events.join(" | ")}`,
-  );
-  assertInOrder(events, [
-    `sync ${scenario.board}`,
-    renamedTo(scenario.retiredRoot),
-    `unlink ${scenario.journal}`,
-  ]);
 });

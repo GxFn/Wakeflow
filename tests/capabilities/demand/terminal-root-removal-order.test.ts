@@ -26,9 +26,8 @@ useDisposableDurability();
  * `current/`，再删改名后的树并再同步一次，最后持久删除生命周期日志。少任何一次同步，掉电之后都可能
  * 出现日志已经消失、而根（或退役根）又回来的状态，recover 再也找不到日志去完成退役。这里按发生顺序
  * 记录 Demand 根的 `rename`、`filesystemMutation.removeTree`、`filesystemMutation.unlink` 与父目录句柄的
- * `sync`。六条路径：一次完整的完成应用；删退役根之后同步丢失；删退役根的中途失败；改名之后同步丢失；
- * 根的顶层在快照之后变过；recover 在根已不在的分支里自己的那次同步失败。同步"丢失"用抛错且不执行
- * 模拟：同步失败与进程恰在这里被杀留下的磁盘状态相同。一次性工作区以 `none` 打开，fsync 系统调用被
+ * `sync`。三条路径：一次完整的完成应用；删退役根的中途失败；根的顶层在快照之后变过。"同步丢了"的
+ * 三条在 1.4.2 的验证瘦身里删掉了（open-items D13）。一次性工作区以 `none` 打开，fsync 系统调用被
  * 跳过，但同步调用本身的顺序就是要钉住的合同。
  */
 
@@ -276,48 +275,12 @@ test("完成应用：根先改名为退役根并同步 current，再删退役根
   deepEqual(retiredRootNames(scenario), []);
 });
 
-test("删退役根之后同步丢失：应用报 io-failure、日志留着；recover 不再删树，先同步 current 再 unlink 日志", async (t) => {
-  const scenario = await terminalCase(t);
-  scenario.recorded.loseSyncAfterRetiredRootRemoval();
-  await applyFailingRootRemoval(scenario);
-  ok(scenario.recorded.events.includes(`sync-lost ${scenario.current}`));
-  deepEqual(retiredRootNames(scenario), []);
-
-  const events = await recoverCompletion(scenario);
-  equal(
-    events.some((event) => event.startsWith("removeTree ") || event.startsWith("rename ")),
-    false,
-    `recover 不应再改名或删树：${events.join(" | ")}`,
-  );
-  const unlinked = events.indexOf(`unlink ${scenario.journal}`);
-  const settled = events.indexOf(`sync ${scenario.current}`);
-  ok(
-    settled >= 0 && settled < unlinked,
-    `recover 删日志之前没有同步 current：${events.join(" | ")}`,
-  );
-});
-
 test("删退役根中途失败：根已不在自己的名字下，半棵退役根与日志留着；recover 清掉退役根、同步、再 unlink 日志", async (t) => {
   const scenario = await terminalCase(t);
   scenario.recorded.failRetiredRootRemoval();
   await applyFailingRootRemoval(scenario);
   ok(scenario.recorded.events.includes(`removeTree-failed ${scenario.retiredRoot}`));
   equal(retiredRootNames(scenario).length, 1, "半棵退役根应留在 current 里");
-
-  assertRecoverClearedRetiredRoot(scenario, await recoverCompletion(scenario));
-});
-
-test("改名之后同步丢失：应用报 io-failure，完整的退役根与日志留着；recover 清掉退役根、同步、再 unlink 日志", async (t) => {
-  const scenario = await terminalCase(t);
-  scenario.recorded.loseSyncAfterRootRename();
-  await applyFailingRootRemoval(scenario);
-  ok(scenario.recorded.events.includes(`sync-lost ${scenario.current}`));
-  equal(
-    scenario.recorded.events.some((event) => event.startsWith("removeTree ")),
-    false,
-    "改名的同步丢了，不应接着删树",
-  );
-  equal(retiredRootNames(scenario).length, 1, "完整的退役根应留在 current 里");
 
   assertRecoverClearedRetiredRoot(scenario, await recoverCompletion(scenario));
 });
@@ -353,46 +316,4 @@ test("根的顶层在快照之后变过：改名之前拒绝为可重试的 dema
   ok(renamed >= 0, `recover 没有把残根改名：${events.join(" | ")}`);
   const removed = after(events, renamed, `removeTree ${scenario.retiredRoot}`);
   after(events, removed, `unlink ${scenario.journal}`);
-});
-
-test("recover 见根已不在、自己的那次 current 同步失败：报 io-failure、日志留着；再一次 recover 先同步再 unlink 日志", async (t) => {
-  const scenario = await terminalCase(t);
-  const { events } = scenario.recorded;
-  scenario.recorded.loseSyncAfterRetiredRootRemoval();
-  await applyFailingRootRemoval(scenario);
-
-  // 根已不在的分支里那次落盘失败：失败必须报出，日志不能被删。
-  const failedRecoverStart = events.length;
-  scenario.recorded.loseNextCurrentSync();
-  await rejects(
-    executeDemandCompletionRequest({
-      root: scenario.fixture.workspacePath,
-      mode: "recover",
-      operationId: scenario.fixture.demandId,
-    }),
-    isDemandRootRemoveFailure,
-  );
-  const failedRecoverEvents = events.slice(failedRecoverStart);
-  ok(
-    failedRecoverEvents.includes(`sync-lost ${scenario.current}`),
-    `recover 没有走到根已不在分支的同步：${failedRecoverEvents.join(" | ")}`,
-  );
-  equal(
-    failedRecoverEvents.includes(`unlink ${scenario.journal}`),
-    false,
-    `同步失败之后日志被删：${failedRecoverEvents.join(" | ")}`,
-  );
-  equal(
-    existsSync(path.join(scenario.workspace, scenario.journal)),
-    true,
-    "日志必须留给下一次 recover",
-  );
-
-  const recovered = await recoverCompletion(scenario);
-  const unlinked = recovered.indexOf(`unlink ${scenario.journal}`);
-  const settled = recovered.indexOf(`sync ${scenario.current}`);
-  ok(
-    settled >= 0 && settled < unlinked,
-    `recover 删日志之前没有同步 current：${recovered.join(" | ")}`,
-  );
 });

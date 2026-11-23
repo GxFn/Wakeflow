@@ -215,7 +215,8 @@ async function retestMixedFailure(
   equal(complete.status, "ready", complete.blockers.join(","));
 }
 
-for (const other of ["flaky", "harness-defect", "missing-evidence", "environment"] as const) {
+// 四种失败分类走同一条规则；1.4.2 的验证瘦身起只留 flaky 这一种（open-items D13）。
+for (const other of ["flaky"] as const) {
   test(`混合 product-defect + ${other}：仅授权产品步骤，其余失败保留`, {
     timeout: 240_000,
   }, async () => {

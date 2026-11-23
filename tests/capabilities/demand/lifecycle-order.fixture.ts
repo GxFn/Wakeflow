@@ -227,7 +227,7 @@ export async function lifecycleOrderCase(t: TestContext): Promise<LifecycleOrder
 }
 
 /** `events` 里从 `from` 起第一条满足 `match` 的事件的位置；没有就让测试失败并打印整段记录。 */
-export function indexOfEvent(
+function indexOfEvent(
   events: readonly string[],
   match: string | ((event: string) => boolean),
   from = 0,

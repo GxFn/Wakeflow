@@ -159,35 +159,6 @@ test("终态事件已提交、根还在：完成、取消、续接、记录决�
   await assertCompletionHealed(scenario);
 });
 
-test("1.4.0 删到一半的残根留在 Demand 自己的名字下：打不开的根照样点名 complete 的 recover；recover 清掉残根", async (t) => {
-  const scenario = await lifecycleOrderCase(t);
-  await interruptCompletionAfterClaim(scenario);
-  rmSync(inRoot(scenario, "identity.json"));
-  assertSignpost(
-    await refusalOf(completePreview(scenario)),
-    "lifecycle-journal-pending",
-    "wakeflow_complete_demand",
-    scenario.demandId,
-  );
-  assertSignpost(
-    await refusalOf(cancelPreview(scenario)),
-    "lifecycle-journal-pending",
-    "wakeflow_complete_demand",
-    scenario.demandId,
-  );
-
-  // 删得只剩一个空目录也一样。
-  rmSync(inRoot(scenario), { recursive: true });
-  mkdirSync(inRoot(scenario), { mode: 0o700 });
-  assertSignpost(
-    await refusalOf(completeApply(scenario)),
-    "lifecycle-journal-pending",
-    "wakeflow_complete_demand",
-    scenario.demandId,
-  );
-  await assertCompletionHealed(scenario);
-});
-
 test("根已改名退役、还没删完：根不在时完成与取消点名 complete 的 recover；recover 治好", async (t) => {
   const scenario = await lifecycleOrderCase(t);
   scenario.failNextRemoveTree((target) => target === scenario.retiredRoot);

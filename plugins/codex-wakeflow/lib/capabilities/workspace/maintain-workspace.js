@@ -1259,7 +1259,7 @@ export async function executeWakeflowMaintenancePublicRequest(facade, value, opt
         },
         recover: async (context, operationId) => {
             try {
-                return await context.facade.recover(context.root, parseWakeflowMaintenanceOperationId(operationId, "$request.operationId"), { ...signalOptions, writer: context.writer });
+                return await afterMutationRefresh(context.root, options.signal, () => context.facade.recover(context.root, parseWakeflowMaintenanceOperationId(operationId, "$request.operationId"), { ...signalOptions, writer: context.writer }));
             }
             catch (error) {
                 mapTransactionError(error);

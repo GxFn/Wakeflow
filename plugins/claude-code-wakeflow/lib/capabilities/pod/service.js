@@ -723,7 +723,7 @@ export async function executePodRequest(facade, value, options = {}) {
         close: async () => { },
         plan: planPod,
         apply: (context, input, plan) => afterMutationRefresh(context.root, context.options.signal, () => applyPod(context, input, plan)),
-        recover: recoverPod,
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.options.signal, () => recoverPod(context, operationId)),
         next: async (context, phase) => {
             const { result, next } = await assembleResult(context, phase);
             assembled = result;

@@ -91,7 +91,11 @@ async function refreshActiveProjectionQuietly(root, signal) {
         }
     }
 }
-/** 变更执行器的包装：先执行变更（提交或应用），成功后静默刷新一次投影，再返回变更结果。 */
+/**
+ * 变更执行器的包装：先执行变更（提交或应用），成功后静默刷新一次投影，再返回变更结果。各工具的
+ * recover 补完的是同一个事务，也经这里（1.4.2）：此前恢复之后投影没有重算，两份状态页过期，verify 的
+ * active-projection 门失败，要再做一次 reconcile 才过。
+ */
 export async function afterMutationRefresh(root, signal, mutate) {
     if (signal?.aborted === true)
         fail("io-failure", "aborted", "$signal");

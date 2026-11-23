@@ -464,7 +464,7 @@ export async function executeRecordEvidenceRequest(value, options = {}) {
         close: async () => { },
         plan: planEvidence,
         apply: (context, input, plan) => afterMutationRefresh(context.root, context.options.signal, () => applyEvidence(context, input, plan)),
-        recover: recoverEvidence,
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.options.signal, () => recoverEvidence(context, operationId)),
         next: async (context, phase) => phase.mode === "preview"
             ? evidencePreviewNext(phase.planned)
             : nextAfterMutation(context, phase.outcome.demandId),

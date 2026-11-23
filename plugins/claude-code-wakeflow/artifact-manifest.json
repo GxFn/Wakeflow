@@ -388,15 +388,15 @@
     },
     {
       "path": "lib/capabilities/demand/lifecycle.js",
-      "bytes": 63545,
-      "sha256": "sha256:fa90f0ff126eb1305e7526d087a0bbe19995574b55fe43a35ae746f351675b5f",
+      "bytes": 63661,
+      "sha256": "sha256:653125b0b086b8574a21c58818ff1c985a04f4a3e4ba0b2bb3ab5ee4806ae3f6",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/demand/service.js",
-      "bytes": 18503,
-      "sha256": "sha256:d4a887e3a3ee2afba10383daa5cff86d0f05f1534fcf9bc190108bcd5687a580",
+      "bytes": 18561,
+      "sha256": "sha256:35f48cd0ac03a9e30ffb4d9b13ed1780cd9811e1748b32e3987d059d9963645d",
       "mode": "0644",
       "scope": "shared"
     },
@@ -458,8 +458,8 @@
     },
     {
       "path": "lib/capabilities/evidence/service.js",
-      "bytes": 21200,
-      "sha256": "sha256:0a942d817f937ff959ec54533052a1dafc5fe8e2946917717c670b447805a9ba",
+      "bytes": 21314,
+      "sha256": "sha256:d1925e3af4cbe5e9331b931b93522515d984c8e9d66f0f55be619e563b519afa",
       "mode": "0644",
       "scope": "shared"
     },
@@ -500,8 +500,8 @@
     },
     {
       "path": "lib/capabilities/pod/service.js",
-      "bytes": 33508,
-      "sha256": "sha256:1a625afb9b79ac4f64eee4466be9a0a95bc779c732eadb6eeda10f4ddc008c8a",
+      "bytes": 33622,
+      "sha256": "sha256:be21c82bfd3c32c4b0f1e6fea8b1fe15781f66df987011179665eae5adbf3874",
       "mode": "0644",
       "scope": "shared"
     },
@@ -584,8 +584,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 59897,
-      "sha256": "sha256:910f3d359ccf0b5d5a13c9e062dad74fc4a610868eff1421f7607dd383662be8",
+      "bytes": 59955,
+      "sha256": "sha256:148656572586dbd8785ba0a75abb20b887d6315ea9b0695fd97b1b14ddf6fdef",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2677,8 +2677,8 @@
     },
     {
       "path": "lib/governance/observation/active-projection-refresh.js",
-      "bytes": 6416,
-      "sha256": "sha256:e1c151e2cd7fb988c08b2323ded3b343be63d83dc2a22a776116b56d6cffd2e4",
+      "bytes": 6642,
+      "sha256": "sha256:135c4aba8df0bb6ca75ab1b6b9db1e7ae50b5a1bbe78b5a4bac8e0f3a021944d",
       "mode": "0644",
       "scope": "shared"
     },

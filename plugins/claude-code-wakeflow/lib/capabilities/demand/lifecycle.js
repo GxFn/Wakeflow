@@ -884,7 +884,7 @@ async function executeTerminal(action, tool, parse, admit, value, options) {
             const verify = facts.verify;
             return afterMutationRefresh(context.root, context.signal, () => withDemandPodMutation(context, plan.demandId, () => applyTerminalLocked(context, plan, verify, "apply")));
         },
-        recover: (context, operationId) => recoverTerminal(context, action, operationId),
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.signal, () => recoverTerminal(context, action, operationId)),
         next: async (context, phase) => phase.mode === "preview"
             ? previewNext(tool, `demand-${action}-apply`, phase.planned)
             : nextAfterMutation(context, phase.outcome.demandId),
@@ -1265,7 +1265,7 @@ export async function executeDemandContinuationRequest(value, options = {}) {
                 : planDecision(context, input);
         },
         apply: (context, _input, plan) => afterMutationRefresh(context.root, context.signal, () => plan.action === "continue" ? applyContinue(context, plan) : applyDecision(context, plan)),
-        recover: (context, operationId) => recoverContinuation(context, operationId),
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.signal, () => recoverContinuation(context, operationId)),
         next: async (context, phase) => phase.mode === "preview"
             ? previewNext(WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, "demand-continuation-apply", phase.planned)
             : nextAfterMutation(context, phase.outcome.demandId),

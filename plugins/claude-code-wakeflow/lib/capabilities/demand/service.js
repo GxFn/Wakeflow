@@ -380,7 +380,7 @@ export async function executeDemandCreationRequest(value, options = {}) {
             return planCreate(context, input, facts);
         },
         apply: (context, _input, plan) => afterMutationRefresh(context.root, context.signal, () => applyCreate(context, plan)),
-        recover: (context, operationId) => recoverCreate(context, operationId),
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.signal, () => recoverCreate(context, operationId)),
         next: async (context, phase) => phase.mode === "preview"
             ? previewNext(WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, "demand-creation-apply", phase.planned)
             : nextAfterMutation(context, phase.outcome.demandId),

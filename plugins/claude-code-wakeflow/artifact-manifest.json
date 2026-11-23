@@ -1844,8 +1844,8 @@
     },
     {
       "path": "lib/foundation/filesystem/rooted-directory.js",
-      "bytes": 15719,
-      "sha256": "sha256:af61d84cabf7f64a8999611d3359475209e784dee4d1179aa88e102a9af9376e",
+      "bytes": 16527,
+      "sha256": "sha256:47592b4a380781c9b48fd905b02d227d085bbed06f1e0f2aaff32e9349137f54",
       "mode": "0644",
       "scope": "shared"
     },

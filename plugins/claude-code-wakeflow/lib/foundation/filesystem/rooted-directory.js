@@ -4,7 +4,7 @@ import { lstat, open as openFileHandle, realpath } from "node:fs/promises";
 import nodePath from "node:path";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, sameFileNodeSnapshot, } from "./file-node-snapshot.js";
+import { createFileNodeSnapshot, FileNodeSnapshotError, sameFileNodeIdentity, } from "./file-node-snapshot.js";
 import { PortableResourcePathError, splitPortableResourcePath, } from "./portable-resource-path.js";
 const ERROR_MESSAGES = {
     "root-input": "Rooted directory requires one normalized non-root absolute path.",
@@ -135,6 +135,16 @@ async function inspectCanonicalPath(physicalPath, errorPath, aliasReason, change
     }
     if (canonical !== physicalPath)
         fail(aliasReason, errorPath);
+}
+/** `physicalPath` 的父目录存在并且就是它的规范路径；不存在或看不了都算不是，由逐级检查下结论。 */
+async function isCanonicalDirectory(physicalPath) {
+    const parent = nodePath.dirname(physicalPath);
+    try {
+        return (await realpath(parent)) === parent;
+    }
+    catch {
+        return false;
+    }
 }
 async function resolveCanonicalRootPath(physicalPath, errorPath) {
     try {
@@ -281,12 +291,18 @@ export class RootedDirectory {
         return current;
     }
     /**
-     * 逐段检查一个已存在资源，不跟随最终符号链接。
+     * 检查一个已存在资源，不跟随最终符号链接：看一次节点，取一次规范路径（1.4.2）。
      *
-     * 所有中间段必须保持真实目录；最终段可为任意节点类型，供后续稳定读取方、
-     * 目录树扫描器或迁移职责所有者再施加自己的节点策略。最终节点是目录时只复验
-     * 节点类型、设备号和 inode：合法的同级变更会改变目录修改时间和状态变更时间，
-     * 但不表示目录已经被替换。
+     * 规范路径必须等于请求的路径：路径上任何一级是符号链接，或者名字只是大小写、Unicode 归一化不同的
+     * 别名，都在这里被拒绝。最终段是符号链接时取的是它父目录的规范路径，链接本身不跟随，交给调用方按
+     * 自己的节点策略处理。拒绝的原因与以前相同（`ancestor-symlink`、`ancestor-type`、`resource-alias`）：
+     * 只在这两步有一步不过的时候才逐段看一遍，说出是哪一种。目标不在时另确认一次父目录的规范路径，
+     * 父目录不是规范路径（或也不在）同样逐段看一遍：隔着符号链接祖先的"不在"不算数。
+     *
+     * 不再做的（1.4.1 及之前每次检查都做）：逐段各看一遍、整条路径再走第二遍核对每一级还是同一个节点；
+     * 每次检查前后各确认一次根目录没有被换。所以一次检查的过程中某一级目录被换掉、或一次操作中途整个
+     * 根被换掉，这里不再发现；根的身份只在打开根时与显式调用 `assertCurrent` 时核对。读的过程中文件
+     * 被改写仍由读取方在句柄上读前读后比对发现，不靠这里。
      */
     async inspectExistingResource(resourcePath, errorPath) {
         const path = normalizeErrorPath(errorPath, "$resourcePath");
@@ -300,59 +316,45 @@ export class RootedDirectory {
                 fail("resource-path", path, error);
             throw error;
         }
-        await this.assertCurrent("$root");
-        const finalPhysicalPath = resourcePhysicalPath(this.#absolutePath, segments, path);
-        const entries = [];
+        const physicalPath = resourcePhysicalPath(this.#absolutePath, segments, path);
+        try {
+            const node = await inspectPathNode(physicalPath, path, "resource-not-found");
+            await inspectCanonicalPath(node.kind === "symbolic-link" ? nodePath.dirname(physicalPath) : physicalPath, path, "resource-alias", "resource-changed");
+            return Object.freeze({ resourcePath, physicalPath, node });
+        }
+        catch (error) {
+            if (error instanceof RootedDirectoryError) {
+                // 目标"不在"只在它的父目录是规范路径时才成立：隔着一个符号链接祖先看过去的"不在"照旧拒绝。
+                const suspect = error.reason === "resource-alias" ||
+                    error.reason === "inspection-failure" ||
+                    (error.reason === "resource-not-found" && !(await isCanonicalDirectory(physicalPath)));
+                if (suspect)
+                    await this.#nameFailingAncestor(segments, path);
+            }
+            throw error;
+        }
+    }
+    /**
+     * 只在检查失败之后调用：从根往下逐级看中间目录，第一处不对的按它的种类报出来。都对就返回，由调用方
+     * 抛出原来的错误。
+     */
+    async #nameFailingAncestor(segments, path) {
         let current = this.#absolutePath;
-        for (const [index, segment] of segments.entries()) {
+        for (const segment of segments.slice(0, -1)) {
             current = nodePath.join(current, segment);
-            const isFinal = index === segments.length - 1;
-            const node = await inspectPathNode(current, path, "resource-not-found");
-            if (!isFinal && node.kind === "symbolic-link") {
+            let node;
+            try {
+                node = await inspectPathNode(current, path, "resource-not-found");
+            }
+            catch {
+                return;
+            }
+            if (node.kind === "symbolic-link")
                 fail("ancestor-symlink", path);
-            }
-            if (!isFinal && node.kind !== "directory") {
+            if (node.kind !== "directory")
                 fail("ancestor-type", path);
-            }
-            if (node.kind !== "symbolic-link") {
-                await inspectCanonicalPath(current, path, "resource-alias", "resource-changed");
-            }
-            entries.push(Object.freeze({
-                physicalPath: current,
-                node,
-                isFinal,
-            }));
+            await inspectCanonicalPath(current, path, "resource-alias", "resource-changed");
         }
-        await this.assertCurrent("$root");
-        let finalNode;
-        for (const entry of entries) {
-            const currentNode = await inspectPathNode(entry.physicalPath, path, "resource-changed");
-            if (currentNode.kind !== entry.node.kind || !sameFileNodeIdentity(entry.node, currentNode)) {
-                fail("resource-changed", path);
-            }
-            if (!entry.isFinal && currentNode.kind !== "directory") {
-                fail("resource-changed", path);
-            }
-            if (currentNode.kind !== "symbolic-link") {
-                await inspectCanonicalPath(entry.physicalPath, path, "resource-alias", "resource-changed");
-            }
-            if (entry.isFinal) {
-                const finalUnchanged = currentNode.kind === "directory"
-                    ? sameFileNodeIdentity(entry.node, currentNode)
-                    : sameFileNodeSnapshot(entry.node, currentNode);
-                if (!finalUnchanged) {
-                    fail("resource-changed", path);
-                }
-                finalNode = currentNode;
-            }
-        }
-        if (finalNode === undefined)
-            fail("inspection-failure", path);
-        return Object.freeze({
-            resourcePath,
-            physicalPath: finalPhysicalPath,
-            node: finalNode,
-        });
     }
     /** 幂等关闭根目录句柄；关闭后所有文件系统操作都会稳定拒绝。 */
     async close() {

@@ -81,7 +81,7 @@
 | 改完一处 | `npm run wf -- verify quick --changed`（静态检查 + 变更集选中的测试，含资源边） |
 | 看该跑哪一级 | `npm run wf -- impact report` |
 | 跑一个目录或文件 | `npm run test:typescript:focused -- tests/kernel tests/capabilities/tasking/decide.test.ts` |
-| 跑一条宿主链 | `npm run test:typescript:focused -- tests/scenarios/wakeflow-scenario-acceptance-codex.test.ts` |
+| 跑场景链 | `npm run test:typescript:focused -- tests/scenarios/wakeflow-scenario-acceptance-claude-code-desktop.test.ts`（1.4.2 起门里只留这一条，open-items D13） |
 | 完整门 | `npm run locked -- npm test`（或 `npm run wf -- verify gate`，回执在 `.build/verification/run-*/`） |
 | 偶发失败分诊 | `npm run wf -- test flaky --files <file> --runs 5` |
 | 刷新耗时表 | 第 2 级绿门后 `npm run wf -- timings apply --receipt <receipt.json>` |

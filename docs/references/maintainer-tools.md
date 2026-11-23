@@ -405,7 +405,7 @@ npm run --silent wf -- cache refresh --host claude-code --yes
 ## 19. 偶发失败分诊
 
 ```sh
-npm run --silent wf -- test flaky --files tests/tooling/lab/workflow.load.test.ts --runs 5
+npm run --silent wf -- test flaky --files tests/kernel/hook-observations.load.test.ts --runs 5
 ```
 
 同一组文件重复运行 N 次（1–20），每次是一条完整的聚焦运行，整个分诊持有构建锁；输出每次的结果与耗时，混合结果标为 `flaky` 且非零退出，全部失败也非零。它不自动重试洗绿，日志与 `triage.json` 留在 `.build/flaky/run-…/`。

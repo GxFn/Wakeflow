@@ -158,25 +158,32 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
     experiments on both built artifacts; an `assets/agent-text/` change selects
     those tests through a declared resource edge and is tier 1, not a full
     gate); the owning
-    slice's tests and one host's scenario chain for capability or governance
+    slice's tests and the scenario chain for capability or governance
     changes - then `npm run wf -- handoff`.
-  - Tier 2, the full gate `npm test` (about 18 min on 8 CPUs): before a
-    push or a tag, after any change under `src/foundation`, `src/kernel`,
-    `src/contracts`, `tests/scenarios` or `tooling/testing`, after a Biome,
-    knip or tsconfig change, and once per day of work. Only tier 2 receipts
-    feed `wf timings apply`. A push runs the same gate remotely
-    (`verify.yml`), so the push itself needs no second local run.
-  - The runner schedules lanes on its own (gate-log §13.204): the two scenario
-    chains and the `loadSensitive`-tagged files start at once with two workers
-    each, the rest follow at the remaining budget once the tagged files finish.
+  - Tier 2, the full gate `npm test`: an event to schedule, not a habit
+    (user ruling 2026-11-22, open-items D13). Run it before a push or a
+    release, and at most once per stage. Before it starts, the tree is frozen
+    and the cheap checks are green: `npm run wf -- handoff`, the artifact
+    rebuild, `git diff --check` and the tests the change set reaches. After a
+    green gate, a change confined to comments, whitespace, docs or agent text
+    does not get a second gate: run tier 0 (with the artifact rebuild when
+    bytes under `plugins/` change) and `wf handoff`, and say in the gate-log
+    which receipt covers which bytes. Only tier 2 receipts feed
+    `wf timings apply`. A push runs the same gate remotely (`verify.yml`),
+    so the push itself needs no second local run.
+  - The runner schedules lanes on its own (gate-log §13.204): the scenario
+    chain and the `loadSensitive`-tagged files (two workers) start at once,
+    the rest follow at the remaining budget once the tagged files finish.
     Run the gate at the default budget; `WAKEFLOW_TEST_CONCURRENCY=2` is CI's
     single-lane setting, not a local requirement. A test that times out only
     under eight workers gets the tag, not a longer timeout.
 - Each gate-log section states which tier ran and why.
 - A tier 2 receipt counts as the stage gate whoever launched it, when `wf verify`
   recorded it as `gate`, `passed` and `inputsUnchanged` and its input digest
-  equals the tree's current digest: the receipt pins the bytes, not the
-  author. Say in the gate-log whose run it was. `wf timings apply` compares
+  equals the digest of the tree it is cited for: the receipt pins the bytes,
+  not the author. A later change of the kind tier 2 exempts (comments,
+  whitespace, docs, agent text) does not void it; the gate-log names that
+  change and the checks run after it. Say in the gate-log whose run it was. `wf timings apply` compares
   that digest too, so it may run before or after the gated tree is committed.
 - Tests follow `docs/standards/testing-standard.md`: six levels (pure, component,
   capability, public-tool, tooling, artifact) with per-file budgets, placement
@@ -197,7 +204,9 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   result the item says "not checked" and does not block.
 - `npm test` is the gate: typecheck, architecture rules, lint and format
   checks (Biome), unused-code check (knip), the TypeScript tests including the
-  end-to-end scenario chain (31 scenarios, run once per host), the Schema
+  end-to-end scenario chain (31 scenarios on the Claude Code desktop
+  combination; the Codex and tmux combinations left the gate in 1.4.2 and are
+  covered by their host tests and the artifact smoke), the Schema
   and helper-script drift checks, and `build:check` against the committed
   artifacts.
 - After a change that reaches the artifacts (runtime, skills, commands,

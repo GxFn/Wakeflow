@@ -20,10 +20,9 @@ import {
 import { loadSensitive } from "../../support/load-sensitive.js";
 
 /**
- * lab 的宿主 × 业务场景矩阵（§13.169 批次 5，open-items D9）：每个宿主一个测试文件，让 LPT 调度把两个宿主放到
- * 不同的 worker 上跑，而不是一个 786 秒的文件占住关键路径。矩阵正文在这里，`workflow-codex.load.test.ts` 与
- * `workflow-claude-code.load.test.ts` 在门里各注册 `single-product`，`workflow-matrix.manual.ts` 在制品冒烟里
- * 注册其余四个实验；其余 lab 行为测试在 `workflow.load.test.ts`（§13.206 D2/D3）。
+ * lab 的宿主 × 业务场景矩阵（§13.169 批次 5，open-items D9）。矩阵正文在这里，`workflow-matrix.manual.ts`
+ * 在制品冒烟里注册 dual-product 与 worktree 的实验。门里原来各宿主注册 `single-product` 的两个文件与 lab
+ * 自己的两个行为测试在 1.4.2 的验证瘦身里删掉了（open-items D13）：`single-product` 不再有地方跑。
  */
 
 export function fixture(t: TestContext) {

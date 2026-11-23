@@ -165,8 +165,8 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
     release, and at most once per stage. Before it starts, the tree is frozen
     and the cheap checks are green: `npm run wf -- handoff`, the artifact
     rebuild, `git diff --check` and the tests the change set reaches. After a
-    green gate, a change confined to comments, whitespace, docs or agent text
-    does not get a second gate: run tier 0 (with the artifact rebuild when
+    green gate, a change confined to comments, whitespace, docs, agent text or
+    the timings table does not get a second gate: run tier 0 (with the artifact rebuild when
     bytes under `plugins/` change) and `wf handoff`, and say in the gate-log
     which receipt covers which bytes. Only tier 2 receipts feed
     `wf timings apply`. A push runs the same gate remotely (`verify.yml`),
@@ -182,7 +182,7 @@ restrictions for a prohibition on authorized Wakeflow source maintenance here.
   recorded it as `gate`, `passed` and `inputsUnchanged` and its input digest
   equals the digest of the tree it is cited for: the receipt pins the bytes,
   not the author. A later change of the kind tier 2 exempts (comments,
-  whitespace, docs, agent text) does not void it; the gate-log names that
+  whitespace, docs, agent text, the timings table) does not void it; the gate-log names that
   change and the checks run after it. Say in the gate-log whose run it was. `wf timings apply` compares
   that digest too, so it may run before or after the gated tree is committed.
 - Tests follow `docs/standards/testing-standard.md`: six levels (pure, component,

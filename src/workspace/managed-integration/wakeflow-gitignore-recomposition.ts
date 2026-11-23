@@ -7,6 +7,7 @@ import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snap
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   RootedExclusiveFileLockError,
+  retireDeadRootedExclusiveFileLock,
   withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
@@ -247,6 +248,10 @@ export async function recomposeWakeflowWorkspaceGitignore(
 
   let committed = false;
   try {
+    // 上一个重组 `.gitignore` 的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
+    await retireDeadRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, {
+      relatedTargetResourcePaths: [WAKEFLOW_GITIGNORE_REF],
+    });
     return await withRootedExclusiveFileLock(
       rootValue,
       WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,

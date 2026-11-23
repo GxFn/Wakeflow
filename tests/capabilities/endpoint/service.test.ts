@@ -45,6 +45,7 @@ import { writeHostHookObservation } from "../../../src/kernel/hook-observations.
 import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
 import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import { wakeflowWindowHostBindingMutationLockRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
@@ -371,6 +372,36 @@ test("Codex：inspect 给出启动意图与执行参数，register 需要 hook �
   equal(after.binding.bindingId, registered.binding.bindingId);
   equal(after.next.frontier, "window-registration");
   equal(after.next.blockers.length, intents.length - 1);
+});
+
+test("Codex：登记锁被死持有者留下时，只读的 inspect 照常回答，不清那把锁（1.4.2）", {
+  timeout: 60_000,
+}, async (t) => {
+  const { root, intents } = await fixture(t, executeCodexWakeflowMaintenance);
+  const intent = intents[0];
+  if (intent === undefined) throw new Error("Expected a launch intent.");
+  const lockPath = path.join(
+    root,
+    ...wakeflowWindowHostBindingMutationLockRef(codexWorkspaceHostResourceProfile).split("/"),
+  );
+  mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+  // 上一次登记的进程死在锁里。以前这把锁在场，每一个只读的调用都被拒绝，直到下一次登记把它清掉。
+  writeFileSync(
+    lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "99999999-9999-4999-8999-999999999999",
+    }),
+    { mode: 0o600 },
+  );
+  const inspected = await executeWindowBindingRequest(CODEX, {
+    root,
+    operation: "inspect",
+    windowId: intent.windowId,
+  });
+  if (inspected.kind !== "WakeflowWindowBindingInspection")
+    throw new Error("Expected an inspection.");
+  equal(inspected.binding.status, "unregistered");
+  equal(existsSync(lockPath), true, "只读的调用不清锁");
 });
 
 test("Codex：两个窗口以同一句柄交错登记——都在锁外看到无人持有，锁内复验让后进锁的以 handle-conflict 拒绝，登记表仍可读（open-items W1）", {

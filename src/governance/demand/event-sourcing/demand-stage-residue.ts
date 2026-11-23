@@ -226,7 +226,6 @@ export interface DemandStageResidueInspection {
   readonly entries: readonly Readonly<DemandStageResidueObservation>[];
   /** 写者还活着的暂存，加上读的时候正在变的目录：稍后再看。 */
   readonly activeCount: number;
-  readonly unknownCount: number;
   /**
    * 清除那一半做得成：三个目录都读得出，每个目录的形状都是分类规则认得的，`task-packages/` 里成对的
    * 目标内容与暂存名里记的摘要相符。预览与应用用的是同一套核对，所以预览说清得掉的，应用不会再以
@@ -372,7 +371,6 @@ export async function inspectDemandStageResidue(
   return Object.freeze({
     entries: Object.freeze(entries),
     activeCount: entries.filter((entry) => entry.owner === "active").length + busyDirectories,
-    unknownCount: entries.filter((entry) => entry.owner === "unknown").length,
     retirable,
   });
 }

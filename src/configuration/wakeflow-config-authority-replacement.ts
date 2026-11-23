@@ -7,6 +7,7 @@ import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapsho
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   RootedExclusiveFileLockError,
+  retireDeadRootedExclusiveFileLock,
   withRootedExclusiveFileLock,
 } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
@@ -187,6 +188,10 @@ export async function replaceWakeflowConfigAuthority(
 
   let committed = false;
   try {
+    // 上一个替换配置的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
+    await retireDeadRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, {
+      relatedTargetResourcePaths: [WAKEFLOW_CONFIG_FILE_REF],
+    });
     return await withRootedExclusiveFileLock(
       root,
       WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,

@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -22,8 +23,17 @@ import {
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-replacement.js";
-import { readWakeflowConfigAuthoritySnapshot } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
+import {
+  readWakeflowConfigAuthoritySnapshot,
+  WAKEFLOW_CONFIG_FILE_REF,
+} from "../../src/configuration/wakeflow-config-authority-snapshot.js";
+import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
@@ -99,6 +109,45 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
     equal(retried.effect, null);
     equal(retried.source.configDigest, replaced.authority.configDigest);
     equal(retried.authority, retried.source);
+  } finally {
+    await root.close();
+    rmSync(fixture.temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("Config authority replacement 清掉死持有者留下的锁与配置文件的死暂存，然后照常替换（1.4.2）", async () => {
+  const fixture = createWorkspace();
+  const root = await RootedDirectory.open(fixture.workspaceRoot);
+  try {
+    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
+    // 上一个替换配置的进程死在锁里：锁文件留着，它替换用的暂存也留着。以前没有任何路径清这把锁，
+    // 维护的 recover 走到这一步就失败。
+    writeFileSync(
+      fixture.lockPath,
+      rootedExclusiveFileLockRecordTextForTest({
+        tokenUuid: "66666666-6666-4666-8666-666666666666",
+      }),
+      { mode: 0o600 },
+    );
+    const bytes = Buffer.from("{}\n");
+    const stage = issueDurableAtomicFileStageAddress(
+      "replace",
+      WAKEFLOW_CONFIG_FILE_REF,
+      computeSha256Digest(bytes),
+      0o644,
+    );
+    releaseDurableAtomicFileStageAddress(stage);
+    const stagePath = path.join(fixture.workspaceRoot, stage.fileName);
+    writeFileSync(stagePath, bytes, { mode: 0o644 });
+
+    const replaced = await replaceWakeflowConfigAuthority(
+      root,
+      changedConfig("After A Dead Holder"),
+      source.authority,
+    );
+    equal(replaced.disposition, "replaced");
+    equal(existsSync(fixture.lockPath), false);
+    equal(existsSync(stagePath), false);
   } finally {
     await root.close();
     rmSync(fixture.temporaryRoot, { recursive: true, force: true });

@@ -16,6 +16,7 @@ import { type TestContext, test } from "node:test";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
@@ -140,6 +141,20 @@ test("Gitignore recomposition atomically creates once and then remains current",
   equal(currentReceipt.inspection.status, "managed-current");
   deepEqual(readFileSync(current.gitignorePath), createdBytes);
   equal(statSync(current.gitignorePath, { bigint: true }).ino, createdNode.ino);
+  equal(existsSync(current.lockPath), false);
+});
+
+test("Gitignore recomposition clears a dead holder's lock and then creates (1.4.2)", async (t) => {
+  const current = await fixture(t);
+  writeFileSync(
+    current.lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "88888888-8888-4888-8888-888888888888",
+    }),
+    { mode: 0o600 },
+  );
+  const created = await recomposeWakeflowWorkspaceGitignore(current.root, request());
+  equal(created.disposition, "created");
   equal(existsSync(current.lockPath), false);
 });
 

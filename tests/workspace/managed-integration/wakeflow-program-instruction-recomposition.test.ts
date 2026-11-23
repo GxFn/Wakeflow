@@ -20,6 +20,7 @@ import {
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
@@ -127,6 +128,23 @@ test("Program Instruction recomposition atomically creates once and stays curren
   equal(current.effect, null);
   deepEqual(readFileSync(workspace.instructionPath), bytes);
   equal(statSync(workspace.instructionPath, { bigint: true }).ino, node.ino);
+  equal(existsSync(workspace.lockPath), false);
+});
+
+test("Program Instruction recomposition clears a dead holder's lock and then creates (1.4.2)", async (t) => {
+  const workspace = await fixture(t);
+  writeFileSync(
+    workspace.lockPath,
+    rootedExclusiveFileLockRecordTextForTest({
+      tokenUuid: "77777777-7777-4777-8777-777777777777",
+    }),
+    { mode: 0o600 },
+  );
+  const created = await recomposeWakeflowProgramInstruction(
+    workspace.root,
+    request(null, config("en")),
+  );
+  equal(created.disposition, "created");
   equal(existsSync(workspace.lockPath), false);
 });
 

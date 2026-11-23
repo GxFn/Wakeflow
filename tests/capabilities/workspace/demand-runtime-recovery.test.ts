@@ -421,3 +421,36 @@ test("只有暂存残留的根读不出身份、或三个目录之一自己不�
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }
 });
+
+test("判断不出写者死活的暂存残留：不进计划，也不挡这个工作区的 reconcile（1.4.2；以前报 demand-stage-residue-unknown 把它挡住）", {
+  timeout: 60_000,
+}, async () => {
+  const fixture = await createTargetTaskPlanningWorkspaceFixture({ freshBaseline: true });
+  await preparePrivateModes(fixture.workspacePath);
+  const demandRoot = path.join(fixture.workspacePath, demandFinalRootRef(fixture.request.demandId));
+  const request = { root: fixture.workspacePath, ...RECONCILE_PREVIEW };
+  try {
+    const planted = plantStage(
+      demandRoot,
+      "event-sourcing/index/0000000000000009.json",
+      Buffer.from("{trunc"),
+      { paired: false },
+    );
+    releaseDurableAtomicFileStageAddress(planted.address);
+    // 同一个进程的另一个线程签发的名字：写者活着还是死了判断不出来。
+    const unknownOwner = planted.stage.replace(
+      `__${process.pid}-${threadId}-`,
+      `__${process.pid}-${threadId + 1}-`,
+    );
+    equal(unknownOwner === planted.stage, false);
+    writeFileSync(unknownOwner, "{trunc", { mode: 0o600 });
+
+    const preview = await executeCodexWakeflowMaintenance(request);
+    if (preview.mode !== "preview") throw new Error("Expected preview.");
+    equal(hasStageResidueBlocker(preview.blockerCodes), false, preview.blockerCodes.join(","));
+    equal(JSON.stringify(preview.plan).includes('"stageResidueCount"'), false);
+    for (const file of [planted.stage, unknownOwner]) equal(existsSync(file), true, file);
+  } finally {
+    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
+  }
+});

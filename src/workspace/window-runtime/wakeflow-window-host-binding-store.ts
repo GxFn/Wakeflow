@@ -5,6 +5,7 @@ import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
   DurableAtomicFileStageRecoveryError,
   recoverDurableAtomicFileStagesForTargets,
@@ -247,12 +248,13 @@ function privateNode(
   node: Readonly<FileNodeSnapshot>,
   kind: "directory" | "file",
   path: string,
+  maximumLinks = 1n,
 ): void {
   const currentUserId = currentUserIdOrNull();
   if (
     node.kind !== kind ||
     node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
-    (kind === "file" && node.linkCount !== 1n) ||
+    (kind === "file" && (node.linkCount < 1n || node.linkCount > maximumLinks)) ||
     (currentUserId !== null && node.userId !== currentUserId)
   ) {
     fail("layout", path);
@@ -315,8 +317,9 @@ async function readInventory(
 ): Promise<Readonly<WakeflowWindowHostBindingInventory>> {
   let directory: Awaited<ReturnType<typeof readStableResourceDirectory>>;
   try {
+    // 登记表的成员之外，最多还有登记锁、它的创建暂存与一份登记文件的暂存。
     directory = await readStableResourceDirectory(root, authority.bindingRootRef, {
-      maximumEntries: authority.bindingRefs.length + 1,
+      maximumEntries: authority.bindingRefs.length + 3,
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
@@ -331,9 +334,12 @@ async function readInventory(
   const bindings: Readonly<WakeflowWindowHostBinding>[] = [];
   for (const entry of directory.entries) {
     if (entry.resourcePath === authority.lockRef) {
-      privateNode(entry.node, "file", "$lock");
+      // 持有者死在锁已链接、创建暂存还没退役的那一刻时，锁是两个链接。
+      privateNode(entry.node, "file", "$lock", 2n);
       continue;
     }
+    // 登记留下的原子暂存不是成员；清它们的是下一次登记。
+    if (hasDurableAtomicFileStagePrefix(entry.name)) continue;
     if (!expected.has(entry.resourcePath)) fail("inventory", "$inventory");
     privateNode(entry.node, "file", "$inventory");
     let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
@@ -409,20 +415,6 @@ function mapLockError(error: RootedExclusiveFileLockError): never {
   fail("recovery-required", "$lock");
 }
 
-async function assertInventoryLockAbsent(
-  root: RootedDirectory,
-  authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
-): Promise<void> {
-  try {
-    const lock = await inspectRootedExclusiveFileLock(root, authority.lockRef);
-    if (lock.status !== "absent") fail("lock", "$lock");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingStoreError) throw error;
-    if (error instanceof RootedExclusiveFileLockError) fail("lock", "$lock");
-    throw error;
-  }
-}
-
 function sameInventory(
   left: Readonly<WakeflowWindowHostBindingInventory>,
   right: Readonly<WakeflowWindowHostBindingInventory>,
@@ -433,8 +425,10 @@ function sameInventory(
 /**
  * 零写入观察一份稳定的完整Binding inventory。
  *
- * 两次读取之间及结束时都要求mutation lock不存在；若一次完整注册恰好穿过观察窗口，
- * inventory差异会使本次读取失败关闭。该入口不创建锁、不恢复stage、不清理残留。
+ * 读两遍并比较：一次登记恰好穿过观察窗口时两遍不同，本次读取失败关闭。登记锁在不在不影响读（1.4.2）：
+ * 以前锁在场就拒绝，而持有者死掉之后只有下一次登记才清它，这期间每一个只读的调用都失败。现在读到的
+ * 是此刻盘面上的登记表——与一次正在进行的登记同时发生时，可能是它之前的样子。锁文件与属于登记的原子
+ * 暂存不算登记表的成员。该入口不创建锁、不恢复stage、不清理残留。
  */
 export async function inspectWakeflowWindowHostBindingInventory(
   root: RootedDirectory,
@@ -451,11 +445,8 @@ export async function inspectWakeflowWindowHostBindingInventory(
   }
   const { signal } = parseInspectOptions(optionsValue);
   assertNotAborted(signal);
-  await assertInventoryLockAbsent(root, authority);
   const first = await readInventory(root, authority, signal);
-  await assertInventoryLockAbsent(root, authority);
   const second = await readInventory(root, authority, signal);
-  await assertInventoryLockAbsent(root, authority);
   if (!sameInventory(first, second)) fail("inventory", "$inventory");
   return second;
 }

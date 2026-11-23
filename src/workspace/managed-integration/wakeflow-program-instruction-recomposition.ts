@@ -7,6 +7,7 @@ import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snap
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   RootedExclusiveFileLockError,
+  retireDeadRootedExclusiveFileLock,
   withRootedExclusiveFileLock,
 } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
@@ -238,6 +239,10 @@ export async function recomposeWakeflowProgramInstruction(
 
   let committed = false;
   try {
+    // 上一个重组程序指令的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
+    await retireDeadRootedExclusiveFileLock(rootValue, wakeflowProgramInstructionLockRef(request), {
+      relatedTargetResourcePaths: [wakeflowProgramInstructionTargetRef(request)],
+    });
     return await withRootedExclusiveFileLock(
       rootValue,
       wakeflowProgramInstructionLockRef(request),

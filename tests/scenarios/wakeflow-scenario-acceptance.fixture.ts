@@ -216,14 +216,10 @@ export const SCENARIO_CATALOG: readonly ScenarioDefinition[] = Object.freeze([
   },
 ]);
 
-/** 产品仓库相对工作区根的位置：`sibling` 是兄弟目录（`../ProductA`），`nested` 嵌套在根下面（`ProductA`）。 */
-export type ScenarioLayout = "sibling" | "nested";
-
 export interface ScenarioWorkspace {
   readonly fixtureRoot: string;
   readonly workspacePath: string;
   readonly productPath: string;
-  readonly layout: ScenarioLayout;
   /** 配置里产品仓库的落点。 */
   readonly productPlacement: string;
 }
@@ -241,16 +237,15 @@ function gitInit(directory: string): void {
 }
 
 /**
- * 建立一次性工作区：工作区根与一个产品仓库，两者都是真实 Git 仓库。`sibling` 把仓库放在根旁边（旧夹具的
- * 布局），`nested` 把仓库嵌套在根下面——真实工作区的布局（open-items D3，§13.169）。
+ * 建立一次性工作区：工作区根与一个产品仓库，两者都是真实 Git 仓库。产品仓库嵌套在根下面——真实工作区的
+ * 布局（open-items D3，§13.169）。
  */
-export function createScenarioWorkspace(layout: ScenarioLayout = "sibling"): ScenarioWorkspace {
+export function createScenarioWorkspace(): ScenarioWorkspace {
   const fixtureRoot = realpathSync(
     mkdtempSync(path.join(os.tmpdir(), "wakeflow-scenario-acceptance-")),
   );
   const workspacePath = path.join(fixtureRoot, "Workspace");
-  const productPath =
-    layout === "nested" ? path.join(workspacePath, "ProductA") : path.join(fixtureRoot, "ProductA");
+  const productPath = path.join(workspacePath, "ProductA");
   mkdirSync(workspacePath, { mode: 0o755 });
   mkdirSync(productPath, { mode: 0o755 });
   gitInit(workspacePath);
@@ -259,8 +254,7 @@ export function createScenarioWorkspace(layout: ScenarioLayout = "sibling"): Sce
     fixtureRoot,
     workspacePath,
     productPath,
-    layout,
-    productPlacement: layout === "nested" ? "ProductA" : "../ProductA",
+    productPlacement: "ProductA",
   });
 }
 

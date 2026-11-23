@@ -38,7 +38,6 @@ import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabi
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
-import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import {
   runWakeflowHookObserver,
   WAKEFLOW_HOOK_OBSERVER_HOST_ARGUMENT,
@@ -108,7 +107,6 @@ import {
   createScenarioWorkspace,
   renderScenarioReport,
   SCENARIO_CATALOG,
-  type ScenarioLayout,
   type ScenarioOutcome,
   type ScenarioWorkspace,
   scenarioToolText,
@@ -318,40 +316,6 @@ interface OutcomeResult {
   };
 }
 
-/**
- * 宿主驱动（§13.169 批次 5，open-items D2/D3/D8）：二十个场景按宿主参数化。Codex 是项目聊天宿主——
- * session-start 在工作区根，产品检出以 worktree.executionRoot 单独登记，句柄是线程标识；Claude Code 是
- * 会话宿主——session-start 在窗口根或检出里，句柄是会话 id，登记带 tmux 坐标（助手真实回执的形状）。
- * 布局也随宿主切换：Codex 用旧夹具的兄弟仓库，Claude 用真实工作区的嵌套仓库。
- */
-interface ScenarioHostDriver {
-  /** 驱动标识：一个宿主可以有多种窗口传输（ADR-0025 D8），每种传输各跑一遍链。 */
-  readonly driverId: ScenarioDriverId;
-  readonly hostId: "codex" | "claude-code";
-  /** Claude 宿主的窗口传输（`hosts.claude-code.windowTransport`）；项目聊天宿主没有。 */
-  readonly windowTransport: "tmux" | "desktop" | null;
-  readonly layout: ScenarioLayout;
-  readonly instructionFile: "AGENTS.md" | "CLAUDE.md";
-  readonly handleKind: "codex-thread" | "claude-session";
-  readonly projectThread: boolean;
-  readonly createServer: () => ReturnType<typeof createCodexWakeflowMcpServer>;
-  readonly handle: (label: string) => string;
-  /** fresh-initialize 选择里的 `hosts`：桌面传输在这里选出，tmux 与 Codex 用夹具缺省。 */
-  readonly freshHosts: Record<string, unknown> | null;
-  readonly launchPreference: (model: string) => Record<string, unknown>;
-  readonly assertLaunchExecution: (execution: Record<string, unknown>, model: string) => void;
-  /** pod 窗口的启动意图：tmux 窗口开在 pod 自己的 tmux 会话里，桌面会话与 Codex 没有 tmux。 */
-  readonly assertPodLaunch: (launchIntent: PodLaunchIntentView) => void;
-  /** 登记观察里的定位子：tmux 坐标、桌面会话 id（`local_` + 句柄），项目聊天宿主为空。 */
-  readonly locator: (label: string, handle: string) => Record<string, unknown>;
-  /** 退役时交回的关闭证据：项目聊天宿主报线程归档，tmux 交回关闭前后的 pane 清单，桌面交回会话清单。 */
-  readonly closure: (handle: string) => Record<string, unknown>;
-  /** 初始化发布的宿主资产与设置条目（ADR-0025 D6）；Codex 没有宿主资产面。 */
-  readonly hostSurface: ClaudeHostSurface | null;
-}
-
-type ScenarioDriverId = "codex" | "claude-code" | "claude-code-desktop";
-
 interface PodLaunchIntentView {
   readonly podName: string;
   readonly podPlacement: string;
@@ -362,37 +326,21 @@ interface PodLaunchIntentView {
   };
 }
 
-/** 一种 Claude 窗口传输在工作区里留下的资产与设置：助手文件、它的允许规则、状态栏资产（桌面没有）。 */
-interface ClaudeHostSurface {
-  readonly helperAssetRef: string;
-  readonly helperRule: string;
-  readonly foreignHelperAssetRef: string;
-  readonly foreignHelperRule: string;
-  readonly statuslineAssetRef: string | null;
-}
-
 /** Claude 的会话 id 是 UUID 形：从标签确定性派生，同一标签在两次运行里相同。 */
 function uuidShapedHandle(label: string): string {
   const hex = createHash("sha256").update(label).digest("hex");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-const TMUX_PANE_NUMBERS = new Map<string, number>();
-function tmuxCoordinates(label: string): Record<string, unknown> {
-  let number = TMUX_PANE_NUMBERS.get(label);
-  if (number === undefined) {
-    number = TMUX_PANE_NUMBERS.size + 1;
-    TMUX_PANE_NUMBERS.set(label, number);
-  }
-  return {
-    socketName: null,
-    sessionName: "wakeflow",
-    windowId: `@${number}`,
-    paneId: `%${number}`,
-  };
-}
+/** 一组 tmux 坐标：桌面会话传输的登记带上它必须被拒（locator-kind-mismatch）。 */
+const FOREIGN_TMUX_COORDINATES = Object.freeze({
+  socketName: null,
+  sessionName: "wakeflow",
+  windowId: "@1",
+  paneId: "%1",
+});
 
-/** Claude 两种传输共用的启动参数核对：`--model` 跟着 card-01/reconfigure 写入的偏好。 */
+/** 启动参数核对：`--model` 跟着 card-01/reconfigure 写入的偏好。 */
 function claudeArguments(execution: Record<string, unknown>, model: string): readonly string[] {
   const args = execution.arguments;
   if (!Array.isArray(args))
@@ -403,126 +351,50 @@ function claudeArguments(execution: Record<string, unknown>, model: string): rea
   return args.map(String);
 }
 
-const CLAUDE_TMUX_HOST_SURFACE: ClaudeHostSurface = Object.freeze({
-  helperAssetRef: CLAUDE_CODE_TMUX_ASSET_REF,
-  helperRule: WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-  foreignHelperAssetRef: CLAUDE_CODE_DESKTOP_ASSET_REF,
-  foreignHelperRule: WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
-  statuslineAssetRef: CLAUDE_CODE_STATUSLINE_ASSET_REF,
-});
-
-const CLAUDE_DESKTOP_HOST_SURFACE: ClaudeHostSurface = Object.freeze({
-  helperAssetRef: CLAUDE_CODE_DESKTOP_ASSET_REF,
-  helperRule: WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE,
-  foreignHelperAssetRef: CLAUDE_CODE_TMUX_ASSET_REF,
-  foreignHelperRule: WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE,
-  statuslineAssetRef: null,
-});
-
-const SCENARIO_HOST_DRIVERS: readonly ScenarioHostDriver[] = Object.freeze([
-  Object.freeze({
-    driverId: "codex" as const,
-    hostId: "codex" as const,
-    windowTransport: null,
-    layout: "sibling" as const,
-    instructionFile: "AGENTS.md" as const,
-    handleKind: "codex-thread" as const,
-    projectThread: true,
-    createServer: () => createCodexWakeflowMcpServer("1.0.0-scenario"),
-    handle: (label: string) => `codex-host-owned-thread:${label}`,
-    freshHosts: null,
-    launchPreference: (model: string) => ({
-      codex: { launch: { modelByRole: { default: model } } },
-    }),
-    assertLaunchExecution: (execution: Record<string, unknown>, model: string) => {
-      equal(execution.kind, "codex");
-      equal(execution.tool, "create_thread");
-      equal(execution.model, model);
-    },
-    assertPodLaunch: (launchIntent: PodLaunchIntentView) => {
-      equal(launchIntent.execution.tmux, undefined);
-    },
-    locator: () => ({}),
-    closure: () => ({
-      preClose: { kind: "codex-thread", status: "active" },
-      closeResult: { status: "closed" },
-      postClose: { kind: "codex-thread", status: "archived" },
-    }),
-    hostSurface: null,
+/**
+ * 链只在一个组合上跑（open-items D13）：Claude Code 宿主、桌面会话传输（ADR-0025）、产品仓库嵌套在工作区根
+ * 下面。Codex 与 tmux 两个组合在 1.4.2 的验证瘦身里删掉了，脚本里按宿主、按传输分叉的路也一并删掉；那两个
+ * 组合的宿主适配由各自切片的测试守着，不再有端到端的链。宿主相关的取值集中在这一个对象里。
+ */
+const SCENARIO_HOST_DRIVER = Object.freeze({
+  /** 组合的名字：出现在测试名与报告表的表头里。 */
+  driverId: "claude-code-desktop",
+  hostId: "claude-code",
+  instructionFile: "CLAUDE.md",
+  handleKind: "claude-session",
+  createServer: () => createClaudeCodeWakeflowMcpServer("1.0.0-scenario"),
+  handle: uuidShapedHandle,
+  /** fresh-initialize 选择里的 `hosts`：桌面会话传输在这里选出。 */
+  freshHosts: { "claude-code": { windowTransport: "desktop" } },
+  /** reconfigure 换掉整个 hosts 段：传输选择必须随偏好一起写回，否则就是一次传输切换（K2 才支持）。 */
+  launchPreference: (model: string): Record<string, unknown> => ({
+    "claude-code": { launch: { modelByRole: { default: model } }, windowTransport: "desktop" },
   }),
-  Object.freeze({
-    driverId: "claude-code" as const,
-    hostId: "claude-code" as const,
-    windowTransport: "tmux" as const,
-    layout: "nested" as const,
-    instructionFile: "CLAUDE.md" as const,
-    handleKind: "claude-session" as const,
-    projectThread: false,
-    createServer: () => createClaudeCodeWakeflowMcpServer("1.0.0-scenario"),
-    handle: uuidShapedHandle,
-    freshHosts: null,
-    launchPreference: (model: string) => ({
-      "claude-code": { launch: { modelByRole: { default: model } } },
-    }),
-    assertLaunchExecution: (execution: Record<string, unknown>, model: string) => {
-      equal(execution.kind, "claude-code", JSON.stringify(execution));
-      claudeArguments(execution, model);
-    },
-    // §13.186：Claude 上 worktree pod 的窗口开在自己的 tmux 会话 `<配置名>-<pod 名>` 里。
-    assertPodLaunch: (launchIntent: PodLaunchIntentView) => {
-      equal(launchIntent.podPlacement, "worktree");
-      equal(launchIntent.execution.tmux?.sessionName, `wakeflow-${launchIntent.podName}`);
-    },
-    locator: (label: string) => ({ tmux: tmuxCoordinates(label) }),
-    closure: () => ({
-      preClose: { kind: "tmux-panes", panes: [] },
-      closeResult: { status: "closed" },
-      postClose: { kind: "tmux-panes", panes: [] },
-    }),
-    hostSurface: CLAUDE_TMUX_HOST_SURFACE,
-  }),
+  assertLaunchExecution: (execution: Record<string, unknown>, model: string): void => {
+    assertDesktopLaunchExecution(execution);
+    claudeArguments(execution, model);
+  },
+  /** pod 窗口的启动意图：worktree 落位上的桌面启动意图，没有 tmux 会话。 */
+  assertPodLaunch: (launchIntent: PodLaunchIntentView): void => {
+    equal(launchIntent.podPlacement, "worktree");
+    equal(launchIntent.execution.tmux, undefined, "a desktop pod window has no tmux session");
+    assertDesktopLaunchExecution(launchIntent.execution as Record<string, unknown>);
+  },
   /**
-   * Claude 桌面会话传输（ADR-0025）：同一个 claude-code 宿主与制品，fresh 选择里选 `windowTransport: desktop`。
-   * 启动意图是 `claude-code-desktop`（会话 id 由宿主分配、没有 `--session-id` 与 `--worktree`），登记带桌面会话 id
-   * 而不带 tmux 坐标，关闭证据是桌面 `list_sessions` 的会话行（open-items X17：关闭前在侧栏、空闲；归档后该行带
-   * `archived`），维护只发布桌面助手、没有状态栏。
+   * 退役时交回的关闭证据：桌面 `list_sessions` 的会话行（open-items X17：关闭前在侧栏、空闲；归档后该行带
+   * `archived`）。
    */
-  Object.freeze({
-    driverId: "claude-code-desktop" as const,
-    hostId: "claude-code" as const,
-    windowTransport: "desktop" as const,
-    layout: "nested" as const,
-    instructionFile: "CLAUDE.md" as const,
-    handleKind: "claude-session" as const,
-    projectThread: false,
-    createServer: () => createClaudeCodeWakeflowMcpServer("1.0.0-scenario"),
-    handle: uuidShapedHandle,
-    freshHosts: { "claude-code": { windowTransport: "desktop" } },
-    // reconfigure 换掉整个 hosts 段：传输选择必须随偏好一起写回，否则就是一次传输切换（K2 才支持）。
-    launchPreference: (model: string) => ({
-      "claude-code": { launch: { modelByRole: { default: model } }, windowTransport: "desktop" },
-    }),
-    assertLaunchExecution: (execution: Record<string, unknown>, model: string) => {
-      assertDesktopLaunchExecution(execution);
-      claudeArguments(execution, model);
-    },
-    assertPodLaunch: (launchIntent: PodLaunchIntentView) => {
-      equal(launchIntent.podPlacement, "worktree");
-      equal(launchIntent.execution.tmux, undefined, "a desktop pod window has no tmux session");
-      assertDesktopLaunchExecution(launchIntent.execution as Record<string, unknown>);
-    },
-    locator: (_label: string, handle: string) => ({ desktop: { sessionId: `local_${handle}` } }),
-    closure: (handle: string) => {
-      const row = { sessionId: handle, desktopSessionId: `local_${handle}`, status: "idle" };
-      return {
-        preClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: false }] },
-        closeResult: { status: "closed" },
-        postClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: true }] },
-      };
-    },
-    hostSurface: CLAUDE_DESKTOP_HOST_SURFACE,
-  }),
-]);
+  closure: (handle: string): Record<string, unknown> => {
+    const row = { sessionId: handle, desktopSessionId: `local_${handle}`, status: "idle" };
+    return {
+      preClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: false }] },
+      closeResult: { status: "closed" },
+      postClose: { kind: "desktop-sessions", sessions: [{ ...row, archived: true }] },
+    };
+  },
+});
+
+type ScenarioHostDriver = typeof SCENARIO_HOST_DRIVER;
 
 /** 桌面启动意图的形状（ADR-0025 D3/D4）：执行种类、宿主分配的会话 id、侧栏标题与 cwd，参数里没有 tmux 专属项。 */
 function assertDesktopLaunchExecution(execution: Record<string, unknown>): void {
@@ -538,13 +410,9 @@ function assertDesktopLaunchExecution(execution: Record<string, unknown>): void 
   equal(args.includes("--worktree"), false, text);
 }
 
-/** 会话宿主的登记带本传输的定位子（tmux 坐标或桌面会话 id）；项目聊天宿主没有。 */
-function locatorObservation(
-  context: ScenarioContext,
-  label: string,
-  handle: string,
-): Record<string, unknown> {
-  return context.driver.locator(label, handle);
+/** 登记观察里的定位子：桌面会话 id（`local_` + 句柄）。 */
+function locatorObservation(handle: string): Record<string, unknown> {
+  return { desktop: { sessionId: `local_${handle}` } };
 }
 
 async function call(
@@ -575,7 +443,7 @@ function assertNoPrivatePath(context: ScenarioContext, result: CallToolResult): 
   );
 }
 
-/** 场景的 fresh 选择：Ledger 账本根、产品仓库按布局放置，驱动指定的 `hosts`（桌面传输在这里选出）。 */
+/** 场景的 fresh 选择：Ledger 账本根、产品仓库嵌套在工作区根下面、`hosts` 选出桌面会话传输。 */
 function scenarioFreshSelection(context: ScenarioContext) {
   const selection = createMinimalWakeflowFreshConfigSelection();
   (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
@@ -585,47 +453,44 @@ function scenarioFreshSelection(context: ScenarioContext) {
   if (repositorySelection === undefined)
     throw new Error("fresh selection lacks the product repository");
   repositorySelection.path = context.workspace.productPlacement;
-  if (context.driver.freshHosts !== null) {
-    (selection as Record<string, unknown>).hosts = structuredClone(context.driver.freshHosts);
-  }
+  (selection as Record<string, unknown>).hosts = structuredClone(context.driver.freshHosts);
   return selection;
 }
 
 /**
- * 初始化发布的宿主资产面（ADR-0025 D6）：本传输的助手字节在私有资产目录、允许规则在程序根设置里；另一种传输的
- * 助手与规则都不在；状态栏资产与本地设置条目只在 tmux 传输出现。Codex 没有宿主资产面。
+ * 初始化发布的宿主资产面（ADR-0025 D6）：桌面助手的字节在私有资产目录、它的允许规则在程序根设置里；tmux 助手
+ * 与它的规则都不在；桌面会话传输没有状态栏，状态栏资产与本地设置条目都不出现。
  */
 function assertPublishedHostSurface(context: ScenarioContext): string {
-  const surface = context.driver.hostSurface;
-  if (surface === null) return "no host surface";
   const root = context.workspace.workspacePath;
-  ok(existsSync(path.join(root, surface.helperAssetRef)), "transport helper asset missing");
+  ok(existsSync(path.join(root, CLAUDE_CODE_DESKTOP_ASSET_REF)), "desktop helper asset missing");
   equal(
-    existsSync(path.join(root, surface.foreignHelperAssetRef)),
+    existsSync(path.join(root, CLAUDE_CODE_TMUX_ASSET_REF)),
     false,
-    "the other transport's helper was published",
+    "the tmux helper was published",
   );
   const rules = allowRulesOf(path.join(root, CLAUDE_SETTINGS_REF));
-  ok(rules.includes(surface.helperRule), `helper rule missing: ${rules.join(",")}`);
+  ok(
+    rules.includes(WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE),
+    `desktop helper rule missing: ${rules.join(",")}`,
+  );
   equal(
-    rules.includes(surface.foreignHelperRule),
+    rules.includes(WAKEFLOW_CLAUDE_CODE_TMUX_PERMISSION_RULE),
     false,
-    `foreign helper rule: ${rules.join(",")}`,
+    `tmux helper rule: ${rules.join(",")}`,
   );
   const localSettings = path.join(root, CLAUDE_LOCAL_SETTINGS_REF);
-  const statusLine = existsSync(localSettings) && statusLineIsWakeflows(localSettings);
-  if (surface.statuslineAssetRef === null) {
-    equal(statusLine, false, "the desktop transport wrote a Wakeflow statusLine");
-    equal(
-      existsSync(path.join(root, CLAUDE_CODE_STATUSLINE_ASSET_REF)),
-      false,
-      "the desktop transport published the status-line asset",
-    );
-    return `helper=${path.posix.basename(surface.helperAssetRef)}, no statusline`;
-  }
-  ok(statusLine, "the tmux transport lacks Wakeflow's statusLine");
-  ok(existsSync(path.join(root, surface.statuslineAssetRef)), "status-line asset missing");
-  return `helper=${path.posix.basename(surface.helperAssetRef)}, statusline`;
+  equal(
+    existsSync(localSettings) && statusLineIsWakeflows(localSettings),
+    false,
+    "the desktop transport wrote a Wakeflow statusLine",
+  );
+  equal(
+    existsSync(path.join(root, CLAUDE_CODE_STATUSLINE_ASSET_REF)),
+    false,
+    "the desktop transport published the status-line asset",
+  );
+  return `helper=${path.posix.basename(CLAUDE_CODE_DESKTOP_ASSET_REF)}, no statusline`;
 }
 
 async function scenarioFreshInitialize(context: ScenarioContext): Promise<string> {
@@ -691,7 +556,7 @@ async function scenarioFreshInitialize(context: ScenarioContext): Promise<string
     (config.hosts as Record<string, { readonly windowTransport?: string } | undefined>)[
       "claude-code"
     ]?.windowTransport,
-    context.driver.windowTransport === "desktop" ? "desktop" : undefined,
+    "desktop",
     "fresh config carries the selected window transport",
   );
   const surface = assertPublishedHostSurface(context);
@@ -843,7 +708,7 @@ async function scenarioReconcileNoop(context: ScenarioContext): Promise<string> 
 
 /**
  * card-01/reconfigure（能力卡 1.3）：改一条声明差异（`program.description`）并加一条宿主启动偏好
- * （`hosts.codex.launch.modelByRole.default`），preview 零写且只报描述差异带出的两步，apply 只改这两处；
+ * （`hosts.claude-code.launch.modelByRole.default`），preview 零写且只报描述差异带出的两步，apply 只改这两处；
  * `storage.ledgerRoot` 与 `pods[]` 的差异被拒。hosts 不是布局（§13.116 D1），偏好随后进入启动意图。
  */
 const SCENARIO_LAUNCH_MODEL = "scenario-launch-model";
@@ -940,10 +805,10 @@ interface BindingMutation {
 }
 
 /**
- * 代 Codex 触发一次宿主 hook：喂宿主形状的 payload 给观察入口（§13.97 D9），工作区由入口按声明
- * 拓扑自己定位。场景因此端到端证明 Codex 的事件与字段映射，而不是绕开入口直接调内核写入器。
+ * 代宿主触发一次 hook：喂宿主形状的 payload 给观察入口（§13.97 D9），工作区由入口按声明拓扑自己定位。
+ * 场景因此端到端证明宿主的事件与字段映射，而不是绕开入口直接调内核写入器。
  */
-async function observeCodexHook(
+async function observeHostHook(
   context: ScenarioContext,
   event: "SessionStart" | "UserPromptSubmit" | "Stop" | "SessionEnd",
   payload: { readonly sessionId: string; readonly cwd: string; readonly prompt?: string },
@@ -972,16 +837,10 @@ async function observeCodexHook(
   );
 }
 
-/**
- * Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主触发这一条。项目聊天宿主在
- * 工作区根启动；会话宿主在窗口根启动，所以会话宿主必须给窗口。
- */
-async function recordSessionStart(context: ScenarioContext, sessionId: string, windowId?: string) {
-  const cwd =
-    context.driver.projectThread || windowId === undefined
-      ? context.workspace.workspacePath
-      : await windowPlacementPath(context, windowId);
-  await observeCodexHook(context, "SessionStart", { sessionId, cwd });
+/** Agent 在宿主里启动窗口后，宿主 hook 会留下 session-start 记录；这里代替宿主触发这一条。会话在窗口根启动。 */
+async function recordSessionStart(context: ScenarioContext, sessionId: string, windowId: string) {
+  const cwd = await windowPlacementPath(context, windowId);
+  await observeHostHook(context, "SessionStart", { sessionId, cwd });
 }
 
 /** 一次预期被拒的绑定调用：返回错误文本，断言它带着给定的稳定码。 */
@@ -1002,7 +861,7 @@ async function expectBindingRefusal(
 
 /**
  * 桌面传输的定位子二选一（ADR-0025 D3）：带 tmux 坐标报 locator-kind-mismatch，缺桌面会话 id 报
- * desktop-session-required；两次拒绝都零写，随后的正常登记照旧。tmux 链不走这里。
+ * desktop-session-required；两次拒绝都零写，随后的正常登记照旧。
  */
 async function assertDesktopLocatorRefusals(
   context: ScenarioContext,
@@ -1018,7 +877,7 @@ async function assertDesktopLocatorRefusals(
       root,
       operation: "register",
       windowId,
-      observation: { ...withoutLocator, tmux: tmuxCoordinates("desktop-foreign") },
+      observation: { ...withoutLocator, tmux: FOREIGN_TMUX_COORDINATES },
     },
     "locator-kind-mismatch",
   );
@@ -1067,12 +926,9 @@ async function scenarioWindowHandshake(context: ScenarioContext): Promise<string
     handle,
     launchIntentDigest: inspection.launchIntent.intentDigest,
     observedAt: new Date().toISOString(),
-    ...locatorObservation(context, "scenario-1", handle.value),
+    ...locatorObservation(handle.value),
   };
-  const refusals =
-    context.driver.windowTransport === "desktop"
-      ? `; refused=${await assertDesktopLocatorRefusals(context, context.productWindowId, observation)}`
-      : "";
+  const refusals = `; refused=${await assertDesktopLocatorRefusals(context, context.productWindowId, observation)}`;
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
@@ -1139,7 +995,7 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
         handle,
         launchIntentDigest: inspection.launchIntent.intentDigest,
         observedAt: new Date().toISOString(),
-        ...locatorObservation(context, "scenario-2", handle.value),
+        ...locatorObservation(handle.value),
       },
       expectedBindingId: context.productBinding.bindingId,
       expectedBindingDigest: `sha256:${"0".repeat(64)}`,
@@ -1155,7 +1011,7 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
       handle,
       launchIntentDigest: inspection.launchIntent.intentDigest,
       observedAt: new Date().toISOString(),
-      ...locatorObservation(context, "scenario-2", handle.value),
+      ...locatorObservation(handle.value),
     },
     expectedBindingId: context.productBinding.bindingId,
     expectedBindingDigest: context.productBinding.bindingDigest,
@@ -1195,27 +1051,24 @@ async function scenarioWindowReplace(context: ScenarioContext): Promise<string> 
   context.productBinding = mutation.binding;
   context.productHandle = handle.value;
   // 桌面会话发消息即续、没有可换的 pane：relocate 被拒 relocate-not-applicable（ADR-0025 D3），绑定不变。
-  const relocate =
-    context.driver.windowTransport === "desktop"
-      ? `; relocate=${await expectBindingRefusal(
-          context,
-          {
-            root,
-            operation: "relocate",
-            windowId: context.productWindowId,
-            observation: {
-              handle,
-              launchIntentDigest: inspection.launchIntent.intentDigest,
-              observedAt: new Date().toISOString(),
-              ...locatorObservation(context, "scenario-2", handle.value),
-            },
-            expectedBindingId: mutation.binding.bindingId,
-            expectedBindingDigest: mutation.binding.bindingDigest,
-          },
-          "relocate-not-applicable",
-        )}`
-      : "";
-  return `stale-cas=rejected; replace=${mutation.disposition}; generation changed${relocate}`;
+  const relocate = await expectBindingRefusal(
+    context,
+    {
+      root,
+      operation: "relocate",
+      windowId: context.productWindowId,
+      observation: {
+        handle,
+        launchIntentDigest: inspection.launchIntent.intentDigest,
+        observedAt: new Date().toISOString(),
+        ...locatorObservation(handle.value),
+      },
+      expectedBindingId: mutation.binding.bindingId,
+      expectedBindingDigest: mutation.binding.bindingDigest,
+    },
+    "relocate-not-applicable",
+  );
+  return `stale-cas=rejected; replace=${mutation.disposition}; generation changed; relocate=${relocate}`;
 }
 
 interface PublicationPreview {
@@ -1654,7 +1507,7 @@ async function recordSessionEvent(
   }
   // D2 d：session-start 之后的事件只写进已持有该句柄绑定的工作区，所以窗口必须先握手。
   // worktree pod 的产品窗口在宿主自选的检出里运行，调用方按实际检出路径给 cwd。
-  await observeCodexHook(context, event === "stop" ? "Stop" : "UserPromptSubmit", {
+  await observeHostHook(context, event === "stop" ? "Stop" : "UserPromptSubmit", {
     sessionId: handle,
     cwd: cwd ?? (await windowPlacementPath(context, windowId)),
     ...(prompt === null ? {} : { prompt }),
@@ -1851,7 +1704,7 @@ async function registerWindow(
       handle,
       launchIntentDigest: inspection.launchIntent.intentDigest,
       observedAt: new Date().toISOString(),
-      ...locatorObservation(context, handleValue, handleValue),
+      ...locatorObservation(handleValue),
     },
   });
   equal((registered.structuredContent as BindingMutation).disposition, "registered");
@@ -2702,11 +2555,11 @@ async function importAndAcceptTest(
   const importResult = imported.structuredContent as ImportResult;
   equal(importResult.status, "committed");
   equal(importResult.callback.permit.hostAction.windowId, context.controllerWindowId);
-  // X15（1.4 第 3 段）：回调的去处只在许可里——桌面会话传输给出 Controller 当前绑定的会话，其余传输为 null。
+  // X15（1.4 第 3 段）：回调的去处只在许可里——桌面会话传输给出 Controller 当前绑定的会话。
   equal(
     importResult.callback.permit.hostAction.desktopSessionId,
-    context.driver.windowTransport === "desktop" ? `local_${context.controllerHandle ?? ""}` : null,
-    "the callback permit names the Controller's desktop session only under desktop sessions",
+    `local_${context.controllerHandle ?? ""}`,
+    "the callback permit names the Controller's desktop session",
   );
   // 测试会话留下 Stop 记录后，accept 才进入允许集合。
   await recordSessionEvent(context, context.testWindowId, context.testHandle, "stop");
@@ -4292,15 +4145,11 @@ async function registerPodWindow(
       readonly podPlacement: string;
     } & PodLaunchIntentView;
   };
-  // pod 窗口的执行位置按宿主与传输核对（tmux 会话名、桌面启动意图、Codex 无 tmux）。
+  // pod 窗口的执行位置：worktree 落位上的桌面启动意图，没有 tmux 会话。
   context.driver.assertPodLaunch(inspection.launchIntent);
-  // 与另外两个辅助函数同一条路：session-start 由观察入口按 Codex payload 落地，不绕开入口直接写内核
-  // （§13.97 D9）。项目聊天在工作区根启动，产品执行检出由 worktree.executionRoot 单独登记。
-  // 项目聊天宿主在工作区根启动、检出以 executionRoot 登记；会话宿主直接在窗口根或检出里启动。
-  await observeCodexHook(context, "SessionStart", {
-    sessionId: handleValue,
-    cwd: context.driver.projectThread ? root : cwd,
-  });
+  // 与另外两个辅助函数同一条路：session-start 由观察入口按宿主 payload 落地，不绕开入口直接写内核
+  // （§13.97 D9）。会话直接在窗口根或检出里启动。
+  await observeHostHook(context, "SessionStart", { sessionId: handleValue, cwd });
   const registered = await call(context, WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME, {
     root,
     operation: "register",
@@ -4309,12 +4158,8 @@ async function registerPodWindow(
       handle: { kind: context.driver.handleKind, value: handleValue },
       launchIntentDigest: inspection.launchIntent.intentDigest,
       observedAt: new Date().toISOString(),
-      ...locatorObservation(context, handleValue, handleValue),
-      ...(worktree === undefined
-        ? {}
-        : {
-            worktree: context.driver.projectThread ? { ...worktree, executionRoot: cwd } : worktree,
-          }),
+      ...locatorObservation(handleValue),
+      ...(worktree === undefined ? {} : { worktree }),
     },
   });
   assertNoPrivatePath(context, registered);
@@ -4422,11 +4267,11 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
       windowId: windowOf("product"),
     })
   ).structuredContent as { readonly launchIntent: { readonly intentDigest: string } };
-  // 会话证据先到位，让拒绝只剩 worktree 回执缺席这一个原因（会话宿主在窗口根启动，项目聊天宿主在工作区根启动）。
+  // 会话证据先到位，让拒绝只剩 worktree 回执缺席这一个原因（会话在窗口根启动）。
   const missingWorktreeHandle = context.driver.handle("pod-product-nowt");
-  await observeCodexHook(context, "SessionStart", {
+  await observeHostHook(context, "SessionStart", {
     sessionId: missingWorktreeHandle,
-    cwd: context.driver.projectThread ? root : context.workspace.productPath,
+    cwd: context.workspace.productPath,
   });
   const missingWorktree = await context.connection.client.callTool({
     name: WAKEFLOW_WINDOW_HOST_BINDING_PUBLIC_TOOL_NAME,
@@ -4438,7 +4283,7 @@ async function scenarioPodLifecycle(context: ScenarioContext): Promise<string> {
         handle: { kind: context.driver.handleKind, value: missingWorktreeHandle },
         launchIntentDigest: productInspection.launchIntent.intentDigest,
         observedAt: new Date().toISOString(),
-        ...locatorObservation(context, "pod-product-nowt", missingWorktreeHandle),
+        ...locatorObservation(missingWorktreeHandle),
       },
     },
   });
@@ -4934,28 +4779,22 @@ function resourceAbsolutePath(context: ScenarioContext, ref: string): string {
 }
 
 /**
- * pod 产品窗口的检出位置与分支（open-items D3）。会话宿主（Claude Code）的检出在仓库自己的
- * `.claude/worktrees/<名字>` 下、分支 `worktree-<名字>`——助手与 `claude --worktree` 实际产生的布局，嵌套在
- * 仓库里而仓库又嵌套在工作区根里。项目聊天宿主（Codex）的检出由宿主自选，这里放在工作区旁边。
+ * pod 产品窗口的检出位置与分支（open-items D3）。检出在仓库自己的 `.claude/worktrees/<名字>` 下、分支
+ * `worktree-<名字>`——助手与 `claude --worktree` 实际产生的布局，嵌套在仓库里而仓库又嵌套在工作区根里。
  */
 function podCheckoutOf(
   context: ScenarioContext,
   podName: string,
 ): { readonly checkout: string; readonly branch: string } {
-  return context.driver.projectThread
-    ? {
-        checkout: path.join(context.workspace.fixtureRoot, `wt-${podName}`),
-        branch: `wakeflow-${podName}`,
-      }
-    : {
-        checkout: path.join(
-          context.workspace.productPath,
-          ".claude",
-          "worktrees",
-          `wakeflow-${podName}`,
-        ),
-        branch: `worktree-wakeflow-${podName}`,
-      };
+  return {
+    checkout: path.join(
+      context.workspace.productPath,
+      ".claude",
+      "worktrees",
+      `wakeflow-${podName}`,
+    ),
+    branch: `worktree-wakeflow-${podName}`,
+  };
 }
 
 /** 经公共工具建一个 worktree pod 并带到 ready：四个窗口握手，产品窗口在真实 worktree 里交回 git 事实。 */
@@ -5297,13 +5136,8 @@ async function assertVerifyGates(
   equal(clean.repairsApplied, false);
   equal(clean.demand, null);
   equal(clean.next.frontier, "runtime-artifact-unavailable");
-  // Codex 没有状态栏资产面（not-applicable）；Claude 的资产由初始化按传输发布（tmux：助手与状态栏；桌面：只有
-  // 桌面助手），字节与设置条目都 current（无码）。
-  equal(
-    gateOf(clean, "host-settings-assets").code,
-    context.driver.hostId === "codex" ? "not-applicable" : null,
-    "host assets gate per host",
-  );
+  // 宿主资产由初始化按传输发布（桌面会话传输只有桌面助手），字节与设置条目都 current（无码）。
+  equal(gateOf(clean, "host-settings-assets").code, null, "host assets are current");
   equal(gateOf(clean, "window-identity").code, "unregistered:1", "unregistered is not damage");
   // 带 demandId：demand.gates 原样复用 demand 切片的门（D3，不改名）。它们是完成预检的语义，
   // 所以在飞投递让 work-claims-released 报出持有声明的窗口；这不影响工作区级的 ok。
@@ -6862,20 +6696,6 @@ interface DetachMutationResult extends MaintenanceMutationResult {
   readonly leftBehind?: readonly string[];
 }
 
-/**
- * ADR-0024 的两个 Claude 宿主步：只在 Claude 链的 detach-workspace 计划里出现；状态行删除步只在有 Wakeflow 的
- * 状态行条目时计划，桌面传输没有状态栏（ADR-0025 D6），所以只有规则删除步。
- */
-const DETACH_CLAUDE_HOST_STEP_KINDS: readonly string[] = Object.freeze([
-  "remove-portable-settings-rules",
-  "remove-statusline-entry",
-]);
-
-function detachHostStepExpected(context: ScenarioContext, kind: string): boolean {
-  const surface = context.driver.hostSurface;
-  if (surface === null) return false;
-  return kind !== "remove-statusline-entry" || surface.statuslineAssetRef !== null;
-}
 const CLAUDE_SETTINGS_REF = ".claude/settings.json";
 const CLAUDE_LOCAL_SETTINGS_REF = ".claude/settings.local.json";
 /** 用户自己的条目都不含 wakeflow 字样：detach 之后必须原样留下。 */
@@ -7153,8 +6973,9 @@ function statusLineIsWakeflows(file: string): boolean {
 }
 
 /**
- * Claude 链：detach 之前程序根带 Wakeflow 的 MCP 规则与状态行条目；再放一条用户自己的允许规则、把 Test 面的
- * `statusLine` 换成用户自己的——detach 必须精确删 Wakeflow 的条目、留下用户的（ADR-0024）。
+ * detach 之前程序根带 Wakeflow 的 MCP 规则；再放一条用户自己的允许规则、在 Test 面写一条用户自己的
+ * `statusLine`（桌面会话传输没有状态栏，这一条是用户自己写进来的）——detach 必须精确删 Wakeflow 的条目、
+ * 留下用户的（ADR-0024）。
  */
 function prepareClaudeUserSettings(context: ScenarioContext): void {
   const root = context.workspace.workspacePath;
@@ -7171,28 +6992,16 @@ function prepareClaudeUserSettings(context: ScenarioContext): void {
   };
   writeFileSync(programSettings, `${JSON.stringify(document, null, 2)}\n`);
   const testLocal = path.join(root, "Test", CLAUDE_LOCAL_SETTINGS_REF);
-  if (context.driver.hostSurface?.statuslineAssetRef === null) {
-    // 桌面传输没有状态栏：Test 面的用户状态行是用户自己写进来的，detach 同样必须留下它。
-    for (const local of [path.join(root, CLAUDE_LOCAL_SETTINGS_REF), testLocal]) {
-      equal(existsSync(local) && statusLineIsWakeflows(local), false, "desktop wrote a statusLine");
-    }
-    const local = existsSync(testLocal) ? readJsonDocument(testLocal) : {};
-    local.statusLine = { ...USER_STATUS_LINE };
-    mkdirSync(path.dirname(testLocal), { recursive: true });
-    writeFileSync(testLocal, `${JSON.stringify(local, null, 2)}\n`);
-    return;
+  for (const local of [path.join(root, CLAUDE_LOCAL_SETTINGS_REF), testLocal]) {
+    equal(existsSync(local) && statusLineIsWakeflows(local), false, "desktop wrote a statusLine");
   }
-  ok(
-    statusLineIsWakeflows(path.join(root, CLAUDE_LOCAL_SETTINGS_REF)),
-    "program root lacks Wakeflow's statusLine before detach",
-  );
-  ok(statusLineIsWakeflows(testLocal), "Test surface lacks Wakeflow's statusLine before detach");
-  const local = readJsonDocument(testLocal);
+  const local = existsSync(testLocal) ? readJsonDocument(testLocal) : {};
   local.statusLine = { ...USER_STATUS_LINE };
+  mkdirSync(path.dirname(testLocal), { recursive: true });
   writeFileSync(testLocal, `${JSON.stringify(local, null, 2)}\n`);
 }
 
-/** Claude 链 detach 之后：三处 settings 都没有含 wakeflow 的允许规则，用户规则与用户状态行原样留下。 */
+/** detach 之后：三处 settings 都没有含 wakeflow 的允许规则，用户规则与用户状态行原样留下。 */
 function assertClaudeSettingsDetached(context: ScenarioContext): string {
   const root = context.workspace.workspacePath;
   for (const surface of ["", "Design", "Test"]) {
@@ -7216,7 +7025,7 @@ function assertClaudeSettingsDetached(context: ScenarioContext): string {
     { ...USER_STATUS_LINE },
     "user statusLine lost",
   );
-  return "claude: no Wakeflow rules, user rule kept, Wakeflow statusLine gone, user statusLine kept";
+  return "no Wakeflow rules, user rule kept, no Wakeflow statusLine, user statusLine kept";
 }
 
 interface DetachWorkspaceEvidence {
@@ -7225,8 +7034,8 @@ interface DetachWorkspaceEvidence {
 }
 
 /**
- * detach-workspace：用户自己的内容先放进去（工作区 .gitignore 一行；Claude 链的用户规则与用户状态行），preview 零写、
- * 步骤种类按宿主、retire-config 收尾；apply 后配置改名为 wakeflow.detached.json（字节不变），托管块只删 Wakeflow 的、
+ * detach-workspace：用户自己的内容先放进去（工作区 .gitignore 一行；用户规则与用户状态行），preview 零写、
+ * 两个宿主步按桌面会话传输核对、retire-config 收尾；apply 后配置改名为 wakeflow.detached.json（字节不变），托管块只删 Wakeflow 的、
  * 所有者正文与用户行留下，全部窗口投影不在，不碰的目录都在且列入 leftBehind，owner-managed 的 ProductA 整树不动。
  */
 async function detachWholeWorkspace(
@@ -7236,14 +7045,12 @@ async function detachWholeWorkspace(
   const root = context.workspace.workspacePath;
   if (!context.productWindowId)
     throw new Error("scenario ordering: fresh-initialize must run first");
-  const isClaude = context.driver.hostId === "claude-code";
   const gitignorePath = path.join(root, ".gitignore");
   const gitignoreBefore = readFileSync(gitignorePath, "utf8");
   ok(gitignoreBefore.includes(".wakeflow-local"), "workspace .gitignore lacks Wakeflow's block");
   const separator = gitignoreBefore.endsWith("\n") ? "" : "\n";
   writeFileSync(gitignorePath, `${gitignoreBefore}${separator}${USER_IGNORE_RULE}\n`);
-  if (isClaude) prepareClaudeUserSettings(context);
-  else equal(existsSync(path.join(root, ".claude")), false, "Codex wrote host settings");
+  prepareClaudeUserSettings(context);
   const configBefore = readFileSync(path.join(root, "wakeflow.config.json"));
   const configDocumentBefore = readConfigDocument(root);
   const windowIds = configWindowIds(configDocumentBefore);
@@ -7262,13 +7069,10 @@ async function detachWholeWorkspace(
   ok(kinds.includes("retire-window-projections"), kinds.join(","));
   equal(kinds.at(-1), "retire-config", kinds.join(","));
   equal(kinds.includes("publish-config"), false, kinds.join(","));
-  for (const kind of DETACH_CLAUDE_HOST_STEP_KINDS) {
-    equal(
-      kinds.includes(kind),
-      detachHostStepExpected(context, kind),
-      `${kind} on ${context.driver.driverId}: ${kinds.join(",")}`,
-    );
-  }
+  // ADR-0024 的两个 Claude 宿主步：规则删除步在计划里；状态行删除步只在有 Wakeflow 的状态行条目时计划，
+  // 桌面会话传输没有状态栏（ADR-0025 D6），所以不在。
+  ok(kinds.includes("remove-portable-settings-rules"), kinds.join(","));
+  equal(kinds.includes("remove-statusline-entry"), false, kinds.join(","));
   assertRootsUnchanged(before, roots, "detach-workspace preview wrote");
   const detached = await applyMaintenance<DetachMutationResult>(
     context,
@@ -7317,9 +7121,7 @@ async function detachWholeWorkspace(
     [context.workspace.productPath],
     "detach touched owner-managed ProductA",
   );
-  const host = isClaude
-    ? assertClaudeSettingsDetached(context)
-    : "codex: no host steps, no .claude";
+  const host = assertClaudeSettingsDetached(context);
   return {
     configDocumentBefore,
     text: `detach-workspace=${detached.status} (${kinds.join("+")}; leftBehind=${leftBehind.length}; config→detached.json byte-equal; user .gitignore rule kept; ProductC owner text kept; projections gone; ProductA untouched; ${host})`,
@@ -7413,28 +7215,24 @@ const SCENARIO_RUNNERS: Readonly<Record<string, (context: ScenarioContext) => Pr
   });
 
 /**
- * 每个宿主一组、每个场景一个 `test()`（open-items D8）：场景仍在同一个一次性工作区上顺序推进，前序场景
- * 失败时后续场景以 `skip` 明确标出被谁挡住，而不是整条链消失成一个 `not-run`。报告表在组结束时照旧输出。
+ * 每个场景一个 `test()`（open-items D8）：场景在同一个一次性工作区上顺序推进，前序场景失败时后续场景以
+ * `skip` 明确标出被谁挡住，而不是整条链消失成一个 `not-run`。报告表在组结束时照旧输出。链由
+ * `wakeflow-scenario-acceptance-claude-code-desktop.test.ts` 登记。
  */
-/**
- * 每个宿主一个测试文件（`wakeflow-scenario-acceptance-<host>.test.ts`）登记同一条链：两组在不同的一次性工作区上
- * 推进，门的两个 worker 可以并行安排它们；只跑一个宿主就聚焦运行对应文件。
- */
-export function registerScenarioAcceptance(driverId: ScenarioDriverId): void {
-  const driver = SCENARIO_HOST_DRIVERS.find((entry) => entry.driverId === driverId);
-  if (driver === undefined) throw new Error(`unknown scenario driver ${driverId}`);
-  describe(`scenario acceptance on ${driver.driverId} (${driver.layout} layout)`, () => {
+export function registerScenarioAcceptance(): void {
+  const driver = SCENARIO_HOST_DRIVER;
+  describe(`scenario acceptance on ${driver.driverId} (nested layout)`, () => {
     let context: ScenarioContext | null = null;
     const outcomes: ScenarioOutcome[] = [];
     let blockedBy: string | null = null;
     before(async () => {
-      const workspace = createScenarioWorkspace(driver.layout);
+      const workspace = createScenarioWorkspace();
       const connection = await connectWakeflowMcpServerForTest(driver.createServer());
       context = { workspace, connection, driver };
     });
     after(async () => {
       const report = renderScenarioReport(outcomes);
-      process.stdout.write(`\n${driver.driverId}/${driver.layout}:\n${report}\n`);
+      process.stdout.write(`\n${driver.driverId}/nested:\n${report}\n`);
       if (context !== null) {
         equal(report.includes(context.workspace.fixtureRoot), false);
         await context.connection.close();

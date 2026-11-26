@@ -71,14 +71,6 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
         processing: "managed-integration-text:exact-source-recompose",
       },
       {
-        declarationId: "host-runtime.codex.instruction-lock",
-        ownerId: "host-instruction-integration",
-        relativePath: ".wakeflow-program-instruction-codex.lock",
-        tracking: "ignored:runtime-private",
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
-      },
-      {
         declarationId: "host-runtime.codex.window-runtime-projections-root",
         ownerId: "window-runtime-projection",
         relativePath: ".wakeflow-local/runtime/hosts/codex/projections/window-runtime",
@@ -95,15 +87,6 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
         processing: "directory-container:materialize-directory",
       },
       {
-        declarationId: "host-runtime.codex.window-identity-lock",
-        ownerId: "window-host-binding",
-        relativePath:
-          ".wakeflow-local/runtime/hosts/codex/identity/window-bindings/.registration.lock",
-        tracking: "ignored:runtime-private",
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
-      },
-      {
         declarationId: "host-runtime.codex.pod-receipts-root",
         ownerId: "pod-receipts",
         relativePath: ".wakeflow-local/runtime/hosts/codex/pods",
@@ -114,7 +97,7 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
     ],
   );
   // 复审 J5：Codex 没有 operations 表面，也不再声明无人使用的 keep-live 目录。
-  equal(catalog.length, 9);
+  equal(catalog.length, 7);
   equal(
     catalog.every(
       (entry) =>
@@ -183,14 +166,6 @@ test("optional Host resources are compiled from profile values without host bran
         processing: "managed-integration-text:exact-source-recompose",
       },
       {
-        declarationId: "host-runtime.claude-code.instruction-lock",
-        ownerId: "host-instruction-integration",
-        relativePath: ".wakeflow-program-instruction-claude-code.lock",
-        tracking: "ignored:runtime-private",
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
-      },
-      {
         declarationId: "host-runtime.claude-code.window-runtime-projections-root",
         ownerId: "window-runtime-projection",
         relativePath: ".wakeflow-local/runtime/hosts/claude-code/projections/window-runtime",
@@ -205,15 +180,6 @@ test("optional Host resources are compiled from profile values without host bran
         tracking: "ignored:runtime-private",
         mode: "0700",
         processing: "directory-container:materialize-directory",
-      },
-      {
-        declarationId: "host-runtime.claude-code.window-identity-lock",
-        ownerId: "window-host-binding",
-        relativePath:
-          ".wakeflow-local/runtime/hosts/claude-code/identity/window-bindings/.registration.lock",
-        tracking: "ignored:runtime-private",
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
       },
       {
         declarationId: "host-runtime.claude-code.pod-receipts-root",
@@ -282,8 +248,10 @@ test("optional Host resources are compiled from profile values without host bran
     ],
   );
   // 复审 J5：定位器声明在真实目录 identity 下；activity-monitor 与 temp/prompts 不再声明。
-  equal(catalog.length, 16);
-  const statusline = catalog[14];
+  equal(catalog.length, 14);
+  const statusline = catalog.find(
+    (entry) => entry.declarationId === "host-runtime.claude-code.statusline-asset",
+  );
   equal(statusline?.nodePolicy.kind, "file");
   if (statusline?.nodePolicy.kind === "file") {
     equal(statusline.nodePolicy.executablePolicy, "forbidden");
@@ -334,7 +302,6 @@ test("optional Host resources are compiled from profile values without host bran
       "host-runtime.codex.identity-root",
       "host-runtime.codex.projections-root",
       "host-runtime.codex.instruction",
-      "host-runtime.codex.instruction-lock",
       "host-runtime.codex.window-runtime-projections-root",
       "host-runtime.codex.operations-root",
       "host-runtime.codex.window-locators-root",

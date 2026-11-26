@@ -18,12 +18,6 @@ import {
   RootedDirectoryTreeRemovalError,
   removeRootedDirectoryTree,
 } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-  retireRootedExclusiveFileLockResidue,
-  withRootedExclusiveFileLock,
-} from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -36,13 +30,9 @@ import {
   computeLedgerAuthorityRecordDigest,
   type RequirementRecord,
 } from "./ledger-authority-record.js";
-import {
-  LEDGER_DURABLE_DIRECTORY_MODE,
-  LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-} from "./ledger-authority-storage-policy.js";
+import { LEDGER_DURABLE_DIRECTORY_MODE } from "./ledger-authority-storage-policy.js";
 import {
   throwLedgerAuthorityStoreError as fail,
-  LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
 } from "./ledger-authority-store-contract.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
@@ -50,7 +40,8 @@ import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.
 /**
  * Wakeflow Governance / Ledger：逐记录发布流程的私有存储与协调边界。
  *
- * 本模块负责暂存目录、逐记录锁和最终目标回读校验，不解析调用方提供的成员输入。
+ * 本模块负责暂存目录和最终目标回读校验，不解析调用方提供的成员输入。发布之间的互斥不在这里：调用方
+ * 持有工作区的账本记录锁（ADR-0033）——账本目录里不放锁文件。
  *
  * 发布不记日志（1.4 第 5 段 5a 的 A 行，ADR-0031）：需求包的身份由内容推出，同一个标识的暂存目录
  * 只可能装着同样的字节，所以被打断的发布由同一个请求再发一次续上——暂存补齐（补不了的崩溃残留删掉
@@ -58,11 +49,10 @@ import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.
  * 已经删掉。
  */
 
-/** 一次发布在内存里的计划：记录、它的三个路径与目录树的精确清单。不落盘。 */
+/** 一次发布在内存里的计划：记录、它的两个路径与目录树的精确清单。不落盘。 */
 export interface LedgerRecordPublicationPlan {
   readonly record: Readonly<RequirementRecord>;
   readonly finalRootRef: PortableResourcePath;
-  readonly lockRef: PortableResourcePath;
   readonly stageRef: PortableResourcePath;
   readonly treePlan: Readonly<DirectoryTreeCandidatePlan>;
 }
@@ -148,65 +138,6 @@ export async function retireLedgerRecordPublicationStage(
       if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("recovery-required", "$stage", error);
     }
-    throw error;
-  }
-}
-
-export async function prepareLedgerRecordPublicationLockRecovery(
-  root: RootedDirectory,
-  lockRef: PortableResourcePath,
-): Promise<void> {
-  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
-  try {
-    observation = await inspectRootedExclusiveFileLock(root, lockRef);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("lock-unsafe", "$lock", error);
-    }
-    throw error;
-  }
-  if (observation.status !== "held" || observation.ownerState !== "inactive") {
-    return;
-  }
-  try {
-    await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("recovery-required", "$lock", error);
-    }
-    throw error;
-  }
-}
-
-function mapLockError(error: RootedExclusiveFileLockError): never {
-  if (error.reason === "timeout") fail("lock-timeout", "$lock");
-  if (error.reason === "aborted") fail("aborted", "$signal");
-  if (
-    error.reason === "unsafe-lock" ||
-    error.reason === "parent" ||
-    error.reason === "root-scope"
-  ) {
-    fail("lock-unsafe", "$lock");
-  }
-  fail("recovery-required", "$lock");
-}
-
-export async function withLedgerRecordPublicationLock<Result>(
-  root: RootedDirectory,
-  lockRef: PortableResourcePath,
-  signal: AbortSignal | undefined,
-  action: () => Promise<Result>,
-): Promise<Result> {
-  try {
-    return await withRootedExclusiveFileLock(root, lockRef, action, {
-      acquireTimeoutMilliseconds: LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-      // 账本记录锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L7）。
-      durability: "content-only",
-      ...(signal === undefined ? {} : { signal }),
-    });
-  } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityStoreError) throw error;
-    if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
     throw error;
   }
 }

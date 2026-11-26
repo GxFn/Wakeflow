@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -18,10 +19,18 @@ import {
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { acquireKernelFileLock } from "../../../src/foundation/filesystem/kernel-file-lock.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import {
+  materializeWorkspaceLocksRoot,
+  workspaceLockRef,
+} from "../../../src/kernel/workspace-locks.js";
 import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-body-authority.js";
 import {
@@ -30,7 +39,6 @@ import {
   type WakeflowProgramInstructionRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
-import { wakeflowProgramInstructionRecompositionLockRef } from "../../../src/workspace/workspace-host-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
@@ -39,7 +47,6 @@ useDisposableDurability();
 interface Fixture {
   readonly absolutePath: string;
   readonly instructionPath: string;
-  readonly lockPath: string;
   readonly root: RootedDirectory;
 }
 
@@ -52,7 +59,6 @@ async function fixture(t: TestContext, source?: string | Uint8Array): Promise<Re
   if (source !== undefined) {
     writeFileSync(instructionPath, source, { mode: 0o644 });
   }
-  const lockRef = wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile);
   const root = await RootedDirectory.open(absolutePath);
   t.after(async () => {
     await root.close();
@@ -61,7 +67,6 @@ async function fixture(t: TestContext, source?: string | Uint8Array): Promise<Re
   return Object.freeze({
     absolutePath,
     instructionPath,
-    lockPath: path.join(absolutePath, lockRef),
     root,
   });
 }
@@ -119,7 +124,6 @@ test("Program Instruction recomposition atomically creates once and stays curren
   equal(created.inspection.status, "managed-current");
   equal(created.inspection.transition.target, null);
   equal(statSync(workspace.instructionPath).mode & 0o777, 0o644);
-  equal(existsSync(workspace.lockPath), false);
   const bytes = readFileSync(workspace.instructionPath);
   const node = statSync(workspace.instructionPath, { bigint: true });
 
@@ -128,24 +132,33 @@ test("Program Instruction recomposition atomically creates once and stays curren
   equal(current.effect, null);
   deepEqual(readFileSync(workspace.instructionPath), bytes);
   equal(statSync(workspace.instructionPath, { bigint: true }).ino, node.ino);
-  equal(existsSync(workspace.lockPath), false);
+  // 锁在私有的锁目录里（ADR-0033）：工作区根上没有锁文件。
+  deepEqual(
+    readdirSync(workspace.absolutePath).filter((name) => name.endsWith(".lock")),
+    [],
+  );
 });
 
-test("Program Instruction recomposition clears a dead holder's lock and then creates (1.4.2)", async (t) => {
-  const workspace = await fixture(t);
-  writeFileSync(
-    workspace.lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "77777777-7777-4777-8777-777777777777",
-    }),
-    { mode: 0o600 },
+test("Program Instruction recomposition settles a dead writer's stage and then replaces (ADR-0033)", async (t) => {
+  const workspace = await fixture(t, "# User section\n");
+  // 上一个重组的进程死在写到一半：内核已经收走它的锁，它替换用的暂存还留着。
+  const bytes = Buffer.from("stale\n");
+  const stage = issueDurableAtomicFileStageAddress(
+    "replace",
+    parsePortableResourcePath("AGENTS.md"),
+    computeSha256Digest(bytes),
+    0o644,
   );
-  const created = await recomposeWakeflowProgramInstruction(
+  releaseDurableAtomicFileStageAddress(stage);
+  const stagePath = path.join(workspace.absolutePath, stage.fileName);
+  writeFileSync(stagePath, bytes, { mode: 0o644 });
+
+  const replaced = await recomposeWakeflowProgramInstruction(
     workspace.root,
     request(null, config("en")),
   );
-  equal(created.disposition, "created");
-  equal(existsSync(workspace.lockPath), false);
+  equal(replaced.disposition, "replaced");
+  equal(existsSync(stagePath), false);
 });
 
 test("Program Instruction recomposition replaces an admitted language render and preserves outside", async (t) => {
@@ -176,7 +189,6 @@ test("Program Instruction recomposition replaces an admitted language render and
   const finalBytes = readFileSync(workspace.instructionPath);
   deepEqual(finalBytes.subarray(0, outside.byteLength), outside);
   equal(finalBytes.includes(Buffer.from("Wakeflow 程序指令")), true);
-  equal(existsSync(workspace.lockPath), false);
 });
 
 test("Program Instruction recomposition rejects unsafe source and bounded lock contention", async (t) => {
@@ -188,26 +200,14 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
     "source-invalid",
     "$source",
   );
-  equal(existsSync(unsafe.lockPath), false);
 
   const contended = await fixture(t);
-  let enter: (() => void) | undefined;
-  let release: (() => void) | undefined;
-  const entered = new Promise<void>((resolve) => {
-    enter = resolve;
-  });
-  const released = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const holder = withRootedExclusiveFileLock(
+  await materializeWorkspaceLocksRoot(contended.root);
+  const lease = await acquireKernelFileLock(
     contended.root,
-    wakeflowProgramInstructionRecompositionLockRef(codexWorkspaceHostResourceProfile),
-    async () => {
-      enter?.();
-      await released;
-    },
+    workspaceLockRef("program-instruction"),
+    "exclusive",
   );
-  await entered;
   try {
     await expectRecompositionError(
       () =>
@@ -219,8 +219,6 @@ test("Program Instruction recomposition rejects unsafe source and bounded lock c
       "$lock",
     );
   } finally {
-    release?.();
-    await holder;
+    await lease.release();
   }
-  equal(existsSync(contended.lockPath), false);
 });

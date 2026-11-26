@@ -1,532 +1,234 @@
+/**
+ * Level 1 (component): 读写作用域在一次性根上的行为——共享者并存、等待中的写者关上门并等在场的共享者走完、
+ * 准入前检查在门内执行、失败与中止不留下持有、持有者被强杀之后不需要清理（ADR-0017，ADR-0033 决定 4）。
+ * "别的进程"用真实子进程表示，所以带负载敏感标签。
+ */
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { threadId } from "node:worker_threads";
-import {
-  issueDurableAtomicFileStageAddress,
-  releaseDurableAtomicFileStageAddress,
-} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
+
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  RootedExclusiveFileLockError,
-  setRootedExclusiveFileLockReleaseFailureReporter,
-} from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   RootedReadWriteScopeError,
   withRootedReadWriteScope,
 } from "../../../src/foundation/filesystem/rooted-read-write-scope.js";
-import {
-  RootedResourceParentHandle,
-  RootedResourceParentHandleError,
-} from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "./rooted-exclusive-file-lock-test-support.js";
 
-/**
- * Level 1 (component): shared/exclusive admission on a disposable root — reader overlap, writer closure
- * and draining, cancellation, latch settlement failures, unknown owners, dead-reader retirement
- * (§13.161 F1/F2/F4) and lease settlement after the critical section (B10, open-items W8).
- *
- * Latch settlement failures are injected in two places. At the latch's unlink, through
- * `filesystemMutation.unlink`: the injection performs the real unlink first and then reports a failure,
- * so the directory entry change happened but its settlement did not, and the release never reaches the
- * admission directory sync that follows every release (the latch and leases are light only at
- * acquisition; replan section 3, path C). And at that sync itself, through the parent handle: the
- * unlink settled and the sync that should make it durable fails. Both leave the same visible state and
- * the same `release-failure`. The replacement test below injects at the unlink only. The sync counts are
- * pinned in durability-class-counts.test.ts.
- */
+const LOCKS = Object.freeze({
+  gate: parsePortableResourcePath("admission/gate.lock"),
+  scope: parsePortableResourcePath("admission/scope.lock"),
+});
+const SHORT = { acquireTimeoutMilliseconds: 200 } as const;
 
-/** A settlement failure reported by the unlink after the directory entry change already happened. */
-function injectedUnlinkFailure(): Error {
-  return Object.assign(new Error("Injected latch unlink failure."), { code: "EIO" });
-}
-
-const AREA = parsePortableResourcePath("admission");
-async function fixture(t: TestContext) {
-  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-admission-")));
-  mkdirSync(path.join(base, AREA), { mode: 0o700 });
-  const root = await RootedDirectory.open(base);
+async function fixture(t: TestContext): Promise<RootedDirectory> {
+  const directory = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-rw-scope-")));
+  mkdirSync(path.join(directory, "admission"), { mode: 0o700 });
+  const root = await RootedDirectory.open(directory);
   t.after(async () => {
     await root.close();
-    rmSync(base, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true });
   });
-  return { base, root, area: path.join(base, AREA) };
+  return root;
 }
 
-async function until(predicate: () => boolean) {
-  const end = performance.now() + 5000;
-  while (!predicate()) {
-    if (performance.now() > end) throw new Error("Checkpoint timed out.");
-    await delay(10);
-  }
+function scopeError(reason: RootedReadWriteScopeError["reason"]) {
+  return (error: unknown) => error instanceof RootedReadWriteScopeError && error.reason === reason;
 }
 
-test("shared readers overlap; a waiting writer closes admission and drains existing readers", {
-  timeout: 15000,
-}, async (t) => {
-  if (loadSensitive(t, "real reader processes and latch waits")) return;
-  const f = await fixture(t);
-  const release = Promise.withResolvers<void>();
-  const releaseWriter = Promise.withResolvers<void>();
-  const events: string[] = [];
-  const first = withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-    events.push("first");
-    await release.promise;
-  });
-  const second = withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-    events.push("second");
-    await release.promise;
-  });
-  await until(() => events.length === 2);
-  const writer = withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {
-    events.push("writer");
-    await releaseWriter.promise;
-  });
-  await until(() => existsSync(path.join(f.area, "writer.lock")));
-  let lateEntered = false;
-  const late = withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-    lateEntered = true;
-    events.push("late");
-  });
-  try {
-    equal(events.includes("writer"), false);
-    equal(lateEntered, false);
-    release.resolve();
-    await Promise.all([first, second]);
-    await until(() => events.includes("writer"));
-    equal(lateEntered, false);
-    releaseWriter.resolve();
-    await Promise.all([writer, late]);
-    deepEqual(events.slice(2), ["writer", "late"]);
-    deepEqual(readdirSync(f.area), []);
-  } finally {
-    release.resolve();
-    releaseWriter.resolve();
-    await Promise.allSettled([first, second, writer, late]);
+async function until(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    if (predicate()) return;
+    await delay(5);
   }
-});
+  throw new Error("condition was not reached");
+}
 
-test("cancellation and failed callbacks release their leases without entering a waiting reader", async (t) => {
-  const f = await fixture(t);
-  const entered = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
-  const writer = withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {
-    entered.resolve();
-    await release.promise;
+/** 一个停在作用域里的持有者：`release` 让它走完。 */
+function parked(root: RootedDirectory, mode: "shared" | "exclusive") {
+  let release: () => void = () => undefined;
+  let entered = false;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
   });
-  await entered.promise;
-  const signal = new AbortController();
-  let executed = false;
-  const reader = withRootedReadWriteScope(
-    f.root,
-    AREA,
-    "shared",
-    async () => {
-      executed = true;
-    },
-    { signal: signal.signal },
-  );
-  signal.abort();
-  try {
-    await rejects(
-      reader,
-      (e: unknown) => e instanceof RootedReadWriteScopeError && e.reason === "aborted",
-    );
-    equal(executed, false);
-  } finally {
-    release.resolve();
-    await writer;
-  }
-  await rejects(
-    withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-      throw new Error("body-failed");
-    }),
-    /body-failed/u,
-  );
-  deepEqual(readdirSync(f.area), []);
-});
-
-test("a reader release during lease inspection is reobserved; a replacement with an unknown owner stays protected", {
-  timeout: 15000,
-}, async (t) => {
-  if (loadSensitive(t, "real reader processes and latch waits")) return;
-  for (const replacement of [false, true]) {
-    await t.test(replacement ? "unknown replacement" : "normal release", async (t) => {
-      const f = await fixture(t);
-      const entered = Promise.withResolvers<void>();
-      const release = Promise.withResolvers<void>();
-      const reader = withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-        entered.resolve();
-        await release.promise;
-      });
-      await entered.promise;
-      const name = readdirSync(f.area).find((name) => name.startsWith("reader-"));
-      if (name === undefined) throw new Error("Missing real reader lease.");
-      const ref = parsePortableResourcePath(`${AREA}/${name}`);
-      const unknown = rootedExclusiveFileLockRecordTextForTest({
-        pid: process.pid,
-        threadId,
-        tokenUuid: "33333333-3333-4333-8333-333333333333",
-      });
-      const inspect = f.root.inspectExistingResource.bind(f.root);
-      let interrupted = false;
-      t.mock.method(
-        f.root,
-        "inspectExistingResource",
-        async (...args: Parameters<typeof inspect>) => {
-          const snapshot = await inspect(...args);
-          if (!interrupted && args[0] === ref && existsSync(path.join(f.area, "writer.lock"))) {
-            interrupted = true;
-            release.resolve();
-            await reader;
-            if (replacement) writeFileSync(path.join(f.area, name), unknown, { mode: 0o600 });
-          }
-          return snapshot;
-        },
-      );
-      let writerEntered = false;
-      try {
-        // 未知所有者按活着等待，预算耗尽才是 recovery-required：给写者一个短预算。
-        const writer = withRootedReadWriteScope(
-          f.root,
-          AREA,
-          "exclusive",
-          async () => {
-            writerEntered = true;
-          },
-          { acquireTimeoutMilliseconds: 3000 },
-        );
-        if (replacement) {
-          await rejects(
-            writer,
-            (e: unknown) =>
-              e instanceof RootedReadWriteScopeError && e.reason === "recovery-required",
-          );
-          equal(writerEntered, false);
-          equal(readFileSync(path.join(f.area, name), "utf8"), unknown);
-        } else {
-          await writer;
-          equal(writerEntered, true);
-          deepEqual(readdirSync(f.area), []);
-        }
-        equal(interrupted, true);
-      } finally {
-        release.resolve();
-        await reader;
-      }
-    });
-  }
-});
-
-test("latch settlement failure releases acquired admission before propagating the failure", {
-  timeout: 15000,
-}, async (t) => {
-  if (loadSensitive(t, "real reader processes and latch waits")) return;
-  for (const [mode, releaseNumber, fault] of [
-    ["shared", 1, "unlink"],
-    ["exclusive", 1, "unlink"],
-    ["exclusive", 2, "unlink"],
-    ["shared", 1, "sync"],
-    ["exclusive", 1, "sync"],
-    ["exclusive", 2, "sync"],
-  ] as const) {
-    await t.test(`${mode} latch release ${releaseNumber}, failing at the ${fault}`, async (t) => {
-      const f = await fixture(t);
-      const latch = path.join(f.area, "latch.lock");
-      let settlements = 0;
-      let injected = false;
-      let entered = false;
-      /** True on the latch release this subtest fails. */
-      const failsNow = (): boolean => {
-        settlements += 1;
-        injected ||= settlements === releaseNumber;
-        return settlements === releaseNumber;
-      };
-      if (fault === "unlink") {
-        const originalUnlink = filesystemMutation.unlink;
-        t.mock.method(filesystemMutation, "unlink", async (target: string): Promise<void> => {
-          await originalUnlink(target);
-          if (target === latch && failsNow()) throw injectedUnlinkFailure();
-        });
-      } else {
-        // The admission directory sync that follows the latch's unlink: the only parent sync of a light
-        // cycle, so "the latch is already gone" identifies it.
-        const originalSync = RootedResourceParentHandle.prototype.sync;
-        t.mock.method(
-          RootedResourceParentHandle.prototype,
-          "sync",
-          async function (
-            this: RootedResourceParentHandle,
-            ...args: Parameters<typeof originalSync>
-          ) {
-            if (this.resourceAbsolutePath === latch && !existsSync(latch) && failsNow()) {
-              throw new RootedResourceParentHandleError("sync-failure", "$test");
-            }
-            return originalSync.apply(this, args);
-          },
-        );
-      }
-      await rejects(
-        withRootedReadWriteScope(f.root, AREA, mode, async () => {
-          entered = true;
-        }),
-        (error: unknown) =>
-          error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
-      );
-      equal(injected, true);
-      equal(entered, false);
-      deepEqual(readdirSync(f.area), []);
-      t.mock.restoreAll();
-      // Both admission modes must remain usable in this same live process.
-      for (const nextMode of ["shared", "exclusive"] as const) {
-        equal(
-          await withRootedReadWriteScope(f.root, AREA, nextMode, async () => "entered", {
-            acquireTimeoutMilliseconds: 1000,
-          }),
-          "entered",
-        );
-      }
-      deepEqual(readdirSync(f.area), []);
-    });
-  }
-});
-
-test("latch failure cleanup cannot remove an unknown replacement of the acquired lease", async (t) => {
-  for (const mode of ["shared", "exclusive"] as const) {
-    await t.test(mode, async (t) => {
-      const f = await fixture(t);
-      const originalUnlink = filesystemMutation.unlink;
-      const unknown = rootedExclusiveFileLockRecordTextForTest({
-        pid: process.pid,
-        threadId,
-        tokenUuid: "33333333-3333-4333-8333-333333333333",
-      });
-      let replacement: string | undefined;
-      let entered = false;
-      t.mock.method(filesystemMutation, "unlink", async (target: string): Promise<void> => {
-        await originalUnlink(target);
-        if (replacement === undefined && target === path.join(f.area, "latch.lock")) {
-          const name = readdirSync(f.area).find(
-            (name) => name === "writer.lock" || name.startsWith("reader-"),
-          );
-          if (name === undefined) throw new Error("Missing acquired lease.");
-          replacement = path.join(f.area, name);
-          rmSync(replacement);
-          writeFileSync(replacement, unknown, { mode: 0o600 });
-          throw injectedUnlinkFailure();
-        }
-      });
-      await rejects(
-        withRootedReadWriteScope(f.root, AREA, mode, async () => {
-          entered = true;
-        }),
-        (error: unknown) =>
-          error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
-      );
-      equal(entered, false);
-      if (replacement === undefined) throw new Error("Fault boundary was not reached.");
-      equal(readFileSync(replacement, "utf8"), unknown);
-      t.mock.restoreAll();
-      await rejects(
-        withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {
-          entered = true;
-        }),
-        (error: unknown) =>
-          error instanceof RootedReadWriteScopeError && error.reason === "recovery-required",
-      );
-      equal(entered, false);
-      equal(readFileSync(replacement, "utf8"), unknown);
-    });
-  }
-});
-
-test("unknown same-PID owners and unrecognized files stay protected", async (t) => {
-  const f = await fixture(t);
-  const reader = path.join(f.area, "reader-11111111-1111-4111-8111-111111111111.lock");
-  const bytes = rootedExclusiveFileLockRecordTextForTest({
-    pid: process.pid,
-    threadId,
-    tokenUuid: "22222222-2222-4222-8222-222222222222",
+  const done = withRootedReadWriteScope(root, LOCKS, mode, async () => {
+    entered = true;
+    await gate;
   });
-  writeFileSync(reader, bytes, { mode: 0o600 });
-  // An unknown owner is waited on like a live one; the spent budget turns it into a recovery request (§13.161 F2).
-  const started = performance.now();
-  await rejects(
-    withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {}, {
-      acquireTimeoutMilliseconds: 300,
-    }),
-    (e: unknown) => e instanceof RootedReadWriteScopeError && e.reason === "recovery-required",
-  );
-  equal(
-    performance.now() - started >= 250,
-    true,
-    "the writer must wait out its budget before asking for recovery",
-  );
-  equal(readFileSync(reader, "utf8"), bytes);
-  rmSync(reader);
-  const unknown = path.join(f.area, "keep.txt");
-  writeFileSync(unknown, "keep", { mode: 0o600 });
-  await rejects(
-    withRootedReadWriteScope(f.root, AREA, "shared", async () => {}),
-    (e: unknown) => e instanceof RootedReadWriteScopeError && e.reason === "unsafe",
-  );
-  equal(readFileSync(unknown, "utf8"), "keep");
-});
+  return { done, release, isInside: () => entered };
+}
 
-test("a killed real reader process is retired exactly before the exclusive writer enters", {
-  timeout: 15000,
-}, async (t) => {
-  if (loadSensitive(t, "real reader processes and latch waits")) return;
-  const f = await fixture(t);
-  const child = spawn(
-    process.execPath,
-    [fileURLToPath(new URL("../../support/read-write-scope-holder.js", import.meta.url)), f.base],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-    },
+/** 真实子进程以共享方式停在作用域里；返回时它已经在里面。 */
+async function holdSharedInChildProcess(t: TestContext, root: RootedDirectory) {
+  const script = fileURLToPath(
+    new URL("../../support/read-write-scope-holder.js", import.meta.url),
   );
-  const ready = Promise.withResolvers<void>();
-  child.stdout.on("data", (data: Buffer) => {
-    if (data.toString().includes("held")) ready.resolve();
+  const child = spawn(process.execPath, [script, root.absolutePath], {
+    stdio: ["ignore", "pipe", "inherit"],
   });
-  child.on("error", ready.reject);
-  const exit = once(child, "exit");
   t.after(() => {
     child.kill("SIGKILL");
   });
-  await ready.promise;
-  equal(readdirSync(f.area).filter((name) => name.startsWith("reader-")).length, 1);
-  let entered = false;
-  const writer = withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {
-    entered = true;
+  await once(child.stdout, "data");
+  return {
+    async kill() {
+      child.kill("SIGKILL");
+      await once(child, "exit");
+    },
+  };
+}
+
+test("共享者并存；等待中的写者关上门：新的共享者进不来，在场的共享者走完之后写者才进去", async (t) => {
+  const root = await fixture(t);
+  const first = parked(root, "shared");
+  const second = parked(root, "shared");
+  await until(() => first.isInside() && second.isInside());
+
+  const order: string[] = [];
+  const writer = withRootedReadWriteScope(root, LOCKS, "exclusive", async () => {
+    order.push("writer");
   });
-  try {
-    await until(() => existsSync(path.join(f.area, "writer.lock")));
-    equal(entered, false);
-    child.kill("SIGKILL");
-    await exit;
-    await writer;
-    equal(entered, true);
-    deepEqual(readdirSync(f.area), []);
-  } finally {
-    child.kill("SIGKILL");
-    await Promise.allSettled([exit, writer]);
-  }
+  // 写者已经拿着门在等：这之后来的共享者排在它后面。
+  await delay(60);
+  const late = withRootedReadWriteScope(root, LOCKS, "shared", async () => {
+    order.push("late-reader");
+  });
+  await delay(60);
+  deepEqual(order, [], "nobody enters while the first readers are inside");
+
+  first.release();
+  await delay(60);
+  deepEqual(order, [], "the writer waits for every reader that was already inside");
+  second.release();
+  await Promise.all([first.done, second.done, writer, late]);
+  deepEqual(order, ["writer", "late-reader"]);
 });
 
-test("a live contender's in-flight create stage is skipped, never retired; a dead one is retired on the next admission (§13.161 F1)", async (t) => {
-  const f = await fixture(t);
-  const address = issueDurableAtomicFileStageAddress(
-    "create",
-    `${AREA}/latch.lock`,
-    `sha256:${"0".repeat(64)}`,
-    0o600,
+test("写者在里面时共享者与另一个写者都等到超时；它走完之后都进得去", async (t) => {
+  const root = await fixture(t);
+  const writer = parked(root, "exclusive");
+  await until(() => writer.isInside());
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "shared", async () => undefined, SHORT),
+    scopeError("timeout"),
   );
-  const stage = path.join(f.area, address.fileName);
-  writeFileSync(stage, "", { mode: 0o600 });
-  let entered = false;
-  await withRootedReadWriteScope(f.root, AREA, "exclusive", async () => {
-    entered = true;
-  });
-  equal(entered, true);
-  equal(existsSync(stage), true, "an active stage must survive admission");
-  releaseDurableAtomicFileStageAddress(address);
-  await withRootedReadWriteScope(f.root, AREA, "shared", async () => {});
-  equal(existsSync(stage), false, "a dead writer's stage is retired");
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "exclusive", async () => undefined, SHORT),
+    scopeError("timeout"),
+  );
+  writer.release();
+  await writer.done;
+  equal(await withRootedReadWriteScope(root, LOCKS, "shared", async () => "in", SHORT), "in");
+  equal(await withRootedReadWriteScope(root, LOCKS, "exclusive", async () => "in", SHORT), "in");
 });
 
-test("shared admission retires dead reader leases once they pile up, so shared-only workloads never hit the entry limit (§13.161 F4)", {
-  timeout: 30000,
-}, async (t) => {
-  if (loadSensitive(t, "real reader processes and latch waits")) return;
-  const f = await fixture(t);
-  for (let index = 0; index < 64; index += 1) {
-    const suffix = index.toString(16).padStart(12, "0");
-    const bytes = rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: `44444444-4444-4444-8444-${suffix}`,
-    });
-    writeFileSync(path.join(f.area, `reader-44444444-4444-4444-8444-${suffix}.lock`), bytes, {
-      mode: 0o600,
-    });
-  }
+test("准入前检查在门内执行：它抛错时不进入作用域、错误原样上抛、什么都不留下持有", async (t) => {
+  const root = await fixture(t);
+  const refusal = new Error("reservation");
   let entered = false;
-  await withRootedReadWriteScope(f.root, AREA, "shared", async () => {
-    entered = true;
-    equal(
-      readdirSync(f.area).filter((name) => name.startsWith("reader-")).length,
-      1,
-      "only the live reader remains",
-    );
-  });
-  equal(entered, true);
-  deepEqual(readdirSync(f.area), []);
-});
-
-test("lease release failure after the critical section (open-items W8): the operation's result or error is the outcome and the residue goes to the reporter; without a reporter the release failure is thrown", async (t) => {
   for (const mode of ["shared", "exclusive"] as const) {
-    await t.test(mode, async (t) => {
-      const f = await fixture(t);
-      t.after(() => setRootedExclusiveFileLockReleaseFailureReporter(null));
-      const leasePrefix = mode === "shared" ? "reader-" : "writer.lock";
-      const vanish = () => {
-        for (const name of readdirSync(f.area)) {
-          if (name.startsWith(leasePrefix)) rmSync(path.join(f.area, name));
-        }
-      };
-      await rejects(
-        withRootedReadWriteScope(f.root, AREA, mode, async () => {
-          vanish();
-          return "committed";
-        }),
-        (error: unknown) =>
-          error instanceof RootedExclusiveFileLockError && error.reason === "release-failure",
-      );
-      const reports: string[] = [];
-      setRootedExclusiveFileLockReleaseFailureReporter((failure) => {
-        reports.push(`${failure.lockPath}:${failure.error.reason}`);
-        throw new Error("a throwing reporter must not change the outcome");
-      });
-      equal(
-        await withRootedReadWriteScope(f.root, AREA, mode, async () => {
-          vanish();
-          return "committed";
-        }),
-        "committed",
-      );
-      equal(reports.length, 1);
-      equal(reports[0]?.startsWith(`${AREA}/${leasePrefix}`), true, reports[0]);
-      equal(reports[0]?.endsWith(":release-failure"), true, reports[0]);
-      // The operation's own error is the outcome; the release failure behind it is only reported.
-      await rejects(
-        withRootedReadWriteScope(f.root, AREA, mode, async () => {
-          vanish();
-          throw new Error("body-failed");
-        }),
-        /body-failed/u,
-      );
-      equal(reports.length, 2);
-      // A clean release reports nothing and admission stays usable.
-      equal(await withRootedReadWriteScope(f.root, AREA, mode, async () => "clean"), "clean");
-      equal(reports.length, 2);
-      deepEqual(readdirSync(f.area), []);
-    });
+    await rejects(
+      withRootedReadWriteScope(
+        root,
+        LOCKS,
+        mode,
+        async () => {
+          entered = true;
+        },
+        {
+          beforeEnter: async () => {
+            throw refusal;
+          },
+        },
+      ),
+      (error: unknown) => error === refusal,
+    );
   }
+  equal(entered, false);
+  // 门与作用域都已放开：下一个写者立刻进得去。
+  equal(
+    await withRootedReadWriteScope(root, LOCKS, "exclusive", async () => "next", SHORT),
+    "next",
+  );
+});
+
+test("操作抛错与中止：持有照样放开；已经中止的信号不进入", async (t) => {
+  const root = await fixture(t);
+  const failure = new Error("operation failed");
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "shared", async () => {
+      throw failure;
+    }),
+    (error: unknown) => error === failure,
+  );
+  const aborted = new AbortController();
+  aborted.abort();
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "exclusive", async () => undefined, {
+      signal: aborted.signal,
+    }),
+    scopeError("aborted"),
+  );
+  // 等待途中被中止：写者在里面，共享者等着，信号一到就以 aborted 收场。
+  const writer = parked(root, "exclusive");
+  await until(() => writer.isInside());
+  const waiting = new AbortController();
+  const reader = withRootedReadWriteScope(root, LOCKS, "shared", async () => undefined, {
+    signal: waiting.signal,
+  });
+  await delay(40);
+  waiting.abort();
+  await rejects(reader, scopeError("aborted"));
+  writer.release();
+  await writer.done;
+  equal(
+    await withRootedReadWriteScope(root, LOCKS, "exclusive", async () => "free", SHORT),
+    "free",
+  );
+});
+
+test("共享持有者被强杀：写者不需要任何清理就进得去；目录里始终只有那两个锁文件", async (t) => {
+  if (loadSensitive(t, "a real child process holds the shared scope and is killed")) return;
+  const root = await fixture(t);
+  const holder = await holdSharedInChildProcess(t, root);
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "exclusive", async () => undefined, SHORT),
+    scopeError("timeout"),
+  );
+  // 活着的共享者不挡别的共享者。
+  equal(await withRootedReadWriteScope(root, LOCKS, "shared", async () => "also", SHORT), "also");
+  await holder.kill();
+  equal(await withRootedReadWriteScope(root, LOCKS, "exclusive", async () => "in", SHORT), "in");
+  deepEqual(readdirSync(path.join(root.absolutePath, "admission")).sort(), [
+    "gate.lock",
+    "scope.lock",
+  ]);
+});
+
+test("输入不对与目录不在：模式、选项不认识报 input；锁目录不在报 unsafe", async (t) => {
+  const root = await fixture(t);
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "upgrade" as "shared", async () => undefined),
+    scopeError("input"),
+  );
+  await rejects(
+    withRootedReadWriteScope(root, LOCKS, "shared", async () => undefined, {
+      unknown: true,
+    } as never),
+    scopeError("input"),
+  );
+  const missing = Object.freeze({
+    gate: parsePortableResourcePath("absent/gate.lock"),
+    scope: parsePortableResourcePath("absent/scope.lock"),
+  });
+  await rejects(
+    withRootedReadWriteScope(root, missing, "shared", async () => undefined),
+    scopeError("unsafe"),
+  );
 });

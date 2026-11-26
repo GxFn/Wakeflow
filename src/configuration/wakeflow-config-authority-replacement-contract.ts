@@ -12,19 +12,16 @@ import { parsePlainRecord, pickOwnDataProperties } from "../foundation/data/pass
 import type { DurableAtomicFileReplaceResult } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
+import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import type {
-  RootedExclusiveFileLockError,
-  RootedExclusiveFileLockOptions,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
 import { isAbortSignal } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
+import type { WorkspaceLockOptions } from "../kernel/workspace-locks.js";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
@@ -53,9 +50,6 @@ import {
  * 形成不同的 Config 权威记录准入规则。
  */
 
-export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF = parsePortableResourcePath(
-  ".wakeflow-config-authority.lock",
-);
 const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 
 export interface WakeflowConfigAuthorityReplacementOptions {
@@ -85,7 +79,6 @@ export type WakeflowConfigAuthorityReplacementErrorReason =
   | "conflict"
   | "lock-timeout"
   | "lock-unsafe"
-  | "recovery-not-required"
   | "recovery-required"
   | "aborted"
   | "replacement-failure"
@@ -106,7 +99,6 @@ const ERROR_MESSAGES = {
   conflict: "Wakeflow config authority no longer matches its expected source.",
   "lock-timeout": "Wakeflow config authority replacement lock acquisition timed out.",
   "lock-unsafe": "Wakeflow config authority replacement lock is unsafe.",
-  "recovery-not-required": "Wakeflow config authority replacement has no lock residue to recover.",
   "recovery-required":
     "Wakeflow config authority replacement residue cannot be recovered automatically.",
   aborted: "Wakeflow config authority replacement was aborted before commit.",
@@ -483,7 +475,7 @@ export function matchesWakeflowConfigAuthorityExpectation(
 
 export function wakeflowConfigAuthorityLockOptions(
   options: Readonly<ParsedWakeflowConfigAuthorityReplacementOptions>,
-): RootedExclusiveFileLockOptions {
+): WorkspaceLockOptions {
   return {
     acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
     ...(options.retryDelayMilliseconds === undefined
@@ -493,8 +485,9 @@ export function wakeflowConfigAuthorityLockOptions(
   };
 }
 
+/** 配置权威锁（ADR-0033）的失败：已经提交之后的任何失败都是提交结果不确定。 */
 export function mapWakeflowConfigAuthorityLockError(
-  error: RootedExclusiveFileLockError,
+  error: KernelFileLockError,
   committed: boolean,
 ): never {
   if (committed) {
@@ -508,12 +501,6 @@ export function mapWakeflowConfigAuthorityLockError(
   }
   if (error.reason === "timeout") {
     failWakeflowConfigAuthorityReplacement("lock-timeout", "$lock");
-  }
-  if (error.reason === "root-scope" || error.reason === "parent") {
-    failWakeflowConfigAuthorityReplacement("root-scope", "$root");
-  }
-  if (error.reason === "owner-active" || error.reason === "residue-changed") {
-    failWakeflowConfigAuthorityReplacement("recovery-required", "$lock");
   }
   failWakeflowConfigAuthorityReplacement("lock-unsafe", "$lock");
 }

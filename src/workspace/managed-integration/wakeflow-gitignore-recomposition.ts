@@ -4,20 +4,16 @@ import {
   replaceFileAtomically,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  RootedExclusiveFileLockError,
-  retireDeadRootedExclusiveFileLock,
-  withRootedExclusiveFileLock,
-} from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { settleStagesOfDeadWriters, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import {
   inspectWakeflowWorkspaceGitignore,
   type WakeflowGitignoreInspection,
   WakeflowGitignoreInspectionError,
 } from "./wakeflow-gitignore-inspection.js";
 import {
-  admitWakeflowGitignoreRecompositionLockOperations,
   assertCurrentUserWakeflowGitignoreRecompositionRoot,
   assertWakeflowGitignoreRecompositionNotAborted,
   assertWakeflowGitignoreRecompositionRoot,
@@ -37,22 +33,18 @@ import {
   wakeflowGitignoreInspectionRequest,
   wakeflowGitignoreRecompositionLockOptions,
 } from "./wakeflow-gitignore-recomposition-contract.js";
-import {
-  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-  WAKEFLOW_GITIGNORE_REF,
-} from "./wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-catalog.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：根 `.gitignore` 的锁内精确重组 owner。
  *
- * 本模块取得短生命周期文件锁并重新执行完整 inspection。只有 inspection 生成且已由
+ * 本模块持有工作区的 `gitignore` 锁（ADR-0033）并重新执行完整 inspection。只有 inspection 生成且已由
  * 隔离 Git worktree 验证的候选，才能按“目标不存在时原子创建”或“完整
  * StableFileSource 仍匹配时原子替换”发布。提交后再次稳定读取和运行 Git，成功回执
  * 才证明最终节点、摘要、managed envelope 与规则语义全部一致。
  *
- * 输入、矩阵、Host Profile、根策略、锁 recipe 和公共错误由相邻 contract 唯一解释。
- * 本 owner 不删除用户正文、不把 user-owned 满足状态改写为 managed 状态，也不自动
- * 退休崩溃锁残留；锁残留和不确定提交由显式恢复职责所有者处理。
+ * 输入、矩阵、Host Profile、根策略和公共错误由相邻 contract 唯一解释。
+ * 本 owner 不删除用户正文、不把 user-owned 满足状态改写为 managed 状态；不确定的提交原样报告。
  */
 
 /** 提交之前的检查失败：按检查错误的原因归类；不是检查错误的一律算观察失败。 */
@@ -242,28 +234,26 @@ export async function recomposeWakeflowWorkspaceGitignore(
   const options = parseWakeflowGitignoreRecompositionOptions(optionsValue);
   assertWakeflowGitignoreRecompositionNotAborted(options.signal);
   const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
-  admitWakeflowGitignoreRecompositionLockOperations(request);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
 
   let committed = false;
   try {
-    // 上一个重组 `.gitignore` 的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
-    await retireDeadRootedExclusiveFileLock(rootValue, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF, {
-      relatedTargetResourcePaths: [WAKEFLOW_GITIGNORE_REF],
-    });
-    return await withRootedExclusiveFileLock(
+    return await withWorkspaceLock(
       rootValue,
-      WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-      () =>
-        recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+      "gitignore",
+      async () => {
+        // 上一个重组 `.gitignore` 的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
+        await settleStagesOfDeadWriters(rootValue, [WAKEFLOW_GITIGNORE_REF], options.signal);
+        return recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
           committed = true;
-        }),
+        });
+      },
       wakeflowGitignoreRecompositionLockOptions(options),
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreRecompositionError) throw error;
-    if (error instanceof RootedExclusiveFileLockError) {
+    if (error instanceof KernelFileLockError) {
       mapWakeflowGitignoreRecompositionLockError(error, committed);
     }
     fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);

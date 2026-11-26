@@ -267,7 +267,12 @@ export function selectImpactedTests(
         seeds.push([mentioner, file]);
     }
   }
-  const reasons = propagate(graph, seeds);
+  // 变更集里被删掉的测试文件也是种子（它的夹具可能还有别人用），但它自己已经没有可跑的了。
+  const reasons = new Map(
+    [...propagate(graph, seeds)].filter(
+      ([file]) => lstatSync(path.join(root, file), { throwIfNoEntry: false })?.isFile() === true,
+    ),
+  );
   const tests = [...reasons.keys()].sort();
   const fullGateReasons = new Set<string>();
   for (const file of changed) {

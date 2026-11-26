@@ -4,7 +4,6 @@ import {
 } from "../foundation/filesystem/portable-resource-path.js";
 import { hostPodReceiptsRootRef } from "../kernel/layout.js";
 import {
-  wakeflowWindowHostBindingMutationLockRef,
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./window-runtime/wakeflow-window-runtime-paths.js";
@@ -97,48 +96,6 @@ function integrationFileDeclaration(
   });
 }
 
-function transactionFileDeclaration(
-  declarationId: string,
-  ownerId: string,
-  relativePath: PortableResourcePath,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId,
-    family: "host-runtime",
-    ownerId,
-    scope: "current-host",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath,
-    },
-    tracking: {
-      disposition: "ignored",
-      privacy: "runtime-private",
-    },
-    nodePolicy: {
-      kind: "file",
-      mode: "0600",
-      linkPolicy: "single-link",
-      executablePolicy: "forbidden",
-    },
-    processing: {
-      kind: "resource",
-      role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "owner-transaction-recovery",
-    },
-  });
-}
-
-/** 为一个严格 Host Profile 返回其 Program Instruction 专属短锁路径。 */
-export function wakeflowProgramInstructionRecompositionLockRef(
-  profileValue: unknown,
-): PortableResourcePath {
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-  return parsePortableResourcePath(`.wakeflow-program-instruction-${profile.hostId}.lock`);
-}
-
 function privateProjectionFileDeclaration(
   declarationId: string,
   ownerId: string,
@@ -204,11 +161,6 @@ export function createWakeflowWorkspaceHostResourceCatalog(
       profile.instructionFileName,
       "tracked-shareable",
     ),
-    transactionFileDeclaration(
-      `${prefix}.instruction-lock`,
-      "host-instruction-integration",
-      wakeflowProgramInstructionRecompositionLockRef(profile),
-    ),
     privateDirectoryDeclaration(
       `${prefix}.window-runtime-projections-root`,
       "window-runtime-projection",
@@ -222,11 +174,6 @@ export function createWakeflowWorkspaceHostResourceCatalog(
         `${prefix}.window-identity-root`,
         "window-host-binding",
         wakeflowWindowHostBindingRootRef(profile),
-      ),
-      transactionFileDeclaration(
-        `${prefix}.window-identity-lock`,
-        "window-host-binding",
-        wakeflowWindowHostBindingMutationLockRef(profile),
       ),
     );
   }

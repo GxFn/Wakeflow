@@ -1,21 +1,30 @@
 import { spawn } from "node:child_process";
 
-/** 用真实子进程持有 Foundation 锁；SIGKILL 留下真实残留，end 则正常释放。 */
-export async function holdLockInChildProcess(root: string, resourcePath: string) {
+import type { KernelFileLockMode } from "../../src/foundation/filesystem/kernel-file-lock.js";
+
+/**
+ * 用真实子进程持有一把内核咨询锁（ADR-0033）。`crash` 以 SIGKILL 结束它——内核随即收走这把锁；
+ * `close` 让它正常释放。返回时子进程已经拿到锁。
+ */
+export async function holdKernelLockInChildProcess(
+  root: string,
+  lockRef: string,
+  mode: KernelFileLockMode = "exclusive",
+) {
   const directoryModule = new URL(
     "../../src/foundation/filesystem/rooted-directory.js",
     import.meta.url,
   );
   const lockModule = new URL(
-    "../../src/foundation/filesystem/rooted-exclusive-file-lock.js",
+    "../../src/foundation/filesystem/kernel-file-lock.js",
     import.meta.url,
   );
   const program = `
     import { RootedDirectory } from ${JSON.stringify(directoryModule.href)};
-    import { withRootedExclusiveFileLock } from ${JSON.stringify(lockModule.href)};
+    import { withKernelFileLock } from ${JSON.stringify(lockModule.href)};
     const root = await RootedDirectory.open(process.argv[1]);
     try {
-      await withRootedExclusiveFileLock(root, process.argv[2], async () => {
+      await withKernelFileLock(root, process.argv[2], process.argv[3], async () => {
         process.stdout.write("held\\n");
         await new Promise(resolve => process.stdin.once("data", resolve));
       });
@@ -23,10 +32,8 @@ export async function holdLockInChildProcess(root: string, resourcePath: string)
   `;
   const child = spawn(
     process.execPath,
-    ["--input-type=module", "-e", program, root, resourcePath],
-    {
-      stdio: ["pipe", "pipe", "pipe"],
-    },
+    ["--input-type=module", "-e", program, root, lockRef, mode],
+    { stdio: ["pipe", "pipe", "pipe"] },
   );
   let stderr = "";
   child.stderr.on("data", (chunk: Buffer) => {

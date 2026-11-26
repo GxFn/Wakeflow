@@ -1,12 +1,11 @@
 import { equal } from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
 import { executePodRequest } from "../../../src/capabilities/pod/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
@@ -98,37 +97,31 @@ for (const scenario of ["same-pod", "different-pods", "close"] as const) {
         scenario === "close"
           ? await executePodRequest(CODEX, { root, mode: "preview", intent: closeIntent })
           : null;
-      const closeParent = RootedResourceParentHandle.prototype.close;
+      // 取锁都经过这一个出口：首个请求拿到 Demand 发布锁之后停住（它外面还持有 pod 变更锁，并且在共享的
+      // 操作作用域里）。第二个请求被拒就是它在等：创建去拿 pod 变更锁；关闭 pod 要独占的操作作用域。
+      const openLockFile = filesystemMutation.openLockFile;
       t.mock.method(
-        RootedResourceParentHandle.prototype,
-        "close",
-        async function (this: RootedResourceParentHandle) {
-          await closeParent.call(this);
-          if (
-            secondArmed &&
-            this.resourceAbsolutePath.endsWith("/operation-admission/writer.lock") &&
-            existsSync(this.resourceAbsolutePath)
-          )
-            waiting.resolve();
-          if (
-            !firstPaused &&
-            this.resourceAbsolutePath.includes("/demand-publication/locks/") &&
-            this.resourceAbsolutePath.endsWith(".lock")
-          ) {
+        filesystemMutation,
+        "openLockFile",
+        async (target: string, flags: number, mode: number) => {
+          let handle: Awaited<ReturnType<typeof openLockFile>>;
+          try {
+            handle = await openLockFile.call(filesystemMutation, target, flags, mode);
+          } catch (error: unknown) {
+            if (
+              secondArmed &&
+              (target.endsWith("/locks/pod-mutation.lock") ||
+                target.endsWith("/locks/operation-scope.lock"))
+            )
+              waiting.resolve();
+            throw error;
+          }
+          if (!firstPaused && target.endsWith("/locks/demand-publication.lock")) {
             firstPaused = true;
             paused.resolve();
             await released.promise;
           }
-        },
-      );
-      const inspect = RootedDirectory.prototype.inspectExistingResource;
-      t.mock.method(
-        RootedDirectory.prototype,
-        "inspectExistingResource",
-        async function (this: RootedDirectory, ...args: Parameters<typeof inspect>) {
-          const result = await inspect.apply(this, args);
-          if (secondArmed && String(args[0]).includes("/pod-mutations/")) waiting.resolve();
-          return result;
+          return handle;
         },
       );
       first = executeDemandCreationRequest({
@@ -161,21 +154,19 @@ for (const scenario of ["same-pod", "different-pods", "close"] as const) {
         (value) => ({ ok: true as const, value }),
         (error: unknown) => ({ ok: false as const, error }),
       );
-      if (scenario === "different-pods") {
-        // 第二个 pod 必须在第一个尚未释放时独立完成。
-        equal((await second).ok, true);
-      } else {
-        await Promise.race([
-          waiting.promise,
-          second.then(() => {
-            throw new Error("Second mutation did not wait for the pod.");
-          }),
-        ]);
-      }
+      // 全部 pod 共用一把变更锁（ADR-0033 决定 3）：另一个 pod 的请求也排在首个之后，放开之后各自完成。
+      await Promise.race([
+        waiting.promise,
+        second.then(() => {
+          throw new Error("Second mutation did not wait for the pod mutation lock.");
+        }),
+      ]);
       released.resolve();
       await first;
       const outcome = await second;
-      if (scenario !== "different-pods") {
+      if (scenario === "different-pods") {
+        equal(outcome.ok, true);
+      } else {
         equal(outcome.ok, false);
         if (outcome.ok || !(outcome.error instanceof WakeflowError))
           throw new Error("Expected a typed conflict.");

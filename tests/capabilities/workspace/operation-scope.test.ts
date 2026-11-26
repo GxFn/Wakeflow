@@ -1,7 +1,6 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -15,21 +14,16 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import { threadId } from "node:worker_threads";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import {
-  WORKSPACE_MAINTENANCE_GATE_REF,
-  WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
-  WORKSPACE_OPERATION_SCOPES_REF,
-} from "../../../src/kernel/layout.js";
+import { WORKSPACE_MAINTENANCE_TRANSACTIONS_REF } from "../../../src/kernel/layout.js";
+import { isWorkspaceLockHeld, withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
 import { withWorkspaceOperationScope } from "../../../src/kernel/workspace-operation-scope.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 
 async function prepareFixture(signal: AbortSignal) {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-operation-scope-")));
@@ -130,8 +124,16 @@ test("maintenance waits for an in-flight projection before activating a new conf
       mode: "apply",
       planDigest: preview.planDigest,
     });
+    // 维护已经拿到门、正在等作用域的独占：在场的读者（那次刷新）还没有走完。
+    let waiting = false;
+    void isWorkspaceLockHeld(f.rooted, "maintenance-gate").then(function poll(held): unknown {
+      waiting = held;
+      return held
+        ? undefined
+        : delay(10).then(() => isWorkspaceLockHeld(f.rooted, "maintenance-gate").then(poll));
+    });
     await Promise.race([
-      until(() => existsSync(path.join(f.root, WORKSPACE_OPERATION_SCOPES_REF, "writer.lock"))),
+      until(() => waiting),
       mutation.then(() => {
         throw new Error("Maintenance bypassed the reader.");
       }),
@@ -292,33 +294,34 @@ test("pod 互斥区里的 Config 复验以内核错误拒绝：过期为 config-
   );
 });
 
-test("维护 gate 的所有者未知时按可重试的 maintenance-owner-unknown 等待，不要求恢复（§13.161 F2）", {
+test("维护的门被持有时普通操作按可重试的 maintenance-busy 等待；门放开之后什么都不留下，直接进得去（ADR-0033）", {
   timeout: 20000,
 }, async () => {
   const f = fixture();
-  const gate = path.join(f.root, ...WORKSPACE_MAINTENANCE_GATE_REF.split("/"));
-  mkdirSync(path.dirname(gate), { recursive: true, mode: 0o700 });
-  // 同进程同线程、令牌不在活动表、registry 不同：owner 既不能证明活着也不能证明死了。
-  const unknown = rootedExclusiveFileLockRecordTextForTest({
-    pid: process.pid,
-    threadId,
-    tokenUuid: "55555555-5555-4555-8555-555555555555",
+  const inside = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const maintenance = withWorkspaceLock(f.rooted, "maintenance-gate", async () => {
+    inside.resolve();
+    await release.promise;
   });
-  writeFileSync(gate, unknown, { mode: 0o600 });
+  await inside.promise;
   let entered = false;
-  await rejects(
-    withWorkspaceOperationScope(f.rooted, "shared", async () => {
-      entered = true;
-    }),
-    (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "concurrency-conflict" &&
-      error.reason === "maintenance-owner-unknown" &&
-      error.retryable === true,
-  );
-  equal(entered, false);
-  equal(readFileSync(gate, "utf8"), unknown, "an unknown owner's gate is never retired");
-  rmSync(gate);
+  try {
+    await rejects(
+      withWorkspaceOperationScope(f.rooted, "shared", async () => {
+        entered = true;
+      }),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "concurrency-conflict" &&
+        error.reason === "maintenance-busy" &&
+        error.retryable === true,
+    );
+    equal(entered, false);
+  } finally {
+    release.resolve();
+    await maintenance;
+  }
   await withWorkspaceOperationScope(f.rooted, "shared", async () => {
     entered = true;
   });

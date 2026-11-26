@@ -51,8 +51,10 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   // 根、transactions）删除，需求看板加 2 条（`board/` 目录与 `board/index.md` 索引），
   // Ledger 的 `confirmations/` 根随 confirmation family 删除减 1；宿主目录按复审 J5 去掉
   // keep-live 两条（Codex 还去掉 operations 根）与 Claude 的 activity-monitor、temp 两条。
-  equal(codex.declarations.length, 36);
-  equal(claude.declarations.length, 43);
+  // ADR-0033 之后锁不是声明的资源：七条锁声明（配置、`.gitignore`、程序指令、窗口登记、投影器、账本
+  // 记录、Demand 发布及其目录）删除，维护的门换成一条锁目录的声明，净减 6。
+  equal(codex.declarations.length, 30);
+  equal(claude.declarations.length, 37);
 
   const expectedSharedIds = sorted(
     [
@@ -244,7 +246,7 @@ test("Static Resource Matrix exposes only narrow frozen queries", () => {
   const configOwner = selectWakeflowWorkspaceStaticResourcesByOwner(matrix, "config-authority");
   deepEqual(
     configOwner.map((entry) => entry.declarationId),
-    ["workspace.config-authority", "workspace.config-authority-lock"],
+    ["workspace.config-authority"],
   );
   equal(Object.isFrozen(configOwner), true);
 

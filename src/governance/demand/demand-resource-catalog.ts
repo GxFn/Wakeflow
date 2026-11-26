@@ -29,13 +29,11 @@ import {
 } from "./event-sourcing/demand-event-sourcing-paths.js";
 import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
 import {
-  DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   demandFinalPublicationMarkerRef,
   demandFinalRootRef,
-  demandPublicationLockRef,
 } from "./publication/demand-publication-paths.js";
 
 /**
@@ -181,22 +179,14 @@ const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION = privateDirecto
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
 );
 
-const DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION = privateDirectoryDeclaration(
-  "demand.publication.locks-root",
-  DEMAND_PUBLICATION_OWNER_ID,
-  DEMAND_PUBLICATION_LOCKS_ROOT_REF,
-);
-
 /** Demand 发布职责所有者的确定性静态资源目录。 */
 export const WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG = Object.freeze([
   DEMAND_PUBLICATION_ROOT_RESOURCE_DECLARATION,
   DEMAND_PUBLICATION_STAGES_ROOT_RESOURCE_DECLARATION,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-  DEMAND_PUBLICATION_LOCKS_ROOT_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
 type DemandEventSourcingResourceCatalog = readonly [
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
   Readonly<WakeflowWorkspaceResourceDeclaration>,
@@ -228,12 +218,6 @@ export function createDemandEventSourcingResourceCatalog(
     role: "immutable-fact",
     allowedMutationRecipes: ["exclusive-create"],
     recoveryStrategy: "exact-idempotent-retry",
-  } as const;
-  const transactionProcessing = {
-    kind: "resource",
-    role: "transaction-artifact",
-    allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-    recoveryStrategy: "owner-transaction-recovery",
   } as const;
   const publishedMarkerProcessing = {
     kind: "resource",
@@ -301,12 +285,6 @@ export function createDemandEventSourcingResourceCatalog(
       DEMAND_PUBLICATION_OWNER_ID,
       demandFinalPublicationMarkerRef(demandId),
       publishedMarkerProcessing,
-    ),
-    privateFileDeclaration(
-      `${prefix}.publication-lock`,
-      DEMAND_PUBLICATION_OWNER_ID,
-      demandPublicationLockRef(demandId),
-      transactionProcessing,
     ),
   ]);
 }

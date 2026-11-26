@@ -22,6 +22,8 @@ import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflo
 import { executeClaudeCodeWakeflowMaintenance } from "../../../src/entrypoints/claude-code-wakeflow-maintenance.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { computeSha256Digest, type Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
+import { acquireKernelFileLock } from "../../../src/foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -43,9 +45,8 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
+import { workspaceLockRef } from "../../../src/kernel/workspace-locks.js";
 import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
-import { wakeflowWindowHostBindingMutationLockRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
@@ -374,34 +375,30 @@ test("Codex：inspect 给出启动意图与执行参数，register 需要 hook �
   equal(after.next.blockers.length, intents.length - 1);
 });
 
-test("Codex：登记锁被死持有者留下时，只读的 inspect 照常回答，不清那把锁（1.4.2）", {
+test("Codex：登记锁正被别人持有时，只读的 inspect 照常回答（ADR-0033）", {
   timeout: 60_000,
 }, async (t) => {
-  const { root, intents } = await fixture(t, executeCodexWakeflowMaintenance);
+  const { root, rooted, intents } = await fixture(t, executeCodexWakeflowMaintenance);
   const intent = intents[0];
   if (intent === undefined) throw new Error("Expected a launch intent.");
-  const lockPath = path.join(
-    root,
-    ...wakeflowWindowHostBindingMutationLockRef(codexWorkspaceHostResourceProfile).split("/"),
+  // 只读的调用不拿登记锁：一次登记正在进行时，它读到的是登记之前的那份登记表。
+  const lease = await acquireKernelFileLock(
+    rooted,
+    workspaceLockRef("window-binding"),
+    "exclusive",
   );
-  mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
-  // 上一次登记的进程死在锁里。以前这把锁在场，每一个只读的调用都被拒绝，直到下一次登记把它清掉。
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "99999999-9999-4999-8999-999999999999",
-    }),
-    { mode: 0o600 },
-  );
-  const inspected = await executeWindowBindingRequest(CODEX, {
-    root,
-    operation: "inspect",
-    windowId: intent.windowId,
-  });
-  if (inspected.kind !== "WakeflowWindowBindingInspection")
-    throw new Error("Expected an inspection.");
-  equal(inspected.binding.status, "unregistered");
-  equal(existsSync(lockPath), true, "只读的调用不清锁");
+  try {
+    const inspected = await executeWindowBindingRequest(CODEX, {
+      root,
+      operation: "inspect",
+      windowId: intent.windowId,
+    });
+    if (inspected.kind !== "WakeflowWindowBindingInspection")
+      throw new Error("Expected an inspection.");
+    equal(inspected.binding.status, "unregistered");
+  } finally {
+    await lease.release();
+  }
 });
 
 test("Codex：两个窗口以同一句柄交错登记——都在锁外看到无人持有，锁内复验让后进锁的以 handle-conflict 拒绝，登记表仍可读（open-items W1）", {
@@ -420,21 +417,20 @@ test("Codex：两个窗口以同一句柄交错登记——都在锁外看到无
     ".",
     parseUtcInstant("2026-09-04T09:58:00.000Z"),
   );
-  const lockRef = wakeflowWindowHostBindingMutationLockRef(codexWorkspaceHostResourceProfile);
   type Lane = "first" | "second";
   const lanes: readonly Lane[] = ["first", "second"];
   const loaded: Record<Lane, boolean> = { first: false, second: false };
   const atDoor: Record<Lane, boolean> = { first: false, second: false };
   const doors = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
   const releases = { first: Promise.withResolvers<void>(), second: Promise.withResolvers<void>() };
-  // 锁外加载完成（注入时钟被读到）之后的第一次锁文件观察就是绑定库的门口：停在那里，让另一个窗口也在
+  // 锁外加载完成（注入时钟被读到）之后第一次去开登记锁的文件就是绑定库的门口：停在那里，让另一个窗口也在
   // 锁外完成加载并同样看到无人持有这个句柄，再先后放行进锁。
-  const inspect = RootedDirectory.prototype.inspectExistingResource;
+  const openLockFile = filesystemMutation.openLockFile;
   t.mock.method(
-    RootedDirectory.prototype,
-    "inspectExistingResource",
-    async function (this: RootedDirectory, ...args: Parameters<typeof inspect>) {
-      if (args[0] === lockRef) {
+    filesystemMutation,
+    "openLockFile",
+    async (target: string, flags: number, mode: number) => {
+      if (/[/\\]locks[/\\]window-binding\.lock$/u.test(target)) {
         const lane = lanes.find((candidate) => loaded[candidate] && !atDoor[candidate]);
         if (lane !== undefined) {
           atDoor[lane] = true;
@@ -442,7 +438,7 @@ test("Codex：两个窗口以同一句柄交错登记——都在锁外看到无
           await releases[lane].promise;
         }
       }
-      return inspect.apply(this, args);
+      return openLockFile.call(filesystemMutation, target, flags, mode);
     },
   );
   const register = (lane: Lane, intent: Intent) =>

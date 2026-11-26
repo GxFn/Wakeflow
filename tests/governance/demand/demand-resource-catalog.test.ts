@@ -35,13 +35,11 @@ import {
   parseDemandEventCommitSequence,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
-  DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   demandFinalPublicationMarkerRef,
   demandFinalRootRef,
-  demandPublicationLockRef,
   demandPublicationStageRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
@@ -99,14 +97,9 @@ test("Demand static resource catalog closes only publication directories", () =>
         ownerId: "demand-publication",
         relativePath: DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
       },
-      {
-        declarationId: "demand.publication.locks-root",
-        ownerId: "demand-publication",
-        relativePath: DEMAND_PUBLICATION_LOCKS_ROOT_REF,
-      },
     ],
   );
-  equal(WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.length, 4);
+  equal(WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.length, 3);
   for (const entry of WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG) {
     equal(
       entry.family === "demand" &&
@@ -231,16 +224,9 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
         mode: "0600",
         processing: "transaction-artifact:exact-retire",
       },
-      {
-        declarationId: `${prefix}.publication-lock`,
-        ownerId: "demand-publication",
-        relativePath: demandPublicationLockRef(DEMAND_ID),
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
-      },
     ],
   );
-  equal(catalog.length, 13);
+  equal(catalog.length, 12);
   equal(
     catalog.every(
       (entry) =>

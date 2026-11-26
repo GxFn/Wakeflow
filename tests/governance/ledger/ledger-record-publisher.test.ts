@@ -8,7 +8,6 @@ import {
   readFileSync,
   rmSync,
   statSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -24,12 +23,10 @@ import { createFileCandidateDurably } from "../../../src/foundation/filesystem/d
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { acquireRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import {
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
 } from "../../../src/governance/ledger/ledger-authority-paths.js";
 import { loadLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-authority-reader.js";
@@ -53,7 +50,6 @@ import {
   type LedgerAuthorityStoreErrorReason,
 } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
 import { publishLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-record-publisher.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import {
@@ -146,7 +142,6 @@ function publication(
     files,
     refs: {
       finalRootRef: ledgerAuthorityRootRef(record),
-      lockRef: ledgerRecordPublicationLockRef(record),
       stageRef: ledgerRecordPublicationStageRef(record),
     },
   };
@@ -254,21 +249,25 @@ test("publishes one requirement tree and idempotently reuses the exact committed
     record,
   );
 
-  const results = await Promise.all([
-    publishLedgerAuthorityRecord(
+  // 发布之间的互斥不在这一层：调用方持有工作区的账本记录锁（ADR-0033），所以这里一个接一个地发。
+  const results = [
+    await publishLedgerAuthorityRecord(
       root,
-      requirementRecord("Concurrent", OTHER_REQUIREMENT_ID),
+      requirementRecord("Sequential", OTHER_REQUIREMENT_ID),
       MEMBERS,
       undefined,
     ),
-    publishLedgerAuthorityRecord(
+    await publishLedgerAuthorityRecord(
       root,
-      requirementRecord("Concurrent", OTHER_REQUIREMENT_ID),
+      requirementRecord("Sequential", OTHER_REQUIREMENT_ID),
       MEMBERS,
       undefined,
     ),
-  ]);
-  deepEqual(results.map((result) => result.wroteAuthority).sort(), [false, true]);
+  ];
+  deepEqual(
+    results.map((result) => result.wroteAuthority),
+    [true, false],
+  );
 
   await expectStoreError(
     () =>
@@ -549,43 +548,6 @@ test("fails closed on a stage node it did not build, and a stray stage beside a 
   equal(existsSync(stagePath), true);
 });
 
-test("the record lock gates publication and inactive lock residues are retired first", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { record, refs } = publication(requirementRecord("示例需求"));
-  const lockPath = physical(rootPath, refs.lockRef);
-  const lease = await acquireRootedExclusiveFileLock(root, refs.lockRef);
-  try {
-    await expectStoreError(
-      () => publishLedgerAuthorityRecord(root, record, MEMBERS, AbortSignal.timeout(100)),
-      "aborted",
-      "$signal",
-    );
-  } finally {
-    await lease.release();
-  }
-  equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
-
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "99999999-9999-4999-8999-999999999999",
-    }),
-    { mode: 0o600 },
-  );
-  equal(
-    (await publishLedgerAuthorityRecord(root, record, MEMBERS, undefined)).wroteAuthority,
-    true,
-  );
-  equal(existsSync(lockPath), false);
-
-  symlinkSync("missing", lockPath);
-  await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, record, MEMBERS, undefined),
-    "lock-unsafe",
-    "$lock",
-  );
-});
-
 test("an already aborted signal is reported as aborted before any admission write", async (t) => {
   const { rootPath, root } = await ledgerRoot(t);
   const { record, refs } = publication(requirementRecord("示例需求"));
@@ -596,5 +558,4 @@ test("an already aborted signal is reported as aborted before any admission writ
     "$signal",
   );
   equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
-  equal(existsSync(physical(rootPath, refs.lockRef)), false);
 });

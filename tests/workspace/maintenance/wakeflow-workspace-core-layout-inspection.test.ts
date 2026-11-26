@@ -1,18 +1,25 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import {
-  issueDurableAtomicFileStageAddress,
-  releaseDurableAtomicFileStageAddress,
-} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import {
+  materializeWorkspaceLocksRoot,
+  WORKSPACE_LOCK_NAMES,
+  withWorkspaceLock,
+  workspaceLockRef,
+} from "../../../src/kernel/workspace-locks.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
@@ -37,23 +44,18 @@ function protocolPaths(root: string) {
   return Object.freeze({ local, runtime, maintenance, transactions });
 }
 
-function materializeProtocol(root: string, depth: 1 | 2 | 3 | 4): void {
+/** 深度 4 是完整的协议：事务目录连同锁目录（`locks: false` 摆出从文件锁版本更新上来的样子）。 */
+function materializeProtocol(root: string, depth: 1 | 2 | 3 | 4, locks = true): void {
   const paths = protocolPaths(root);
   mkdirSync(paths.local, { mode: 0o700 });
   if (depth >= 2) mkdirSync(paths.runtime, { mode: 0o700 });
   if (depth >= 3) mkdirSync(paths.maintenance, { mode: 0o700 });
   if (depth >= 4) mkdirSync(paths.transactions, { mode: 0o700 });
+  if (depth >= 4 && locks) mkdirSync(path.join(paths.runtime, "locks"), { mode: 0o700 });
 }
 
-function writeInactiveLock(root: string): void {
-  const lockPath = path.join(root, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"));
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "11111111-1111-4111-8111-111111111111",
-    }),
-    { mode: 0o600 },
-  );
+function gatePath(root: string): string {
+  return path.join(root, ...workspaceLockRef("maintenance-gate").split("/"));
 }
 
 test("core layout distinguishes absent, bootstrap-prefix and idle", async (t) => {
@@ -77,6 +79,18 @@ test("core layout distinguishes absent, bootstrap-prefix and idle", async (t) =>
   equal(idleInspection.local.freshCompatible, true);
   equal(idleInspection.local.protocolComplete, true);
   equal(/^sha256:[0-9a-f]{64}$/u.test(idleInspection.inspectionDigest), true);
+
+  // 事务目录在而锁目录不在：从文件锁的版本更新上来的工作区，协议还差一段（ADR-0033 决定 10）。
+  const upgraded = await fixture(t);
+  materializeProtocol(upgraded.absolutePath, 4, false);
+  mkdirSync(path.join(upgraded.absolutePath, ".wakeflow-local", "runtime", "operation-admission"), {
+    mode: 0o700,
+  });
+  const upgradedInspection = await inspectWakeflowWorkspaceCoreLayout(upgraded.root);
+  equal(upgradedInspection.local.status, "bootstrap-prefix");
+  equal(upgradedInspection.local.freshCompatible, false);
+  equal(upgradedInspection.local.protocolComplete, false);
+  deepEqual(upgradedInspection.issueCodes, []);
 });
 
 test("core layout separates installed resources from fresh-compatible prefix", async (t) => {
@@ -120,7 +134,7 @@ test("core layout distinguishes busy, recovery residue and conflicts", async (t)
   const released = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const holder = withRootedExclusiveFileLock(busy.root, WAKEFLOW_MAINTENANCE_GATE_REF, async () => {
+  const holder = withWorkspaceLock(busy.root, "maintenance-gate", async () => {
     enter?.();
     await released;
   });
@@ -134,12 +148,10 @@ test("core layout distinguishes busy, recovery residue and conflicts", async (t)
     await holder;
   }
 
-  const residue = await fixture(t);
-  materializeProtocol(residue.absolutePath, 4);
-  writeInactiveLock(residue.absolutePath);
-  const inactive = await inspectWakeflowWorkspaceCoreLayout(residue.root);
-  equal(inactive.local.status, "recovery-required");
-  equal(inactive.local.freshCompatible, false);
+  // 门放开之后什么都不留下：锁文件还在，没有人持有，协议是 idle（ADR-0033 决定 5）。
+  const afterRelease = await inspectWakeflowWorkspaceCoreLayout(busy.root);
+  equal(afterRelease.local.status, "idle");
+  equal(afterRelease.local.freshCompatible, true);
 
   const transaction = await fixture(t);
   materializeProtocol(transaction.absolutePath, 4);
@@ -201,92 +213,40 @@ test("transactions 里的残留按名字分类（§13.130）：合法的 intent 
 test("unsafe gate without maintenance/ is a conflict, not a bootstrap prefix", async (t) => {
   const unsafe = await fixture(t);
   materializeProtocol(unsafe.absolutePath, 2);
-  writeFileSync(
-    path.join(unsafe.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/")),
-    "{}\n",
-    { mode: 0o600 },
-  );
+  mkdirSync(path.dirname(gatePath(unsafe.absolutePath)), { mode: 0o700 });
+  symlinkSync(path.join(unsafe.absolutePath, "elsewhere"), gatePath(unsafe.absolutePath));
   const inspected = await inspectWakeflowWorkspaceCoreLayout(unsafe.root);
   equal(inspected.local.status, "conflict");
   equal(inspected.local.freshCompatible, false);
   equal(inspected.issueCodes.includes("maintenance-gate-unsafe"), true);
 });
 
-test("操作准入目录里只有死进程留下的锁与 create 暂存时仍算全新；活着的、不认识的或节点不对的条目照旧不算（1.4.1 段 1b）", async (t) => {
+test("锁目录里只有本协议的锁文件时仍算全新；不认识的名字或节点不对的条目不算（ADR-0033）", async (t) => {
   const { absolutePath, root } = await fixture(t);
   materializeProtocol(absolutePath, 2);
-  const admission = path.join(protocolPaths(absolutePath).runtime, "operation-admission");
-  mkdirSync(admission, { mode: 0o700 });
   const fresh = async () => (await inspectWakeflowWorkspaceCoreLayout(root)).local.freshCompatible;
-  const deadLock = (tokenUuid: string) => rootedExclusiveFileLockRecordTextForTest({ tokenUuid });
-  equal(await fresh(), true, "空的准入目录");
+  equal(await fresh(), true, "没有锁目录");
 
-  // 全新初始化的应用死在独占范围里留下的：准入闩、写者锁，可能还有读者租约与闩的 create 暂存。
-  writeFileSync(
-    path.join(admission, "latch.lock"),
-    deadLock("11111111-1111-4111-8111-111111111111"),
-    {
-      mode: 0o600,
-    },
-  );
-  writeFileSync(
-    path.join(admission, "writer.lock"),
-    deadLock("22222222-2222-4222-8222-222222222222"),
-    {
-      mode: 0o600,
-    },
-  );
-  writeFileSync(
-    path.join(admission, "reader-33333333-3333-4333-8333-333333333333.lock"),
-    deadLock("33333333-3333-4333-8333-333333333333"),
-    { mode: 0o600 },
-  );
-  const stage = issueDurableAtomicFileStageAddress(
-    "create",
-    ".wakeflow-local/runtime/operation-admission/latch.lock",
-    `sha256:${"4".repeat(64)}`,
-    0o600,
-  );
-  const stagePath = path.join(admission, stage.fileName);
-  writeFileSync(stagePath, "", { mode: 0o600 });
-  equal(await fresh(), false, "本进程还持有这个暂存地址：写者活着");
-  releaseDurableAtomicFileStageAddress(stage);
-  equal(await fresh(), true, "都是死进程留下的");
+  // 一次没有做完的初始化留下的：锁目录和全部锁文件。它们不带状态，不妨碍下一次按全新来预览。
+  await materializeWorkspaceLocksRoot(root);
+  const locks = path.join(protocolPaths(absolutePath).runtime, "locks");
+  equal(await fresh(), true, "只有锁文件");
+  equal((await inspectWakeflowWorkspaceCoreLayout(root)).local.status, "bootstrap-prefix");
 
-  // 持有者不是确定已死：记录写着本进程的进程号（出生证据对得上读作活着，对不上读作判断不出，两样都
-  // 不算全新）。
-  const live = path.join(admission, "reader-55555555-5555-4555-8555-555555555555.lock");
-  writeFileSync(
-    live,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "55555555-5555-4555-8555-555555555555",
-      pid: process.pid,
-    }),
-    { mode: 0o600 },
-  );
-  equal(await fresh(), false, "持有者活着或判断不出");
-  rmSync(live);
-  equal(await fresh(), true);
+  // 锁目录的内容此后不变：一把锁被用过，观察的摘要不动。
+  const before = (await inspectWakeflowWorkspaceCoreLayout(root)).inspectionDigest;
+  for (const name of WORKSPACE_LOCK_NAMES) {
+    if (name === "operation-gate" || name === "operation-scope") continue;
+    await withWorkspaceLock(root, name, async () => undefined);
+  }
+  equal((await inspectWakeflowWorkspaceCoreLayout(root)).inspectionDigest, before);
 
-  // 不认识的名字。
-  const unknown = path.join(admission, "notes.txt");
+  const unknown = path.join(locks, "notes.txt");
   writeFileSync(unknown, "x", { mode: 0o600 });
   equal(await fresh(), false, "不认识的条目");
   rmSync(unknown);
-
-  // 读不出的锁记录。
-  writeFileSync(path.join(admission, "writer.lock"), "not a lock record\n", { mode: 0o600 });
-  equal(await fresh(), false, "锁记录不安全");
-  writeFileSync(
-    path.join(admission, "writer.lock"),
-    deadLock("22222222-2222-4222-8222-222222222222"),
-    {
-      mode: 0o600,
-    },
-  );
   equal(await fresh(), true);
 
-  // 节点策略不对。
-  chmodSync(path.join(admission, "latch.lock"), 0o644);
+  chmodSync(path.join(locks, "requirement-board.lock"), 0o644);
   equal(await fresh(), false, "权限位不对");
 });

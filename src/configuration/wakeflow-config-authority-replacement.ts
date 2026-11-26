@@ -4,12 +4,9 @@ import {
   replaceFileAtomically,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import {
-  RootedExclusiveFileLockError,
-  retireDeadRootedExclusiveFileLock,
-  withRootedExclusiveFileLock,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { settleStagesOfDeadWriters, withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthorityDesiredPlacements,
@@ -28,7 +25,6 @@ import {
   prepareWakeflowConfigAuthorityDesired,
   readCurrentWakeflowConfigAuthority,
   sameWakeflowConfigAuthoritySource,
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementOptions,
   type WakeflowConfigAuthorityReplacementReceipt,
@@ -188,22 +184,21 @@ export async function replaceWakeflowConfigAuthority(
 
   let committed = false;
   try {
-    // 上一个替换配置的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
-    await retireDeadRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, {
-      relatedTargetResourcePaths: [WAKEFLOW_CONFIG_FILE_REF],
-    });
-    return await withRootedExclusiveFileLock(
+    return await withWorkspaceLock(
       root,
-      WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
-      () =>
-        replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
+      "config-authority",
+      async () => {
+        // 上一个替换配置的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
+        await settleStagesOfDeadWriters(root, [WAKEFLOW_CONFIG_FILE_REF], parsed.signal);
+        return replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
           committed = true;
-        }),
+        });
+      },
       wakeflowConfigAuthorityLockOptions(parsed),
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityReplacementError) throw error;
-    if (error instanceof RootedExclusiveFileLockError) {
+    if (error instanceof KernelFileLockError) {
       mapWakeflowConfigAuthorityLockError(error, committed);
     }
     fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath", error);
@@ -211,7 +206,6 @@ export async function replaceWakeflowConfigAuthority(
 }
 
 export {
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementErrorReason,
   type WakeflowConfigAuthorityReplacementOptions,

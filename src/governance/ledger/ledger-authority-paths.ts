@@ -52,13 +52,6 @@ export function ledgerAuthorityMemberRef(
   );
 }
 
-export function ledgerRecordPublicationLockRef(
-  record: Readonly<LedgerAuthorityRecord>,
-): PortableResourcePath {
-  const recordId = parseWakeflowDurableIdOfKind(record.requirementId, "requirement", "$recordId");
-  return parsePortableResourcePath(`${LEDGER_TRANSACTIONS_ROOT_REF}/${recordId}.lock`);
-}
-
 /** 每个类型化记录标识只对应一个私有暂存路径；标识由内容推出，所以同一路径下只可能是同样的字节。 */
 export function ledgerRecordPublicationStageRef(
   record: Readonly<LedgerAuthorityRecord>,

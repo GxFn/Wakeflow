@@ -6,6 +6,7 @@ import { type TestContext, test } from "node:test";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { materializeDirectoryPath } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
+import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -306,9 +307,8 @@ for (const [resourceProfile, identityProfile] of [
         RootedDirectory.prototype,
         "inspectExistingResource",
         async function (this: RootedDirectory, ...args: Parameters<typeof inspect>) {
-          let result: Awaited<ReturnType<typeof inspect>>;
           try {
-            result = await inspect.apply(this, args);
+            return await inspect.apply(this, args);
           } catch (error: unknown) {
             if (this === workspace.root && !intercepted && args[0] === source.resourceRef) {
               intercepted = true;
@@ -317,10 +317,18 @@ for (const [resourceProfile, identityProfile] of [
             }
             throw error;
           }
-          if (this === workspace.root && registering && args[0] === authority.lockRef) {
+        },
+      );
+      // 登记去开登记锁的文件，就是它到了锁的门口。
+      const openLockFile = filesystemMutation.openLockFile;
+      t.mock.method(
+        filesystemMutation,
+        "openLockFile",
+        (target: string, flags: number, mode: number) => {
+          if (registering && /[/\\]locks[/\\]window-binding\.lock$/u.test(target)) {
             waitingForLock.resolve();
           }
-          return result;
+          return openLockFile.call(filesystemMutation, target, flags, mode);
         },
       );
       const inputs = { config: model, resourceProfile, identityProfile };

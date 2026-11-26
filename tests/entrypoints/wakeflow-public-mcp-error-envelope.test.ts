@@ -229,7 +229,7 @@ test("旧错误类按家族表翻成封闭码，旧码与授权事实进 details
   const client = await connectWakeflowMcpTestClient(t, {
     inspectStatus: async () => {
       throw Object.assign(new Error("/Users/someone/private lock message"), {
-        code: "wakeflow-rooted-exclusive-file-lock",
+        code: "wakeflow-kernel-file-lock",
         reason: "timeout",
         path: "$lock",
         retryable: true,
@@ -247,7 +247,7 @@ test("旧错误类按家族表翻成封闭码，旧码与授权事实进 details
       causeReason: "timeout",
       code: "concurrency-conflict",
       details: {
-        legacyCode: "wakeflow-rooted-exclusive-file-lock",
+        legacyCode: "wakeflow-kernel-file-lock",
         publicationAuthority: "recoverable",
       },
       path: "$lock",

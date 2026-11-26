@@ -700,6 +700,39 @@ test("parked 包 activate 回到 pending，withdraw 用 CAS，supersedes 撤回�
   equal(index.includes(successor.package.requirementId), false, "withdrawn package still listed");
 });
 
+test("同一份需求包的两次应用同时到达：账本记录锁让它们先后进行，两次都成功，账本里只有同一条记录", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const request = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput(workspace, { confirmation: { confirmedAt: CONFIRMED_AT } }),
+  };
+  const ready = await executeRequirementPublicationRequest(request, { clock });
+  if (ready.kind !== "WakeflowRequirementPublicationPreview" || ready.planDigest === null)
+    throw new Error("Expected a ready preview.");
+  const apply = () =>
+    executeRequirementPublicationRequest(
+      { ...request, mode: "apply", planDigest: ready.planDigest },
+      { clock },
+    );
+  const results = await Promise.all([apply(), apply()]);
+  for (const result of results) {
+    equal(result.kind, "WakeflowRequirementPublicationMutation");
+  }
+  const requirementIds = results.map((result) =>
+    result.kind === "WakeflowRequirementPublicationMutation" ? result.package.requirementId : null,
+  );
+  equal(requirementIds[0], requirementIds[1]);
+  // 账本里只有这一条记录，暂存目录没有留下东西。
+  deepEqual(readdirSync(path.join(root, "Ledger", "transactions")), []);
+  equal(readdirSync(path.join(root, "Ledger", "requirements")).length, 1);
+});
+
 test("看板索引被删之后认领：重建出来的索引是配置的语言，不是英文（L10）", {
   timeout: 90_000,
 }, async (t) => {

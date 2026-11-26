@@ -5,7 +5,6 @@ import {
   REQUIREMENT_BOARD_INDEX_REF,
   REQUIREMENT_BOARD_ROOT_REF,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
-  WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
   WAKEFLOW_ACTIVE_ROOT_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
@@ -102,34 +101,10 @@ const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION = projectionDeclarat
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
 );
 
-const WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION =
-  parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: "active.workspace-projection-lock",
-    family: "active",
-    ownerId: "active-workspace-projection",
-    scope: "host-neutral",
-    placement: { root: { kind: "workspace" }, relativePath: WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-      kind: "file",
-      mode: "0600",
-      linkPolicy: "single-link",
-      executablePolicy: "forbidden",
-    },
-    processing: {
-      kind: "resource",
-      role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "owner-transaction-recovery",
-    },
-  });
-
 export const WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_RESOURCE_DECLARATION,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION,
-  WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
 /** Active Layout 两级容器策略的语义摘要；维护计划用它做步骤目标。 */

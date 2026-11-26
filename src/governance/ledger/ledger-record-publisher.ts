@@ -18,7 +18,6 @@ import type { RootedDirectory } from "../../foundation/filesystem/rooted-directo
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
 } from "./ledger-authority-paths.js";
 import {
@@ -48,16 +47,14 @@ import {
   ledgerPublicationResourceNodeOrNull,
   ledgerRecordPublicationStageState,
   loadExactPublishedLedgerRecord,
-  prepareLedgerRecordPublicationLockRecovery,
   publishLedgerRecordStage,
   retireLedgerRecordPublicationStage,
-  withLedgerRecordPublicationLock,
 } from "./ledger-record-publication-storage.js";
 
 /**
  * Wakeflow Governance / Ledger：单记录聚合的暂存发布编排。
  *
- * 本模块负责输入准入、目录树候选计划和提交。暂存、逐记录锁与回读校验在相邻的存储模块里。
+ * 本模块负责输入准入、目录树候选计划和提交。暂存与回读校验在相邻的存储模块里。
  */
 
 interface ParsedMemberInput {
@@ -180,7 +177,6 @@ function preparePublication(
       plan: Object.freeze({
         record,
         finalRootRef: ledgerAuthorityRootRef(record),
-        lockRef: ledgerRecordPublicationLockRef(record),
         stageRef: ledgerRecordPublicationStageRef(record),
         treePlan,
       }),
@@ -279,7 +275,8 @@ async function stageCandidate(
 }
 
 /**
- * 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。
+ * 整体发布目录树，或幂等复用完全一致的不可变权威记录。调用方持有工作区的账本记录锁（ADR-0033）：
+ * 同一条记录的暂存目录只有一个，两次发布不能同时进行。
  *
  * 不记日志：final 在就逐字节核对后复用；不在就把暂存补齐（上一次被打断留下的同一份内容）、
  * 删掉补不了的残留重建，或新建，然后改名生效。被打断的发布由同一个请求再发一次续上。
@@ -291,15 +288,12 @@ export async function publishLedgerAuthorityRecord(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
   const prepared = preparePublication(recordValue, membersValue, signal);
-  await prepareLedgerRecordPublicationLockRecovery(root, prepared.plan.lockRef);
-  return withLedgerRecordPublicationLock(root, prepared.plan.lockRef, signal, async () => {
-    if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
-      const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
-      return Object.freeze({ wroteAuthority: false, loaded });
-    }
-    const candidate = await stageCandidate(root, prepared, signal);
-    await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
+  if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
     const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
-    return Object.freeze({ wroteAuthority: true, loaded });
-  });
+    return Object.freeze({ wroteAuthority: false, loaded });
+  }
+  const candidate = await stageCandidate(root, prepared, signal);
+  await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
+  const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
+  return Object.freeze({ wroteAuthority: true, loaded });
 }

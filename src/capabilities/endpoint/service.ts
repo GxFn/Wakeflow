@@ -115,7 +115,6 @@ import {
   type WakeflowWindowRuntimeDesiredWindow,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
 import {
-  wakeflowWindowHostBindingMutationLockRef,
   wakeflowWindowHostBindingRef,
   wakeflowWindowHostBindingRootRef,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
@@ -469,7 +468,6 @@ async function openContext(
         wakeflowWindowHostBindingRef(facade.resourceProfile, entry.windowId),
       ),
       bindingRootRef: wakeflowWindowHostBindingRootRef(facade.resourceProfile),
-      lockRef: wakeflowWindowHostBindingMutationLockRef(facade.resourceProfile),
     }),
     signal: options.signal,
     clock: options.clock,

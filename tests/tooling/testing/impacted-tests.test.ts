@@ -134,6 +134,16 @@ test("多行 named import、import type、export … from 与默认加命名导�
   ]);
 });
 
+test("被删掉的测试文件不入选：它在变更集里，但已经没有可跑的了；同一次改动里别的受影响测试照常入选", (t) => {
+  const root = fixture(t);
+  rmSync(path.join(root, "tests/capabilities/y/service.test.ts"));
+  write(root, "src/kernel/a.ts", "export const a = 2;\n");
+  const selection = selectImpactedTests(root);
+  equal(selection.changed.includes("tests/capabilities/y/service.test.ts"), true);
+  deepEqual(selection.tests, ["tests/capabilities/x/service.test.ts", "tests/kernel/a.test.ts"]);
+  equal("tests/capabilities/y/service.test.ts" in selection.reasons, false);
+});
+
 test("改动的夹具只影响它的消费者；新增的未跟踪测试本身入选；提交后按 --since 仍能回看", (t) => {
   const root = fixture(t);
   write(

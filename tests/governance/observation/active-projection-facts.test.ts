@@ -36,13 +36,12 @@ import {
   renderActiveProjectionFiles,
 } from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF } from "../../../src/kernel/layout.js";
+import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
 import {
   createPodWorktreeReceipt,
   type WorktreeCheckoutObservation,
 } from "../../../src/kernel/pod-worktree-receipts.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";
 
@@ -341,24 +340,26 @@ test("刷新这条路也在锁内：锁被别人持有时这一轮以 projection
   const root = workspace.workspaceRoot;
   await materializeActiveLayout(root, { recovering: false });
   const activeRoot = path.join(root.absolutePath, ".wakeflow-active");
-  const lockPath = path.join(root.absolutePath, ...WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF.split("/"));
-  const plantedLock = rootedExclusiveFileLockRecordTextForTest({
-    pid: process.ppid,
-    tokenUuid: "11111111-1111-4111-8111-111111111111",
-  });
-  writeFileSync(lockPath, plantedLock, { mode: 0o600 });
-  // 锁种下之后再取快照：比较的是"这一轮有没有写投影"，不是我们自己种的锁。
   const before = readdirSync(activeRoot).sort();
-
-  await rejects(
-    refreshActiveProjection(root, { acquireTimeoutMilliseconds: 50 }),
-    (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "io-failure" &&
-      error.reason === "projection-contended" &&
-      error.retryable,
-  );
-
-  deepEqual(readdirSync(activeRoot).sort(), before, "争用的一轮不得新建任何投影文件");
-  equal(readFileSync(lockPath, "utf8"), plantedLock, "争用的一轮不得夺走别人的锁");
+  const inside = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const holder = withWorkspaceLock(root, "active-projection", async () => {
+    inside.resolve();
+    await release.promise;
+  });
+  await inside.promise;
+  try {
+    await rejects(
+      refreshActiveProjection(root, { acquireTimeoutMilliseconds: 50 }),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "io-failure" &&
+        error.reason === "projection-contended" &&
+        error.retryable,
+    );
+    deepEqual(readdirSync(activeRoot).sort(), before, "争用的一轮不得新建任何投影文件");
+  } finally {
+    release.resolve();
+    await holder;
+  }
 });

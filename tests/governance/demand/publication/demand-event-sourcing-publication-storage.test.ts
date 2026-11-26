@@ -56,7 +56,6 @@ import {
   renderDemandEventSourcingPublicationTransaction,
 } from "../../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import {
-  DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   DEMAND_PUBLICATION_MARKER_REF,
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
@@ -489,17 +488,16 @@ test("initializePublicationStorage 只在当前活动布局下幂等建立私有
     DEMAND_PUBLICATION_ROOT_REF,
     DEMAND_PUBLICATION_STAGES_ROOT_REF,
     DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
-    DEMAND_PUBLICATION_LOCKS_ROOT_REF,
   ]) {
     equal(statSync(physical(ref)).mode & 0o777, 0o700, ref);
   }
   await initializeStorage(root, undefined);
-  chmodSync(physical(DEMAND_PUBLICATION_LOCKS_ROOT_REF), 0o755);
+  chmodSync(physical(DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF), 0o755);
   await rejects(
     initializeStorage(root, undefined),
-    isServiceError("conflict", `$${DEMAND_PUBLICATION_LOCKS_ROOT_REF}`),
+    isServiceError("conflict", `$${DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF}`),
   );
-  chmodSync(physical(DEMAND_PUBLICATION_LOCKS_ROOT_REF), 0o700);
+  chmodSync(physical(DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF), 0o700);
   rmSync(physical(DEMAND_PUBLICATION_STAGES_ROOT_REF), { recursive: true });
   writeFileSync(physical(DEMAND_PUBLICATION_STAGES_ROOT_REF), "", { mode: 0o600 });
   await rejects(

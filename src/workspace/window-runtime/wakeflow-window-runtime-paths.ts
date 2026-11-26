@@ -29,15 +29,6 @@ export function wakeflowWindowHostBindingRef(
   );
 }
 
-/** 当前宿主全部 Window Host Binding mutation 共用的短生命周期独占锁。 */
-export function wakeflowWindowHostBindingMutationLockRef(
-  profileValue: unknown,
-): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${wakeflowWindowHostBindingRootRef(profileValue)}/.registration.lock`,
-  );
-}
-
 export function wakeflowWindowRuntimeProjectionRootRef(
   profileValue: unknown,
 ): PortableResourcePath {

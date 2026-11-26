@@ -1,15 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
-import { materializeDirectoryPath } from "../foundation/filesystem/durable-directory-materialization.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectoryError,
   type RootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   withRootedReadWriteScope,
   RootedReadWriteScopeError,
@@ -24,11 +20,15 @@ import { fail, isWakeflowError } from "./error.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
-  WORKSPACE_MAINTENANCE_GATE_REF,
   WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
-  WORKSPACE_OPERATION_SCOPES_REF,
   WAKEFLOW_CONFIG_SCHEMA_VERSION,
 } from "./layout.js";
+import {
+  isWorkspaceLockHeld,
+  materializeWorkspaceLocksRoot,
+  WORKSPACE_LOCKS_ROOT_REF,
+  workspaceLockRef,
+} from "./workspace-locks.js";
 
 interface ActiveScope {
   readonly root: RootedDirectory;
@@ -67,21 +67,21 @@ async function assertWriterProtocol(root: RootedDirectory, signal?: AbortSignal)
   }
 }
 
+/**
+ * 维护的保留条件：此刻有一次维护在跑（门被持有）就让调用方稍后重试；事务目录里留着意图就是上一次维护
+ * 没有做完，要先恢复。门自己不留残留——持有者死掉时内核收走它（ADR-0033 决定 5）。
+ */
 async function assertNoMaintenanceReservation(root: RootedDirectory): Promise<void> {
-  const gate = await inspectRootedExclusiveFileLock(root, WORKSPACE_MAINTENANCE_GATE_REF);
-  if (gate.status === "held") {
-    // 所有者未知（出生证据缺失、PID 被复用或不可观察）不等于死了：当作仍在维护让调用方重试，
-    // 只有被证明不活跃的 gate 才需要恢复（§13.161 F2）。
-    const reason =
-      gate.ownerState === "active"
-        ? "maintenance-busy"
-        : gate.ownerState === "unknown"
-          ? "maintenance-owner-unknown"
-          : "maintenance-recovery-required";
-    fail("concurrency-conflict", reason, "$workspace", {
-      retryable: gate.ownerState !== "inactive",
-    });
+  let busy: boolean;
+  try {
+    busy = await isWorkspaceLockHeld(root, "maintenance-gate");
+  } catch (error: unknown) {
+    if (error instanceof KernelFileLockError) {
+      fail("io-failure", `maintenance-gate-${error.reason}`, "$workspace", { cause: error });
+    }
+    throw error;
   }
+  if (busy) fail("concurrency-conflict", "maintenance-busy", "$workspace", { retryable: true });
   try {
     const entries = await readStableResourceDirectory(
       root,
@@ -104,15 +104,12 @@ async function prepareScope(
   if (options.maintenanceGuard !== undefined) {
     if (mode !== "exclusive") fail("unexpected", "maintenance-scope-mode", "$workspace");
     await options.maintenanceGuard();
-    await materializeDirectoryPath(root, WORKSPACE_OPERATION_SCOPES_REF, {
-      mode: 0o700,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
+    await materializeWorkspaceLocksRoot(root, options.signal);
     return;
   }
   await assertWriterProtocol(root, options.signal);
   try {
-    await root.inspectExistingResource(WORKSPACE_OPERATION_SCOPES_REF, "$scope");
+    await root.inspectExistingResource(WORKSPACE_LOCKS_ROOT_REF, "$scope");
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
       fail("precondition-failed", "operation-scope-missing", "$workspace");
@@ -133,13 +130,8 @@ function assertBorrowable(
 }
 
 function mapScopeError(error: unknown): never {
-  if (error instanceof RootedReadWriteScopeError || error instanceof RootedExclusiveFileLockError) {
+  if (error instanceof RootedReadWriteScopeError) {
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-    // 操作已提交、租约却释放不掉（只在没有登记释放失败报告者时到这里）：残留需要恢复，不是并发冲突
-    //（open-items W8；与维护 gate 对 release-failure 的归类一致）。
-    if (error.reason === "release-failure") {
-      fail("recovery-required", "operation-scope-release-failure", "$workspace", { cause: error });
-    }
     fail("concurrency-conflict", `operation-scope-${error.reason}`, "$workspace", {
       cause: error,
       retryable: error.reason === "timeout",
@@ -172,7 +164,7 @@ export async function withWorkspaceOperationScope<Result>(
   try {
     return await withRootedReadWriteScope(
       root,
-      WORKSPACE_OPERATION_SCOPES_REF,
+      { gate: workspaceLockRef("operation-gate"), scope: workspaceLockRef("operation-scope") },
       mode,
       () =>
         scopes.run(scope, async () => {

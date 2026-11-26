@@ -17,7 +17,7 @@ A revision, a claim, a binding or a lock is no longer what the request assumed. 
 - **demand**: `archive-raced`, `payload-changed`, `publication-<reason>`, `stream-advanced`, `stream-revision`
 - **endpoint**: `binding-changed`, `binding-lock`, `claim-changed`
 - **evidence**: `demand-root-read-source-changed`
-- **kernel**: `claim-state-changed`, `claim-state-exists`, `claim-state-lock-<reason>`, `operation-scope-<reason>`, `pod-lock-<reason>`
+- **kernel**: `claim-state-changed`, `claim-state-exists`, `claim-state-lock-<reason>`, `maintenance-busy`, `operation-scope-<reason>`, `pod-lock-<reason>`
 - **pod**: `config-<reason>`
 - **requirement**: `claim-state-drift`, `ledger-lock`
 - **result-review**: `stream-revision`
@@ -77,7 +77,6 @@ Finish that operation's recovery before anything else. When `details.tool` is pr
 
 - **demand**: `append-candidates-pending`, `claim-state-vanished`, `demand-publication`, `demand-root-and-archive-absent`, `demand-root-restore`, `demand-root-vanished`, `evidence-publication-pending`, `journal-invalid`, `journal-verify-missing`, `lifecycle-journal-pending`
 - **endpoint**: `binding-store`
-- **kernel**: `operation-scope-release-failure`
 - **pod**: `config-<reason>`
 - **requirement**: `claim-state-vanished`, `ledger-publication`, `record-vanished`
 - **workspace**: `maintenance-gate-residue`, `maintenance-recovery-artifact-mismatch`

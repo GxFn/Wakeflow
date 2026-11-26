@@ -4,6 +4,7 @@ import {
   chmodSync,
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -14,18 +15,25 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { acquireKernelFileLock } from "../../../src/foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import {
+  materializeWorkspaceLocksRoot,
+  workspaceLockRef,
+} from "../../../src/kernel/workspace-locks.js";
 import { createWakeflowGitignoreBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
 import {
   recomposeWakeflowWorkspaceGitignore,
   WakeflowGitignoreRecompositionError,
   type WakeflowGitignoreRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
-import { WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import { inspectWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -40,7 +48,6 @@ const PROFILES = Object.freeze([
 interface GitFixture {
   readonly absolutePath: string;
   readonly gitignorePath: string;
-  readonly lockPath: string;
   readonly root: RootedDirectory;
 }
 
@@ -73,7 +80,6 @@ async function fixture(
   return Object.freeze({
     absolutePath,
     gitignorePath,
-    lockPath: path.join(absolutePath, WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF),
     root,
   });
 }
@@ -119,20 +125,18 @@ test("Gitignore recomposition atomically creates once and then remains current",
     true,
   );
   equal(statSync(current.gitignorePath).mode & 0o777, 0o644);
-  equal(existsSync(current.lockPath), false);
   const createdBytes = readFileSync(current.gitignorePath);
   const createdNode = statSync(current.gitignorePath, { bigint: true });
   const envelope = inspectWakeflowManagedTextEnvelope(createdBytes);
   equal(envelope.kind, "managed");
-  equal(
-    created.inspection.authority.rules.some((rule) => rule === "/.wakeflow-config-authority.lock"),
-    true,
+  // 锁在私有的锁目录里（ADR-0033）：工作区根上没有锁文件，托管块里也就没有忽略它们的规则。
+  deepEqual(
+    readdirSync(current.absolutePath).filter((name) => name.endsWith(".lock")),
+    [],
   );
   equal(
-    created.inspection.authority.rules.some(
-      (rule) => rule === "/.wakeflow-gitignore-recomposition.lock",
-    ),
-    true,
+    created.inspection.authority.rules.some((rule) => rule.endsWith(".lock")),
+    false,
   );
 
   const currentReceipt = await recomposeWakeflowWorkspaceGitignore(current.root, request());
@@ -141,21 +145,25 @@ test("Gitignore recomposition atomically creates once and then remains current",
   equal(currentReceipt.inspection.status, "managed-current");
   deepEqual(readFileSync(current.gitignorePath), createdBytes);
   equal(statSync(current.gitignorePath, { bigint: true }).ino, createdNode.ino);
-  equal(existsSync(current.lockPath), false);
 });
 
-test("Gitignore recomposition clears a dead holder's lock and then creates (1.4.2)", async (t) => {
-  const current = await fixture(t);
-  writeFileSync(
-    current.lockPath,
-    rootedExclusiveFileLockRecordTextForTest({
-      tokenUuid: "88888888-8888-4888-8888-888888888888",
-    }),
-    { mode: 0o600 },
+test("Gitignore recomposition settles a dead writer's stage and then replaces (ADR-0033)", async (t) => {
+  const current = await fixture(t, "node_modules/\n");
+  // 上一个重组的进程死在写到一半：内核已经收走它的锁，它替换用的暂存还留着。
+  const bytes = Buffer.from("stale\n");
+  const stage = issueDurableAtomicFileStageAddress(
+    "replace",
+    WAKEFLOW_GITIGNORE_REF,
+    computeSha256Digest(bytes),
+    0o644,
   );
-  const created = await recomposeWakeflowWorkspaceGitignore(current.root, request());
-  equal(created.disposition, "created");
-  equal(existsSync(current.lockPath), false);
+  releaseDurableAtomicFileStageAddress(stage);
+  const stagePath = path.join(current.absolutePath, stage.fileName);
+  writeFileSync(stagePath, bytes, { mode: 0o644 });
+
+  const receipt = await recomposeWakeflowWorkspaceGitignore(current.root, request());
+  equal(receipt.disposition, "replaced");
+  equal(existsSync(stagePath), false);
 });
 
 test("Gitignore recomposition replaces an exact source and preserves user-owned bytes", async (t) => {
@@ -171,7 +179,6 @@ test("Gitignore recomposition replaces an exact source and preserves user-owned 
   }
   equal(receipt.inspection.status, "managed-current");
   equal(readFileSync(current.gitignorePath, "utf8").startsWith(source), true);
-  equal(existsSync(current.lockPath), false);
 });
 
 test("Gitignore recomposition leaves a satisfying user-owned file byte-exact", async (t) => {
@@ -188,7 +195,6 @@ test("Gitignore recomposition leaves a satisfying user-owned file byte-exact", a
   equal(receipt.inspection.envelope.kind, "unmanaged");
   deepEqual(readFileSync(current.gitignorePath), before);
   equal(statSync(current.gitignorePath, { bigint: true }).ino, beforeNode.ino);
-  equal(existsSync(current.lockPath), false);
 });
 
 test("Gitignore recomposition rejects unsafe sources and bounded lock contention", async (t) => {
@@ -200,7 +206,6 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
       "source-invalid",
       "$source",
     );
-    equal(existsSync(current.lockPath), false);
   });
 
   await t.test("non Git repository", async (subtest) => {
@@ -210,7 +215,6 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
       "observation-failure",
       "$git",
     );
-    equal(existsSync(current.lockPath), false);
   });
 
   await t.test("pre-aborted", async (subtest) => {
@@ -223,28 +227,16 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
       "aborted",
       "$signal",
     );
-    equal(existsSync(current.lockPath), false);
   });
 
   await t.test("lock timeout", async (subtest) => {
     const current = await fixture(subtest);
-    let enter: (() => void) | undefined;
-    let release: (() => void) | undefined;
-    const entered = new Promise<void>((resolve) => {
-      enter = resolve;
-    });
-    const released = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const holder = withRootedExclusiveFileLock(
+    await materializeWorkspaceLocksRoot(current.root);
+    const lease = await acquireKernelFileLock(
       current.root,
-      WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-      async () => {
-        enter?.();
-        await released;
-      },
+      workspaceLockRef("gitignore"),
+      "exclusive",
     );
-    await entered;
     try {
       await expectRecompositionError(
         () =>
@@ -256,9 +248,7 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
         "$lock",
       );
     } finally {
-      release?.();
-      await holder;
+      await lease.release();
     }
-    equal(existsSync(current.lockPath), false);
   });
 });

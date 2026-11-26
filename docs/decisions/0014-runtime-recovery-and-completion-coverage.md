@@ -26,7 +26,7 @@ board 和 projection 的 owner 在正常写入口退役已证明失活的锁；F
 
 ### 3. pod 的占用变化共用短临界区
 
-公开 create、continue、终态完成/取消及 pod 关闭使用按 podId 隔离的运行锁。在锁内复验配置和当前占用；关闭重新推导计划。锁放在私有 runtime 中，不进入事件或归档。
+公开 create、continue、终态完成/取消及 pod 关闭使用按 podId 隔离的运行锁。（2026-11-26：[ADR-0033](0033-kernel-advisory-locks.md) 起这是工作区的一把 `pod-mutation` 内核锁，不再按 podId 分；两个 pod 的这类操作先后进行。）在锁内复验配置和当前占用；关闭重新推导计划。锁放在私有 runtime 中，不进入事件或归档。
 
 进程死亡不代表事务结束。未结的 Demand 发布意图与生命周期日志继续保留对应 pod 的占用，直到原操作恢复；不能只扫描 claimed 看板项。不同 pod 保持独立，配置 CAS 继续防止覆盖他人的配置变更。宿主效果及 Agent 等待不进入该临界区。
 

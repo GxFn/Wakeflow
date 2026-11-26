@@ -89,7 +89,7 @@ const PINNED_DIGESTS: Readonly<Record<string, string>> = Object.freeze({
     "sha256:d153191f9c93ff2cc3a3d2e8c197f9784e83d7ff760d47754df210286a447428",
   "support-memory/test/zh-Hans/claude-code":
     "sha256:1257d13a11275e4af5226fc02b2221af54cd9301c365f7e33ad910295f87761b",
-  gitignore: "sha256:cf9f0c3223e9f7bec4fe13192859c7188d564ba3cbfde4dcdfa31527283773a0",
+  gitignore: "sha256:ebe394d50278f361c689d9c5a16a94cd1d0a74a1c060be8831e66a5533e9c908",
   "support-gitignore": "sha256:760b753ea63415fb9e286c097644f32682c0543f7178c03c27381577baf255e9",
 });
 
@@ -158,7 +158,28 @@ test("黄金摘要：五种托管正文的当前渲染与钉住的摘要逐项�
   );
 });
 
-test("历史表今天为空、冻结且每张不超过 7 项，退役版本是 semver；生产者用夹具输入算历史正文得到空集", () => {
+test("仓库 `.gitignore` 的 1.4.4 历史渲染重算出带四条根锁规则的旧正文，摘要与 1.4.3 钉住的相同（ADR-0033）", () => {
+  const current = createWakeflowGitignoreBodyAuthority(PROFILES).body;
+  const bodies = historicalWakeflowManagedTextBodies(
+    WAKEFLOW_GITIGNORE_BODY_HISTORY,
+    current,
+    PROFILES,
+  );
+  deepEqual(bodies.map(digest), [
+    "sha256:cf9f0c3223e9f7bec4fe13192859c7188d564ba3cbfde4dcdfa31527283773a0",
+  ]);
+  deepEqual(
+    (bodies[0] ?? "").split("\n").filter((rule) => !current.split("\n").includes(rule)),
+    [
+      "/.wakeflow-config-authority.lock",
+      "/.wakeflow-gitignore-recomposition.lock",
+      "/.wakeflow-program-instruction-claude-code.lock",
+      "/.wakeflow-program-instruction-codex.lock",
+    ],
+  );
+});
+
+test("历史表冻结且每张不超过 7 项，退役版本是 semver；没有登记历史的组件用夹具输入算历史正文得到空集", () => {
   const tables: readonly (readonly WakeflowManagedTextHistoricalRender<readonly unknown[]>[])[] = [
     WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
     WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,

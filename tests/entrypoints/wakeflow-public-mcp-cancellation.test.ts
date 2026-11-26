@@ -4,11 +4,18 @@ import { executeClaudeCodeWakeflowMaintenance } from "../../src/entrypoints/clau
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import { executeCodexWakeflowMaintenance } from "../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
-import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
+import { filesystemMutation } from "../../src/foundation/filesystem/filesystem-mutation.js";
+import {
+  acquireKernelFileLock,
+  type KernelFileLockLease,
+} from "../../src/foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { readRequirementClaimState } from "../../src/kernel/requirement-board.js";
+import {
+  materializeWorkspaceLocksRoot,
+  workspaceLockRef,
+} from "../../src/kernel/workspace-locks.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,
@@ -27,29 +34,19 @@ for (const [host, createServer, maintain] of [
   }, async (t) => {
     const fixture = await createDemandEventSourcingPublicationWorkspaceFixture();
     const { client, close } = await connectWakeflowMcpServerForTest(createServer("1.0.0-test"));
-    const lockRef = parsePortableResourcePath(
-      `.wakeflow-active/current/board/locks/${fixture.requirementId}.lock`,
-    );
-    const held = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
+    await materializeWorkspaceLocksRoot(fixture.workspaceRoot);
     const waiting = Promise.withResolvers<void>();
     const finished = Promise.withResolvers<void>();
     let armed = false;
-    const inspect = RootedDirectory.prototype.inspectExistingResource;
     const closeRoot = RootedDirectory.prototype.close;
+    // apply 去开看板锁的文件，就是它到了锁的门口。
+    const openLockFile = filesystemMutation.openLockFile;
     t.mock.method(
-      RootedDirectory.prototype,
-      "inspectExistingResource",
-      async function (this: RootedDirectory, ...args: Parameters<typeof inspect>) {
-        const result = await inspect.apply(this, args);
-        if (
-          armed &&
-          this.absolutePath === fixture.workspaceRoot.absolutePath &&
-          args[0] === lockRef
-        ) {
-          waiting.resolve();
-        }
-        return result;
+      filesystemMutation,
+      "openLockFile",
+      (target: string, flags: number, mode: number) => {
+        if (armed && /[/\\]locks[/\\]requirement-board\.lock$/u.test(target)) waiting.resolve();
+        return openLockFile.call(filesystemMutation, target, flags, mode);
       },
     );
     t.mock.method(RootedDirectory.prototype, "close", async function (this: RootedDirectory) {
@@ -62,7 +59,7 @@ for (const [host, createServer, maintain] of [
         finished.resolve();
       }
     });
-    let holder: Promise<void> | undefined;
+    let lease: KernelFileLockLease | undefined;
     try {
       const request = {
         root: fixture.workspacePath,
@@ -79,11 +76,11 @@ for (const [host, createServer, maintain] of [
       equal(preview.isError, undefined);
       const plan = preview.structuredContent as { status: string; planDigest: string };
       equal(plan.status, "ready");
-      holder = withRootedExclusiveFileLock(fixture.workspaceRoot, lockRef, async () => {
-        held.resolve();
-        await release.promise;
-      });
-      await held.promise;
+      lease = await acquireKernelFileLock(
+        fixture.workspaceRoot,
+        workspaceLockRef("requirement-board"),
+        "exclusive",
+      );
       armed = true;
       const controller = new AbortController();
       const cancelled = rejects(
@@ -100,8 +97,8 @@ for (const [host, createServer, maintain] of [
       await cancelled;
       // 请求上下文必须在锁仍被持有时关闭，证明不是等到释放后才忽略回复。
       await finished.promise;
-      release.resolve();
-      await holder;
+      await lease.release();
+      lease = undefined;
       const state = await readRequirementClaimState(fixture.workspaceRoot, fixture.requirementId);
       equal(state?.state.status, "pending");
       equal(state?.state.revision, 1);
@@ -119,8 +116,7 @@ for (const [host, createServer, maintain] of [
         (error: unknown) => error instanceof WakeflowError && error.reason === "aborted",
       );
     } finally {
-      release.resolve();
-      await holder;
+      await lease?.release();
       await close();
       t.mock.restoreAll();
       await cleanupDemandEventSourcingPublicationWorkspaceFixture(fixture);

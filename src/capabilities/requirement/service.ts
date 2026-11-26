@@ -49,6 +49,9 @@ import {
 } from "../../governance/ledger/ledger-authority-store.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
+import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import { LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS } from "../../governance/ledger/ledger-authority-storage-policy.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   type PublicationTransactionEnvelope,
@@ -197,11 +200,16 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
 });
 
 function mapStoreError(error: unknown): never {
+  // 账本记录锁（ADR-0033）：等到超时是另一条记录正在发布，重试即可；其余是锁文件或卷的问题。
+  if (error instanceof KernelFileLockError) {
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error.reason === "timeout") {
+      fail("concurrency-conflict", "ledger-lock", "$ledger", { cause: error, retryable: true });
+    }
+    fail("io-failure", `ledger-lock-${error.reason}`, "$ledger", { cause: error });
+  }
   if (error instanceof LedgerAuthorityStoreError) {
     switch (error.reason) {
-      case "lock-timeout":
-        fail("concurrency-conflict", "ledger-lock", "$ledger", { cause: error, retryable: true });
-        break;
       case "conflict":
         fail("precondition-failed", "record-conflict", "$request.package", { cause: error });
         break;
@@ -722,7 +730,16 @@ async function ensureRecord(
   }
   const members = await memberBytes(context, plan);
   try {
-    await context.store.publish(candidate, members, signalOptions(context.signal));
+    // 发布在账本记录锁内进行：同一条记录的暂存目录只有一个，两次发布不能同时动它。
+    await withWorkspaceLock(
+      context.root,
+      "ledger-record",
+      () => context.store.publish(candidate, members, signalOptions(context.signal)),
+      {
+        acquireTimeoutMilliseconds: LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+        ...signalOptions(context.signal),
+      },
+    );
   } catch (error: unknown) {
     mapStoreError(error);
   }

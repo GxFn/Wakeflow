@@ -6,8 +6,6 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
 import {
-  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-  WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
   WAKEFLOW_GITIGNORE_REF,
   WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
@@ -47,9 +45,9 @@ test("Managed Integration Catalog gives .gitignore one exact resource policy", (
       recoveryStrategy: "recompose-owned-content",
     },
   });
+  // 重组 `.gitignore` 的锁在工作区的锁目录里（ADR-0033），不是这张目录里的一项资源。
   deepEqual(WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG, [
     WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
-    WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
   ]);
   assertDeepFrozen(WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG);
   deepEqual(
@@ -74,32 +72,4 @@ test("Managed Integration Catalog gives .gitignore one exact resource policy", (
     caught = error;
   }
   equal(caught instanceof WakeflowResourceProcessingContractError, true);
-
-  deepEqual(WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION, {
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: "workspace.ignore-integration-lock",
-    family: "workspace",
-    ownerId: "workspace-ignore-integration",
-    scope: "host-neutral",
-    placement: {
-      root: { kind: "workspace" },
-      relativePath: WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-    },
-    tracking: {
-      disposition: "ignored",
-      privacy: "runtime-private",
-    },
-    nodePolicy: {
-      kind: "file",
-      mode: "0600",
-      linkPolicy: "single-link",
-      executablePolicy: "forbidden",
-    },
-    processing: {
-      kind: "resource",
-      role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "owner-transaction-recovery",
-    },
-  });
 });

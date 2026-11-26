@@ -55,7 +55,7 @@ import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js
  */
 
 const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_ENTRIES = 100_000;
-export const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
+const DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE = 1_024;
 
 export interface DurableAtomicFileStageRecoveryOptions {
   readonly signal?: AbortSignal;

@@ -1,5 +1,5 @@
 import { equal, rejects } from "node:assert/strict";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -22,14 +22,14 @@ async function fixture(t: TestContext) {
   return { base, root };
 }
 
-test("pod 互斥区：正常进入并释放；不安全的锁记录按不可重试冲突拒绝（§13.161 F6）", async (t) => {
+test("pod 互斥区：正常进入并释放；锁的路径上不是普通文件时按不可重试冲突拒绝（§13.161 F6）", async (t) => {
   const f = await fixture(t);
   let entered = 0;
   equal(await withPodMutation(f.root, POD_ID, async () => ++entered), 1);
   equal(entered, 1);
-  const lockDirectory = path.join(f.base, ".wakeflow-local", "runtime", "pod-mutations");
-  mkdirSync(lockDirectory, { recursive: true, mode: 0o700 });
-  writeFileSync(path.join(lockDirectory, `${POD_ID}.lock`), "not a lock record", { mode: 0o600 });
+  const lockPath = path.join(f.base, ".wakeflow-local", "runtime", "locks", "pod-mutation.lock");
+  rmSync(lockPath);
+  mkdirSync(lockPath, { mode: 0o700 });
   await rejects(
     withPodMutation(f.root, POD_ID, async () => ++entered),
     (error: unknown) =>

@@ -259,8 +259,8 @@ interface HookStageResiduePlan {
 }
 
 /**
- * 没有操作可恢复的维护门残留的退役计划（open-items B9）：进程死在拿到门锁之后、intent 发布之前，留下一把
- * 已死进程的门锁和（可能的）孤儿暂存，协议是 recovery-required 却没有 operation ID 可交给 recover。
+ * 没有操作可恢复的维护残留的退役计划（open-items B9）：进程死在 intent 的暂存写好、还没有链接到目标的那
+ * 一刻，事务目录里留下孤儿暂存，协议是 recovery-required 却没有 operation ID 可交给 recover。
  */
 interface GateResiduePlan {
   readonly kind: "gate-residue";
@@ -268,7 +268,6 @@ interface GateResiduePlan {
   readonly view: Readonly<{
     readonly kind: "WakeflowMaintenanceGateResiduePlan";
     readonly schemaVersion: 1;
-    readonly lock: WakeflowMaintenanceGateResidue["lock"];
     readonly transactionStages: number;
   }>;
 }
@@ -937,7 +936,6 @@ async function planGateResidue(
       view: Object.freeze({
         kind: "WakeflowMaintenanceGateResiduePlan" as const,
         schemaVersion: 1 as const,
-        lock: residue.lock,
         transactionStages: residue.transactionStages,
       }),
     }),
@@ -1446,7 +1444,9 @@ function nextAfterLaunchIntents(
  * 都是宿主声明为私有资产的操作（助手、状态栏脚本），换上的是已装制品里的字节（1.3.0 终验，用户裁决
  * 2026-11-15：此前每次插件更新都要用户为它确认一次）。没有任何步骤的 reconcile 同样归 Controller：它只重写
  * Wakeflow 自己的状态页与索引，比重装助手更轻，verify 的下一步也本来就把它标给 Controller（用户裁决
- * 2026-11-25，open-items Y21）。其余计划改动的是用户的目录，由用户确认。
+ * 2026-11-25，open-items Y21）。补齐 Wakeflow 自己的协议目录的那一步也在这一类里：它只在
+ * `.wakeflow-local/runtime` 里建私有目录，从文件锁的版本更新上来的工作区第一次对账就是它（ADR-0033
+ * 决定 10）——同样是"插件更新之后的那次对账"。其余计划改动的是用户的目录，由用户确认。
  */
 function applyOwnerOf(
   plan: SlicePlan | null,
@@ -1457,10 +1457,10 @@ function applyOwnerOf(
   if (plan.kind !== "materialization" || plan.executionRequest.action !== "reconcile")
     return "user";
   const steps = plan.executionPlan.steps;
-  return steps.every(
-    (step) =>
-      step.boundary === "host-capability" &&
-      privateAssetOperationKinds.includes(step.operationKind),
+  return steps.every((step) =>
+    step.boundary === "host-capability"
+      ? privateAssetOperationKinds.includes(step.operationKind)
+      : step.stepKind === "materialize-local-protocol",
   )
     ? "controller"
     : "user";

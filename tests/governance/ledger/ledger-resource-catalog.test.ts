@@ -50,19 +50,18 @@ test("Ledger static catalog separates the durable requirements root from private
   }
 });
 
-test("concrete Ledger record catalog binds aggregate, facts, and lock", () => {
+test("concrete Ledger record catalog binds the aggregate and its facts", () => {
   const record = createRequirementRecord(requirementRecordDraft(), {
     clock: () => FIXTURE_RECORDED_AT,
   });
   const catalog = createLedgerAuthorityResourceCatalog(record);
-  equal(catalog.length, 5);
-  const [root, manifest, landing, requirement, lock] = catalog;
+  equal(catalog.length, 4);
+  const [root, manifest, landing, requirement] = catalog;
   if (
     root === undefined ||
     manifest === undefined ||
     landing === undefined ||
-    requirement === undefined ||
-    lock === undefined
+    requirement === undefined
   ) {
     throw new Error("Ledger catalog is incomplete.");
   }
@@ -94,19 +93,11 @@ test("concrete Ledger record catalog binds aggregate, facts, and lock", () => {
     requirement.placement.relativePath,
     `requirements/${FIXTURE_REQUIREMENT_ID}/requirement.md`,
   );
-  equal(lock.placement.relativePath, `transactions/${FIXTURE_REQUIREMENT_ID}.lock`);
-  for (const transaction of [lock]) {
-    deepEqual(transaction.tracking, {
-      disposition: "ignored",
-      privacy: "runtime-private",
-    });
-    equal(transaction.nodePolicy.kind, "file");
-    equal(transaction.nodePolicy.mode, "0600");
-    if (transaction.processing.kind !== "resource") {
-      throw new Error("Ledger transaction must be a resource role.");
-    }
-    equal(transaction.processing.role, "transaction-artifact");
-  }
+  // 账本目录里没有锁文件：发布的互斥是工作区锁目录里的那把账本记录锁（ADR-0033）。
+  equal(
+    catalog.some((entry) => entry.placement.relativePath?.endsWith(".lock") === true),
+    false,
+  );
   equal(
     catalog.some((entry) => entry.placement.relativePath?.endsWith(".stage") === true),
     false,

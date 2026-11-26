@@ -18,7 +18,7 @@ useDisposableDurability();
 
 function fixture(t: TestContext): string {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-append-")));
-  mkdirSync(path.join(root, ".wakeflow-local/runtime/operation-admission"), {
+  mkdirSync(path.join(root, ".wakeflow-local/runtime/locks"), {
     recursive: true,
     mode: 0o700,
   });

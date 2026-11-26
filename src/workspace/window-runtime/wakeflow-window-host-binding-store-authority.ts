@@ -18,10 +18,7 @@ import {
   compileWakeflowWindowRuntimeDesiredTopology,
   WakeflowWindowRuntimeDesiredTopologyError,
 } from "./wakeflow-window-runtime-desired-topology.js";
-import {
-  wakeflowWindowHostBindingMutationLockRef,
-  wakeflowWindowHostBindingRootRef,
-} from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "./wakeflow-window-runtime-paths.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：私有Binding Store的纯读取权威。
@@ -140,6 +137,5 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
     identityProfile,
     bindingRefs,
     bindingRootRef: wakeflowWindowHostBindingRootRef(resourceProfile),
-    lockRef: wakeflowWindowHostBindingMutationLockRef(resourceProfile),
   });
 }

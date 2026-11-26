@@ -18,11 +18,6 @@ import {
   recoverDurableAtomicFileStagesForTargets,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-  retireRootedExclusiveFileLockResidue,
-} from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
@@ -69,9 +64,7 @@ import {
   type WakeflowMaintenanceOperationId,
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
-  wakeflowMaintenanceOperationUuid,
 } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   parseWakeflowMaintenanceWriter,
   type WakeflowMaintenanceWriter,
@@ -618,34 +611,6 @@ async function advanceIntent(
   });
 }
 
-async function retireInactiveCorrelatedGate(
-  root: RootedDirectory,
-  operationId: WakeflowMaintenanceOperationId,
-): Promise<void> {
-  let gate: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
-  try {
-    gate = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("gate", "$gate", operationId);
-    }
-    throw error;
-  }
-  if (gate.status === "absent") return;
-  if (gate.ownerState !== "inactive") fail("gate", "$gate", operationId);
-  if (!gate.record.token.endsWith(`-${wakeflowMaintenanceOperationUuid(operationId)}`)) {
-    fail("gate", "$operationId", operationId);
-  }
-  try {
-    await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_MAINTENANCE_GATE_REF, gate);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("recovery-required", "$gate", operationId);
-    }
-    throw error;
-  }
-}
-
 function gateOptions(
   options: Readonly<ParsedOptions>,
   signal: AbortSignal | undefined = options.signal,
@@ -970,7 +935,6 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
       retired,
       operationId,
     );
-    await retireInactiveCorrelatedGate(root, operationId);
     return await withExistingWakeflowMaintenanceGate(
       root,
       operationId,

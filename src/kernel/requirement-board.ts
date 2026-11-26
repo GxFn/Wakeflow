@@ -18,10 +18,6 @@ import {
   readDeterministicJsonFile,
 } from "../foundation/filesystem/deterministic-json-file.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesMatchingTargets,
-} from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
@@ -30,17 +26,9 @@ import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
-import {
-  type PortableResourcePath,
-  parsePortableResourcePath,
-} from "../foundation/filesystem/portable-resource-path.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
+import type { PortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-  retireRootedExclusiveFileLockResidue,
-  withRootedExclusiveFileLock,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -63,6 +51,7 @@ import {
   REQUIREMENT_BOARD_ROOT_REF,
   requirementClaimStateRef,
 } from "./layout.js";
+import { settleStagesOfDeadWriters, withWorkspaceLock } from "./workspace-locks.js";
 
 /**
  * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
@@ -140,85 +129,66 @@ const DIRECTORY_MODE = 0o700;
 const FILE_MODE = 0o600;
 const STATE_FILE_PATTERN =
   /^(requirement_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
-const LOCKS_DIRECTORY_NAME = "locks";
+/** 1.4.5 之前看板目录里的锁目录的名字：列举时照旧跳过，直到一次维护把它清掉。 */
+const LEGACY_LOCKS_DIRECTORY_NAME = "locks";
 const ATOMIC_STAGE_PREFIX = ".wakeflow-atomic-";
 const LOCK_ACQUIRE_TIMEOUT_MILLISECONDS = 10_000;
 const INDEX_REFRESH_ATTEMPTS = 4;
-const BOARD_LOCKS_ROOT_REF = parsePortableResourcePath(
-  `${REQUIREMENT_BOARD_ROOT_REF}/${LOCKS_DIRECTORY_NAME}`,
-  "$layout",
-);
-
-function claimStateLockRef(requirementId: string): PortableResourcePath {
-  return parsePortableResourcePath(`${BOARD_LOCKS_ROOT_REF}/${requirementId}.lock`, "$layout");
-}
-
-/** 看板级锁：索引刷新的列举、渲染与发布在它里面连成一步（W29）；状态文件名是 `requirement_<uuid>`，不会与它同名。 */
-const INDEX_LOCK_REF = parsePortableResourcePath(`${BOARD_LOCKS_ROOT_REF}/index.lock`, "$layout");
 
 /**
- * 看板锁目录下的一把互斥锁：已证明失活的持有者残留先退休，活动或未知 owner 由 acquire 等待；
- * 锁本身的失败由调用方按自己的边界映射，临界区的错误原样穿过。
+ * 看板的一把互斥锁（ADR-0033）：状态文件的写入与索引的刷新都持它，互不嵌套——状态写入在锁内读、比对、
+ * 替换；刷新在锁内列举、渲染、发布；调用方在状态提交之后、锁外调用刷新。锁本身的失败由调用方按自己的
+ * 边界映射，临界区的错误原样穿过。
  */
 async function withBoardLock<Result>(
   root: RootedDirectory,
-  lockRef: PortableResourcePath,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
-  mapLockError: (error: RootedExclusiveFileLockError) => never,
+  mapLockError: (error: KernelFileLockError) => never,
 ): Promise<Result> {
+  let entered = false;
   try {
-    await materializeDirectoryPath(root, BOARD_LOCKS_ROOT_REF, {
-      mode: DIRECTORY_MODE,
-      ...signalOptions(signal),
-    });
-    const observed = await inspectRootedExclusiveFileLock(root, lockRef);
-    if (observed.status === "held" && observed.ownerState === "inactive") {
-      // 看板 owner 只退休已证明失活且仍匹配的锁；活动或未知 owner 仍由 acquire 等待。
-      await retireRootedExclusiveFileLockResidue(root, lockRef, observed);
-    }
-    // 看板锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L4）。
-    return await withRootedExclusiveFileLock(root, lockRef, operation, {
-      acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS,
-      durability: "content-only",
-      ...signalOptions(signal),
-    });
+    return await withWorkspaceLock(
+      root,
+      "requirement-board",
+      () => {
+        entered = true;
+        return operation();
+      },
+      { acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS, ...signalOptions(signal) },
+    );
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `board-locks-${error.reason}`, "$board", { cause: error });
-    }
-    if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
+    // 只把获取时的失败说成锁的失败；临界区里别的锁抛出的同类错误不是这把锁的。
+    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
     throw error;
   }
 }
 
-/** 每个需求包一把互斥锁：期望检查与替换在锁内连成一步，两个认领者恰有一个成功。 */
+/** 状态文件的写入：期望检查与替换在锁内连成一步，两个认领者恰有一个成功。 */
 function withClaimStateLock<Result>(
   root: RootedDirectory,
-  requirementId: string,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
 ): Promise<Result> {
-  return withBoardLock(root, claimStateLockRef(requirementId), signal, operation, (error) =>
+  return withBoardLock(root, signal, operation, (error) =>
     fail("concurrency-conflict", `claim-state-lock-${error.reason}`, "$claimState", {
       cause: error,
-      retryable: true,
+      retryable: error.reason === "timeout",
     }),
   );
 }
 
 /**
- * 索引锁（W29，R-ROOT-02）：一次刷新从列举到发布都持有它，所以任何一次刷新看到的列举都不早于另一次
- * 正在发布的索引。它与状态文件锁互不嵌套——状态写入只持 `<requirementId>.lock`，刷新只持这一把，
- * 调用方在状态提交之后、锁外调用刷新。等不到锁沿用索引争用的既有语义（可重试的
- * `board-index-contended`，调用方静默自愈，下次刷新补齐）；中止仍以 `-aborted` 结尾原样穿出。
+ * 索引的刷新（W29，R-ROOT-02）：一次刷新从列举到发布都在锁内，所以任何一次刷新看到的列举都不早于另一次
+ * 正在发布的索引。等不到锁沿用索引争用的既有语义（可重试的 `board-index-contended`，调用方静默自愈，
+ * 下次刷新补齐）；中止仍以 `-aborted` 结尾原样穿出。
  */
 function withIndexLock<Result>(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
 ): Promise<Result> {
-  return withBoardLock(root, INDEX_LOCK_REF, signal, operation, (error) => {
+  return withBoardLock(root, signal, operation, (error) => {
     if (error.reason === "aborted") {
       fail("io-failure", "board-index-lock-aborted", "$boardIndex", { cause: error });
     }
@@ -469,7 +439,7 @@ async function readBoardEntry(
   if (match === null) {
     const expected =
       entry.name === "index.md" ||
-      entry.name === LOCKS_DIRECTORY_NAME ||
+      entry.name === LEGACY_LOCKS_DIRECTORY_NAME ||
       entry.name.startsWith(ATOMIC_STAGE_PREFIX);
     return expected ? "index" : "skip";
   }
@@ -539,7 +509,7 @@ export async function createRequirementClaimStateFile(
   if (state.revision !== 1) fail("invalid-request", "claim-state-revision", "$claimState.revision");
   await materializeRequirementBoardRoot(root, signal);
   const ref = requirementClaimStateRef(state.requirementId);
-  return withClaimStateLock(root, state.requirementId, signal, async () => {
+  return withClaimStateLock(root, signal, async () => {
     const existing = await readSource(root, ref, signal);
     if (existing !== null) {
       // 同一记录已上板即为 current；发布时间由先到者决定，重放不改它。
@@ -565,24 +535,6 @@ export async function createRequirementClaimStateFile(
   });
 }
 
-/**
- * 先清再读（L10）：上一个写者死在"状态文件已链接、创建暂存还没删"的那一刻，状态文件带着两个链接留下。
- * 不先结算，替换自己会在写之前退役那份暂存，链接数从 2 变 1，它刚读到的期望于是对不上，第一次替换必然
- * 以 `claim-state-changed` 被拒。结算不了（属主说不清、目录读不出）就照旧往下走，由替换自己报出来。
- */
-async function settleDeadClaimStateStages(
-  root: RootedDirectory,
-  ref: PortableResourcePath,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  try {
-    await recoverDurableAtomicFileStagesMatchingTargets(root, [ref], signalOptions(signal));
-  } catch (error: unknown) {
-    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-  }
-}
-
 /** 带期望的整文件替换：期望不再成立即并发冲突，调用方重读后重决定。 */
 export async function replaceRequirementClaimStateFile(
   root: RootedDirectory,
@@ -594,8 +546,9 @@ export async function replaceRequirementClaimStateFile(
     fail("precondition-failed", "claim-state-chain", "$claimState.previousStateDigest");
   }
   const ref = requirementClaimStateRef(next.requirementId);
-  await withClaimStateLock(root, next.requirementId, signal, async () => {
-    await settleDeadClaimStateStages(root, ref, signal);
+  await withClaimStateLock(root, signal, async () => {
+    // 先清再读（L10）：上一个写者死在"状态文件已链接、创建暂存还没删"的那一刻时，状态文件带着两个链接。
+    await settleStagesOfDeadWriters(root, [ref], signal);
     // 锁内重读：期望摘要仍是当前摘要才替换，先到的写者让后到者看到漂移。
     const current = await readSource(root, ref, signal);
     if (current === null || current.digest !== expected.digest) {

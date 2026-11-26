@@ -52,7 +52,6 @@ import {
 import {
   DEMAND_PUBLICATION_MARKER_REF,
   demandFinalRootRef,
-  demandPublicationLockRef,
   demandPublicationStageRef,
   demandStagePublicationMarkerRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
@@ -72,7 +71,6 @@ import {
   withdrawRequirementClaim,
 } from "../../../src/kernel/requirement-board.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import {
   FIXTURE_REQUIREMENT_ID,
   publishFixtureRequirement,
@@ -227,15 +225,6 @@ test("a stage that holds only the marker keeps its pod busy and recovers without
       value,
       renderDemandEventSourcingPublicationTransaction(transaction),
     );
-    const lockRef = demandPublicationLockRef(DEMAND_ID);
-    const lockPath = workspaceFile(value, lockRef);
-    writeFileSync(
-      lockPath,
-      rootedExclusiveFileLockRecordTextForTest({
-        tokenUuid: "88888888-8888-4888-8888-888888888888",
-      }),
-      { mode: 0o600 },
-    );
     await rejects(
       assertNoActiveDemand(value.workspaceRoot, undefined, null, transaction.identity.podId),
       (error: unknown) => error instanceof WakeflowError && error.reason === "pod-busy",
@@ -267,7 +256,6 @@ test("a stage that holds only the marker keeps its pod busy and recovers without
     equal(recovered.loaded.firstCommit.commitId, COMMIT_ID);
     equal(recovered.claim.state.status, "claimed");
     equal(existsSync(markerPath), false);
-    equal(existsSync(lockPath), false);
     equal(await readPendingDemandPublication(value.workspaceRoot, DEMAND_ID), null);
     deepEqual(
       readdirSync(

@@ -25,13 +25,6 @@ export const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(
   "$layout",
 );
 
-/** Cross-process operation admission is private coordination, never business authority. */
-export const WORKSPACE_OPERATION_SCOPES_REF = parsePortableResourcePath(
-  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/operation-admission`,
-);
-export const WORKSPACE_MAINTENANCE_GATE_REF = parsePortableResourcePath(
-  `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance.lock`,
-);
 export const WORKSPACE_MAINTENANCE_TRANSACTIONS_REF = parsePortableResourcePath(
   `${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance/transactions`,
 );
@@ -61,12 +54,6 @@ export const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF = parsePortableResourcePath(
 /** 工作区级当前状态投影（人读，确定性重写）。 */
 export const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF = parsePortableResourcePath(
   `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/workspace-current-status.md`,
-  "$layout",
-);
-
-/** 投影器的短期互斥锁。 */
-export const WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF = parsePortableResourcePath(
-  `${WAKEFLOW_ACTIVE_ROOT_REF}/projector.lock`,
   "$layout",
 );
 

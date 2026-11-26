@@ -36,7 +36,7 @@ test("WakeflowError 只接受封闭错误码、kebab-case 原因与结构路径"
 
 test("旧错误类按家族表翻成封闭码：retryable 为 concurrency-conflict，旧码与授权事实进 details，消息不复制（§13.166）", () => {
   class LockError extends Error {
-    readonly code = "wakeflow-rooted-exclusive-file-lock";
+    readonly code = "wakeflow-kernel-file-lock";
     readonly reason = "timeout";
     readonly path = "$lock";
     readonly retryable = true;
@@ -48,7 +48,7 @@ test("旧错误类按家族表翻成封闭码：retryable 为 concurrency-confli
     reason: "timeout",
     path: "$lock",
     retryable: true,
-    details: { legacyCode: "wakeflow-rooted-exclusive-file-lock" },
+    details: { legacyCode: "wakeflow-kernel-file-lock" },
     causeReason: "timeout",
   });
   equal(lock.message.includes("/Users"), false);

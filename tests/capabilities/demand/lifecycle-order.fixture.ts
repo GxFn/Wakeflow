@@ -324,20 +324,24 @@ export async function recoverContinuation(
   return scenario.events.slice(start);
 }
 
-/** 下一次取 pod 变更锁的调用停在锁文件 `link` 之前；`reached` 兑现时它已经停住，`release` 放行。 */
+/** 下一次取 pod 变更锁的调用停在打开锁文件之前；`reached` 兑现时它已经停住，`release` 放行。 */
 export function holdNextPodLock(t: TestContext): { reached: Promise<void>; release: () => void } {
   const reached = Promise.withResolvers<void>();
   const released = Promise.withResolvers<void>();
   let armed = true;
-  const originalLink = filesystemMutation.link;
-  t.mock.method(filesystemMutation, "link", async (existing: string, target: string) => {
-    if (armed && /[/\\]pod-mutations[/\\][^/\\]+\.lock$/u.test(target)) {
-      armed = false;
-      reached.resolve();
-      await released.promise;
-    }
-    return originalLink.call(filesystemMutation, existing, target);
-  });
+  const originalOpen = filesystemMutation.openLockFile;
+  t.mock.method(
+    filesystemMutation,
+    "openLockFile",
+    async (target: string, flags: number, mode: number) => {
+      if (armed && /[/\\]locks[/\\]pod-mutation\.lock$/u.test(target)) {
+        armed = false;
+        reached.resolve();
+        await released.promise;
+      }
+      return originalOpen.call(filesystemMutation, target, flags, mode);
+    },
+  );
   return { reached: reached.promise, release: () => released.resolve() };
 }
 

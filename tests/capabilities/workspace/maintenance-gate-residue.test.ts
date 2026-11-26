@@ -15,14 +15,15 @@ import { type TestContext, test } from "node:test";
 
 import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
+import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixture.js";
 
 /**
- * 级别 2（能力）：没有操作可恢复的维护门残留（open-items B9，§13.242）。
+ * 级别 2（能力）：没有操作可恢复的维护残留（open-items B9，§13.242；ADR-0033 之后只剩孤儿暂存这一种）。
  *
  * 真实进程的中断矩阵（`maintenance-crash-recovery.load.test.ts`）跑出这种状态并走通了它的出口；这里用
  * 手工摆出的残留钉住出口的边界——什么时候有这份计划、什么时候没有、什么时候 apply 拒绝动手。
@@ -61,24 +62,14 @@ function plain(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
-const runtimeOf = (root: string) => path.join(root, ".wakeflow-local", "runtime");
-const gateOf = (root: string) => path.join(runtimeOf(root), "maintenance.lock");
-const transactionsOf = (root: string) => path.join(runtimeOf(root), "maintenance", "transactions");
-
-/** 一把属主已经不在的门锁（pid 取不存在的最大值）。 */
-function leaveDeadGate(root: string): void {
-  writeFileSync(
-    gateOf(root),
-    rootedExclusiveFileLockRecordTextForTest({ tokenUuid: "55555555-5555-4555-8555-555555555555" }),
-    { mode: 0o600 },
-  );
-}
+const transactionsOf = (root: string) =>
+  path.join(root, ".wakeflow-local", "runtime", "maintenance", "transactions");
 
 /** 与 foundation 签发的暂存名同形的孤儿暂存；`pid` 是名字里记着的属主。 */
-function leaveOrphanStage(root: string, pid: number): string {
+function leaveOrphanStage(root: string, pid: number, seed = "6"): string {
   const file = path.join(
     transactionsOf(root),
-    `.wakeflow-atomic-v1-create-${"a".repeat(64)}-${"b".repeat(64)}-m600__${pid}-0-66666666-6666-4666-8666-666666666666.tmp`,
+    `.wakeflow-atomic-v1-create-${"a".repeat(64)}-${"b".repeat(64)}-m600__${pid}-0-${seed.repeat(8)}-6666-4666-8666-666666666666.tmp`,
   );
   writeFileSync(file, "{}\n", { mode: 0o600 });
   return file;
@@ -109,45 +100,42 @@ async function protocolOf(root: string): Promise<string> {
   return (await executeStatusRequest(CODEX_OBSERVATION_FACADE, { root })).maintenance.protocol;
 }
 
-test("已死进程的门锁、没有任何操作：reconcile 的第一份计划退役它，预览零写，计划过期被拒，之后回到 idle", {
+test("只剩孤儿暂存、没有任何操作：reconcile 的第一份计划退役它，预览零写，计划过期被拒，之后回到 idle", {
   timeout: 120_000,
 }, async (t) => {
   const root = await initializedWorkspace(t);
-  leaveDeadGate(root);
+  const first = leaveOrphanStage(root, 2_147_483_647);
   equal(await protocolOf(root), "recovery-required");
-  const first = await previewReconcile(root);
-  deepEqual(plain(first.plan), {
+  const preview = await previewReconcile(root);
+  deepEqual(plain(preview.plan), {
     kind: "WakeflowMaintenanceGateResiduePlan",
     schemaVersion: 1,
-    lock: "inactive",
-    transactionStages: 0,
+    transactionStages: 1,
   });
-  equal(existsSync(gateOf(root)), true, "preview writes nothing");
-  if (first.planDigest === null) throw new Error("Expected a ready plan.");
+  equal(existsSync(first), true, "preview writes nothing");
+  if (preview.planDigest === null) throw new Error("Expected a ready plan.");
 
   // 预览之后多出一份孤儿暂存：旧摘要的 apply 被拒，什么都没有删。
-  const stage = leaveOrphanStage(root, 2_147_483_647);
-  await rejects(applyReconcile(root, first.planDigest), (error: unknown) => {
+  const second = leaveOrphanStage(root, 2_147_483_647, "7");
+  await rejects(applyReconcile(root, preview.planDigest), (error: unknown) => {
     equal(isWakeflowError(error) && error.code, "precondition-failed");
     return true;
   });
-  equal(existsSync(gateOf(root)), true);
-  equal(existsSync(stage), true);
+  equal(existsSync(first), true);
+  equal(existsSync(second), true);
 
-  const second = await previewReconcile(root);
-  deepEqual(plain(second.plan), {
+  const again = await previewReconcile(root);
+  deepEqual(plain(again.plan), {
     kind: "WakeflowMaintenanceGateResiduePlan",
     schemaVersion: 1,
-    lock: "inactive",
-    transactionStages: 1,
+    transactionStages: 2,
   });
-  if (second.planDigest === null) throw new Error("Expected a ready plan.");
-  const applied = await applyReconcile(root, second.planDigest);
+  if (again.planDigest === null) throw new Error("Expected a ready plan.");
+  const applied = await applyReconcile(root, again.planDigest);
   if (applied.mode !== "apply") throw new Error("Expected an apply result.");
   deepEqual(plain(applied.stepReceipts), [
-    { kind: "WakeflowMaintenanceGateResidueReceipt", lockRetired: true, stagesRetired: 1 },
+    { kind: "WakeflowMaintenanceGateResidueReceipt", stagesRetired: 2 },
   ]);
-  equal(existsSync(gateOf(root)), false);
   deepEqual(readdirSync(transactionsOf(root)), []);
   equal(await protocolOf(root), "idle");
   // 下一次预览回到平常的布局维护。
@@ -156,7 +144,7 @@ test("已死进程的门锁、没有任何操作：reconcile 的第一份计划�
   equal((ordinary.plan as { kind?: string } | null)?.kind, "WakeflowMaintenancePlanSummary");
 });
 
-test("只剩孤儿暂存、没有门锁：计划是 lock absent；暂存的属主还活着时 apply 以 maintenance-gate-residue 拒绝并且不删", {
+test("暂存的属主还活着时 apply 以 maintenance-gate-residue 拒绝并且不删；换成属主已经不在的，同一条路把它退役", {
   timeout: 120_000,
 }, async (t) => {
   const root = await initializedWorkspace(t);
@@ -167,7 +155,6 @@ test("只剩孤儿暂存、没有门锁：计划是 lock absent；暂存的属�
   deepEqual(plain(guarded.plan), {
     kind: "WakeflowMaintenanceGateResiduePlan",
     schemaVersion: 1,
-    lock: "absent",
     transactionStages: 1,
   });
   if (guarded.planDigest === null) throw new Error("Expected a ready plan.");
@@ -179,7 +166,6 @@ test("只剩孤儿暂存、没有门锁：计划是 lock absent；暂存的属�
   });
   equal(existsSync(live), true, "a stage whose owner may be alive is never deleted");
 
-  // 换成属主已经不在的暂存：同一条路把它退役。
   rmSync(live);
   leaveOrphanStage(root, 2_147_483_647);
   const dead = await previewReconcile(root);
@@ -187,36 +173,40 @@ test("只剩孤儿暂存、没有门锁：计划是 lock absent；暂存的属�
   const applied = await applyReconcile(root, dead.planDigest);
   if (applied.mode !== "apply") throw new Error("Expected an apply result.");
   deepEqual(plain(applied.stepReceipts), [
-    { kind: "WakeflowMaintenanceGateResidueReceipt", lockRetired: false, stagesRetired: 1 },
+    { kind: "WakeflowMaintenanceGateResidueReceipt", stagesRetired: 1 },
   ]);
   equal(await protocolOf(root), "idle");
 });
 
-test("不归这份计划管的两种状态：门锁的属主说不清，或事务目录里有 intent——reconcile 仍被协议状态挡住", {
+test("不归这份计划管的两种状态：有一次维护在跑（门被持有），或事务目录里有 intent——reconcile 仍被协议状态挡住", {
   timeout: 120_000,
 }, async (t) => {
   const root = await initializedWorkspace(t);
-  // 记着本进程 pid 的门锁：属主说不清，不是"确实不在了"。
-  writeFileSync(
-    gateOf(root),
-    rootedExclusiveFileLockRecordTextForTest({
-      pid: process.pid,
-      tokenUuid: "77777777-7777-4777-8777-777777777777",
-    }),
-    { mode: 0o600 },
-  );
-  const unknownOwner = await previewReconcile(root);
-  equal(unknownOwner.plan, null);
-  equal(unknownOwner.planDigest, null);
-  equal(
-    unknownOwner.blockerCodes.some((code) => code.startsWith("maintenance-protocol-")),
-    true,
-  );
-  equal(existsSync(gateOf(root)), true);
+  // 门被持有、事务目录里只有暂存：那是进行中的维护正在发布它的 intent，不是残留。
+  const stage = leaveOrphanStage(root, 2_147_483_647);
+  const rooted = await RootedDirectory.open(root);
+  t.after(() => rooted.close());
+  const inside = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const running = withWorkspaceLock(rooted, "maintenance-gate", async () => {
+    inside.resolve();
+    await release.promise;
+  });
+  await inside.promise;
+  try {
+    equal(await protocolOf(root), "busy");
+    const busy = await previewReconcile(root);
+    equal(busy.plan, null);
+    equal(busy.planDigest, null);
+    deepEqual(busy.blockerCodes, ["maintenance-protocol-busy"]);
+    equal(existsSync(stage), true);
+  } finally {
+    release.resolve();
+    await running;
+  }
 
-  // 已死的门锁加一份 intent：那是一个可以按 operation ID 恢复的操作，不在这里退役。
-  rmSync(gateOf(root));
-  leaveDeadGate(root);
+  // 一份 intent：那是一个可以按 operation ID 恢复的操作，不在这里退役。
+  rmSync(stage);
   const intent = path.join(
     transactionsOf(root),
     "maintenance_operation_88888888-8888-4888-8888-888888888888.intent.json",
@@ -230,6 +220,5 @@ test("不归这份计划管的两种状态：门锁的属主说不清，或事�
     status.maintenance.residues.map((residue) => [residue.kind, residue.recoverable]),
     [["intent", true]],
   );
-  equal(existsSync(gateOf(root)), true);
   equal(existsSync(intent), true);
 });

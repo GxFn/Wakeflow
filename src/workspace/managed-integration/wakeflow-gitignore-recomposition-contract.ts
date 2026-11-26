@@ -14,26 +14,20 @@ import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
+import type { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import type {
-  RootedExclusiveFileLockError,
-  RootedExclusiveFileLockOptions,
-} from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
+import type { WorkspaceLockOptions } from "../../kernel/workspace-locks.js";
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
   parseWakeflowWorkspaceStaticResourceMatrix,
   type WakeflowWorkspaceStaticResourceMatrix,
   WakeflowWorkspaceStaticResourceMatrixError,
 } from "../wakeflow-workspace-static-resource-matrix.js";
-import {
-  createWakeflowWorkspaceStaticResourceOperationContext,
-  WakeflowWorkspaceStaticResourceOperationContextError,
-} from "../wakeflow-workspace-static-resource-operation-context.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WAKEFLOW_WORKSPACE_HOST_IDS,
@@ -89,7 +83,6 @@ export type WakeflowGitignoreRecompositionErrorReason =
   | "conflict"
   | "lock-timeout"
   | "lock-unsafe"
-  | "recovery-not-required"
   | "recovery-required"
   | "aborted"
   | "effect-failure"
@@ -107,7 +100,6 @@ const ERROR_MESSAGES = {
   conflict: "Wakeflow Gitignore source changed before atomic publication.",
   "lock-timeout": "Wakeflow Gitignore recomposition lock acquisition timed out.",
   "lock-unsafe": "Wakeflow Gitignore recomposition lock is unsafe.",
-  "recovery-not-required": "Wakeflow Gitignore recomposition has no lock residue to recover.",
   "recovery-required": "Wakeflow Gitignore recomposition requires explicit recovery.",
   aborted: "Wakeflow Gitignore recomposition was aborted before commit.",
   "effect-failure": "Wakeflow Gitignore candidate could not be published safely.",
@@ -334,25 +326,6 @@ export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(
   }
 }
 
-export function admitWakeflowGitignoreRecompositionLockOperations(
-  request: Readonly<ParsedWakeflowGitignoreRecompositionRequest>,
-): void {
-  for (const recipe of ["exclusive-create", "exact-retire"] as const) {
-    try {
-      createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
-        expectedMatrixDigest: request.expectedMatrixDigest,
-        declarationId: "workspace.ignore-integration-lock",
-        recipe,
-      });
-    } catch (error: unknown) {
-      if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-        failWakeflowGitignoreRecomposition("input", "$request.matrix", error);
-      }
-      throw error;
-    }
-  }
-}
-
 export function wakeflowGitignoreInspectionRequest(
   request: Readonly<ParsedWakeflowGitignoreRecompositionRequest>,
   signal: AbortSignal | undefined,
@@ -367,7 +340,7 @@ export function wakeflowGitignoreInspectionRequest(
 
 export function wakeflowGitignoreRecompositionLockOptions(
   options: Readonly<ParsedWakeflowGitignoreRecompositionOptions>,
-): RootedExclusiveFileLockOptions {
+): WorkspaceLockOptions {
   return {
     acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
     ...(options.retryDelayMilliseconds === undefined
@@ -377,8 +350,9 @@ export function wakeflowGitignoreRecompositionLockOptions(
   };
 }
 
+/** `.gitignore` 重组锁（ADR-0033）的失败：已经提交之后的任何失败都是提交结果不确定。 */
 export function mapWakeflowGitignoreRecompositionLockError(
-  error: RootedExclusiveFileLockError,
+  error: KernelFileLockError,
   committed: boolean,
 ): never {
   if (committed) {
@@ -392,16 +366,6 @@ export function mapWakeflowGitignoreRecompositionLockError(
   }
   if (error.reason === "timeout") {
     failWakeflowGitignoreRecomposition("lock-timeout", "$lock");
-  }
-  if (error.reason === "root-scope" || error.reason === "parent") {
-    failWakeflowGitignoreRecomposition("root-scope", "$root");
-  }
-  if (
-    error.reason === "owner-active" ||
-    error.reason === "residue-changed" ||
-    error.reason === "release-failure"
-  ) {
-    failWakeflowGitignoreRecomposition("recovery-required", "$lock");
   }
   failWakeflowGitignoreRecomposition("lock-unsafe", "$lock");
 }

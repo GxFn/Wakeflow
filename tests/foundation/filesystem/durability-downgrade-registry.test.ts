@@ -59,7 +59,7 @@ import { parseSync } from "@swc/core";
  *
  * 仍然看不见的（新增降档若走这些路，需要评审者自己看）：
  * - 展开一个对象带进来的 durability（`f({ ...LIGHT })`），或把一个现成的选项对象整个当实参传
- *   （`withRootedExclusiveFileLock(root, ref, operation, LIGHT)`）：只在造出 LIGHT 的那个字面量处
+ *   （`createFileAtomically(root, ref, bytes, LIGHT)`）：只在造出 LIGHT 的那个字面量处
  *   有一行，新增一处使用同一个对象不改表；
  * - 改名导入的被调者（`import { removeEmptyDirectoryExactly as removeDirectory }`）、经
  *   `.call` / `.apply` / `.bind` 或函数值间接调用、展开实参（`f(...args)`）时的参数位；
@@ -73,12 +73,8 @@ import { parseSync } from "@swc/core";
  * 离 0 级的 1 秒预算很近，门内负载下可能超出，超出的部分是解析本身。
  */
 
-/** 档：L1–L7 的轻档、现状不变（1.4.1 之前就不同步）、或权威写法的组成部分（档表第 0 节两种特殊写法）。 */
-type DowngradeClass =
-  | "轻档 L1–L7"
-  | "现状不变（1.4.1 之前）"
-  | "权威（追加）的组成"
-  | "权威（目录树发布）的组成";
+/** 档：现状不变（1.4.1 之前就不同步），或权威写法的组成部分（档表第 0 节两种特殊写法）。 */
+type DowngradeClass = "现状不变（1.4.1 之前）" | "权威（追加）的组成" | "权威（目录树发布）的组成";
 
 /** 一个调用点：文件、所在函数、去处与取值（转发点的取值是被转发的表达式）。 */
 interface SiteKey {
@@ -108,16 +104,7 @@ interface ForwardingExemption {
   readonly reason: string;
 }
 
-const LIGHT =
-  "获取时放弃父目录同步（只在链接前同步一次内容），释放与退休照常同步父目录；掉电后能留下的是当时正被持有的锁文件（内容完整、属主已死，下一次获取退休它），以及自该目录上次同步以来每次没拿到锁的获取至多一份属主已死的创建暂存（同目录下一次释放或退休把它的删除落盘）";
-const LOCK_CALL = "call withRootedExclusiveFileLock";
 const UNLINK_CALL = "call unlinkRegularFileExactly";
-
-/** 轻档锁族的一行：一次获取的调用点。 */
-function lightLock(file: string, scope: string, context: string, family: string): DowngradeRow {
-  const reason = `${family}的获取：${LIGHT}`;
-  return { file, scope, context, value: "content-only", count: 1, kind: "轻档 L1–L7", reason };
-}
 
 /** 1.4.1 之前就不同步的一行。 */
 function unchanged(file: string, scope: string, context: string, reason: string): DowngradeRow {
@@ -129,39 +116,8 @@ const SNAPSHOT_STORE = "src/governance/demand/event-sourcing/demand-file-event-s
 const INCIDENT = "src/kernel/incident.ts";
 const HOOK_OBSERVATIONS = "src/kernel/hook-observations.ts";
 
+// 锁不在这张表里：锁是内核咨询锁（ADR-0033），持有不写盘，也就没有可降的档。
 const REGISTRY: readonly DowngradeRow[] = [
-  lightLock(
-    "src/foundation/filesystem/rooted-read-write-scope.ts",
-    "withRootedReadWriteScope>lockOptions",
-    "return",
-    "L1 闩锁与写者锁、L2 读者租约",
-  ),
-  lightLock("src/kernel/active-projection.ts", "publishActiveProjection", LOCK_CALL, "L3 投影锁"),
-  lightLock(
-    "src/kernel/requirement-board.ts",
-    "withBoardLock",
-    LOCK_CALL,
-    "L4 看板锁（需求锁与索引锁）",
-  ),
-  lightLock("src/kernel/pod-mutation-lock.ts", "withPodMutation", LOCK_CALL, "L5 pod 变更锁"),
-  lightLock(
-    "src/governance/demand/publication/demand-event-sourcing-publication-service.ts",
-    "runLocked",
-    LOCK_CALL,
-    "L6 Demand 发布锁",
-  ),
-  lightLock(
-    "src/governance/demand/demand-runtime-recovery.ts",
-    "applyDemandRuntimeRecovery",
-    LOCK_CALL,
-    "L6 Demand 发布锁（维护的运行时恢复取同一把锁）",
-  ),
-  lightLock(
-    "src/governance/ledger/ledger-record-publication-storage.ts",
-    "withLedgerRecordPublicationLock",
-    LOCK_CALL,
-    "L7 账本记录锁",
-  ),
   {
     file: "src/governance/demand/event-sourcing/demand-file-event-store.ts",
     scope: "DemandFileEventStore.#appendUnderProcessGate",
@@ -1607,7 +1563,6 @@ test("the two tree primitives that defer parent-entry syncs are imported only by
 
 test("each registered row names its class and a reason, and no two rows share a call site", () => {
   const classes: readonly DowngradeClass[] = [
-    "轻档 L1–L7",
     "现状不变（1.4.1 之前）",
     "权威（追加）的组成",
     "权威（目录树发布）的组成",

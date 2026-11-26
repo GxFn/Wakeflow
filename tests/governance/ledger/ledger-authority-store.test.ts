@@ -1,5 +1,5 @@
 import { deepEqual, equal } from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -33,11 +33,9 @@ import {
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
 } from "../../../src/governance/ledger/ledger-authority-paths.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
@@ -117,7 +115,6 @@ function publicationPlan(record: Readonly<RequirementRecord>) {
     files,
     refs: {
       finalRootRef: ledgerAuthorityRootRef(record),
-      lockRef: ledgerRecordPublicationLockRef(record),
       stageRef: ledgerRecordPublicationStageRef(record),
     },
   };
@@ -233,7 +230,7 @@ test("Ledger publishes one requirement package tree and idempotently reuses it",
   }
 });
 
-test("a complete stage left by a dead writer is published by the same publish call, and its lock residue is retired", async () => {
+test("a complete stage left by a dead writer is published by the same publish call", async () => {
   const { rootPath, root, store } = await fixture();
   try {
     const record = requirementRecord(REQUIREMENT_ID, "Recover staged authority");
@@ -244,21 +241,12 @@ test("a complete stage left by a dead writer is published by the same publish ca
       publication.files,
       CANDIDATE_OPTIONS,
     );
-    const lockPath = path.join(rootPath, ...publication.refs.lockRef.split("/"));
-    writeFileSync(
-      lockPath,
-      rootedExclusiveFileLockRecordTextForTest({
-        tokenUuid: "99999999-9999-4999-8999-999999999999",
-      }),
-      { mode: 0o600 },
-    );
 
     // 没有日志：同一个发布请求再发一次就是恢复（ADR-0031，5a 的 A 行）。
     const resumed = await store.publish(record, MEMBERS);
     equal(resumed.wroteAuthority, true);
     equal(resumed.loaded.recordDigest.length, 71);
     equal(existsSync(path.join(rootPath, ...publication.refs.stageRef.split("/"))), false);
-    equal(existsSync(lockPath), false);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();
@@ -337,22 +325,6 @@ test("one record's pending stage does not block unrelated reads or publications"
     deepEqual((await store.loadRequirement(REQUIREMENT_ID)).record, first);
     equal(existsSync(path.join(rootPath, ...unrelatedStage.split("/"))), true);
     equal(readdirSync(path.join(rootPath, "transactions")).length, 2);
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("same record concurrent publication has one commit and one idempotent result", async () => {
-  const { rootPath, root, store } = await fixture();
-  try {
-    const record = requirementRecord(REQUIREMENT_ID, "Concurrent authority");
-    const results = await Promise.all([
-      store.publish(record, MEMBERS),
-      store.publish(record, MEMBERS),
-    ]);
-    deepEqual(results.map((result) => result.wroteAuthority).sort(), [false, true]);
-    equal(readdirSync(path.join(rootPath, "transactions")).length, 0);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

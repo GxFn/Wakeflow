@@ -12,7 +12,6 @@ import {
   ledgerAuthorityMemberRef,
   ledgerAuthorityRecordRef,
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
 } from "./ledger-authority-paths.js";
 import {
   type LedgerAuthorityRecord,
@@ -94,39 +93,6 @@ function durableFactDeclaration(
       role: "immutable-fact",
       allowedMutationRecipes: ["exclusive-create"],
       recoveryStrategy: "exact-idempotent-retry",
-    },
-  });
-}
-
-function transactionDeclaration(
-  declarationId: string,
-  relativePath: PortableResourcePath,
-): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  return parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId,
-    family: "ledger",
-    ownerId: "ledger-record-publication",
-    scope: "host-neutral",
-    placement: {
-      root: { kind: "ledger" },
-      relativePath,
-    },
-    tracking: {
-      disposition: "ignored",
-      privacy: "runtime-private",
-    },
-    nodePolicy: {
-      kind: "file",
-      mode: "0600",
-      linkPolicy: "single-link",
-      executablePolicy: "forbidden",
-    },
-    processing: {
-      kind: "resource",
-      role: "transaction-artifact",
-      allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-      recoveryStrategy: "owner-transaction-recovery",
     },
   });
 }
@@ -251,6 +217,5 @@ export function createLedgerAuthorityResourceCatalog(
       ledgerAuthorityMemberRef(record, document.path),
     ),
   );
-  const lock = transactionDeclaration(`${prefix}.lock`, ledgerRecordPublicationLockRef(record));
-  return Object.freeze([root, manifest, ...members, lock]);
+  return Object.freeze([root, manifest, ...members]);
 }

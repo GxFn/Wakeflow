@@ -34,7 +34,7 @@ test("插件制品搬到仓库之外后跑通冒烟：工具目录、fresh 初�
     ["codex", "claude-code"],
   );
   for (const artifact of result.artifacts) {
-    equal(artifact.acts.tools, 20, artifact.hostId);
+    equal(artifact.acts.tools, 21, artifact.hostId);
     equal(artifact.acts.freshInitialize, "completed", artifact.hostId);
     equal(artifact.acts.reconcile, "no-op", artifact.hostId);
     ok(artifact.acts.status.length > 0, artifact.hostId);

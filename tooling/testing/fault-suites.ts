@@ -4,16 +4,13 @@ import { verifyRepository } from "../verification/verify.js";
 const SUITES = [
   {
     name: "locks",
-    techniques: ["real-filesystem", "child-process", "injected-errors"],
+    techniques: ["real-filesystem", "child-process"],
     invariant:
-      "Unknown lock owners are never retired by acquisition; scope failures retain cleanup responsibility. The next acquisition or scope entry clears every combination of dead locks, leases and create stages, except dead reader leases under shared entry, and leaves live owners untouched.",
+      "A lock is a kernel advisory lock on a permanent file: a holder that dies leaves nothing to retire, shared holders coexist, and a waiting exclusive holder closes the gate to new shared holders.",
     files: [
-      "tests/foundation/filesystem/rooted-exclusive-file-lock.test.ts",
+      "tests/foundation/filesystem/kernel-file-lock.test.ts",
       "tests/foundation/filesystem/rooted-read-write-scope.test.ts",
       "tests/kernel/workspace-operation-scope.test.ts",
-      "tests/foundation/filesystem/lock-residue-combinations.load.test.ts",
-      "tests/foundation/filesystem/lock-residue-combinations-scope-exclusive.load.test.ts",
-      "tests/foundation/filesystem/lock-residue-combinations-scope-shared.load.test.ts",
     ],
   },
   {

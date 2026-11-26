@@ -1,13 +1,5 @@
-import { deepEqual, equal, ok, rejects } from "node:assert/strict";
-import {
-  chmodSync,
-  existsSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { deepEqual, equal, ok } from "node:assert/strict";
+import { chmodSync, existsSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
@@ -18,12 +10,10 @@ import {
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { acquireRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import {
   ledgerAuthorityRootRef,
-  ledgerRecordPublicationLockRef,
   ledgerRecordPublicationStageRef,
 } from "../../../src/governance/ledger/ledger-authority-paths.js";
 import {
@@ -50,12 +40,9 @@ import {
   ledgerPublicationResourceNodeOrNull,
   ledgerRecordPublicationStageState,
   loadExactPublishedLedgerRecord,
-  prepareLedgerRecordPublicationLockRecovery,
   publishLedgerRecordStage,
   retireLedgerRecordPublicationStage,
-  withLedgerRecordPublicationLock,
 } from "../../../src/governance/ledger/ledger-record-publication-storage.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { writeTextFile } from "../../support/write-tree.js";
@@ -138,7 +125,6 @@ function publication(record: Readonly<RequirementRecord>) {
   const plan: LedgerRecordPublicationPlan = {
     record,
     finalRootRef: ledgerAuthorityRootRef(record),
-    lockRef: ledgerRecordPublicationLockRef(record),
     stageRef: ledgerRecordPublicationStageRef(record),
     treePlan: planDirectoryTreeCandidate(files, CANDIDATE_OPTIONS),
   };
@@ -177,14 +163,7 @@ test("resource node lookup reports absence, the exact node, and unsafe ancestors
 test("a bare root without the ledger layout fails closed for every transaction resource", async (t) => {
   const { rootPath, root } = await ledgerRoot(t, false);
   const { plan } = publication(requirementRecord("示例需求"));
-  const noop = async () => undefined;
   equal(await ledgerRecordPublicationStageState(root, plan), "absent");
-  await prepareLedgerRecordPublicationLockRecovery(root, plan.lockRef);
-  await expectStoreError(
-    () => withLedgerRecordPublicationLock(root, plan.lockRef, undefined, noop),
-    "lock-unsafe",
-    "$lock",
-  );
   await expectStoreError(
     () => loadExactPublishedLedgerRecord(root, plan, undefined),
     "not-found",
@@ -224,76 +203,6 @@ test("stage retirement removes the whole stage tree, and an aborted signal remov
   equal(existsSync(stagePath), true);
   await retireLedgerRecordPublicationStage(root, plan, undefined);
   deepEqual(readdirSync(path.join(rootPath, "transactions")), []);
-});
-
-test("lock recovery retires inactive residues and leaves live or unsafe locks alone", async (t) => {
-  const { rootPath, root } = await ledgerRoot(t);
-  const { plan } = publication(requirementRecord("示例需求"));
-  const lockPath = physical(rootPath, plan.lockRef);
-  const prepare = () => prepareLedgerRecordPublicationLockRecovery(root, plan.lockRef);
-  const locked = <Result>(action: () => Promise<Result>, signal?: AbortSignal) =>
-    withLedgerRecordPublicationLock(root, plan.lockRef, signal, action);
-  await prepare();
-  equal(existsSync(lockPath), false);
-
-  const residue = rootedExclusiveFileLockRecordTextForTest({
-    tokenUuid: "99999999-9999-4999-8999-999999999999",
-  });
-  writeFileSync(lockPath, residue, { mode: 0o600 });
-  await prepare();
-  equal(existsSync(lockPath), false);
-
-  const result = await locked(async () => {
-    equal(existsSync(lockPath), true);
-    return "inside";
-  });
-  equal(result, "inside");
-  equal(existsSync(lockPath), false);
-
-  const domainError = new LedgerAuthorityStoreError("conflict", "$test");
-  equal(
-    await expectStoreError(() => locked(() => Promise.reject(domainError)), "conflict", "$test"),
-    domainError,
-  );
-  await rejects(() => locked(() => Promise.reject(new RangeError("private"))), RangeError);
-  equal(existsSync(lockPath), false);
-
-  const lease = await acquireRootedExclusiveFileLock(root, plan.lockRef);
-  try {
-    await prepare();
-    equal(existsSync(lockPath), true);
-    let entered = false;
-    const enter = async () => {
-      entered = true;
-    };
-    await expectStoreError(() => locked(enter, AbortSignal.timeout(100)), "aborted", "$signal");
-    equal(entered, false);
-  } finally {
-    await lease.release();
-  }
-  equal(existsSync(lockPath), false);
-
-  symlinkSync("missing", lockPath);
-  await expectStoreError(prepare, "lock-unsafe", "$lock");
-  await expectStoreError(() => locked(async () => undefined), "lock-unsafe", "$lock");
-});
-
-test("a lock held by another owner times out at the publication deadline", async (t) => {
-  const { root } = await ledgerRoot(t);
-  const { plan } = publication(requirementRecord("示例需求"));
-  const lease = await acquireRootedExclusiveFileLock(root, plan.lockRef);
-  try {
-    const startedAt = performance.now();
-    const noop = async () => undefined;
-    await expectStoreError(
-      () => withLedgerRecordPublicationLock(root, plan.lockRef, undefined, noop),
-      "lock-timeout",
-      "$lock",
-    );
-    ok(performance.now() - startedAt >= 9_000);
-  } finally {
-    await lease.release();
-  }
 });
 
 test("stage publication commits the tree and exact loading proves it", async (t) => {

@@ -9,7 +9,7 @@ function assertDeepFrozen(value: unknown): void {
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
 
-test("Maintenance catalog closes Local bootstrap chain and one gate", () => {
+test("Maintenance catalog closes the Local bootstrap chain and the lock directory", () => {
   deepEqual(
     WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG.map((entry) => ({
       declarationId: entry.declarationId,
@@ -40,6 +40,14 @@ test("Maintenance catalog closes Local bootstrap chain and one gate", () => {
         processing: "materialize-directory",
       },
       {
+        declarationId: "local.locks-root",
+        family: "local-core",
+        ownerId: "maintenance-bootstrap",
+        path: ".wakeflow-local/runtime/locks",
+        mode: "0700",
+        processing: "materialize-directory",
+      },
+      {
         declarationId: "maintenance.root",
         family: "maintenance",
         ownerId: "workspace-maintenance",
@@ -54,14 +62,6 @@ test("Maintenance catalog closes Local bootstrap chain and one gate", () => {
         path: ".wakeflow-local/runtime/maintenance/transactions",
         mode: "0700",
         processing: "materialize-directory",
-      },
-      {
-        declarationId: "maintenance.gate",
-        family: "maintenance",
-        ownerId: "workspace-maintenance",
-        path: ".wakeflow-local/runtime/maintenance.lock",
-        mode: "0600",
-        processing: "transaction-artifact:exclusive-create+exact-retire",
       },
     ],
   );

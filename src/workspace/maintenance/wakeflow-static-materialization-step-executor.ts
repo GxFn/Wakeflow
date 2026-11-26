@@ -140,12 +140,7 @@ import {
   type WakeflowMaintenanceGateContext,
   WakeflowMaintenanceGateError,
 } from "./wakeflow-maintenance-gate.js";
-import {
-  WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
-  WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
-  WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-  WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
-} from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   parseWakeflowStaticMaterializationPreview,
   parseWakeflowStaticMaterializationPreviewRequest,
@@ -354,15 +349,7 @@ async function executeLocalProtocol(
   step: Readonly<WakeflowStaticMaterializationStep>,
   signal: AbortSignal | undefined,
 ) {
-  assertStepTarget(
-    step,
-    authorityDigest([
-      WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
-      WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
-      WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
-      WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-    ]),
-  );
+  assertStepTarget(step, authorityDigest(WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG));
   let core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
     core = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
@@ -506,16 +493,16 @@ async function executeActiveWorkspaceProjection(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
   desired: WakeflowConfigModel,
-  recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
   const projection = renderWakeflowFreshActiveProjection(desired);
   assertStepTarget(step, projection.authorityDigest);
   try {
-    const result = await publishActiveProjection(root, projection.files, {
-      recovering,
-      ...(signal === undefined ? {} : { signal }),
-    });
+    const result = await publishActiveProjection(
+      root,
+      projection.files,
+      signal === undefined ? {} : { signal },
+    );
     // fresh 工作区里的目标只能是缺失或本 owner 写过的；任何 unsafe 都是 owner 失败。
     if (result.disposition === "unsafe") fail("owner", "$projection");
     return receipt(step.stepId, result.disposition, {
@@ -1282,7 +1269,7 @@ export async function executeWakeflowStaticMaterializationStep(
     return fail("plan", `$step.kind:${step.kind}`);
   }
   if (step.kind === "publish-fresh-active-workspace-projection") {
-    return executeActiveWorkspaceProjection(root, step, desired, recovering, signal);
+    return executeActiveWorkspaceProjection(root, step, desired, signal);
   }
   if (step.kind === "materialize-ledger-layout") {
     return executeLedgerLayout(root, step, request, desired, recovering, signal);

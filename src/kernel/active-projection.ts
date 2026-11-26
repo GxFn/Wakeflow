@@ -29,12 +29,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-  retireRootedExclusiveFileLockResidue,
-  withRootedExclusiveFileLock,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -52,12 +47,12 @@ import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { fail } from "./error.js";
+import { withWorkspaceLock } from "./workspace-locks.js";
 import {
   demandProjectionIndexRef,
   demandProjectionProgressRef,
   demandProjectionRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
-  WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
   WAKEFLOW_ACTIVE_PROJECTIONS_ROOT_REF,
   WAKEFLOW_ACTIVE_ROOT_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
@@ -1097,8 +1092,6 @@ export interface ActiveProjectionPublicationReceipt {
 
 export interface PublishActiveProjectionOptions {
   readonly signal?: AbortSignal;
-  /** 维护事务的 affected-step 恢复：先退休失活的锁，再结算遗留暂存文件。 */
-  readonly recovering?: boolean;
   /**
    * 活动 Demand 的观察证据（`ActiveProjectionFacts.activeDemands`）。缺席或 `observed`
    * 为假的这一轮不退休任何页面目录：删除只在有"该 Demand 确实不再活动"的正面证据时进行。
@@ -1330,33 +1323,6 @@ async function retireDemandProjection(
   return Object.freeze({ demandId, disposition: "retired" as const });
 }
 
-async function retireInactiveLock(root: RootedDirectory): Promise<boolean> {
-  let lock: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
-  try {
-    lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("io-failure", "projection-lock", "$projection", { cause: error });
-    }
-    throw error;
-  }
-  if (lock.status !== "held" || lock.ownerState !== "inactive") return false;
-  try {
-    // 退休先恢复锁与声明的相关目标自己的 stage；同目录其他目标的 stage 不挡退休。工作区
-    // 索引与锁同住 `.wakeflow-active/`，把它声明为相关目标，是为了让崩溃留下的、属主已死的
-    // 索引 stage 与锁一起结算并退役；属主仍活动的索引 stage 照旧让退休以 residue-changed 失败。
-    await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, lock, {
-      relatedTargetResourcePaths: [WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF],
-    });
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("io-failure", "projection-lock", "$projection", { cause: error });
-    }
-    throw error;
-  }
-  return true;
-}
-
 /** 目标的父目录尚不存在（首次发布前的 Demand 页面目录）：那里不可能有暂存文件，无需退休。 */
 async function stageParentPresent(
   root: RootedDirectory,
@@ -1428,9 +1394,9 @@ async function settleStages(
   for (const pages of pagesByDirectory(files)) await settleDirectoryStages(root, pages, signal);
 }
 
-function mapLockError(error: RootedExclusiveFileLockError): never {
+function mapLockError(error: KernelFileLockError): never {
   if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
-  if (error.reason === "timeout" || error.reason === "owner-active") {
+  if (error.reason === "timeout") {
     fail("io-failure", "projection-contended", "$projection", { cause: error, retryable: true });
   }
   fail("io-failure", `projection-lock-${error.reason}`, "$projection", { cause: error });
@@ -1465,9 +1431,10 @@ function receiptOf(
  * 当前不动；`files` 之外的 Demand 页面目录只在 `activeDemands` 证明这一轮看全了活动
  * Demand、且全部成员带标记时退休。
  *
- * `render` 是闭包时先取锁再渲染：观察与落盘之间没有第二个发布方插队的窗口。恢复语义里
- * 退休失活的锁必须发生在取锁之前（不然谁也取不到），暂存结算则挪进锁内——它读的是同一批
- * 目标所在的目录，锁内读才不会撞上另一个发布方正在写的活动 stage。
+ * `render` 是闭包时先取锁再渲染：观察与落盘之间没有第二个发布方插队的窗口。上一个发布方死在写到一半
+ * 时留下的暂存，由下一次发布在锁内先结算——它读的是同一批目标所在的目录，锁内读才不会撞上另一个发布方
+ * 正在写的活动 stage。锁是内核咨询锁（ADR-0033）：持有者死掉不留下锁，所以每一次发布都先结算，不再
+ * 取决于"发现了一把死锁"。
  */
 export async function publishActiveProjection(
   root: RootedDirectory,
@@ -1477,28 +1444,27 @@ export async function publishActiveProjection(
   assertRoot(root);
   const signal = options.signal;
   if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
-  // 正常变更后的刷新与维护恢复都必须能从已证明失活的 projector 锁继续。
-  const retiredLock = await retireInactiveLock(root);
-  const effectiveOptions = retiredLock ? { ...options, recovering: true } : options;
+  let entered = false;
   try {
-    return await withRootedExclusiveFileLock(
+    return await withWorkspaceLock(
       root,
-      WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
-      () => renderAndPublishLocked(root, render, effectiveOptions),
+      "active-projection",
+      () => {
+        entered = true;
+        return renderAndPublishLocked(root, render, options);
+      },
       {
         acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
-        // 投影锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L3）。
-        durability: "content-only",
         ...signalOptions(signal),
       },
     );
   } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
+    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
     throw error;
   }
 }
 
-/** 锁内的一轮：渲染（或接过已渲染的文件）、按需结算暂存、再发布。 */
+/** 锁内的一轮：渲染（或接过已渲染的文件）、结算上一个发布方留下的暂存、再发布。 */
 async function renderAndPublishLocked(
   root: RootedDirectory,
   render: ActiveProjectionRender,
@@ -1508,7 +1474,7 @@ async function renderAndPublishLocked(
   const rendering: Readonly<ActiveProjectionRendering> =
     typeof render === "function" ? await render() : { files: render };
   const evidence = rendering.activeDemands ?? options.activeDemands;
-  if (options.recovering === true) await settleStages(root, rendering.files, signal);
+  await settleStages(root, rendering.files, signal);
   return publishLocked(root, rendering.files, evidence, signal);
 }
 

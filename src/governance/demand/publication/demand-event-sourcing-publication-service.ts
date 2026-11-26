@@ -17,12 +17,8 @@ import {
   parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import {
-  inspectRootedExclusiveFileLock,
-  RootedExclusiveFileLockError,
-  retireRootedExclusiveFileLockResidue,
-  withRootedExclusiveFileLock,
-} from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
+import { withWorkspaceLock } from "../../../kernel/workspace-locks.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
@@ -64,7 +60,6 @@ import {
 } from "./demand-event-sourcing-publication-transaction.js";
 import {
   demandFinalPublicationMarkerRef,
-  demandPublicationLockRef,
   demandStagePublicationMarkerRef,
 } from "./demand-publication-paths.js";
 
@@ -222,35 +217,37 @@ async function applyPublication(
   });
 }
 
-function mapLockError(error: RootedExclusiveFileLockError): never {
+function mapLockError(error: KernelFileLockError): never {
   if (error.reason === "timeout") fail("lock-timeout", "$lock");
   if (error.reason === "aborted") fail("aborted", "$signal");
-  if (
-    error.reason === "unsafe-lock" ||
-    error.reason === "parent" ||
-    error.reason === "root-scope"
-  ) {
-    fail("lock-unsafe", "$lock");
-  }
-  fail("recovery-required", "$lock");
+  fail("lock-unsafe", "$lock");
 }
 
+/**
+ * 在 Demand 发布锁内执行。全部 Demand 共用一把（ADR-0033 决定 3）：两个 Demand 的发布先后进行；
+ * 持有者死掉时内核收走它，没有要退役的残留。
+ */
 async function runLocked<Result>(
   root: RootedDirectory,
-  demandId: DemandEventSourcingPublicationTransaction["demandId"],
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
 ): Promise<Result> {
+  let entered = false;
   try {
-    return await withRootedExclusiveFileLock(root, demandPublicationLockRef(demandId), operation, {
-      acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-      // Demand 发布锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L6）。
-      durability: "content-only",
-      ...(signal === undefined ? {} : { signal }),
-    });
+    return await withWorkspaceLock(
+      root,
+      "demand-publication",
+      () => {
+        entered = true;
+        return operation();
+      },
+      {
+        acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+        ...(signal === undefined ? {} : { signal }),
+      },
+    );
   } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingPublicationServiceError) throw error;
-    if (error instanceof RootedExclusiveFileLockError) mapLockError(error);
+    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
     throw error;
   }
 }
@@ -388,8 +385,7 @@ export async function publishDemandFromPackage(
   let publicationIntentWriteAttempted = false;
   try {
     await initializePublicationStorage(root, signal);
-    await retireInactivePublicationLock(root, transaction.demandId, signal);
-    return await runLocked(root, transaction.demandId, signal, async () => {
+    return await runLocked(root, signal, async () => {
       const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
       if (idempotent !== null) return idempotent;
       // 上一次被打断留下的标记必须就是这一份事务：调用方沿用了它的时间才会相同；不同就是另一次创建。
@@ -417,37 +413,6 @@ export async function publishDemandFromPackage(
       publicationAuthority = "unknown";
     }
     rethrowWithPublicationAuthority(error, publicationAuthority);
-  }
-}
-
-/** 流程锁的持有者确实不在了就收掉它（与看板、投影的正常入口同一做法，ADR-0014 决定 2）。 */
-async function retireInactivePublicationLock(
-  root: RootedDirectory,
-  demandId: DemandEventSourcingPublicationTransaction["demandId"],
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  assertNotAborted(signal);
-  const lockRef = demandPublicationLockRef(demandId);
-  let observation: Awaited<ReturnType<typeof inspectRootedExclusiveFileLock>>;
-  try {
-    observation = await inspectRootedExclusiveFileLock(root, lockRef);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("recovery-required", "$lock");
-    }
-    throw error;
-  }
-  if (observation.status !== "held" || observation.ownerState !== "inactive") {
-    return;
-  }
-  assertNotAborted(signal);
-  try {
-    await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
-  } catch (error: unknown) {
-    if (error instanceof RootedExclusiveFileLockError) {
-      fail("recovery-required", "$lock");
-    }
-    throw error;
   }
 }
 
@@ -549,8 +514,7 @@ export async function recoverDemandPublication(
     }
     transaction = observed?.transaction ?? null;
     await initializePublicationStorage(root, signal);
-    await retireInactivePublicationLock(root, demandId, signal);
-    return await runLocked(root, demandId, signal, async () => {
+    return await runLocked(root, signal, async () => {
       const fresh = await readPendingPublication(root, demandId, signal, true);
       if (fresh === null) fail("not-found", "$transaction");
       if (

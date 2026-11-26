@@ -87,8 +87,6 @@ export type LedgerAuthorityStoreErrorReason =
   | "member"
   | "node-policy"
   | "capacity"
-  | "lock-timeout"
-  | "lock-unsafe"
   | "aborted"
   | "operation-failure";
 
@@ -102,8 +100,6 @@ const ERROR_MESSAGES = {
   member: "Ledger authority member inventory or bytes are invalid.",
   "node-policy": "Ledger authority resource violates its durable node policy.",
   capacity: "Ledger authority resource exceeds its bounded capacity.",
-  "lock-timeout": "Ledger record publication lock could not be acquired before its deadline.",
-  "lock-unsafe": "Ledger record publication lock resource is unsafe.",
   aborted: "Ledger authority operation was aborted.",
   "operation-failure": "Ledger authority operation failed.",
 } as const satisfies Readonly<Record<LedgerAuthorityStoreErrorReason, string>>;

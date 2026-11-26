@@ -3,20 +3,17 @@ import {
   DurableResourceRenameError,
   renameResourceDurably,
 } from "../foundation/filesystem/durable-resource-rename.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import {
-  RootedExclusiveFileLockError,
-  withRootedExclusiveFileLock,
-} from "../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   currentWakeflowConfigAuthorityUserId,
   parseWakeflowConfigAuthorityReplacementOptions,
   type ParsedWakeflowConfigAuthorityReplacementOptions,
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementOptions,
   wakeflowConfigAuthorityLockOptions,
@@ -274,7 +271,7 @@ function mapRetirementFailure(error: unknown, committed: boolean): never {
   if (error instanceof WakeflowConfigAuthorityReplacementError) {
     mapReplacementContractError(error);
   }
-  if (error instanceof RootedExclusiveFileLockError) {
+  if (error instanceof KernelFileLockError) {
     if (error.reason === "aborted") fail("aborted", "$signal");
     fail(committed ? "commit-uncertain" : "lock", "$lock");
   }
@@ -301,9 +298,9 @@ export async function retireWakeflowConfigAuthority(
   assertNotAborted(parsed.signal);
   let committed = false;
   try {
-    return await withRootedExclusiveFileLock(
+    return await withWorkspaceLock(
       root,
-      WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
+      "config-authority",
       () =>
         retireUnderLock(root, expected, parsed, expectedUserId, () => {
           committed = true;

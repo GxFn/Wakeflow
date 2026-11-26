@@ -43,13 +43,12 @@ import {
   demandProjectionProgressRef,
   demandProjectionRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
-  WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF,
   WAKEFLOW_ACTIVE_ROOT_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
 } from "../../src/kernel/layout.js";
 import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
+import { isWorkspaceLockHeld, withWorkspaceLock } from "../../src/kernel/workspace-locks.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 
 useDisposableDurability();
@@ -65,7 +64,6 @@ const DEMAND_B = "demand_bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const POD_ID = "pod_99999999-9999-4999-8999-999999999999";
 const REPOSITORY_ID = "repository_22222222-2222-4222-8222-222222222222";
 const MARKER = /^<!-- wakeflow:(active|demand)-projection:v1:(sha256:[0-9a-f]{64}) -->$/mu;
-const LOCK_TOKEN_UUID = "0a0a0a0a-0a0a-4a0a-8a0a-0a0a0a0a0a0a";
 
 function digest(seed: string): Sha256Digest {
   return computeCanonicalJsonSha256Digest({ seed });
@@ -565,58 +563,63 @@ test("退休证据：没看全活动 Demand 的一轮一个页面目录都不删
   equal(existsSync(directory), false);
 });
 
-test("投影锁：活动持有者仍受保护；正常发布也退休失活锁", async (t) => {
+test("投影锁被别人持有时这一轮以 projection-contended 失败，一个字节都不写；放开之后正常发布", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
   const files = renderActiveProjectionFiles(facts());
-  const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
-
-  // 父进程仍在：持有者活动，等到超时也拿不到锁。争用的语义与等待多久无关，取锁上限因此
-  // 由调用方给出（默认 10 s），这一轮只等 50 ms。
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({ pid: process.ppid, tokenUuid: LOCK_TOKEN_UUID }),
-    { mode: 0o600 },
-  );
-  await rejects(
-    publishActiveProjection(root, files, { acquireTimeoutMilliseconds: 50 }),
-    (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "io-failure" &&
-      error.reason === "projection-contended" &&
-      error.retryable,
-  );
-  equal(existsSync(lockPath), true, "a contended round must not steal the lock");
-  equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), false);
-  unlinkSync(lockPath);
-
-  // 进程号不存在：持有者失活，维护恢复语义先退休残留再发布。
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({ pid: 2_147_483_647, tokenUuid: LOCK_TOKEN_UUID }),
-    { mode: 0o600 },
-  );
+  const inside = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const holder = withWorkspaceLock(root, "active-projection", async () => {
+    inside.resolve();
+    await release.promise;
+  });
+  await inside.promise;
+  try {
+    // 争用的语义与等待多久无关，取锁上限因此由调用方给出（默认 10 s），这一轮只等 50 ms。
+    await rejects(
+      publishActiveProjection(root, files, { acquireTimeoutMilliseconds: 50 }),
+      (error: unknown) =>
+        error instanceof WakeflowError &&
+        error.code === "io-failure" &&
+        error.reason === "projection-contended" &&
+        error.retryable,
+    );
+    equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), false);
+  } finally {
+    release.resolve();
+    await holder;
+  }
   const receipt = await publishActiveProjection(root, files);
   equal(receipt.disposition, "created");
-  equal(existsSync(lockPath), false, "the lock is released after the round");
   equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);
 });
 
-test("锁内渲染：渲染时投影锁已在，同一轮里的第二次发布撞上 projection-contended；回执仍来自这一轮渲染", async (t) => {
+test("锁内渲染：渲染时投影锁已在，另一条调用链上的第二次发布撞上 projection-contended；回执仍来自这一轮渲染", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
-  const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
   let lockedWhileRendering: boolean | null = null;
-  let contender: unknown = null;
-
-  const receipt = await publishActiveProjection(root, async () => {
-    lockedWhileRendering = existsSync(lockPath);
-    // 观察与落盘之间没有插队窗口：此刻别人拿不到锁，两轮刷新因此不能按与观察相反的顺序落盘。
-    contender = await publishActiveProjection(root, renderActiveProjectionFiles(facts()), {
+  // 另一条调用链上的发布方：在锁外登记，由渲染闭包放行，所以它不继承这一轮持有的锁。
+  const start = Promise.withResolvers<void>();
+  const contender = start.promise.then(() =>
+    publishActiveProjection(root, renderActiveProjectionFiles(facts()), {
       acquireTimeoutMilliseconds: 50,
     }).then(
       () => null,
       (error: unknown) => error,
+    ),
+  );
+
+  const receipt = await publishActiveProjection(root, async () => {
+    lockedWhileRendering = await isWorkspaceLockHeld(root, "active-projection");
+    // 观察与落盘之间没有插队窗口：此刻别人拿不到锁，两轮刷新因此不能按与观察相反的顺序落盘。
+    start.resolve();
+    const refused = await contender;
+    equal(
+      refused instanceof WakeflowError &&
+        refused.code === "io-failure" &&
+        refused.reason === "projection-contended" &&
+        refused.retryable,
+      true,
     );
     return {
       files: renderActiveProjectionFiles(facts()),
@@ -625,15 +628,8 @@ test("锁内渲染：渲染时投影锁已在，同一轮里的第二次发布�
   });
 
   equal(lockedWhileRendering, true, "the render thunk must run while the projector lock is held");
-  equal(
-    contender instanceof WakeflowError &&
-      contender.code === "io-failure" &&
-      contender.reason === "projection-contended" &&
-      contender.retryable,
-    true,
-  );
   equal(receipt.disposition, "created");
-  equal(existsSync(lockPath), false, "the lock is released after the round");
+  equal(await isWorkspaceLockHeld(root, "active-projection"), false);
   equal(
     markerOf(readFileSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF), "utf8")).kind,
     "active",
@@ -642,18 +638,12 @@ test("锁内渲染：渲染时投影锁已在，同一轮里的第二次发布�
   equal(existsSync(absolute(root, demandProjectionIndexRef(DEMAND_A))), true);
 });
 
-test("恢复：失活的锁与同目录的工作区索引暂存残留一起退休，recovering 因此在它存在的那一轮也能发布", async (t) => {
+test("恢复：上一个发布方死在写工作区索引的半路，留下的暂存由下一次发布在锁内结算（ADR-0033 决定 6）", async (t) => {
   const root = await fixture(t);
   await materializeActiveLayout(root, { recovering: false });
   const files = renderActiveProjectionFiles(facts());
-  const lockPath = absolute(root, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF);
-  writeFileSync(
-    lockPath,
-    rootedExclusiveFileLockRecordTextForTest({ pid: 2_147_483_647, tokenUuid: LOCK_TOKEN_UUID }),
-    { mode: 0o600 },
-  );
 
-  // 崩溃残留：写工作区索引写到一半的暂存文件，与 projector.lock 同住 .wakeflow-active/。
+  // 崩溃残留：写工作区索引写到一半的暂存文件。持有者死掉时锁已经由内核收走，磁盘上只有这份暂存。
   const partial = encodeUtf8("partial");
   const address = issueDurableAtomicFileStageAddress(
     "create",
@@ -665,10 +655,9 @@ test("恢复：失活的锁与同目录的工作区索引暂存残留一起退�
   writeFileSync(absolute(root, stageRef), partial, { mode: 0o600 });
   releaseDurableAtomicFileStageAddress(address);
 
-  const receipt = await publishActiveProjection(root, files, { recovering: true });
+  const receipt = await publishActiveProjection(root, files);
   equal(receipt.disposition, "created");
-  equal(existsSync(lockPath), false, "the dead lock must be retired");
-  equal(existsSync(absolute(root, stageRef)), false, "the sibling residue stage goes with it");
+  equal(existsSync(absolute(root, stageRef)), false, "the dead writer's stage is settled first");
   equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);
 });
 
@@ -697,7 +686,7 @@ test("恢复：同一个目录里后一页留着死写者的暂存，前一页�
   writeFileSync(absolute(root, stageRef), partial, { mode: 0o600 });
   releaseDurableAtomicFileStageAddress(address);
 
-  const receipt = await publishActiveProjection(root, files, { recovering: true });
+  const receipt = await publishActiveProjection(root, files);
   equal(receipt.disposition, "current");
   equal(existsSync(absolute(root, stageRef)), false, "the later page's dead stage is retired");
 });

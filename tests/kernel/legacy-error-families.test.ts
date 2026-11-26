@@ -34,7 +34,7 @@ test("旧错误码家族表与源码里的旧错误类集合完全一致，每�
   for (const [code, family] of Object.entries(LEGACY_ERROR_CODE_FAMILIES)) {
     ok(isWakeflowErrorCode(family), `${code} maps to a closed code`);
   }
-  equal(LEGACY_ERROR_CODE_FAMILIES["wakeflow-rooted-exclusive-file-lock"], "io-failure");
+  equal(LEGACY_ERROR_CODE_FAMILIES["wakeflow-kernel-file-lock"], "io-failure");
   equal(LEGACY_ERROR_CODE_FAMILIES["wakeflow-demand-aggregate-state"], "precondition-failed");
   equal(LEGACY_ERROR_CODE_FAMILIES["wakeflow-json-value"], "unexpected");
 });

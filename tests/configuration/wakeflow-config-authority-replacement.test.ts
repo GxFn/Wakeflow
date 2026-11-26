@@ -1,9 +1,10 @@
-import { equal } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -19,7 +20,6 @@ import {
 import { publishWakeflowConfigAuthority } from "../../src/configuration/wakeflow-config-authority-publication.js";
 import {
   replaceWakeflowConfigAuthority,
-  WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-replacement.js";
@@ -33,7 +33,6 @@ import {
   releaseDurableAtomicFileStageAddress,
 } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { rootedExclusiveFileLockRecordTextForTest } from "../foundation/filesystem/rooted-exclusive-file-lock-test-support.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
@@ -43,7 +42,11 @@ interface WorkspaceFixture {
   readonly temporaryRoot: string;
   readonly workspaceRoot: string;
   readonly configPath: string;
-  readonly lockPath: string;
+}
+
+/** 工作区根上名字以 `.lock` 结尾的文件：配置的锁在私有的锁目录里（ADR-0033），根上应当一个都没有。 */
+function rootLockFiles(fixture: WorkspaceFixture): readonly string[] {
+  return readdirSync(fixture.workspaceRoot).filter((name) => name.endsWith(".lock"));
 }
 
 function createWorkspace(): WorkspaceFixture {
@@ -58,7 +61,6 @@ function createWorkspace(): WorkspaceFixture {
     temporaryRoot,
     workspaceRoot,
     configPath: path.join(workspaceRoot, "wakeflow.config.json"),
-    lockPath: path.join(workspaceRoot, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF),
   };
 }
 
@@ -102,7 +104,7 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
     );
     equal(replaced.authority.source.node.permissionBits, 0o644);
     equal(replaced.authority.source.node.linkCount, 1n);
-    equal(existsSync(fixture.lockPath), false);
+    deepEqual(rootLockFiles(fixture), []);
 
     const retried = await replaceWakeflowConfigAuthority(root, desired, source.authority);
     equal(retried.disposition, "current");
@@ -115,20 +117,12 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
   }
 });
 
-test("Config authority replacement 清掉死持有者留下的锁与配置文件的死暂存，然后照常替换（1.4.2）", async () => {
+test("Config authority replacement 先结算配置文件的死暂存，然后照常替换（ADR-0033 决定 6）", async () => {
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
     const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
-    // 上一个替换配置的进程死在锁里：锁文件留着，它替换用的暂存也留着。以前没有任何路径清这把锁，
-    // 维护的 recover 走到这一步就失败。
-    writeFileSync(
-      fixture.lockPath,
-      rootedExclusiveFileLockRecordTextForTest({
-        tokenUuid: "66666666-6666-4666-8666-666666666666",
-      }),
-      { mode: 0o600 },
-    );
+    // 上一个替换配置的进程死在写到一半：内核已经收走它的锁，它替换用的暂存还留着。
     const bytes = Buffer.from("{}\n");
     const stage = issueDurableAtomicFileStageAddress(
       "replace",
@@ -146,7 +140,6 @@ test("Config authority replacement 清掉死持有者留下的锁与配置文件
       source.authority,
     );
     equal(replaced.disposition, "replaced");
-    equal(existsSync(fixture.lockPath), false);
     equal(existsSync(stagePath), false);
   } finally {
     await root.close();
@@ -249,7 +242,6 @@ test("Config authority replacement 通过专属锁串行并发writer", async () 
       ]).has(current.configDigest),
       true,
     );
-    equal(existsSync(fixture.lockPath), false);
   } finally {
     await root.close();
     rmSync(fixture.temporaryRoot, { recursive: true, force: true });
@@ -273,7 +265,6 @@ test("Config authority replacement 拒绝不满足P1的current source", async ()
       "source-policy",
     );
     equal(readFileSync(fixture.configPath, "utf8"), before);
-    equal(existsSync(fixture.lockPath), false);
   } finally {
     await root.close();
     rmSync(fixture.temporaryRoot, { recursive: true, force: true });

@@ -41,14 +41,15 @@ import { CODEX_OBSERVATION_FACADE } from "../observation/observation-facade.fixt
  * 在同一处把目标名删掉得到（磁盘上的名字、字节与已死的属主都和真死在链接之前一样）。
  *
  * 这份矩阵第一次跑就找出三条没有公共出口的死路（§13.242）：journal 的暂存挡住 intent 的恢复；门锁已拿、
- * intent 未发布时没有 operation ID 可恢复；门锁自己的暂存还链接着时锁退役必然失败。
+ * intent 未发布时没有 operation ID 可恢复；门锁自己的暂存还链接着时锁退役必然失败。后两条随 ADR-0033
+ * 消失：门是内核咨询锁，持有者死掉时什么都不留下。
  */
 
 // 本进程里的初始化、收场与重做不付 fsync；被杀的是另起的真实 MCP 进程，它照生产的耐久性落盘，屏障就挂在
 // 它的父目录同步上。SIGKILL 不丢页缓存，所以这里验证的是各步的先后，不是掉电。
 useDisposableDurability();
 
-/** 维护门（`maintenance.lock`）与事务目录（`maintenance/transactions/`）下的每一次落盘。 */
+/** 事务目录（`maintenance/transactions/`）及其上一级下的每一次落盘；维护的门自己不落盘。 */
 const DURABLE_POINT_FRAGMENT = "/.wakeflow-local/runtime/maintenance";
 const STAGE_PREFIX = ".wakeflow-atomic-";
 
@@ -327,12 +328,13 @@ test("真实 MCP 在维护 apply 的各个落盘点死亡：status 说出残留�
   }
 });
 
-test("首次初始化的 apply 死在协议根还没建好的那几步：没有配置也能由 reconcile 退役门残留，然后把初始化做完", {
+test("首次初始化的 apply 死在协议根还没建好的那几步：什么都不用清，同一个请求重新预览再应用就把初始化做完（ADR-0033）", {
   timeout: 300_000,
 }, async (t) => {
   if (loadSensitive(t, "real MCP server processes killed during the first initialization")) return;
-  // 前四个落盘点：门锁的链接、门锁暂存的退役、`maintenance` 与 `transactions` 两级目录的建立——都在 intent 之前。
-  for (let occurrence = 1; occurrence <= 4; occurrence += 1) {
+  // 前两个落盘点：`maintenance` 与 `transactions` 两级目录的建立——都在 intent 之前，这时进程拿着维护的门。
+  // 门是内核咨询锁：进程一死它就没有了，磁盘上只剩空的协议目录与不带状态的锁文件。
+  for (let occurrence = 1; occurrence <= 2; occurrence += 1) {
     const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), "wakeflow-maintenance-crash-")));
     t.after(() => rmSync(base, { recursive: true, force: true }));
     const root = path.join(base, "Workspace");
@@ -364,32 +366,13 @@ test("首次初始化的 apply 死在协议根还没建好的那几步：没有�
     } finally {
       await server.close();
     }
-    // 什么权威内容都还没写下：没有配置，事务目录里没有 intent。
+    // 什么权威内容都还没写下：没有配置，事务目录里没有 intent，也没有要退役的门。
     equal(existsSync(path.join(root, "wakeflow.config.json")), false, label);
-    const blocked = await executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" });
-    if (blocked.mode !== "preview") throw new Error("Expected a preview.");
-    equal(blocked.status, "blocked", label);
-    const reconcile = { root, action: "reconcile", request: {} } as const;
-    const plan = await step(`reconcile preview at ${label}`, () =>
-      executeCodexWakeflowMaintenance({ ...reconcile, mode: "preview" }),
-    );
-    if (plan.mode !== "preview" || plan.planDigest === null) {
-      throw new Error(`reconcile at ${label} is blocked: ${JSON.stringify(plan)}`);
-    }
-    equal(
-      (plan.plan as { kind?: string } | null)?.kind,
-      "WakeflowMaintenanceGateResiduePlan",
-      label,
-    );
-    const planDigest = plan.planDigest;
-    await step(`reconcile apply at ${label}`, () =>
-      executeCodexWakeflowMaintenance({ ...reconcile, mode: "apply", planDigest }),
-    );
     const again = await step(`fresh re-preview at ${label}`, () =>
       executeCodexWakeflowMaintenance({ ...fresh, mode: "preview" }),
     );
     if (again.mode !== "preview" || again.planDigest === null) {
-      throw new Error(`fresh-initialize at ${label} is still blocked: ${JSON.stringify(again)}`);
+      throw new Error(`fresh-initialize at ${label} is blocked: ${JSON.stringify(again)}`);
     }
     const freshDigest = again.planDigest;
     await step(`fresh re-apply at ${label}`, () =>

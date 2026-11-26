@@ -1,3 +1,4 @@
+import { createWakeflowGitignoreBodyAuthority } from "./wakeflow-gitignore-body-authority.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
 /**
@@ -9,7 +10,7 @@ import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-
  * 有界的版本演进接缝：每个组件一张历史渲染表，表项带退役版本与一个用相同输入重算旧正文的函数；生产者
  * 把历史正文作为额外 currentTargets / currentContents 交给转换层，旧正文于是被准入并重组为当前渲染。
  *
- * 表今天为空。改任何一个渲染器时必须把被替换的渲染登记进来：黄金测试
+ * 改任何一个渲染器时必须把被替换的渲染登记进来：黄金测试
  * `tests/workspace/managed-integration/wakeflow-managed-text-history.test.ts` 钉住当前渲染在固定夹具下
  * 的摘要，改了文本不登记就红；CLAUDE.md / AGENTS.md 的 Change Discipline 有同一条规则。
  *
@@ -52,9 +53,24 @@ export const WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY: readonly WakeflowManaged
 export const WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowExternalInstructionHistoryInputs>[] =
   Object.freeze([]);
 
+/**
+ * 1.4.4 之前的仓库 `.gitignore` 托管块：工作区根上有四个锁文件——配置的、重组 `.gitignore` 的、每个宿主
+ * 一个的重组程序指令的——托管块逐一忽略它们。ADR-0033 把锁搬进私有的锁目录，这四条规则随之消失。
+ */
+function gitignoreBodyWithRootLockRules(profileValues: unknown): string {
+  const current = createWakeflowGitignoreBodyAuthority(profileValues);
+  const rules = new Set<string>([
+    ...current.rules,
+    "/.wakeflow-config-authority.lock",
+    "/.wakeflow-gitignore-recomposition.lock",
+    ...current.hostIds.map((hostId) => `/.wakeflow-program-instruction-${hostId}.lock`),
+  ]);
+  return `${[...rules].sort().join("\n")}\n`;
+}
+
 /** 仓库 `.gitignore` 托管块：输入同 `createWakeflowGitignoreBodyAuthority`。 */
 export const WAKEFLOW_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowHostProfilesHistoryInputs>[] =
-  Object.freeze([]);
+  Object.freeze([{ retiredIn: "1.4.4", render: gitignoreBodyWithRootLockRules }]);
 
 /** 支撑面 `.gitignore` 托管块：输入同 `createWakeflowSupportGitignoreBodyAuthority`。 */
 export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY: readonly WakeflowManagedTextHistoricalRender<WakeflowHostProfilesHistoryInputs>[] =

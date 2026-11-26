@@ -8,12 +8,9 @@ import { type TestContext, test } from "node:test";
 import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { withRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import {
-  WAKEFLOW_MAINTENANCE_GATE_REF,
-  WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
-} from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";
@@ -84,7 +81,7 @@ test("维护进行中的条目不标可恢复，锁放开后才是可恢复的�
   const released = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const holder = withRootedExclusiveFileLock(rooted, WAKEFLOW_MAINTENANCE_GATE_REF, async () => {
+  const holder = withWorkspaceLock(rooted, "maintenance-gate", async () => {
     enter?.();
     await released;
   });

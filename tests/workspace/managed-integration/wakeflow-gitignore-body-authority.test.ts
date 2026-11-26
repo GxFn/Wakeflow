@@ -44,15 +44,8 @@ test("Gitignore body authority is one host-neutral deterministic union", () => {
     codexWorkspaceHostResourceProfile,
     claudeCodeWorkspaceHostResourceProfile,
   ]);
-  const rules = [
-    "/.claude/settings.local.json",
-    "/.wakeflow-active/",
-    "/.wakeflow-config-authority.lock",
-    "/.wakeflow-gitignore-recomposition.lock",
-    "/.wakeflow-local/",
-    "/.wakeflow-program-instruction-claude-code.lock",
-    "/.wakeflow-program-instruction-codex.lock",
-  ];
+  // 工作区根上没有锁文件（ADR-0033）：规则只剩两个私有根与宿主声明的本机设置文件。
+  const rules = ["/.claude/settings.local.json", "/.wakeflow-active/", "/.wakeflow-local/"];
   const body = `${rules.join("\n")}\n`;
   deepEqual(authority, {
     kind: "WakeflowGitignoreBodyAuthority",

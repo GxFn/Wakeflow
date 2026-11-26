@@ -9,7 +9,7 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock } from "../../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
+import { isWorkspaceLockHeld } from "../../../src/kernel/workspace-locks.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
@@ -28,7 +28,6 @@ import {
   withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import { wakeflowMaintenanceIntentRef } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_GATE_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
@@ -146,14 +145,8 @@ test("maintenance gate bootstraps, correlates operation and retires the publishe
     async (context) => {
       expiredContext = context;
       equal(context.operationId, OPERATION_ID);
-      const lock = await inspectRootedExclusiveFileLock(
-        workspace.root,
-        WAKEFLOW_MAINTENANCE_GATE_REF,
-      );
-      equal(lock.status, "held");
-      if (lock.status === "held") {
-        equal(lock.record.token.endsWith(`-${UUID}`), true);
-      }
+      // 回调里门由本进程持有。
+      equal(await isWorkspaceLockHeld(workspace.root, "maintenance-gate"), true);
       const published = await publishIntent(workspace.root, context, plan);
       retiredSource = published;
       equal(published.intent.operationId, OPERATION_ID);
@@ -176,10 +169,7 @@ test("maintenance gate bootstraps, correlates operation and retires the publishe
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), true);
   const after = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   equal(after.local.status, "idle");
-  equal(
-    existsSync(path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"))),
-    false,
-  );
+  equal(await isWorkspaceLockHeld(workspace.root, "maintenance-gate"), false);
 
   if (expiredContext === undefined || retiredSource === undefined) {
     throw new Error("Expected issued scope.");
@@ -222,10 +212,7 @@ test("a published intent survives operation failure while the gate releases", as
     after.local.residues.map((residue) => [residue.kind, residue.operationId]),
     [["intent", OPERATION_ID]],
   );
-  equal(
-    existsSync(path.join(workspace.absolutePath, ...WAKEFLOW_MAINTENANCE_GATE_REF.split("/"))),
-    false,
-  );
+  equal(await isWorkspaceLockHeld(workspace.root, "maintenance-gate"), false);
 });
 
 test("the intent store advances the completed-steps counter by exact replacement and keeps the intent digest", async (t) => {

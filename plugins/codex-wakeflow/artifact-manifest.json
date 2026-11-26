@@ -4,7 +4,7 @@
   "hostId": "codex",
   "pluginName": "wakeflow",
   "packageName": "wakeflow",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/codex-wakeflow-mcp.ts",
@@ -155,8 +155,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-maintenance.md",
-      "bytes": 15831,
-      "sha256": "sha256:ab08acf0010bac518198e0ae4b389414c1ccb659a0d38ea0fc110cf4a63d36a3"
+      "bytes": 15926,
+      "sha256": "sha256:c5a9ce45ced8d50afeb1c8ddc1c7d1d5b1a27d9b4d636614ed2f73575b0cea53"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -193,7 +193,7 @@
     {
       "path": ".codex-plugin/plugin.json",
       "bytes": 2317,
-      "sha256": "sha256:ebb80fe563c63ace548f743887f3837b236212e2365039b9c954fc0f6a7f1f59",
+      "sha256": "sha256:f6c38857ed0e0cc69a2b89d6d0a832d9dadf240c9cd07cdf6913694c6b92902b",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -507,8 +507,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 59955,
-      "sha256": "sha256:148656572586dbd8785ba0a75abb20b887d6315ea9b0695fd97b1b14ddf6fdef",
+      "bytes": 60163,
+      "sha256": "sha256:dd3efbdc2bbff33bd56f6153611498a237eb63fbe0d7e54fac2d1ef89a59c4fe",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3567,7 +3567,7 @@
     {
       "path": "mcp/server.mjs",
       "bytes": 1726,
-      "sha256": "sha256:5a792ac3bd7032abc0b3bad22d702e7249dc5b75b5f56c63e221b8dcf288cc65",
+      "sha256": "sha256:58b0b5188037345edcfd8e2b7f0f18f6ca9d1b679ca2be08a6f1f872c60cf00f",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -6815,7 +6815,7 @@
     {
       "path": "package.json",
       "bytes": 1363,
-      "sha256": "sha256:fc5e9f74f51023340769c0cb627de9bcfbca86a33ea20ac4e4fc35a8e23a9103",
+      "sha256": "sha256:7b33438b18b6baa1f66ef0b53d0f93fd3637d37e428e0d81be8252814b912b9c",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -6870,8 +6870,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-maintenance.md",
-      "bytes": 15831,
-      "sha256": "sha256:ab08acf0010bac518198e0ae4b389414c1ccb659a0d38ea0fc110cf4a63d36a3",
+      "bytes": 15926,
+      "sha256": "sha256:c5a9ce45ced8d50afeb1c8ddc1c7d1d5b1a27d9b4d636614ed2f73575b0cea53",
       "mode": "0644",
       "scope": "agent-text"
     },

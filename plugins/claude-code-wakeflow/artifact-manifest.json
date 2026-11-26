@@ -4,7 +4,7 @@
   "hostId": "claude-code",
   "pluginName": "wakeflow",
   "packageName": "claude-code-wakeflow",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/claude-code-wakeflow-mcp.ts",
@@ -157,8 +157,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-flow.md",
-      "bytes": 14626,
-      "sha256": "sha256:b8e00982d921d724b43b2192777aced1b3d5d8af75b735a2481a4e14f8defdf7"
+      "bytes": 14860,
+      "sha256": "sha256:68300620e00c072ac74428a2bf04d78fa640d143a090089132a51065c2e96058"
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-transport.md",
@@ -192,13 +192,13 @@
     },
     {
       "path": "skills/wakeflow-controller/references/windows-and-pods.md",
-      "bytes": 34165,
-      "sha256": "sha256:3bae8815fc09d4b8d6d36a7fdcb862ff6c73f089ecf61c231b0d4d4807821328"
+      "bytes": 34511,
+      "sha256": "sha256:505d8754558c2f6a555ce7b7ad93f6ea33e42bcc91dfd6af33e845c0c14aa167"
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-maintenance.md",
-      "bytes": 15831,
-      "sha256": "sha256:f5d00a265081439c5fa853b51450cc6d3c63604fc11566033bc473e2c868c472"
+      "bytes": 15926,
+      "sha256": "sha256:3da0f8f718e17335188d5182cb132819d91ca71444e6d0bd40f9b0cedaaa0d78"
     },
     {
       "path": "skills/wakeflow-design/SKILL.md",
@@ -235,7 +235,7 @@
     {
       "path": ".claude-plugin/plugin.json",
       "bytes": 997,
-      "sha256": "sha256:132131bb0fad138f8fa9cd7eb39393d864434d833354a6ba1c448c37f92a76e0",
+      "sha256": "sha256:1bdf6163ef0327d6bc6edf6d3f5348e6ab1d2cdb15f91fb79c420e68ef3766d2",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -584,8 +584,8 @@
     },
     {
       "path": "lib/capabilities/workspace/maintain-workspace.js",
-      "bytes": 59955,
-      "sha256": "sha256:148656572586dbd8785ba0a75abb20b887d6315ea9b0695fd97b1b14ddf6fdef",
+      "bytes": 60163,
+      "sha256": "sha256:dd3efbdc2bbff33bd56f6153611498a237eb63fbe0d7e54fac2d1ef89a59c4fe",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3041,8 +3041,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-desktop-helper.generated.js",
-      "bytes": 95886,
-      "sha256": "sha256:132fc7a100db4d0bfa8f3dfd010c5da55732063f390943e3a8e74ab218444ba0",
+      "bytes": 97648,
+      "sha256": "sha256:f01782a33ac82bd268cc69d6ec7c717c4619b99c55268704d29914f83e6d4ea3",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3055,8 +3055,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-tmux-helper.generated.js",
-      "bytes": 154614,
-      "sha256": "sha256:4ca2943956c22dd3a04eb4a9a9a512056806f3fede29dfa02b75b6b1f7bb0368",
+      "bytes": 156376,
+      "sha256": "sha256:fd14a5ba48ff81932dec5a79d27a7e8f7e14e27b57447d4338343bb84c2e33be",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3791,7 +3791,7 @@
     {
       "path": "mcp/server.mjs",
       "bytes": 1747,
-      "sha256": "sha256:8864b88050f697a6c94a531f6f79673bacf7bd6b4679dc80fa0fcb754c2aa9de",
+      "sha256": "sha256:cecc018889687f70c390861416769680d3a532cf8451f4667e559c99c7a9ead6",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -7137,7 +7137,7 @@
     {
       "path": "package.json",
       "bytes": 1314,
-      "sha256": "sha256:1fec3ff55428e73dba42a0e05330abf81f93d86b312ad5c0e7e0db1ff49f8f0b",
+      "sha256": "sha256:3dd2e98d3e740f3501241c5db83ab2b7675a65f0e2b3da4538bfa54fd3a4e324",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -7150,8 +7150,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-flow.md",
-      "bytes": 14626,
-      "sha256": "sha256:b8e00982d921d724b43b2192777aced1b3d5d8af75b735a2481a4e14f8defdf7",
+      "bytes": 14860,
+      "sha256": "sha256:68300620e00c072ac74428a2bf04d78fa640d143a090089132a51065c2e96058",
       "mode": "0644",
       "scope": "agent-text"
     },
@@ -7199,15 +7199,15 @@
     },
     {
       "path": "skills/wakeflow-controller/references/windows-and-pods.md",
-      "bytes": 34165,
-      "sha256": "sha256:3bae8815fc09d4b8d6d36a7fdcb862ff6c73f089ecf61c231b0d4d4807821328",
+      "bytes": 34511,
+      "sha256": "sha256:505d8754558c2f6a555ce7b7ad93f6ea33e42bcc91dfd6af33e845c0c14aa167",
       "mode": "0644",
       "scope": "agent-text"
     },
     {
       "path": "skills/wakeflow-controller/references/workspace-maintenance.md",
-      "bytes": 15831,
-      "sha256": "sha256:f5d00a265081439c5fa853b51450cc6d3c63604fc11566033bc473e2c868c472",
+      "bytes": 15926,
+      "sha256": "sha256:3da0f8f718e17335188d5182cb132819d91ca71444e6d0bd40f9b0cedaaa0d78",
       "mode": "0644",
       "scope": "agent-text"
     },

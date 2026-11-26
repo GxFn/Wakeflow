@@ -388,6 +388,17 @@ test("deriveNextActions：已发布的助手待修时，维护排在过期窗口
       STALE_WINDOW_RESUME,
     ],
   );
+  // 维护协议不是 idle 时同样先维护：窗口的重新登记这时进不了操作作用域（从文件锁的版本更新上来的工作区）。
+  deepEqual(
+    deriveNextActions(
+      nextInput({
+        maintenanceProtocolPending: true,
+        maintenance: true,
+        staleWindows: [{ windowId: WINDOW_A, conversed: true }],
+      }),
+    ).map((action) => action.reason),
+    ["workspace-maintenance", "window-artifact-stale", STALE_WINDOW_RESUME],
+  );
   // 两个来源都指向维护时只列一次；没有过期窗口时它就是前沿——此前 status 的下一步不提助手待修。
   deepEqual(
     deriveNextActions(nextInput({ hostAssetsNeedRepair: true, maintenance: true })).map(
@@ -446,6 +457,23 @@ test("hostAssetsNeedRepair 与 host-settings-assets 门是同一个判断；veri
     blockers: ["runtime-artifact:fail", "host-settings-assets:fail"],
   });
   equal(verifyNext([stale], "controller").frontier, "window-artifact-stale");
+  // 本地布局不过（例如协议目录不全）时同样先维护。
+  equal(
+    verifyNext(
+      [
+        stale,
+        {
+          name: "local-layout",
+          owner: "workspace-layout",
+          status: "fail",
+          code: "local:blocked,step:materialize-local-protocol",
+          evidence: [],
+        },
+      ],
+      "controller",
+    ).frontier,
+    "workspace-maintenance",
+  );
   // 本进程过期仍然最先。
   equal(
     verifyNext([{ ...stale, code: "server-outdated,windows-stale:9" }, assets], "controller")

@@ -195,6 +195,12 @@ export interface NextActionInput {
    */
   readonly hostAssetsNeedRepair?: boolean;
   /**
+   * 维护协议不是 idle（协议目录不全，或上一次维护没有做完）：窗口的重新登记要进操作作用域，这时一律被拒，
+   * 所以维护同样排在窗口重启之前。从文件锁的版本更新上来的工作区就是这样——锁目录还没有建（ADR-0033
+   * 实现记录 2；真实的 1.4.3 工作区上量出来的，§13.294）。
+   */
+  readonly maintenanceProtocolPending?: boolean;
+  /**
    * 停在被打断的事务上的 Demand 与接手它的工具（1.4.1 段 1b）：发布标记、证据事务、追加候选或生命周期
    * 日志还留着。它们各出一条 `demand-recovery` 动作，并且不再出自己的前沿——恢复没做完之前，前沿指的
    * 那一步要么被拒绝，要么会在半个事务上接着做。
@@ -294,7 +300,7 @@ function demandRecoveryActions(
 }
 
 /**
- * 顺序：制品过期（用户）> 宿主资产待修（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
+ * 顺序：制品过期（用户）> 宿主资产待修或维护协议不是 idle（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
  * 被打断的 Demand 事务的恢复（按 demandId）> 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按
  * demandId）> 待认领需求包 > 权限模式不一致的窗口（排在最后，不抢前沿）；去重，上限 64。
  */
@@ -324,7 +330,9 @@ export function deriveNextActions(
     reason: WORKSPACE_MAINTENANCE_FRONTIER,
     subject: null,
   };
-  if (input.hostAssetsNeedRepair === true) actions.push(maintenance);
+  if (input.hostAssetsNeedRepair === true || input.maintenanceProtocolPending === true) {
+    actions.push(maintenance);
+  }
   actions.push(...staleWindowActions(input.staleWindows));
   if (input.maintenance) actions.push(maintenance);
   const recoveries = demandRecoveryActions(input.recoveries ?? []);
@@ -1256,9 +1264,12 @@ export function verifyNext(
       ),
     });
   }
-  // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。
-  const assetsFailing = failing.some((entry) => entry.name === "host-settings-assets");
-  if (!assetsFailing && artifactCodes.some((code) => code.startsWith("windows-stale"))) {
+  // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。本地布局不过时
+  // 也先维护：窗口的重新登记这时一律被拒（见 `NextActionInput.maintenanceProtocolPending`）。
+  const maintenanceFirst = failing.some(
+    (entry) => entry.name === "host-settings-assets" || entry.name === "local-layout",
+  );
+  if (!maintenanceFirst && artifactCodes.some((code) => code.startsWith("windows-stale"))) {
     return Object.freeze({
       frontier: "window-artifact-stale",
       owner: "controller",

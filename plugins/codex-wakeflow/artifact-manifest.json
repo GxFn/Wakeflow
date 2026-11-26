@@ -311,15 +311,15 @@
     },
     {
       "path": "lib/capabilities/demand/lifecycle.js",
-      "bytes": 63661,
-      "sha256": "sha256:653125b0b086b8574a21c58818ff1c985a04f4a3e4ba0b2bb3ab5ee4806ae3f6",
+      "bytes": 63213,
+      "sha256": "sha256:01e80f1bffc0d7050b7d12f2a264615a451ce0b85b49863ac8fb6719e7876e39",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/capabilities/demand/service.js",
-      "bytes": 18561,
-      "sha256": "sha256:35f48cd0ac03a9e30ffb4d9b13ed1780cd9811e1748b32e3987d059d9963645d",
+      "bytes": 19327,
+      "sha256": "sha256:88c1f9f8d5e5b027d0324f80f8b9a23537969139318e5001cc0379d04133b423",
       "mode": "0644",
       "scope": "shared"
     },
@@ -2859,8 +2859,8 @@
     },
     {
       "path": "lib/kernel/active-projection.js",
-      "bytes": 47186,
-      "sha256": "sha256:d8d04d5653df8a99b2ad24b0f24fcf4568439d153be65e282fd59dedc862b54f",
+      "bytes": 47977,
+      "sha256": "sha256:a04cf5896f5e858515eb54fde831df7c082327629a53fca0cce985d6f86bf182",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3013,8 +3013,8 @@
     },
     {
       "path": "lib/kernel/requirement-board.js",
-      "bytes": 30133,
-      "sha256": "sha256:f20e5741ebf4bc35d9e1bb92c32ddb3698b6ace9ce08ef19a59a5b9ef523231e",
+      "bytes": 31216,
+      "sha256": "sha256:d676b8ae924ff5212f22ec830c8a1f410d1a5cf9cb5dbcff8e6aed8b54d8f17d",
       "mode": "0644",
       "scope": "shared"
     },

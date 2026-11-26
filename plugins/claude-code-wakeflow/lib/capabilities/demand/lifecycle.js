@@ -26,12 +26,12 @@ import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF, demandArchiveRef, demandLifecycleJo
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { DEMAND_RECOVERY_TOOLS } from "../../kernel/next-projection.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
-import { archiveRequirementClaim, claimRequirementPackage, readRequirementClaimState, reclaimRequirementPackage, refreshRequirementBoardIndex, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
+import { archiveRequirementClaim, claimRequirementPackage, readRequirementClaimState, reclaimRequirementPackage, replaceRequirementClaimStateFile, withdrawRequirementClaim, } from "../../kernel/requirement-board.js";
 import { createArchiveManifest, findLatestDemandArchive, manifestDigest, manifestPath, mapFoundationError, readArchivePayload, readDemandRootSnapshot, readPayloadFiles, restoreDemandRoot, retireDemandRoot, sealDemandArchive, settleSealedArchive, payloadTexts, } from "./archive.js";
 import { closeSliceContext, demandRootExists, nextAfterMutation, now, openDemandHandle, openSliceContext, parseDemandId, previewNext, publicationEnvelope, releaseDemandHandle, signalOptions, } from "./context.js";
 import { admitDemandCancellationResult, admitDemandCompletionResult, admitDemandContinuationResult, parseDemandCancellationRequest, parseDemandCompletionRequest, parseDemandContinuationRequest, WAKEFLOW_DEMAND_CANCELLATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_COMPLETION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_CONTINUATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
 import { cancellationReasonBlockers, computePayloadTreeDigest, demandWindowIds, deriveCancellationWithdrawalReason, deriveContinueBlockers, deriveDecisionBlockers, deriveLifecycleIds, deriveTerminalBlockers, payloadPrivacyBlockers, pendingReviewTargets, textPrivacyBlockers, } from "./decide.js";
-import { activeDemandOnPod, loadPackage } from "./service.js";
+import { activeDemandOnPod, loadPackage, refreshBoardIndexQuietly } from "./service.js";
 import { evaluateVerifyGates } from "./verify.js";
 /**
  * Wakeflow Capabilities / Demand：完成即归档、取消、续接与记录决定（ADR-0012 D3、D5）。
@@ -162,16 +162,6 @@ async function deleteJournal(context, demandId) {
         if (reason === "not-found" || reason === "resource-not-found")
             return;
         mapFoundationError(error, "journal-delete", "$journal");
-    }
-}
-/** 索引是自愈的投影：五步都已提交，与并发写者的争用不能让终态事务报失败。 */
-async function refreshBoardIndexQuietly(context) {
-    try {
-        await refreshRequirementBoardIndex(context.root, context.signal, context.snapshot.model.presentation.language);
-    }
-    catch (error) {
-        if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended")
-            throw error;
     }
 }
 // ---- 事件追加 ------------------------------------------------------------

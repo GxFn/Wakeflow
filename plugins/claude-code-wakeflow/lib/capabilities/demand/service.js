@@ -17,7 +17,7 @@ import { afterMutationRefresh } from "../../governance/observation/active-projec
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
-import { readRequirementClaimState } from "../../kernel/requirement-board.js";
+import { readRequirementClaimState, refreshRequirementBoardIndex, } from "../../kernel/requirement-board.js";
 import { closeSliceContext, demandRootExists, nextAfterMutation, now, openSliceContext, parseDemandId, previewNext, publicationEnvelope, signalOptions, } from "./context.js";
 import { admitDemandCreationResult, parseDemandCreationRequest, WAKEFLOW_DEMAND_CREATION_PUBLIC_TOOL_NAME, WAKEFLOW_DEMAND_PUBLIC_SCHEMA_VERSION, } from "./contract.js";
 import { deriveCreationBlockers, deriveDemandCreationIds } from "./decide.js";
@@ -288,11 +288,25 @@ async function applyCreateLocked(context, plan) {
     catch (error) {
         mapPublicationError(error);
     }
+    await refreshBoardIndexQuietly(context);
     return Object.freeze({
         disposition: publication.wroteDemandRoot ? "created" : "current",
         demandId: publication.demandId,
         publication: publicationReceipt(publication),
     });
+}
+/**
+ * 看板索引按配置的语言重写一遍。索引是自愈的投影：权威状态已经提交，与并发写者的争用不能让这次调用
+ * 报失败。认领在发布事务里已经刷新过一次，但那一层不读配置——索引被删掉之后它只能按英文重建（L10）。
+ */
+export async function refreshBoardIndexQuietly(context) {
+    try {
+        await refreshRequirementBoardIndex(context.root, context.signal, context.snapshot.model.presentation.language);
+    }
+    catch (error) {
+        if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended")
+            throw error;
+    }
 }
 /** 这个 Demand 有没有一次还没收尾的创建（暂存根或 Demand 根里的发布标记）。 */
 async function pendingPublicationOf(context, demandId) {
@@ -327,6 +341,7 @@ async function recoverCreateLocked(context, operationId) {
         }
         mapPublicationError(error);
     }
+    await refreshBoardIndexQuietly(context);
     return Object.freeze({
         disposition: "recovered",
         demandId,

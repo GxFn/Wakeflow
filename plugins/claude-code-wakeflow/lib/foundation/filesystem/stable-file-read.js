@@ -1,6 +1,7 @@
 import { constants as bufferConstants } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
 import { open as openFileHandle } from "node:fs/promises";
+import { join as joinPath } from "node:path";
 import { types } from "node:util";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
@@ -88,7 +89,7 @@ function parseOptions(value) {
             fail("input", "$options", error);
         throw error;
     }
-    const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
+    const allowed = new Set(["expectedNode", "listed", "maximumBytes", "signal"]);
     if (!Object.hasOwn(record, "maximumBytes") ||
         Object.keys(record).some((key) => !allowed.has(key))) {
         fail("input", "$options");
@@ -106,9 +107,14 @@ function parseOptions(value) {
     if (record.signal !== undefined && !isAbortSignal(record.signal)) {
         fail("input", "$options.signal");
     }
+    const expectedNode = parseExpectedNode(record.expectedNode);
+    if (record.listed !== undefined && (record.listed !== true || expectedNode === undefined)) {
+        fail("input", "$options.listed");
+    }
     return Object.freeze({
         maximumBytes,
-        expectedNode: parseExpectedNode(record.expectedNode),
+        expectedNode,
+        listed: record.listed === true,
         signal: record.signal,
     });
 }
@@ -154,11 +160,23 @@ async function inspectFinalResource(root, resourcePath) {
         throw error;
     }
 }
-function assertRegularFile(resource) {
-    if (resource.node.kind === "symbolic-link")
+function assertRegularFile(node) {
+    if (node.kind === "symbolic-link")
         fail("symlink", "$resourcePath");
-    if (resource.node.kind !== "file")
+    if (node.kind !== "file")
         fail("not-file", "$resourcePath");
+}
+/** `listed` 的读取以列目录时看到的节点为起点；`parseOptions` 已保证它在。 */
+function listedNodeOf(parsed) {
+    if (parsed.expectedNode === undefined)
+        fail("input", "$options.listed");
+    return parsed.expectedNode;
+}
+/** 列出来的那一项在 `root` 目录里的物理路径：名字只能是一段，不经路径核对。 */
+function listedPhysicalPath(root, resourcePath) {
+    if (resourcePath.includes("/"))
+        fail("input", "$resourcePath");
+    return joinPath(root.absolutePath, resourcePath);
 }
 function assertExpectedNode(actual, expected) {
     if (expected !== undefined && !sameFileNodeSnapshot(actual, expected)) {
@@ -195,11 +213,15 @@ function requiredOpenFlags() {
     const nonBlocking = typeof fileSystemConstants.O_NONBLOCK === "number" ? fileSystemConstants.O_NONBLOCK : 0;
     return fileSystemConstants.O_RDONLY | noFollow | nonBlocking;
 }
-async function openStableFile(initial) {
+async function openStableFile(physicalPath, listed) {
     try {
-        return await openFileHandle(initial.physicalPath, requiredOpenFlags());
+        return await openFileHandle(physicalPath, requiredOpenFlags());
     }
     catch (error) {
+        // 列出来之后、打开之前被删掉的一项：没有读前的路径核对替它报"不在"，在这里报。
+        if (listed && readNodeSystemErrorCode(error) === "ENOENT") {
+            fail("not-found", "$resourcePath", error);
+        }
         const code = readNodeSystemErrorCode(error);
         if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR") {
             fail("source-changed", "$resourcePath", error);
@@ -291,36 +313,42 @@ async function readStableFileVersion(root, resourcePath, options, mode) {
     assertRoot(root);
     const parsed = parseOptions(options);
     assertNotAborted(parsed.signal);
-    const initial = await inspectInitialResource(root, resourcePath);
-    assertRegularFile(initial);
-    assertExpectedNode(initial.node, parsed.expectedNode);
-    assertWithinMaximum(initial.node.byteCount, parsed.maximumBytes);
-    if (mode === "bytes" && initial.node.byteCount > bufferConstants.MAX_LENGTH) {
+    const initial = parsed.listed ? null : await inspectInitialResource(root, resourcePath);
+    const initialNode = initial === null ? listedNodeOf(parsed) : initial.node;
+    assertRegularFile(initialNode);
+    if (initial !== null)
+        assertExpectedNode(initial.node, parsed.expectedNode);
+    assertWithinMaximum(initialNode.byteCount, parsed.maximumBytes);
+    if (mode === "bytes" && initialNode.byteCount > bufferConstants.MAX_LENGTH) {
         fail("too-large", "$resourcePath");
     }
-    const handle = await openStableFile(initial);
+    const handle = await openStableFile(initial === null ? listedPhysicalPath(root, resourcePath) : initial.physicalPath, initial === null);
     let primaryError;
     let result;
     try {
         const opened = await snapshotOpenedFile(handle);
-        if (opened.kind !== "file" || !sameFileNodeSnapshot(initial.node, opened)) {
-            fail("source-changed", "$resourcePath");
+        if (opened.kind !== "file" || !sameFileNodeSnapshot(initialNode, opened)) {
+            fail(initial === null ? "expectation-changed" : "source-changed", "$resourcePath");
         }
         assertWithinMaximum(opened.byteCount, parsed.maximumBytes);
         const capture = createCapture(mode, opened.byteCount);
         const read = await readExactFile(handle, opened.byteCount, capture, parsed.signal);
         const afterHandle = await snapshotOpenedFile(handle);
-        const afterPath = await inspectFinalResource(root, resourcePath);
-        if (afterPath.node.kind !== "file" ||
-            !sameFileNodeSnapshot(opened, afterHandle) ||
-            !sameFileNodeSnapshot(afterHandle, afterPath.node)) {
+        if (!sameFileNodeSnapshot(opened, afterHandle))
             fail("source-changed", "$resourcePath");
+        let finalNode = afterHandle;
+        if (initial !== null) {
+            const afterPath = await inspectFinalResource(root, resourcePath);
+            if (afterPath.node.kind !== "file" || !sameFileNodeSnapshot(afterHandle, afterPath.node)) {
+                fail("source-changed", "$resourcePath");
+            }
+            finalNode = afterPath.node;
         }
         assertNotAborted(parsed.signal);
         result = Object.freeze({
             resourcePath,
-            node: afterPath.node,
-            byteCount: afterPath.node.byteCount,
+            node: finalNode,
+            byteCount: finalNode.byteCount,
             digest: read.digest,
             bytes: read.bytes,
         });

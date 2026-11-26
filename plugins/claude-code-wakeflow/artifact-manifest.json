@@ -1886,8 +1886,8 @@
     },
     {
       "path": "lib/foundation/filesystem/stable-file-read.js",
-      "bytes": 13791,
-      "sha256": "sha256:e905b2bc9239cbef4909dbb87b824cae825518a1da3090e0ec5c6474c68f77e0",
+      "bytes": 15277,
+      "sha256": "sha256:ffd2862fbb3e13f1b5af4b6eb51dddfb85eccce784869a84ec51e8ec2f9f80dd",
       "mode": "0644",
       "scope": "shared"
     },
@@ -3041,8 +3041,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-desktop-helper.generated.js",
-      "bytes": 97648,
-      "sha256": "sha256:f01782a33ac82bd268cc69d6ec7c717c4619b99c55268704d29914f83e6d4ea3",
+      "bytes": 97731,
+      "sha256": "sha256:1be4a5a9a38c98a56a2e0347d62bcfefd390720cb3e8a09904cc25e77299666a",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3055,8 +3055,8 @@
     },
     {
       "path": "lib/hosts/claude-code/generated/claude-code-tmux-helper.generated.js",
-      "bytes": 156376,
-      "sha256": "sha256:fd14a5ba48ff81932dec5a79d27a7e8f7e14e27b57447d4338343bb84c2e33be",
+      "bytes": 156459,
+      "sha256": "sha256:8eac0b5ea67751f008d21b5b1626ccbd72c5d20f013aa10e5a92d4786c5e0482",
       "mode": "0644",
       "scope": "current-host"
     },
@@ -3125,15 +3125,15 @@
     },
     {
       "path": "lib/kernel/hook-observation-directory.js",
-      "bytes": 5613,
-      "sha256": "sha256:c4a6682c8dea70224531cf0ccd6f43eb11db151f5d5c9d5a8664cbcbf066651d",
+      "bytes": 6341,
+      "sha256": "sha256:96661bcbff1e2bda9095367e7c62e96824bda0bb844e36aa61d4973e12c3856d",
       "mode": "0644",
       "scope": "shared"
     },
     {
       "path": "lib/kernel/hook-observations.js",
-      "bytes": 46424,
-      "sha256": "sha256:06bab1a6143000d767eccfac706fe85b48a5d8bd32241b6f5c67cdf0fff09c79",
+      "bytes": 47629,
+      "sha256": "sha256:b7e109f2384dde6f1983b0d6b42b49aab5b005ef1b961c74eea36815594e5b3e",
       "mode": "0644",
       "scope": "shared"
     },

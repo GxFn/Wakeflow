@@ -133,6 +133,20 @@ test("plan_target_task 一次调用追加规划事件并返回 next；重放、�
       planFixtureTargetTask(fixture, { idempotencyKey: "bad key!" }),
       (error: unknown) => isWakeflowError(error) && error.code === "invalid-request",
     );
+    // 任务包内部对不上的地方连同它在包里的位置一起交回（1.4.3 的 tmux 一轮）。
+    const firstAnchor = draft.acceptanceAnchors[0];
+    if (firstAnchor === undefined) throw new Error("the fixture draft has no anchor");
+    await rejects(
+      planFixtureTargetTask(fixture, {
+        idempotencyKey: "plan-duplicate-anchor",
+        taskPackage: { ...draft, acceptanceAnchors: [firstAnchor, firstAnchor] },
+      }),
+      (error: unknown) =>
+        isWakeflowError(error) &&
+        error.code === "invalid-request" &&
+        error.reason === "task-package" &&
+        error.path === "$request.taskPackage/acceptanceAnchors/1/anchorId",
+    );
     equal(await commitCount(fixture), before + 1);
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);

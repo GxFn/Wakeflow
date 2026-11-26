@@ -140,8 +140,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/refusals.md",
-      "bytes": 12875,
-      "sha256": "sha256:5be4643683c12ecd82f57de80f835dd87b7298c593bb5ca7a6a957c3d00368f9"
+      "bytes": 13505,
+      "sha256": "sha256:91fa451d57bc93c7a04b7f0be7a06f08f4db775c45f9958d6a3a5f45d88119a9"
     },
     {
       "path": "skills/wakeflow-controller/references/review-and-completion.md",
@@ -318,8 +318,8 @@
     },
     {
       "path": "lib/capabilities/demand/service.js",
-      "bytes": 19327,
-      "sha256": "sha256:88c1f9f8d5e5b027d0324f80f8b9a23537969139318e5001cc0379d04133b423",
+      "bytes": 21145,
+      "sha256": "sha256:7e8c8a9f2976be81b6482cb8259527ce6aba09e3de9014e59919d4a5dfb9a254",
       "mode": "0644",
       "scope": "shared"
     },
@@ -6849,8 +6849,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/refusals.md",
-      "bytes": 12875,
-      "sha256": "sha256:5be4643683c12ecd82f57de80f835dd87b7298c593bb5ca7a6a957c3d00368f9",
+      "bytes": 13505,
+      "sha256": "sha256:91fa451d57bc93c7a04b7f0be7a06f08f4db775c45f9958d6a3a5f45d88119a9",
       "mode": "0644",
       "scope": "agent-text"
     },

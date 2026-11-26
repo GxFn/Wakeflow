@@ -102,7 +102,9 @@ report, return the callback. You own no other step and no Controller authority.
 1. Read the package, then the anchors. Restate the goal to yourself in one
    sentence. If that sentence does not match the prompt, trust the package.
 2. Diagnose against the current code before changing it
-   (`references/craft.md`). Prefer the smallest coherent change.
+   (`references/craft.md`). Prefer the smallest coherent change. A package
+   that lists several pieces of work is still one task: order them as the
+   code needs and answer every anchor.
 3. Run the checks the package expects and keep what they printed.
 4. Write the report: outcome, what you changed and why, branch and commit, the
    per-anchor results, the evidence locators, any instruction you received

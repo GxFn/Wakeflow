@@ -93,7 +93,9 @@ report, return the callback. You own no other step and no Controller authority.
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing
-  result; the callback send follows the same rule: check the receiving window's landing record before any second send - the tmux helper's `deliver` does it itself and refuses with `already-landed`, printing that landing; under desktop sessions run the helper's `landing` first - and record or report that landing instead of sending again (tmux `--force` is only for a prompt you have established never reached the window).
+  result and releases your work claim, so replay it even when the result is
+  already saved (after the Controller's maintenance when status names that
+  first); the callback send follows the same rule: check the receiving window's landing record before any second send - the tmux helper's `deliver` does it itself and refuses with `already-landed`, printing that landing; under desktop sessions run the helper's `landing` first - and record or report that landing instead of sending again (tmux `--force` is only for a prompt you have established never reached the window).
 - Workspace and repository `CLAUDE.md` files bind you, and a
   repository's own rules outrank both this skill and the prompt's phrasing.
 

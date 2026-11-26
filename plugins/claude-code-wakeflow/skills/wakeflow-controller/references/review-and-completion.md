@@ -199,7 +199,10 @@ the gap. There is no implicit waiver. Cancellation remains available for
 uncompleted requirements. Before you apply, re-read the package's completion
 definition and non-goals against what landed: the gate checks the acceptance
 list, not the non-goals, and "every task is accepted" is not the completion
-definition.
+definition. A failing `work-claims-released` check on a live window after an
+interrupted import means the result was saved but the claim was not released:
+have that window replay the same import, which returns the saved result and
+releases the claim; do not release-claim a live window.
 
 `wakeflow_cancel_demand` ends a non-terminal Demand with a reason. Results and
 evidence are kept, the work claims are released, the requirement package is

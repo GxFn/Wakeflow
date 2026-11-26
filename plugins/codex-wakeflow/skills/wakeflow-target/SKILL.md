@@ -93,7 +93,9 @@ report, return the callback. You own no other step and no Controller authority.
 - If a host error cuts your turn, look before you act again: `wakeflow_status`
   for this Demand tells you whether your import already landed. Replaying the
   import with the same delivery identity and fence returns the existing
-  result; the callback send follows the same rule: check the receiving window's thread before sending again; when the prompt already arrived there, record or report that landing instead of sending a second time.
+  result and releases your work claim, so replay it even when the result is
+  already saved (after the Controller's maintenance when status names that
+  first); the callback send follows the same rule: check the receiving window's thread before sending again; when the prompt already arrived there, record or report that landing instead of sending a second time.
 - Workspace and repository `AGENTS.md` files bind you, and a
   repository's own rules outrank both this skill and the prompt's phrasing.
 

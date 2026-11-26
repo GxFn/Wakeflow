@@ -86,6 +86,20 @@ const RESOURCE_EDGES: readonly Readonly<{
     ],
     mention: "hosts/claude-code/assets/",
   },
+  {
+    // 按路径读整棵 `src/` 的清点测试（降档登记表、沿用前落盘登记表、旧错误码家族、宿主知识清点）不经
+    // 任何导入：`src/` 里的任何改动都带上它们。两处登记没跟上删除、第 0 档没选到、整门才红过一次
+    // （gate-log §13.295）。
+    pattern: /^src\//u,
+    owners: [],
+    mention: ', "src")',
+  },
+  {
+    // 复杂度允许清单逐文件登记在 `biome.json` 里：`src/` 的文件删了、或清单自己改了，都要核对它。
+    pattern: /^(?:src\/|biome\.json$)/u,
+    owners: [],
+    mention: '"biome.json"',
+  },
 ];
 
 export function assertRevision(since: string): string {

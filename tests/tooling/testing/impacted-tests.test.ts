@@ -270,6 +270,30 @@ test("助手源文件改动经资源边传播：两个资产模块与生成器�
   equal(selection.fullGateRecommended, false);
 });
 
+test("按路径清点 `src/` 的测试与复杂度允许清单的测试不经任何导入：`src/` 里任何改动都带上它们", (t) => {
+  const root = fixture(t);
+  write(
+    root,
+    "tests/kernel/inventory.test.ts",
+    'const SOURCE_ROOT = path.join(process.cwd(), "src");\n',
+  );
+  write(
+    root,
+    "tests/tooling/architecture/complexity-allowlist.test.ts",
+    'const config = JSON.parse(readFileSync("biome.json", "utf8"));\n',
+  );
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "inventory tests"]);
+  deepEqual(selectImpactedTests(root).tests, []);
+
+  write(root, "src/capabilities/y/service.ts", "export const y = 3;\n");
+  deepEqual(selectImpactedTests(root).tests, [
+    "tests/capabilities/y/service.test.ts",
+    "tests/kernel/inventory.test.ts",
+    "tests/tooling/architecture/complexity-allowlist.test.ts",
+  ]);
+});
+
 test("tooling 源也在静态图里：改动的 tooling 模块选中导入它的测试，经另一个 tooling 模块的间接导入也选中", (t) => {
   const root = fixture(t);
   write(root, "tooling/verification/files.ts", "export const files = 1;\n");

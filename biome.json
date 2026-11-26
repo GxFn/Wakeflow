@@ -89,7 +89,6 @@
         "src/foundation/filesystem/durable-resource-rename.ts",
         "src/foundation/filesystem/exact-regular-file-unlink.ts",
         "src/foundation/filesystem/rooted-directory.ts",
-        "src/foundation/filesystem/rooted-exclusive-file-lock.ts",
         "src/foundation/filesystem/rooted-read-write-scope.ts",
         "src/foundation/filesystem/stable-directory-read.ts",
         "src/foundation/filesystem/stable-file-read.ts",

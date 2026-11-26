@@ -149,12 +149,6 @@ const REGISTRY: readonly DowngradeRow[] = [
       "目录树候选的新建目录放弃父目录项同步；父目录在成员写完之后同步一次；只许树候选导入（导入守卫）",
   },
   unchanged(
-    "src/foundation/filesystem/durable-atomic-file-write.ts",
-    "performWrite",
-    "const durability",
-    "根以 none 打开时原子写跳过本次的全部同步（逐次选项让位于根的级别）；只有测试的一次性根取 none，生产组合根永远是 fsync",
-  ),
-  unchanged(
     STREAM_INDEX,
     "publishStreamIndex",
     "call createFileAtomically",

@@ -12,8 +12,8 @@ lineage, not a correction.
 `wakeflow_plan_target_task` appends one package. What you write:
 
 - **Assignment** - which repository and which work type.
-- **Goal** - one paragraph a target can restate in a sentence. If you cannot
-  write it that way, the task is still two tasks.
+- **Goal** - one paragraph a target can restate in a sentence. Several pieces
+  of work in one repository still make one goal: say what they add up to.
 - **Boundary** - what is explicitly out of scope. This is the most valuable
   paragraph you write, because it is what stops a target from "improving"
   code no one reviewed.
@@ -58,6 +58,14 @@ Lineage rules that decide which call you make:
 
 One active lineage per repository. A second unfinished target in the same
 repository is refused - finish or supersede the first.
+
+So everything a requirement asks of one repository goes into one package, not
+one package per piece: name each piece of work as its own in-scope line, give
+every acceptance criterion its own anchor, and leave the order to the target -
+it answers anchor by anchor and you review once. Split only where the rules
+split: a second repository is a second target; inside one repository, plan a
+continuation after the accept only when the later work depends on what your
+review of the earlier work finds.
 
 A test package additionally carries the frozen test contract: the approved
 steps bound to acceptance-criteria items, the allowed skills, the setup, the

@@ -87,7 +87,9 @@ rework keeps `requirementAlignment: aligned`. Rework names at least one
 `failed` independent check. A refused decision record (`record-schema`, `record-relation`) names the field in `path`, e.g. `$request/decision/blockingReasons`: fix that field, do not guess. The failed checks are
 exactly the corrections the target receives with the rework delivery, so a
 rework whose checks all passed is refused when recorded - it could never be
-delivered. Use rework when the change itself must be fixed. When the work is
+delivered. When only some criteria fail, mark only their checks `failed`: the
+target redoes those and what already holds is not sent back. Use rework when
+the change itself must be fixed. When the work is
 right and only the report lacks evidence - a `needs-review` result is the
 common case - do not send it back: record the evidence still missing (reported commits already have theirs), verify each anchor
 yourself and accept with `anchorEvidence`. A unit whose `supersededResults`

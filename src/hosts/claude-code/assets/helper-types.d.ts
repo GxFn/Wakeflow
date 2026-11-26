@@ -33,7 +33,7 @@ interface LandingMatch {
 
 /** `prepareWorktree` 的结果：检出是新建的还是复用的，以及 `.git/info/exclude` 那一行做了什么。 */
 interface PreparedWorktree {
-  readonly prepared: "created" | "reused";
+  readonly prepared: "created" | "reused" | "reattached";
   readonly branch: string;
   readonly checkout: string;
   readonly root: string;

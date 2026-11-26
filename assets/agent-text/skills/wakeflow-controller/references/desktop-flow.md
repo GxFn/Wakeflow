@@ -146,9 +146,12 @@ callback's `user-prompt-submit` record in the Controller session.
 - **Close** is `archive_session`, only when the user authorizes retiring
   that window. Under the `auto` permission mode the host may still refuse that call (and `unarchive_session`) after the user agreed in the conversation: do not retry or look for another way - ask the user to archive (and, for a restart, restore) that session in the sidebar themselves, then go on from the observation. Archiving stops the process and removes the session from the
   sidebar; `list_sessions` then reports it archived, which Wakeflow
-  classifies as absent. Never archive a pod's window while the pod is open,
-  and never run `claude rm` on any Wakeflow session - it deletes checkouts
-  the app believes it owns.
+  classifies as absent. Never archive a pod's window while the pod is open:
+  the app takes a clean checkout off its pod branch when it archives the
+  session working there, and only that session's next turn puts it back
+  (a new `launch` there puts it back too, or refuses when commits were made
+  off the branch). Never run `claude rm` on any Wakeflow session - it
+  deletes checkouts the app believes it owns.
 - **Replace** a session that is absent (archived or deleted): with the user's
   authorization pipe the window's inspect result into `launch` again,
   register the printed observation with `operation: "replace"` and the

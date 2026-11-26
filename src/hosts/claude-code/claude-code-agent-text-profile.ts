@@ -371,14 +371,17 @@ const WORKTREE_LAUNCH =
   "`<repository>/.claude/worktrees/<name>` from the repository's local HEAD on branch " +
   "`worktree-<name>`, reuses the checkout only when this repository's worktree list has it, " +
   "and adds `.claude/worktrees/` to the repository's `.git/info/exclude`; its result says " +
-  "`worktreePrepared: created` or `reused`. Under the tmux transport the window then starts " +
+  "`worktreePrepared: created`, `reused` or `reattached` (the checkout had been taken off its " +
+  "branch and stood at that branch's commit, so the helper checked the branch out again). Under the tmux transport the window then starts " +
   "with `claude --worktree <name>`, which only locks that existing checkout; under desktop " +
   "sessions it starts with the checkout as its working directory and never with `--worktree` " +
   "- the app would claim such a checkout as its own worktree, and archiving the session or " +
   "`claude rm` would delete it. The helper refuses without writing when the placement is not " +
   "the repository top level (`worktree-root-not-toplevel`), when `worktree-<name>` exists " +
   "without its checkout (`worktree-branch-exists`: ask the user whether to delete or rename it) " +
-  "or when another directory holds the path (`worktree-path-occupied`). A launch that fails " +
+  "when another directory holds the path (`worktree-path-occupied`), or when the existing " +
+  "checkout is off its branch with commits the branch lacks (`worktree-head-detached`) or on " +
+  "another branch (`worktree-head-mismatch`): tell the user and let them decide where those commits go. A launch that fails " +
   "after the checkout was prepared still reports `worktreePrepared` and `worktreeBranch`, so " +
   "tell the user that checkout was left behind. Once the session has started, `launch` " +
   "compares its hook-recorded working directory with the prepared checkout and refuses " +

@@ -211,7 +211,7 @@ test("Claude entrypoint contributes settings and its plan digest is rejected by 
   equal(existsSync(path.join(root, "wakeflow.config.json")), false);
 });
 
-test("只重装私有资产的 reconcile 归 Controller 自己应用；计划里还有用户文件的步骤时仍由用户确认（1.3.0 终验，用户裁决 2026-11-15）", async (t) => {
+test("没有步骤或只重装私有资产的 reconcile 归 Controller 自己应用；计划里还有用户文件的步骤时仍由用户确认（1.3.0 终验，用户裁决 2026-11-15；零步的一条 2026-11-25）", async (t) => {
   const root = await fixture(t, "claude-assets");
   const selected = selection();
   const fresh = await executeClaudeCodeWakeflowMaintenance({
@@ -247,6 +247,12 @@ test("只重装私有资产的 reconcile 归 Controller 自己应用；计划里
       next: [preview.next.frontier, preview.next.owner],
     };
   };
+
+  // 没有任何步骤的 reconcile 只重写状态页：也归 Controller（用户裁决 2026-11-25，open-items Y21）。
+  const nothingToRepair = await previewReconcile();
+  equal(nothingToRepair.preview.status, "ready");
+  deepEqual(nothingToRepair.kinds, []);
+  deepEqual(nothingToRepair.next, ["workspace-maintenance-apply", "controller"]);
 
   // 插件更新之后的样子：工作区里的助手是上一版制品发布的字节。计划只有重装它的一步，归 Controller。
   const helper = path.join(root, ...CLAUDE_CODE_TMUX_ASSET_REF.split("/"));

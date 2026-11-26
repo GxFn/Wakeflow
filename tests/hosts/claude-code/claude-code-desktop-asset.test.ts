@@ -1575,6 +1575,25 @@ test("launch prepares a worktree pod's checkout from the local HEAD, starts clau
   equal(elsewhere.json.observedCwd, ".");
   equal(elsewhere.json.worktreePrepared, "reused");
   equal(elsewhere.json.worktreeBranch, "worktree-feature-x");
+  // X33（1.4.3）：桌面 app 归档以检出为目录的会话时会把干净检出的 HEAD 从分支上摘下来。检出就停在自己分支的
+  // 提交上：助手把它切回分支，报 reattached。摘下来之后又有了提交、或者检出在别的分支上：拒绝，检出原样。
+  git(["checkout", "--quiet", "--detach"], checkout);
+  const reattached = launchPod("feature-x");
+  equal(reattached.status, 0, JSON.stringify(reattached.json));
+  equal(reattached.json.worktreePrepared, "reattached");
+  equal(git(["rev-parse", "--abbrev-ref", "HEAD"], checkout).trim(), "worktree-feature-x");
+  git(["checkout", "--quiet", "--detach"], checkout);
+  git(["commit", "--quiet", "--allow-empty", "-m", "made while detached"], checkout);
+  const strayed = launchPod("feature-x");
+  equal(strayed.status, 1, JSON.stringify(strayed.json));
+  equal(strayed.json.reason, "worktree-head-detached");
+  equal(strayed.json.branch, "worktree-feature-x");
+  equal(git(["rev-parse", "--abbrev-ref", "HEAD"], checkout).trim(), "HEAD");
+  git(["checkout", "--quiet", "-b", "somewhere-else"], checkout);
+  const otherBranch = launchPod("feature-x");
+  equal(otherBranch.status, 1, JSON.stringify(otherBranch.json));
+  equal(otherBranch.json.reason, "worktree-head-mismatch");
+  git(["checkout", "--quiet", "worktree-feature-x"], checkout);
   // 分支已在、检出不在：不复用旧分支，拒绝且不起会话。
   git(["worktree", "remove", "--force", checkout]);
   const leftover = launchPod("feature-x");

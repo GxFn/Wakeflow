@@ -85,7 +85,7 @@ file. Never hand-edit it or trust a remembered value; read it back through a too
   private modes: when something under `.wakeflow-local` or `.wakeflow-active` has only drifted
   wider than 0700 / 0600 in a safe way (a `chmod -R go+rX`, a Finder `.DS_Store`), the preview's plan
   is a `WakeflowPrivateModeConvergencePlan` (counts and areas) and `next` names you as its owner: it only
-  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan. The same holds for a reconcile whose plan only reinstalls Wakeflow's own published files (every step a `statusline-asset`, `tmux-asset` or `desktop-asset`, the plan after a plugin update): `next.owner` is `controller`, apply it without asking and say afterwards what was reinstalled. Any other step in the plan puts the apply back with the user.
+  restores permission bits, so apply it without asking, then preview again; the user confirms that next plan. The same holds for a reconcile whose plan only reinstalls Wakeflow's own published files (every step a `statusline-asset`, `tmux-asset` or `desktop-asset`, the plan after a plugin update) and for one whose plan has no step (it only rewrites Wakeflow's own status pages): `next.owner` is `controller`, apply it without asking and say afterwards what was reinstalled or refreshed. Any other step in the plan puts the apply back with the user.
   A private node another user owns, that group or others can write, or that
   is a symlink is reported as `private-mode-unsafe:<area>` and never touched,
   and the other intents refuse with `private-mode-drift` until reconcile has

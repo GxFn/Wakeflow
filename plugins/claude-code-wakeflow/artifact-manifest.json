@@ -4,7 +4,7 @@
   "hostId": "claude-code",
   "pluginName": "wakeflow",
   "packageName": "claude-code-wakeflow",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "releaseEligible": true,
   "generator": "tooling/artifacts/build-plugin-artifacts.ts",
   "sourceEntrypoint": "src/entrypoints/claude-code-wakeflow-mcp.ts",
@@ -235,7 +235,7 @@
     {
       "path": ".claude-plugin/plugin.json",
       "bytes": 997,
-      "sha256": "sha256:1bdf6163ef0327d6bc6edf6d3f5348e6ab1d2cdb15f91fb79c420e68ef3766d2",
+      "sha256": "sha256:efb5589a277740aa609bf4909d4ae05f9de9386bde07b1e263b3aa04acf875c9",
       "mode": "0644",
       "scope": "metadata"
     },
@@ -3812,7 +3812,7 @@
     {
       "path": "mcp/server.mjs",
       "bytes": 1747,
-      "sha256": "sha256:cecc018889687f70c390861416769680d3a532cf8451f4667e559c99c7a9ead6",
+      "sha256": "sha256:1a6bb59e60780550ceed5d364cacf9f864ea3546f910031fdfd124ebc95d6e09",
       "mode": "0755",
       "scope": "entrypoint"
     },
@@ -7158,7 +7158,7 @@
     {
       "path": "package.json",
       "bytes": 1314,
-      "sha256": "sha256:3dd2e98d3e740f3501241c5db83ab2b7675a65f0e2b3da4538bfa54fd3a4e324",
+      "sha256": "sha256:70e32edd316842745f30797099f3b089fd5c6c9303370a0115885d6172b6df17",
       "mode": "0644",
       "scope": "metadata"
     },

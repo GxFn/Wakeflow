@@ -1380,32 +1380,52 @@ async function stageParentPresent(
   }
 }
 
+/** 这一轮渲染的页面按所在目录分组，组内保持渲染的顺序。 */
+function pagesByDirectory(
+  files: readonly Readonly<ActiveProjectionFile>[],
+): readonly (readonly PortableResourcePath[])[] {
+  const groups = new Map<string, PortableResourcePath[]>();
+  for (const entry of files) {
+    const directory = entry.resourcePath.slice(0, entry.resourcePath.lastIndexOf("/"));
+    groups.set(directory, [...(groups.get(directory) ?? []), entry.resourcePath]);
+  }
+  return [...groups.values()];
+}
+
+/** 结算一个目录里这一组页面的暂存；属主还活着或说不清的暂存让这一轮失败。 */
+async function settleDirectoryStages(
+  root: RootedDirectory,
+  pages: readonly PortableResourcePath[],
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const first = pages[0];
+  if (first === undefined || !(await stageParentPresent(root, first))) return;
+  try {
+    const recovery = await recoverDurableAtomicFileStagesForTargets(
+      root,
+      pages,
+      signalOptions(signal),
+    );
+    if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
+      fail("io-failure", "projection-stage-active", `$projection/${first}`);
+    }
+  } catch (error: unknown) {
+    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
+    fail("io-failure", "projection-stage", `$projection/${first}`, { cause: error });
+  }
+}
+
+/**
+ * 一个目录结算一次，目标是这一轮渲染在该目录里的全部页面。恢复只认闭合的目标集合：逐页结算时，同目录
+ * 里另一页的死暂存会被当成"集合之外的暂存"，把排在它前面的页挡住（L10）。
+ */
 async function settleStages(
   root: RootedDirectory,
   files: readonly Readonly<ActiveProjectionFile>[],
   signal: AbortSignal | undefined,
 ): Promise<void> {
-  for (const entry of files) {
-    if (!(await stageParentPresent(root, entry.resourcePath))) continue;
-    try {
-      const recovery = await recoverDurableAtomicFileStagesForTargets(
-        root,
-        [entry.resourcePath],
-        signalOptions(signal),
-      );
-      if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
-        fail("io-failure", "projection-stage-active", `$projection/${entry.resourcePath}`);
-      }
-    } catch (error: unknown) {
-      if (error instanceof DurableAtomicFileStageRecoveryError) {
-        if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
-        fail("io-failure", "projection-stage", `$projection/${entry.resourcePath}`, {
-          cause: error,
-        });
-      }
-      throw error;
-    }
-  }
+  for (const pages of pagesByDirectory(files)) await settleDirectoryStages(root, pages, signal);
 }
 
 function mapLockError(error: RootedExclusiveFileLockError): never {

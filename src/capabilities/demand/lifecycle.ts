@@ -71,7 +71,6 @@ import {
   claimRequirementPackage,
   readRequirementClaimState,
   reclaimRequirementPackage,
-  refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
   type RequirementClaimState,
@@ -143,7 +142,7 @@ import {
   pendingReviewTargets,
   textPrivacyBlockers,
 } from "./decide.js";
-import { activeDemandOnPod, loadPackage } from "./service.js";
+import { activeDemandOnPod, loadPackage, refreshBoardIndexQuietly } from "./service.js";
 import { evaluateVerifyGates, type VerifyReport } from "./verify.js";
 
 /**
@@ -382,19 +381,6 @@ async function deleteJournal(context: DemandSliceContext, demandId: string): Pro
       typeof error === "object" && error !== null && "reason" in error ? error.reason : null;
     if (reason === "not-found" || reason === "resource-not-found") return;
     mapFoundationError(error, "journal-delete", "$journal");
-  }
-}
-
-/** 索引是自愈的投影：五步都已提交，与并发写者的争用不能让终态事务报失败。 */
-async function refreshBoardIndexQuietly(context: DemandSliceContext): Promise<void> {
-  try {
-    await refreshRequirementBoardIndex(
-      context.root,
-      context.signal,
-      context.snapshot.model.presentation.language,
-    );
-  } catch (error: unknown) {
-    if (!(error instanceof WakeflowError) || error.reason !== "board-index-contended") throw error;
   }
 }
 

@@ -55,55 +55,59 @@ interface WorkspaceFacts {
  * 之前每个测试各跑一遍 `fresh-initialize` 的 preview 与 apply。链留在基线里，每个测试仍然
  * 按需复制到自己的临时目录，仍是真实文件系统工作区，仍在 `t.after` 里删掉自己的副本。
  */
-const requirementWorkspaceStore = createPreparedWorkspaceStore<undefined, Readonly<WorkspaceFacts>>(
-  {
-    prefix: "wakeflow-requirement-slice-",
-    keyOf: () => "fresh",
-    build: async (fixtureRoot) => {
-      const initialized = spawnSync("git", ["init", "--quiet"], {
-        cwd: fixtureRoot,
-        encoding: "utf8",
-        shell: false,
-      });
-      if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
-      const selection = createMinimalWakeflowFreshConfigSelection();
-      (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
-      const preview = await executeCodexWakeflowMaintenance({
-        root: fixtureRoot,
-        action: "fresh-initialize",
-        mode: "preview",
-        request: { selection },
-      });
-      if (preview.mode !== "preview" || preview.planDigest === null)
-        throw new Error("Expected a ready Fresh plan.");
-      await executeCodexWakeflowMaintenance({
-        root: fixtureRoot,
-        action: "fresh-initialize",
-        mode: "apply",
-        request: { selection },
-        planDigest: preview.planDigest,
-      });
-      const config = parseWakeflowConfig(
-        JSON.parse(readFileSync(path.join(fixtureRoot, "wakeflow.config.json"), "utf8")),
-      );
-      const design = config.topology.supportSurfaces.find(
-        (surface) => surface.capability === "design",
-      );
-      const designWindow = config.topology.windows.find((window) => window.role === "design");
-      if (design === undefined || designWindow === undefined)
-        throw new Error("Fresh config lacks a design surface.");
-      mkdirSync(path.join(fixtureRoot, design.path, "drafts"), { recursive: true });
-      return Object.freeze({
-        designSurfaceId: design.surfaceId,
-        designRelativePath: design.path,
-        designWindowId: designWindow.windowId,
-      });
-    },
-  },
-);
+type FixtureLanguage = "en" | "zh-Hans";
 
-async function fixture(t: TestContext): Promise<Workspace> {
-  const prepared = await requirementWorkspaceStore.materialize(undefined);
+const requirementWorkspaceStore = createPreparedWorkspaceStore<
+  FixtureLanguage,
+  Readonly<WorkspaceFacts>
+>({
+  prefix: "wakeflow-requirement-slice-",
+  keyOf: (language) => `fresh-${language}`,
+  build: async (fixtureRoot, language) => {
+    const initialized = spawnSync("git", ["init", "--quiet"], {
+      cwd: fixtureRoot,
+      encoding: "utf8",
+      shell: false,
+    });
+    if (initialized.status !== 0) throw new Error("Cannot initialize fixture Git.");
+    const selection = createMinimalWakeflowFreshConfigSelection();
+    (selection.storage as Record<string, unknown>).ledgerRoot = "Ledger";
+    (selection.presentation as Record<string, unknown>).language = language;
+    const preview = await executeCodexWakeflowMaintenance({
+      root: fixtureRoot,
+      action: "fresh-initialize",
+      mode: "preview",
+      request: { selection },
+    });
+    if (preview.mode !== "preview" || preview.planDigest === null)
+      throw new Error("Expected a ready Fresh plan.");
+    await executeCodexWakeflowMaintenance({
+      root: fixtureRoot,
+      action: "fresh-initialize",
+      mode: "apply",
+      request: { selection },
+      planDigest: preview.planDigest,
+    });
+    const config = parseWakeflowConfig(
+      JSON.parse(readFileSync(path.join(fixtureRoot, "wakeflow.config.json"), "utf8")),
+    );
+    const design = config.topology.supportSurfaces.find(
+      (surface) => surface.capability === "design",
+    );
+    const designWindow = config.topology.windows.find((window) => window.role === "design");
+    if (design === undefined || designWindow === undefined)
+      throw new Error("Fresh config lacks a design surface.");
+    mkdirSync(path.join(fixtureRoot, design.path, "drafts"), { recursive: true });
+    return Object.freeze({
+      designSurfaceId: design.surfaceId,
+      designRelativePath: design.path,
+      designWindowId: designWindow.windowId,
+    });
+  },
+});
+
+async function fixture(t: TestContext, language: FixtureLanguage = "en"): Promise<Workspace> {
+  const prepared = await requirementWorkspaceStore.materialize(language);
   t.after(() => rmSync(prepared.fixtureRoot, { recursive: true, force: true }));
   const root = realpathSync(prepared.fixtureRoot);
   return {
@@ -613,6 +617,47 @@ test("parked 包 activate 回到 pending，withdraw 用 CAS，supersedes 撤回�
   equal(withdrawnView.package.status, "withdrawn");
   const index = readFileSync(path.join(root, ".wakeflow-active/current/board/index.md"), "utf8");
   equal(index.includes(successor.package.requirementId), false, "withdrawn package still listed");
+});
+
+test("看板索引被删之后认领：重建出来的索引是配置的语言，不是英文（L10）", {
+  timeout: 90_000,
+}, async (t) => {
+  const workspace = await fixture(t, "zh-Hans");
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const request = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput(workspace, { confirmation: { confirmedAt: CONFIRMED_AT } }),
+  };
+  const preview = await executeRequirementPublicationRequest(request, { clock });
+  if (preview.kind !== "WakeflowRequirementPublicationPreview" || preview.planDigest === null)
+    throw new Error("Expected ready.");
+  const published = await executeRequirementPublicationRequest(
+    { ...request, mode: "apply", planDigest: preview.planDigest },
+    { clock },
+  );
+  if (published.kind !== "WakeflowRequirementPublicationMutation")
+    throw new Error("Expected a mutation.");
+  const indexPath = path.join(root, ".wakeflow-active/current/board/index.md");
+  equal(readFileSync(indexPath, "utf8").includes("# 需求看板"), true);
+  rmSync(indexPath);
+
+  const applied = await executeDemandCreationRequest({
+    root,
+    mode: "apply",
+    requirementId: published.package.requirementId,
+    demand: { title: "索引重建", goal: "认领之后看索引。", completionDefinition: "索引是中文。" },
+  });
+  if (applied.kind !== "WakeflowDemandCreationMutation") throw new Error("Expected a mutation.");
+  const rebuilt = readFileSync(indexPath, "utf8");
+  equal(
+    rebuilt.includes("# 需求看板"),
+    true,
+    "the rebuilt index is not in the configured language",
+  );
+  equal(rebuilt.includes(published.package.requirementId), true);
 });
 
 test("parked 包激活后被认领：create_demand 根先建后 CAS 认领，回执修订为 3，第二个活动 Demand 被拒", {

@@ -5,11 +5,24 @@
  * 所以那两个用例起一个子进程持锁再 SIGKILL。
  */
 import { deepEqual, equal, rejects, throws } from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  linkSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
+import {
+  issueDurableAtomicFileStageAddress,
+  releaseDurableAtomicFileStageAddress,
+} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { acquireRootedExclusiveFileLock } from "../../src/foundation/filesystem/rooted-exclusive-file-lock.js";
@@ -330,6 +343,36 @@ test("状态文件独占创建、CAS 替换、目录列出与索引重写", asyn
 
 // 旧实现的已验证行为（todo-service："concurrent claim attempts against one exact snapshot allow
 // exactly one commit"、"concurrent appenders serialize"）在新的每包锁加整文件 CAS 上同样成立。
+test("上一个写者死在链接之后：状态文件带着死暂存的第二个链接，第一次替换先结算再读，不被拒（L10）", async (t) => {
+  const root = await fixture(t);
+  await createRequirementClaimStateFile(root, pending());
+  const source = await readRequirementClaimState(root, REQUIREMENT);
+  if (source === null) throw new Error("expected a state");
+  const stateFile = path.join(
+    root.absolutePath,
+    ".wakeflow-active/current/board",
+    `${REQUIREMENT}.json`,
+  );
+  // 死写者留下的那一对：暂存名的属主已经释放，暂存与状态文件是同一个节点的两个链接。
+  const address = issueDurableAtomicFileStageAddress(
+    "create",
+    `.wakeflow-active/current/board/${REQUIREMENT}.json`,
+    computeSha256Digest(readFileSync(stateFile)),
+    0o600,
+  );
+  releaseDurableAtomicFileStageAddress(address);
+  linkSync(stateFile, path.join(path.dirname(stateFile), address.fileName));
+  equal(statSync(stateFile).nlink, 2);
+
+  await replaceRequirementClaimStateFile(
+    root,
+    source,
+    withdrawRequirementClaim(source.state, "x", LATER),
+  );
+  equal(statSync(stateFile).nlink, 1);
+  equal((await readRequirementClaimState(root, REQUIREMENT))?.state.status, "withdrawn");
+});
+
 test("并发：两个 Demand 凭同一快照认领恰有一个成功，同一状态并发创建恰有一个 created（§13.126）", async (t) => {
   const root = await fixture(t);
   const first = pending();

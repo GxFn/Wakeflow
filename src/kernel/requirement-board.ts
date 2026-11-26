@@ -18,6 +18,10 @@ import {
   readDeterministicJsonFile,
 } from "../foundation/filesystem/deterministic-json-file.js";
 import {
+  DurableAtomicFileStageRecoveryError,
+  recoverDurableAtomicFileStagesMatchingTargets,
+} from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
+import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
@@ -561,6 +565,24 @@ export async function createRequirementClaimStateFile(
   });
 }
 
+/**
+ * 先清再读（L10）：上一个写者死在"状态文件已链接、创建暂存还没删"的那一刻，状态文件带着两个链接留下。
+ * 不先结算，替换自己会在写之前退役那份暂存，链接数从 2 变 1，它刚读到的期望于是对不上，第一次替换必然
+ * 以 `claim-state-changed` 被拒。结算不了（属主说不清、目录读不出）就照旧往下走，由替换自己报出来。
+ */
+async function settleDeadClaimStateStages(
+  root: RootedDirectory,
+  ref: PortableResourcePath,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  try {
+    await recoverDurableAtomicFileStagesMatchingTargets(root, [ref], signalOptions(signal));
+  } catch (error: unknown) {
+    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
+    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+  }
+}
+
 /** 带期望的整文件替换：期望不再成立即并发冲突，调用方重读后重决定。 */
 export async function replaceRequirementClaimStateFile(
   root: RootedDirectory,
@@ -573,6 +595,7 @@ export async function replaceRequirementClaimStateFile(
   }
   const ref = requirementClaimStateRef(next.requirementId);
   await withClaimStateLock(root, next.requirementId, signal, async () => {
+    await settleDeadClaimStateStages(root, ref, signal);
     // 锁内重读：期望摘要仍是当前摘要才替换，先到的写者让后到者看到漂移。
     const current = await readSource(root, ref, signal);
     if (current === null || current.digest !== expected.digest) {

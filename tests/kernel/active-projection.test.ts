@@ -672,6 +672,36 @@ test("恢复：失活的锁与同目录的工作区索引暂存残留一起退�
   equal(existsSync(absolute(root, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF)), true);
 });
 
+test("恢复：同一个目录里后一页留着死写者的暂存，前一页的结算不被它挡住（L10）", async (t) => {
+  const root = await fixture(t);
+  await materializeActiveLayout(root, { recovering: false });
+  const files = renderActiveProjectionFiles(facts());
+  equal((await publishActiveProjection(root, files)).disposition, "created");
+
+  // 找同一个目录里的两页，给排在后面的那一页摆一份死写者的暂存。
+  const directoryOf = (ref: PortableResourcePath) => ref.slice(0, ref.lastIndexOf("/"));
+  const later = files.find((entry, index) =>
+    files
+      .slice(0, index)
+      .some((earlier) => directoryOf(earlier.resourcePath) === directoryOf(entry.resourcePath)),
+  );
+  if (later === undefined) throw new Error("expected two pages in one directory");
+  const partial = encodeUtf8("partial");
+  const address = issueDurableAtomicFileStageAddress(
+    "replace",
+    later.resourcePath,
+    computeSha256Digest(partial),
+    0o600,
+  );
+  const stageRef = durableAtomicFileStageRefForTest(later.resourcePath, address);
+  writeFileSync(absolute(root, stageRef), partial, { mode: 0o600 });
+  releaseDurableAtomicFileStageAddress(address);
+
+  const receipt = await publishActiveProjection(root, files, { recovering: true });
+  equal(receipt.disposition, "current");
+  equal(existsSync(absolute(root, stageRef)), false, "the later page's dead stage is retired");
+});
+
 test("状态页：已接受分支段只声称投影真看得到的东西（§13.94 D5：投影作用域没有仓库指针）", () => {
   const unmergedAccepted = [
     {

@@ -71,24 +71,22 @@ import type { RootedResourceParentHandle } from "./rooted-resource-parent-handle
  * 所以创建在三处报 `target-exists` 之前（第一次与第二次“目标不存在”检查、链接的 `EEXIST`）
  * 各先同步一次目标的父目录：目录同步让此前该目录里的全部目录项变化落盘，含对方的链接，而对方
  * 在链接之前已经同步过暂存内容。这次同步只在本次写入自己的有效级别会同步父目录时发生（`fsync`），
- * `content-only`、`none` 与 `none` 的根都不同步，那里的 `target-exists` 只说明“名字在”。保证的
- * 范围只是目标自己的父目录、且只对链接之前同步过内容的目标（`fsync` 与 `content-only` 的写入者）
- * 成立，不涉及任何祖先目录的目录项。这次同步失败时调用方拿不到 `target-exists`：同步调用失败报
- * `durability-failure`，同步前后父目录身份变了报 `parent-changed`，两者都按失败处理（读作成功的
- * 调用方因此报错重试；`fsync` 级别的锁在竞争窗口里会报获取失败而不是“被占用”）。成功路径不多同步：
+ * `none` 与 `none` 的根都不同步，那里的 `target-exists` 只说明“名字在”。保证的范围只是目标自己的
+ * 父目录、且只对链接之前同步过内容的目标（`fsync` 的写入者）成立，不涉及任何祖先目录的目录项。
+ * 这次同步失败时调用方拿不到 `target-exists`：同步调用失败报 `durability-failure`，同步前后父目录
+ * 身份变了报 `parent-changed`，两者都按失败处理（读作成功的调用方因此报错重试）。成功路径不多同步：
  * 上面的三次与两次不变。
  *
  * 是否真正执行 `fsync` 的权威是根的持久化级别：`root.durability` 为 `none` 时，
- * 经由该根的创建与替换都不同步。创建的逐次选项 `durability` 只能往下收：`content-only`
- * 在链接之前同步暂存内容、一次父目录都不同步（恰好一次，供能自行退役的锁与租约使用），
- * `none` 一次都不同步（供可重建的派生检查点使用）；两者取更弱的一档，逐次选项无法把一个
- * `none` 的根抬回 `fsync`。替换没有逐次选项（档表第 0 节：锁不替换），永远按 `fsync` 请求、
- * 只由根收窄。上面"旁边没有暂存的目标已经同步过目录项"的不变量只对 `fsync` 级别成立。
+ * 经由该根的创建与替换都不同步。创建的逐次选项 `durability` 只能往下收：`none` 一次都不同步
+ * （供可重建的派生检查点使用）；两者取更弱的一档，逐次选项无法把一个 `none` 的根抬回 `fsync`。
+ * 替换没有逐次选项，永远按 `fsync` 请求、只由根收窄。上面"旁边没有暂存的目标已经同步过目录项"的
+ * 不变量只对 `fsync` 级别成立。（只同步内容、不同步父目录的中间一档随带属主记录的锁文件一起删掉了，
+ * ADR-0033：它只被锁用过。）
  *
  * 逐次选项只管本次发布协议本身（暂存内容、链接、删暂存前后的父目录同步）。写入之前对同一
- * 目标遗留暂存的恢复不看逐次选项，只跟随根的级别：`fsync` 的根上，即使本次是 `content-only`
- * 或 `none`，退役一个中断留下的暂存仍可能同步一次父目录；上面"恰好一次"与"零次"的计数只在
- * 旁边没有可退役的遗留暂存时成立。
+ * 目标遗留暂存的恢复不看逐次选项，只跟随根的级别：`fsync` 的根上，即使本次是 `none`，退役一个
+ * 中断留下的暂存仍可能同步一次父目录；上面"零次"的计数只在旁边没有可退役的遗留暂存时成立。
  *
  * 失败时本次自己的暂存（尚未提交）会被删掉并同步父目录。清理再失败时，主错误优先（例如替换在
  * 暂存写好之后才发现预期已过时，调用方仍看到 `expectation-changed`）；唯一的例外是主错误为
@@ -159,9 +157,8 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
   expected: Readonly<DurableAtomicFileExpectation> | null,
   requested: DurableAtomicFileDurability,
 ): Promise<Readonly<DurableAtomicFileWriteResult<Publication>>> {
-  const durability: DurableAtomicFileDurability = root.durability === "none" ? "none" : requested;
-  const syncContent = durability !== "none";
-  const syncParent = durability === "fsync";
+  // 暂存内容与父目录要么都同步、要么都不同步；根为 `none` 时逐次选项抬不回来。
+  const syncParent = root.durability !== "none" && requested === "fsync";
   const parent = await openDurableAtomicFileTargetParent(root, resourcePath);
   let openStage: Readonly<OpenDurableAtomicFileStage> | undefined;
   let stage: Readonly<PreparedDurableAtomicFileStage> | undefined;
@@ -187,7 +184,7 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
       mode,
     );
     stagePathOwned = true;
-    stage = await prepareDurableAtomicFileStage(openStage, input, mode, signal, syncContent);
+    stage = await prepareDurableAtomicFileStage(openStage, input, mode, signal, syncParent);
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
     assertDurableAtomicFileNotAborted(signal);

@@ -52,7 +52,7 @@ import { countFsyncs } from "./fsync-count-probe.js";
  * `rename`）、父目录同步落在发布之后（创建两次同步时目标都在、暂存先在后删；替换同步时已经重命名）。
  *
  * 深审之后的几条也钉在这里：`fsync` 级别报 `target-exists` 之前先同步一次父目录（三处：第一次与
- * 第二次“目标不存在”检查、链接的 `EEXIST`），`content-only`、`none` 与 `none` 的根不同步，这次同步
+ * 第二次“目标不存在”检查、链接的 `EEXIST`），`none` 与 `none` 的根不同步，这次同步
  * 失败时调用方拿不到 `target-exists`；主错误是 `target-exists` 时暂存清理失败要浮上来；替换没有逐次
  * `durability`；过时的替换预期在建暂存之前的一次 `lstat` 预检里失败、磁盘上什么都不留，预检时父目录
  * 已被换走则报 `parent-changed`；内容同步、父目录同步与暂存句柄关闭的失败路径。
@@ -312,7 +312,7 @@ test("替换没有逐次 durability：带这个键就是非法输入，替换只
     const expected = await readStableFileDigest(durableRoot, resourcePath, {
       maximumBytes: parseByteCount(1024),
     });
-    for (const durability of ["fsync", "content-only", "none", "bogus"]) {
+    for (const durability of ["fsync", "none", "bogus"]) {
       await expectAtomicWriteError(
         () =>
           replaceFileAtomically(
@@ -351,7 +351,7 @@ test("替换没有逐次 durability：带这个键就是非法输入，替换只
   }
 });
 
-test("创建的逐次 durability：content-only 恰好一次内容同步、零次父目录同步，none 级别的根一次都不同步", {
+test("创建的逐次 durability：none 一次都不同步，none 级别的根上任何取值都不同步", {
   concurrency: false,
 }, async (t) => {
   const durablePath = mkdtempSync(
@@ -371,24 +371,9 @@ test("创建的逐次 durability：content-only 恰好一次内容同步、零�
     durability: "none",
   });
   const bytes = Buffer.from("create-level\n", "utf8");
-  const levels = [undefined, "fsync", "content-only", "none"] as const;
+  const levels = [undefined, "fsync", "none"] as const;
 
   try {
-    // 那一次内容同步必须先于建立目标的硬链接：链接之后才同步，断电时目标可能指向一个
-    // 内容尚未落盘的节点。
-    const contentOnly = await countFsyncsWithPublicationOrder(t, durablePath, "link", () =>
-      createFileAtomically(durableRoot, parsePortableResourcePath("content-only"), bytes, {
-        mode: 0o600,
-        durability: "content-only",
-      }),
-    );
-    equal(contentOnly.syncCount, 1);
-    equal(contentOnly.directorySyncCount, 0);
-    deepEqual(contentOnly.syncsAtPublication, [1]);
-    equal(contentOnly.result.publication, "created");
-    deepEqual(readFileSync(path.join(durablePath, "content-only")), bytes);
-    deepEqual(directoryNames(durablePath), []);
-
     const perCallNone = await countFsyncs(() =>
       createFileAtomically(durableRoot, parsePortableResourcePath("none"), bytes, {
         mode: 0o600,
@@ -696,7 +681,7 @@ test("第二次“目标不存在”检查与链接的 EEXIST：报 target-exist
   }
 });
 
-test("报 target-exists 之前的父目录同步只跟随本次写入的有效级别：content-only、none 与 none 的根一次都不同步", {
+test("报 target-exists 之前的父目录同步只跟随本次写入的有效级别：none 与 none 的根一次都不同步", {
   concurrency: false,
 }, async (t) => {
   const durablePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-existing-level-fsync-"));
@@ -714,7 +699,7 @@ test("报 target-exists 之前的父目录同步只跟随本次写入的有效�
     durability: "none",
   });
   const resourcePath = parsePortableResourcePath("state");
-  const levels = [undefined, "fsync", "content-only", "none"] as const;
+  const levels = [undefined, "fsync", "none"] as const;
 
   function createCountingSyncs(
     root: RootedDirectory,
@@ -737,7 +722,6 @@ test("报 target-exists 之前的父目录同步只跟随本次写入的有效�
     const expectedOnDurableRoot = [
       [undefined, 1],
       ["fsync", 1],
-      ["content-only", 0],
       ["none", 0],
     ] as const;
     for (const [durability, directorySyncCount] of expectedOnDurableRoot) {
@@ -1453,6 +1437,8 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       [{}, "$options"],
       [{ mode: 0o600, extra: true }, "$options"],
       [{ mode: 0o600, durability: "bogus" }, "$options.durability"],
+      // 只同步内容的中间一档随锁文件一起删掉了（ADR-0033），不再是合法取值。
+      [{ mode: 0o600, durability: "content-only" }, "$options.durability"],
       [{ mode: -1 }, "$options.mode"],
       [{ mode: 0o1000 }, "$options.mode"],
       [{ mode: 0o600, signal: {} }, "$options.signal"],

@@ -6955,6 +6955,8 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - `refusals:build` 已重新生成参考：`operation-scope-release-failure` 消失，`maintenance-busy` 归入可重试的并发冲突。
 - **`build:artifacts:committed` 被自动模式的分类器拒绝，没有绕过。** `plugins/` 仍是 `d9b75a1f` 的字节，所以这次提交之后 `build:check`（也就是 `wf handoff` 与整门）是红的，等用户放行之后重建并单独提交。提交的制品上的 `tests/artifacts` 与 `smoke:artifacts` 也等那时再跑。
 
-**还没做的。** `createFileAtomically` 的 `content-only` 一档已经没有调用方，下一小批删；ADR "证明"第 3 条的 tmux 杀进程演练放在这一版收尾的现场一轮里（先于整门）；活动投影每次刷新先结算一次暂存的开销没有量。
+**补记（同日，接着的一个提交）。** `createFileAtomically` 的 `content-only` 一档删掉：它只被旧的锁用过。逐次选项只剩 `fsync` 与 `none`，写入里的两个开关合成一个；传 `content-only` 现在是非法输入，有测试。第 0 档 218 个测试文件 1,194/1,194。
+
+**还没做的。** ADR "证明"第 3 条的 tmux 杀进程演练放在这一版收尾的现场一轮里（先于整门）；活动投影每次刷新先结算一次暂存的开销没有量。
 
 **结论：十二把锁都由内核管，持有者死掉什么都不留下；L10 里 9 条随之消失；从 1.4.3 更新的路径有了一条走得通的、被测试钉住的路。**

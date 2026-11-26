@@ -133,13 +133,6 @@ const ROWS: readonly CountRow[] = [
       createDirectoryAtomically(root, parsePortableResourcePath("state/fresh"), { mode: 0o700 }),
   },
   {
-    name: "atomic create content-only (light lock file)",
-    syncCount: 1,
-    directorySyncCount: 0,
-    run: async (root) => () =>
-      createFileAtomically(root, FILE, BYTES, { mode: 0o600, durability: "content-only" }),
-  },
-  {
     name: "exact unlink none (best-effort deletions that were unsynced before 1.4.1)",
     syncCount: 0,
     directorySyncCount: 0,

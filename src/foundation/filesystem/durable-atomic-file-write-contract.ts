@@ -31,17 +31,15 @@ export const DURABLE_ATOMIC_FILE_MAXIMUM_BYTES = parseByteCount(
 
 /**
  * `fsync`：文件与父目录都同步到持久介质，权威事实必须用它；
- * `content-only`：链接或重命名之前同步暂存内容，不同步父目录——目录项可能在断电后
- * 丢失，但凡是可见的目标都有完整内容，供能自行退役的锁与租约使用；
  * `none`：只保证 rename/link 的原子可见性，不做任何同步，只用于可重建的派生检查点。
  */
-export type DurableAtomicFileDurability = "fsync" | "content-only" | "none";
+export type DurableAtomicFileDurability = "fsync" | "none";
 
 /**
- * 逐次写入的 `durability` 只是“这一条记录放弃部分同步”的窄豁免，
+ * 逐次写入的 `durability` 只是“这一条记录放弃同步”的窄豁免，
  * 不是持久化级别的权威：级别由根决定（见 `rooted-directory.ts`）。
  * 两者取更弱的一档——根为 `none` 时整棵树都不同步，根为 `fsync` 时仍允许
- * 单次创建按记录种类降到 `content-only` 或 `none`。替换没有这个选项。
+ * 单次创建按记录种类降到 `none`。替换没有这个选项。
  */
 export interface DurableAtomicFileCreateOptions {
   readonly mode: number;
@@ -234,7 +232,7 @@ function parseSignal(value: unknown): AbortSignal | undefined {
 
 function parseDurability(value: unknown): DurableAtomicFileDurability {
   if (value === undefined) return "fsync";
-  if (value !== "fsync" && value !== "content-only" && value !== "none") {
+  if (value !== "fsync" && value !== "none") {
     failDurableAtomicFileWrite("input", "$options.durability");
   }
   return value;

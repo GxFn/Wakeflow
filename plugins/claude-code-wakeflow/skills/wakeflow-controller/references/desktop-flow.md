@@ -146,7 +146,7 @@ callback's `user-prompt-submit` record in the Controller session.
   that window. Under the `auto` permission mode the host may still refuse that call (and `unarchive_session`) after the user agreed in the conversation: do not retry or look for another way - ask the user to archive (and, for a restart, restore) that session in the sidebar themselves, then go on from the observation. Archiving stops the process and removes the session from the
   sidebar; `list_sessions` then reports it archived, which Wakeflow
   classifies as absent. Never archive a pod's window while the pod is open:
-  the app takes a clean checkout off its pod branch when it archives the
+  the app can take a clean checkout off its pod branch when it archives the
   session working there, and only that session's next turn puts it back
   (a new `launch` there puts it back too, or refuses when commits were made
   off the branch). Never run `claude rm` on any Wakeflow session - it
@@ -200,8 +200,10 @@ reconcile for the gates it names (`host-settings-assets`, the helper's own
 bytes). If the server has not reloaded after a few turns, ask the user to
 archive and unarchive this Controller session, then message it: that message
 restarts its process on the current artifact (a session whose process already
-ended restarts the same way on its next message, with no archive). Nothing is
-relocated.
+ended restarts the same way on its next message, with no archive). An archived
+session is restored from the app's list of archived sessions; when the user
+cannot find it there, another session of theirs outside this workspace can
+bring it back with `unarchive_session`. Nothing is relocated.
 
 Peer windows that started under the older plugin show `runtime: stale`, and
 `wakeflow_verify` reports them as `windows-refresh-pending:<n>` on a passing

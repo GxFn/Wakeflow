@@ -157,8 +157,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-flow.md",
-      "bytes": 14860,
-      "sha256": "sha256:68300620e00c072ac74428a2bf04d78fa640d143a090089132a51065c2e96058"
+      "bytes": 15066,
+      "sha256": "sha256:5fbe604e34b16a449157ba312cc007ef0c40ec8baa0132d9f7bda9580f357486"
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-transport.md",
@@ -7150,8 +7150,8 @@
     },
     {
       "path": "skills/wakeflow-controller/references/desktop-flow.md",
-      "bytes": 14860,
-      "sha256": "sha256:68300620e00c072ac74428a2bf04d78fa640d143a090089132a51065c2e96058",
+      "bytes": 15066,
+      "sha256": "sha256:5fbe604e34b16a449157ba312cc007ef0c40ec8baa0132d9f7bda9580f357486",
       "mode": "0644",
       "scope": "agent-text"
     },

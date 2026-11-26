@@ -21,6 +21,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { WakeflowError } from "../../kernel/error.js";
+import { settleStagesOfDeadWriters } from "../../kernel/workspace-locks.js";
 import {
   assertDemandOperationConfigCurrent,
   closeDemandOperationAuthorityContext,
@@ -69,6 +70,22 @@ import {
   type StoredManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-store.js";
 import { ownString } from "../../foundation/data/own-string.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
+  MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
+  managedEvidencePublicationStageRef,
+} from "./managed-evidence-resource-paths.js";
+
+/** 还没发布的暂存树里的清单：暂存树里只有它是按"建暂存、链接、删暂存"写的。 */
+function stageManifestRef(evidenceId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${managedEvidencePublicationStageRef(evidenceId)}/${MANAGED_EVIDENCE_MANIFEST_FILE_NAME}`,
+  );
+}
 
 /**
  * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的Application/Recovery。
@@ -679,6 +696,13 @@ export class ManagedEvidencePublicationApplicationService {
     let failure: unknown;
     try {
       roots = await openRecoveryRoots(this.#workspaceRoot, demandId, options.signal);
+      // 先结算再读：上一次记录死在"日志（或暂存树的清单）已链接、创建暂存还没删"的那一刻时，目标带着两个
+      // 链接留下，严格的读取与清点认不出它，这次恢复自己就走不下去（真实进程里量出来的两个点）。
+      await settleStagesOfDeadWriters(
+        roots.demandRoot,
+        [MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF],
+        options.signal,
+      );
       let stored: Readonly<StoredManagedEvidencePublicationTransaction> | null;
       try {
         stored = await loadManagedEvidencePublicationTransaction(
@@ -690,6 +714,13 @@ export class ManagedEvidencePublicationApplicationService {
           mapStoreError(error);
         }
         throw error;
+      }
+      if (stored !== null) {
+        await settleStagesOfDeadWriters(
+          roots.demandRoot,
+          [stageManifestRef(stored.transaction.manifest.evidenceId)],
+          options.signal,
+        );
       }
       if (stored === null) {
         await assertConfigCurrent(this.#workspaceRoot, roots.config, options.signal);

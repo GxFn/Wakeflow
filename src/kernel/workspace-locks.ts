@@ -44,6 +44,8 @@ export const WORKSPACE_LOCK_NAMES = Object.freeze([
   "requirement-board",
   "pod-mutation",
   "demand-publication",
+  /** 证据的记录与它的 recover：recover 不会接手一次还在跑的记录。 */
+  "evidence-publication",
   "ledger-record",
   "window-binding",
   "config-authority",

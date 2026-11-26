@@ -16,7 +16,7 @@ A revision, a claim, a binding or a lock is no longer what the request assumed. 
 - **delivery**: `stream-revision`
 - **demand**: `archive-raced`, `payload-changed`, `publication-<reason>`, `stream-advanced`, `stream-revision`
 - **endpoint**: `binding-changed`, `binding-lock`, `claim-changed`
-- **evidence**: `demand-root-read-source-changed`
+- **evidence**: `demand-root-read-source-changed`, `evidence-lock-<reason>`
 - **kernel**: `claim-state-changed`, `claim-state-exists`, `claim-state-lock-<reason>`, `maintenance-busy`, `operation-scope-<reason>`, `pod-lock-<reason>`
 - **pod**: `config-<reason>`
 - **requirement**: `claim-state-drift`, `ledger-lock`

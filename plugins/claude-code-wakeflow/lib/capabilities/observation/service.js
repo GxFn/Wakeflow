@@ -872,6 +872,7 @@ function nextActionInput(context, runtime, recoveries) {
         // 缺失或过期的窗口运行投影由 reconcile 重建（G5），所以也把下一步指向维护（G6）。
         maintenance: overall === "maintenance" || projectionsNeedRepair(observation),
         hostAssetsNeedRepair: hostAssetsNeedRepair(observation.assets),
+        maintenanceProtocolPending: overall === "maintenance",
         unregisteredWindows: bindingsObserved && podsObserved
             ? snapshot.model.topology.windows
                 .filter((window) => !bound.has(window.windowId))

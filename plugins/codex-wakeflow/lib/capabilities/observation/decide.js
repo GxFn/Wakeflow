@@ -138,7 +138,7 @@ function demandRecoveryActions(recoveries) {
     }));
 }
 /**
- * 顺序：制品过期（用户）> 宿主资产待修（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
+ * 顺序：制品过期（用户）> 宿主资产待修或维护协议不是 idle（维护，先于窗口重启）> 过期窗口（汇总一项，再逐窗口 relaunch / resume）> 维护 >
  * 被打断的 Demand 事务的恢复（按 demandId）> 活动 pod 的未登记窗口 > 活动 Demand 前沿（primary 先，再按
  * demandId）> 待认领需求包 > 权限模式不一致的窗口（排在最后，不抢前沿）；去重，上限 64。
  */
@@ -166,8 +166,9 @@ export function deriveNextActions(input) {
         reason: WORKSPACE_MAINTENANCE_FRONTIER,
         subject: null,
     };
-    if (input.hostAssetsNeedRepair === true)
+    if (input.hostAssetsNeedRepair === true || input.maintenanceProtocolPending === true) {
         actions.push(maintenance);
+    }
     actions.push(...staleWindowActions(input.staleWindows));
     if (input.maintenance)
         actions.push(maintenance);
@@ -746,9 +747,10 @@ export function verifyNext(gates, artifactServerRefreshOwner, recoveries = []) {
             ].slice(0, VERIFY_NEXT_BLOCKERS_MAXIMUM)),
         });
     }
-    // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。
-    const assetsFailing = failing.some((entry) => entry.name === "host-settings-assets");
-    if (!assetsFailing && artifactCodes.some((code) => code.startsWith("windows-stale"))) {
+    // 助手待修时先维护：重启窗口用的就是它（见 `NextActionInput.hostAssetsNeedRepair`）。本地布局不过时
+    // 也先维护：窗口的重新登记这时一律被拒（见 `NextActionInput.maintenanceProtocolPending`）。
+    const maintenanceFirst = failing.some((entry) => entry.name === "host-settings-assets" || entry.name === "local-layout");
+    if (!maintenanceFirst && artifactCodes.some((code) => code.startsWith("windows-stale"))) {
         return Object.freeze({
             frontier: "window-artifact-stale",
             owner: "controller",

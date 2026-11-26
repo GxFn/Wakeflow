@@ -392,6 +392,37 @@ async function concurrentPruneDuringRead(
   equal((await readHostHookObservations(root, "claude-code")).skipped, 0);
 }
 
+test("1.4.2 及之前按记录标识分过片的记录照旧读得到；重试留在原地，新记录写在日目录下（open-items B15）", async (t) => {
+  const { root, path: workspace } = await fixture(t);
+  const written = await writeHostHookObservation(root, observation(workspace, AT(1)));
+  const directory = hooksDirectory(workspace, "claude-code");
+  const dayLevel = path.join(directory, recordName(written));
+  const shard = written.record.recordId.slice(0, 2);
+  const sharded = path.join(path.dirname(dayLevel), shard, path.basename(dayLevel));
+  mkdirSync(path.dirname(sharded), { mode: 0o700 });
+  renameSync(dayLevel, sharded);
+
+  const all = await readHostHookObservations(root, "claude-code");
+  deepEqual(
+    all.records.map((record) => record.recordId),
+    [written.record.recordId],
+  );
+  equal(all.skipped, 0);
+  const one = await readHostHookObservationRecord(root, "claude-code", written.record.recordId);
+  equal(one?.record.recordId, written.record.recordId);
+
+  const again = await writeHostHookObservation(root, observation(workspace, AT(1)));
+  equal(again.disposition, "current");
+  equal(existsSync(dayLevel), false, "a retry must not write a second copy");
+  const next = await writeHostHookObservation(root, observation(workspace, AT(2)));
+  const day = path.basename(path.dirname(dayLevel));
+  deepEqual(
+    hookEntries(directory),
+    [`${day}/${shard}/${path.basename(dayLevel)}`, recordName(next)].sort(),
+  );
+  equal((await readHostHookObservations(root, "claude-code")).records.length, 2);
+});
+
 test("制品 manifest 摘要是后加的可选键：旧记录没有它读成 null，新记录原样往返（§13.127）", async (t) => {
   const { root, path: workspace } = await fixture(t);
   const artifact = `sha256:${"c".repeat(64)}` as Sha256Digest;

@@ -168,6 +168,62 @@ test("expectedNode binds the read to one exact previously observed version", asy
   }
 });
 
+test("a listed entry is read by handle: no path check, and the handle must be the listed node（open-items B15）", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-listed-"));
+  const physicalPath = path.join(rootPath, "record.json");
+  writeFileSync(physicalPath, "listed\n");
+  mkdirSync(path.join(rootPath, "sub"));
+  writeFileSync(path.join(rootPath, "sub", "record.json"), "listed\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const resourcePath = parsePortableResourcePath("record.json");
+    const maximumBytes = parseByteCount(1024);
+    const listed = await readStableFileDigest(root, resourcePath, { maximumBytes });
+    const options = { maximumBytes, expectedNode: listed.node, listed: true } as const;
+    const read = await readStableFile(root, resourcePath, options);
+    deepEqual(Buffer.from(read.bytes), Buffer.from("listed\n"));
+    equal(read.digest, listed.digest);
+    deepEqual(read.node, listed.node);
+
+    // 列出来的节点是这种读法的起点；名字只能是这个目录里的一段。
+    await expectStableFileReadError(
+      () => readStableFile(root, resourcePath, asOptions({ maximumBytes, listed: true })),
+      "input",
+      "$options.listed",
+    );
+    await expectStableFileReadError(
+      () => readStableFile(root, parsePortableResourcePath("sub/record.json"), options),
+      "input",
+      "$resourcePath",
+    );
+
+    // 名字下面换了内容：句柄不是列出来的那个节点。
+    writeFileSync(physicalPath, "replaced-version\n");
+    await expectStableFileReadError(
+      () => readStableFile(root, resourcePath, options),
+      "expectation-changed",
+      "$resourcePath",
+    );
+
+    // 列出来之后被删掉：报不在；换成符号链接：不跟随。
+    rmSync(physicalPath);
+    await expectStableFileReadError(
+      () => readStableFile(root, resourcePath, options),
+      "not-found",
+      "$resourcePath",
+    );
+    symlinkSync(path.join(rootPath, "sub", "record.json"), physicalPath);
+    await expectStableFileReadError(
+      () => readStableFile(root, resourcePath, options),
+      "source-changed",
+      "$resourcePath",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
 test("directories and symlinks are classified without reading their targets", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-types-"));
   mkdirSync(path.join(rootPath, "directory"));

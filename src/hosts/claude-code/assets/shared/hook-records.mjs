@@ -8,8 +8,9 @@ import { HOOKS, MAX_RECORD_BYTES, ROOT, readBoundedJson } from "./workspace.mjs"
 export const HOOK_POLL_MS = 500;
 export const DEFAULT_LANDING_WAIT_SECONDS = 3;
 
-// Hook history is either flat v1 or UTC-day/digest-prefix partitions. Stream
-// names so unrelated stop records never consume a lookup's in-memory capacity.
+// Hook history is flat v1, files under a UTC-day directory (written since 1.4.3), or the
+// UTC-day/digest-prefix partitions written before that. Stream names so unrelated stop
+// records never consume a lookup's in-memory capacity.
 /**
  * @param {string} event
  * @param {string} [relative]

@@ -1,6 +1,7 @@
 import { constants as bufferConstants } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
+import { join as joinPath } from "node:path";
 import { types } from "node:util";
 import type { Sha256Digest } from "../crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
@@ -41,6 +42,13 @@ const STABLE_FILE_READ_CHUNK_BYTES = 512 * 1024;
 export interface StableFileReadOptions {
   readonly maximumBytes: ByteCount;
   readonly expectedNode?: Readonly<FileNodeSnapshot>;
+  /**
+   * 调用方刚在 `root` 这个目录里列出了这一项，`expectedNode` 就是列目录时看到的节点，`resourcePath` 是它的
+   * 名字（一段）：不再对这个名字读前读后各核对一次路径，直接不跟随符号链接地打开，在句柄上核对它就是列出来
+   * 的那个文件，读完再核对句柄没有变（1.4.3，open-items B15）。目录本身由调用方在这一批读取前后各核对一次。
+   * 不再发现的：读的过程中这个名字被换成别的文件或被删掉——读到的仍是列目录时那个文件的完整内容。
+   */
+  readonly listed?: true;
   readonly signal?: AbortSignal;
 }
 
@@ -108,6 +116,7 @@ export class StableFileReadError extends Error {
 interface ParsedStableFileReadOptions {
   readonly maximumBytes: ByteCount;
   readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
+  readonly listed: boolean;
   readonly signal: AbortSignal | undefined;
 }
 
@@ -152,7 +161,7 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
     if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
     throw error;
   }
-  const allowed = new Set(["expectedNode", "maximumBytes", "signal"]);
+  const allowed = new Set(["expectedNode", "listed", "maximumBytes", "signal"]);
   if (
     !Object.hasOwn(record, "maximumBytes") ||
     Object.keys(record).some((key) => !allowed.has(key))
@@ -172,9 +181,14 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
   if (record.signal !== undefined && !isAbortSignal(record.signal)) {
     fail("input", "$options.signal");
   }
+  const expectedNode = parseExpectedNode(record.expectedNode);
+  if (record.listed !== undefined && (record.listed !== true || expectedNode === undefined)) {
+    fail("input", "$options.listed");
+  }
   return Object.freeze({
     maximumBytes,
-    expectedNode: parseExpectedNode(record.expectedNode),
+    expectedNode,
+    listed: record.listed === true,
     signal: record.signal,
   });
 }
@@ -227,9 +241,21 @@ async function inspectFinalResource(
   }
 }
 
-function assertRegularFile(resource: Readonly<RootedResourceSnapshot>): void {
-  if (resource.node.kind === "symbolic-link") fail("symlink", "$resourcePath");
-  if (resource.node.kind !== "file") fail("not-file", "$resourcePath");
+function assertRegularFile(node: Readonly<FileNodeSnapshot>): void {
+  if (node.kind === "symbolic-link") fail("symlink", "$resourcePath");
+  if (node.kind !== "file") fail("not-file", "$resourcePath");
+}
+
+/** `listed` 的读取以列目录时看到的节点为起点；`parseOptions` 已保证它在。 */
+function listedNodeOf(parsed: Readonly<ParsedStableFileReadOptions>): Readonly<FileNodeSnapshot> {
+  if (parsed.expectedNode === undefined) fail("input", "$options.listed");
+  return parsed.expectedNode;
+}
+
+/** 列出来的那一项在 `root` 目录里的物理路径：名字只能是一段，不经路径核对。 */
+function listedPhysicalPath(root: RootedDirectory, resourcePath: PortableResourcePath): string {
+  if (resourcePath.includes("/")) fail("input", "$resourcePath");
+  return joinPath(root.absolutePath, resourcePath);
 }
 
 function assertExpectedNode(
@@ -272,10 +298,14 @@ function requiredOpenFlags(): number {
   return fileSystemConstants.O_RDONLY | noFollow | nonBlocking;
 }
 
-async function openStableFile(initial: Readonly<RootedResourceSnapshot>): Promise<FileHandle> {
+async function openStableFile(physicalPath: string, listed: boolean): Promise<FileHandle> {
   try {
-    return await openFileHandle(initial.physicalPath, requiredOpenFlags());
+    return await openFileHandle(physicalPath, requiredOpenFlags());
   } catch (error: unknown) {
+    // 列出来之后、打开之前被删掉的一项：没有读前的路径核对替它报"不在"，在这里报。
+    if (listed && readNodeSystemErrorCode(error) === "ENOENT") {
+      fail("not-found", "$resourcePath", error);
+    }
     const code = readNodeSystemErrorCode(error);
     if (code === "ELOOP" || code === "ENOENT" || code === "ENOTDIR") {
       fail("source-changed", "$resourcePath", error);
@@ -380,41 +410,46 @@ async function readStableFileVersion(
   const parsed = parseOptions(options);
   assertNotAborted(parsed.signal);
 
-  const initial = await inspectInitialResource(root, resourcePath);
-  assertRegularFile(initial);
-  assertExpectedNode(initial.node, parsed.expectedNode);
-  assertWithinMaximum(initial.node.byteCount, parsed.maximumBytes);
-  if (mode === "bytes" && initial.node.byteCount > bufferConstants.MAX_LENGTH) {
+  const initial = parsed.listed ? null : await inspectInitialResource(root, resourcePath);
+  const initialNode = initial === null ? listedNodeOf(parsed) : initial.node;
+  assertRegularFile(initialNode);
+  if (initial !== null) assertExpectedNode(initial.node, parsed.expectedNode);
+  assertWithinMaximum(initialNode.byteCount, parsed.maximumBytes);
+  if (mode === "bytes" && initialNode.byteCount > bufferConstants.MAX_LENGTH) {
     fail("too-large", "$resourcePath");
   }
 
-  const handle = await openStableFile(initial);
+  const handle = await openStableFile(
+    initial === null ? listedPhysicalPath(root, resourcePath) : initial.physicalPath,
+    initial === null,
+  );
   let primaryError: unknown;
   let result: Readonly<InternalStableFileReadResult> | undefined;
   try {
     const opened = await snapshotOpenedFile(handle);
-    if (opened.kind !== "file" || !sameFileNodeSnapshot(initial.node, opened)) {
-      fail("source-changed", "$resourcePath");
+    if (opened.kind !== "file" || !sameFileNodeSnapshot(initialNode, opened)) {
+      fail(initial === null ? "expectation-changed" : "source-changed", "$resourcePath");
     }
     assertWithinMaximum(opened.byteCount, parsed.maximumBytes);
 
     const capture = createCapture(mode, opened.byteCount);
     const read = await readExactFile(handle, opened.byteCount, capture, parsed.signal);
     const afterHandle = await snapshotOpenedFile(handle);
-    const afterPath = await inspectFinalResource(root, resourcePath);
-    if (
-      afterPath.node.kind !== "file" ||
-      !sameFileNodeSnapshot(opened, afterHandle) ||
-      !sameFileNodeSnapshot(afterHandle, afterPath.node)
-    ) {
-      fail("source-changed", "$resourcePath");
+    if (!sameFileNodeSnapshot(opened, afterHandle)) fail("source-changed", "$resourcePath");
+    let finalNode = afterHandle;
+    if (initial !== null) {
+      const afterPath = await inspectFinalResource(root, resourcePath);
+      if (afterPath.node.kind !== "file" || !sameFileNodeSnapshot(afterHandle, afterPath.node)) {
+        fail("source-changed", "$resourcePath");
+      }
+      finalNode = afterPath.node;
     }
     assertNotAborted(parsed.signal);
 
     result = Object.freeze({
       resourcePath,
-      node: afterPath.node,
-      byteCount: afterPath.node.byteCount,
+      node: finalNode,
+      byteCount: finalNode.byteCount,
       digest: read.digest,
       bytes: read.bytes,
     });

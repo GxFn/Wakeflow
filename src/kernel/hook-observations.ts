@@ -47,6 +47,7 @@ import { fail } from "./error.js";
 import {
   HOST_HOOK_FILE_NAME_PATTERN as FILE_NAME_PATTERN,
   partitionedHostHookRef,
+  shardedHostHookRef,
   visitHostHookDirectory,
 } from "./hook-observation-directory.js";
 import { hostHookObservationsRootRef, parseWakeflowHostId } from "./layout.js";
@@ -577,6 +578,16 @@ function legacyHostHookObservationRef(record: Readonly<HostHookObservation>): Po
   );
 }
 
+/** 一条记录可能在的三个位置：现在写的日目录、此前的分片、最早的平铺。 */
+function recordRefs(record: Readonly<HostHookObservation>): readonly PortableResourcePath[] {
+  const fileName = hostHookObservationFileName(record);
+  return [
+    partitionedHostHookRef(record.hostId, fileName),
+    shardedHostHookRef(record.hostId, fileName),
+    legacyHostHookObservationRef(record),
+  ];
+}
+
 export interface WriteHostHookObservationReceipt {
   readonly record: Readonly<HostHookObservation>;
   readonly resourceRef: PortableResourcePath;
@@ -652,7 +663,8 @@ function recognizedRecordLocation(
 ): boolean {
   return (
     entry.resourcePath === `${hostHookObservationsRootRef(hostId)}/${entry.name}` ||
-    entry.resourcePath === partitionedHostHookRef(hostId, entry.name)
+    entry.resourcePath === partitionedHostHookRef(hostId, entry.name) ||
+    entry.resourcePath === shardedHostHookRef(hostId, entry.name)
   );
 }
 
@@ -723,8 +735,8 @@ async function removeEmptiedHookDirectory(
 
 /**
  * 保留期修剪（§13.97 D7b，§13.161 重写）：基准由 `newestOtherRecordCompact` 钳住，截止日之前的
- * 日目录整个过期，只走它们、根层的旧平铺文件，以及本条记录所在的分片（退休写入器留在那里的
- * 暂存文件）；不再逐日走全部历史，所以 4096 个叶子的检查预算只花在能退役的条目上，积压随后续
+ * 日目录整个过期，只走它们、根层的旧平铺文件，以及本条记录所在的日目录自己那一层（退休写入器
+ * 留在那里的暂存文件；当天旧布局的分片不进，随那一天过期再清）；不再逐日走全部历史，所以 4096 个叶子的检查预算只花在能退役的条目上，积压随后续
  * 写入逐次清完。清空的分片与日目录随手 rmdir，目录数不再随历史无限增长（H2-02）。
  */
 async function pruneExpiredHostHookObservations(
@@ -743,7 +755,6 @@ async function pruneExpiredHostHookObservations(
       newestOther === null ? null : retentionCutoffCompact(record.recordedAt, newestOther);
     const cutoffDay = cutoff === null ? null : cutoff.slice(0, 8);
     const writtenDay = compactInstant(record.recordedAt).slice(0, 8);
-    const writtenShard = record.recordId.slice(0, 2);
     const candidates: Readonly<StableDirectoryEntry>[] = [];
     const emptiable: {
       readonly entry: Readonly<StableDirectoryEntry>;
@@ -765,7 +776,7 @@ async function pruneExpiredHostHookObservations(
         {
           ...signal,
           selectDay: (day) => (cutoffDay !== null && day < cutoffDay) || day === writtenDay,
-          selectShard: (day, shard) => day !== writtenDay || shard === writtenShard,
+          selectShard: (day) => day !== writtenDay,
           onDirectory: (entry, kind) => {
             // 只有截止日之前、整个过期的日目录才值得回收；本条记录自己的那天不动。
             if (entry.name !== writtenDay && !entry.resourcePath.includes(`/${writtenDay}/`)) {
@@ -840,6 +851,26 @@ async function createHostHookObservationFile(
   }
 }
 
+/** 这条记录已经在更早的布局里时它所在的位置：重试留在原地，不迁移、不另写一份。 */
+async function earlierLayoutRecordRef(
+  root: RootedDirectory,
+  record: Readonly<HostHookObservation>,
+): Promise<PortableResourcePath | null> {
+  for (const earlierRef of [
+    legacyHostHookObservationRef(record),
+    shardedHostHookRef(record.hostId, hostHookObservationFileName(record)),
+  ]) {
+    try {
+      await root.inspectExistingResource(earlierRef, "$record");
+      return earlierRef;
+    } catch (error: unknown) {
+      if (!(error instanceof RootedDirectoryError) || error.reason !== "resource-not-found")
+        throw error;
+    }
+  }
+  return null;
+}
+
 /**
  * 写入一条记录：同一事实重复写入返回 `current`，同名不同内容拒绝。只有新落地一条记录（`created`）
  * 才按龄修剪同一宿主目录（§13.97 D7b）——`current` 没有新证据落地，修剪不会有新结果，而 hook 事件
@@ -851,18 +882,11 @@ export async function writeHostHookObservation(
   options: { readonly signal?: AbortSignal } = {},
 ): Promise<Readonly<WriteHostHookObservationReceipt>> {
   const record = createHostHookObservation(input);
-  let resourceRef = partitionedHostHookRef(record.hostId, hostHookObservationFileName(record));
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   const document = renderHostHookObservation(record);
-  // A retry of a legacy observation stays in place; no migration or duplicate copy.
-  const legacyRef = legacyHostHookObservationRef(record);
-  try {
-    await root.inspectExistingResource(legacyRef, "$record");
-    resourceRef = legacyRef;
-  } catch (error: unknown) {
-    if (!(error instanceof RootedDirectoryError) || error.reason !== "resource-not-found")
-      throw error;
-  }
+  const resourceRef =
+    (await earlierLayoutRecordRef(root, record)) ??
+    partitionedHostHookRef(record.hostId, hostHookObservationFileName(record));
   try {
     const existing = await readDeterministicJsonFile(root, resourceRef, {
       maximumBytes: RECORD_MAXIMUM_BYTES,
@@ -949,27 +973,29 @@ async function readCandidateRecord(
 ): Promise<Readonly<HostHookObservation> | typeof VANISHED | null> {
   let record: Readonly<HostHookObservation>;
   try {
-    const read = await readDeterministicJsonFile(
-      readRoot,
+    // 在已经核对过的目录里读它列出来的记录：按句柄读，不再逐条核对路径（1.4.3，open-items B15）。
+    const read =
       readRoot === root
-        ? candidate.entry.resourcePath
-        : parsePortableResourcePath(candidate.entry.name),
-      {
-        maximumBytes: RECORD_MAXIMUM_BYTES,
-        expectedNode: candidate.entry.node,
-        ...signal,
-      },
-    );
+        ? await readDeterministicJsonFile(root, candidate.entry.resourcePath, {
+            maximumBytes: RECORD_MAXIMUM_BYTES,
+            expectedNode: candidate.entry.node,
+            ...signal,
+          })
+        : await readDeterministicJsonFile(
+            readRoot,
+            parsePortableResourcePath(candidate.entry.name),
+            {
+              maximumBytes: RECORD_MAXIMUM_BYTES,
+              expectedNode: candidate.entry.node,
+              listed: true,
+              ...signal,
+            },
+          );
     record = parseHostHookObservation(parseDeterministicJsonDocument(read.text, "$record"));
   } catch (error: unknown) {
     return (await candidateVanished(root, candidate, error)) ? VANISHED : null;
   }
-  if (
-    record.hostId !== hostId ||
-    (legacyHostHookObservationRef(record) !== candidate.entry.resourcePath &&
-      partitionedHostHookRef(hostId, hostHookObservationFileName(record)) !==
-        candidate.entry.resourcePath)
-  ) {
+  if (record.hostId !== hostId || !recordRefs(record).includes(candidate.entry.resourcePath)) {
     return null;
   }
   return record;
@@ -1145,6 +1171,12 @@ function tallyScanOutcome(
   if (outcome === STAGE_RESIDUE_FILE || outcome === STAGE_RESIDUE_NODE) counts.stageResidue += 1;
 }
 
+/**
+ * 一批读多少条：同一个目录里的一批共用一次目录核对（读前读后各一次），批越大核对越少。记录写在日目录下
+ * 之后一个目录里有上百条，8 条一批时目录核对占了剩下路径核对的两成（1.4.3，open-items B15）。
+ */
+const SCAN_BATCH_ENTRIES = 32;
+
 async function scanObservations(
   root: RootedDirectory,
   hostIdValue: WakeflowHostId,
@@ -1176,7 +1208,7 @@ async function scanObservations(
           if (onListed !== null) await onListed();
         }
         pending.push(entry);
-        if (pending.length >= 8) await flush();
+        if (pending.length >= SCAN_BATCH_ENTRIES) await flush();
       },
       {
         ...signal,
@@ -1400,10 +1432,7 @@ export async function readHostHookObservationRecord(
   );
   if (found === null) return null;
   const record: Readonly<HostHookObservation> = found;
-  for (const ref of [
-    legacyHostHookObservationRef(record),
-    partitionedHostHookRef(hostId, hostHookObservationFileName(record)),
-  ]) {
+  for (const ref of recordRefs(record)) {
     try {
       const read = await readDeterministicJsonFile(root, ref, {
         maximumBytes: RECORD_MAXIMUM_BYTES,

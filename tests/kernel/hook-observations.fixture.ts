@@ -74,7 +74,7 @@ export function observation(
 }
 
 export function recordName(receipt: Awaited<ReturnType<typeof writeHostHookObservation>>): string {
-  return `${compact(receipt.record.recordedAt).slice(0, 8)}/${receipt.record.recordId.slice(0, 2)}/${compact(receipt.record.recordedAt)}-${receipt.record.event}-${receipt.record.recordId}.json`;
+  return `${compact(receipt.record.recordedAt).slice(0, 8)}/${compact(receipt.record.recordedAt)}-${receipt.record.event}-${receipt.record.recordId}.json`;
 }
 
 /**

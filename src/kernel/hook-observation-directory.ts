@@ -22,11 +22,25 @@ import { hostHookObservationsRootRef } from "./layout.js";
 export const HOST_HOOK_FILE_NAME_PATTERN =
   /^(\d{8}T\d{9}Z)-(session-start|user-prompt-submit|stop|session-end|turn-complete|notification)-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
 
-/** New files partition by UTC day and record digest prefix; old flat files stay readable. */
+/**
+ * 新记录写在按 UTC 日分的目录下（1.4.3，open-items B15）。此前还按记录标识的前两位再分一层：一个用了
+ * 一个月的工作区里 618 条记录散在 501 个目录中，平均每个目录 1.2 个文件，status 每次全读一遍时目录比记录
+ * 还费。更早的平铺文件与分过片的文件照旧读得到，随保留期自然消失，不迁移。
+ */
 export function partitionedHostHookRef(
   hostId: WakeflowHostId,
   fileName: string,
 ): PortableResourcePath {
+  if (!HOST_HOOK_FILE_NAME_PATTERN.test(fileName))
+    throw new Error("Invalid hook observation file name.");
+  return parsePortableResourcePath(
+    `${hostHookObservationsRootRef(hostId)}/${fileName.slice(0, 8)}/${fileName}`,
+    "$record",
+  );
+}
+
+/** 1.4.2 及之前写入的位置：日目录下再按记录标识的前两位分一层。只读，不再写。 */
+export function shardedHostHookRef(hostId: WakeflowHostId, fileName: string): PortableResourcePath {
   const match = HOST_HOOK_FILE_NAME_PATTERN.exec(fileName);
   if (match === null) throw new Error("Invalid hook observation file name.");
   return parsePortableResourcePath(

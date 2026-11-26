@@ -1,17 +1,18 @@
 import { createFileAtomically, DurableAtomicFileWriteError, replaceFileAtomically, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
-import { RootedExclusiveFileLockError, retireDeadRootedExclusiveFileLock, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import { settleStagesOfDeadWriters, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { inspectWakeflowProgramInstruction, WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
-import { admitWakeflowProgramInstructionLockOperations, assertCurrentUserWakeflowProgramInstructionRoot, assertWakeflowProgramInstructionRecompositionNotAborted, assertWakeflowProgramInstructionRecompositionRoot, currentWakeflowProgramInstructionRecompositionUserId, failWakeflowProgramInstructionRecomposition as fail, mapWakeflowProgramInstructionLockError, parseWakeflowProgramInstructionRecompositionOptions, parseWakeflowProgramInstructionRecompositionRequest, WakeflowProgramInstructionRecompositionError, wakeflowProgramInstructionInspectionRequest, wakeflowProgramInstructionLockOptions, wakeflowProgramInstructionLockRef, wakeflowProgramInstructionTargetRef, } from "./wakeflow-program-instruction-recomposition-contract.js";
+import { assertCurrentUserWakeflowProgramInstructionRoot, assertWakeflowProgramInstructionRecompositionNotAborted, assertWakeflowProgramInstructionRecompositionRoot, currentWakeflowProgramInstructionRecompositionUserId, failWakeflowProgramInstructionRecomposition as fail, mapWakeflowProgramInstructionLockError, parseWakeflowProgramInstructionRecompositionOptions, parseWakeflowProgramInstructionRecompositionRequest, WakeflowProgramInstructionRecompositionError, wakeflowProgramInstructionInspectionRequest, wakeflowProgramInstructionLockOptions, wakeflowProgramInstructionTargetRef, } from "./wakeflow-program-instruction-recomposition-contract.js";
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的锁内 CAS owner。
  *
- * 本模块在宿主专属短锁内重新执行完整只读 inspection。候选只能由已绑定摘要的
- * current/desired Config、当前 Host Profile 和 Managed Text authority transition
- * 生成；目标不存在时原子创建，目标存在时以完整 StableFileSource 执行 CAS 替换。
+ * 本模块持有工作区的 `program-instruction` 锁（ADR-0033；两个宿主共用一把）并重新执行完整只读
+ * inspection。候选只能由已绑定摘要的 current/desired Config、当前 Host Profile 和 Managed Text
+ * authority transition 生成；目标不存在时原子创建，目标存在时以完整 StableFileSource 执行 CAS 替换。
  *
  * 提交后重新读取并重推导 desired authority。只有节点、摘要、权限、envelope、Config
- * 摘要和 Matrix 摘要全部闭合才返回成功；锁残留与不确定提交由显式恢复 owner 处理。
+ * 摘要和 Matrix 摘要全部闭合才返回成功；不确定的提交原样报告。
  */
 /** 提交之前的检查失败：按检查错误的原因归类；认不出的一律是来源无效。 */
 function failInspectionBeforeCommit(error) {
@@ -157,31 +158,30 @@ async function recomposeUnderLock(root, request, options, expectedUserId, markCo
     });
 }
 /**
- * 在宿主专属短锁内重推导并幂等创建或 CAS 替换 Program Instruction managed block。
+ * 在程序指令锁内重推导并幂等创建或 CAS 替换 Program Instruction managed block。
  */
 export async function recomposeWakeflowProgramInstruction(rootValue, requestValue, optionsValue) {
     assertWakeflowProgramInstructionRecompositionRoot(rootValue);
     const options = parseWakeflowProgramInstructionRecompositionOptions(optionsValue);
     assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
     const request = parseWakeflowProgramInstructionRecompositionRequest(requestValue);
-    admitWakeflowProgramInstructionLockOperations(request);
     const expectedUserId = currentWakeflowProgramInstructionRecompositionUserId();
     await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
     let committed = false;
     try {
-        // 上一个重组程序指令的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
-        await retireDeadRootedExclusiveFileLock(rootValue, wakeflowProgramInstructionLockRef(request), {
-            relatedTargetResourcePaths: [wakeflowProgramInstructionTargetRef(request)],
-        });
-        return await withRootedExclusiveFileLock(rootValue, wakeflowProgramInstructionLockRef(request), () => recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
-            committed = true;
-        }), wakeflowProgramInstructionLockOptions(options));
+        return await withWorkspaceLock(rootValue, "program-instruction", async () => {
+            // 上一个重组程序指令的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
+            await settleStagesOfDeadWriters(rootValue, [wakeflowProgramInstructionTargetRef(request)], options.signal);
+            return recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+                committed = true;
+            });
+        }, wakeflowProgramInstructionLockOptions(options));
     }
     catch (error) {
         if (error instanceof WakeflowProgramInstructionRecompositionError) {
             throw error;
         }
-        if (error instanceof RootedExclusiveFileLockError) {
+        if (error instanceof KernelFileLockError) {
             mapWakeflowProgramInstructionLockError(error, committed);
         }
         fail(committed ? "commit-uncertain" : "effect-failure", "$resourcePath", error);

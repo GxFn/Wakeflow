@@ -97,7 +97,7 @@ function parseSignal(value) {
 function parseDurability(value) {
     if (value === undefined)
         return "fsync";
-    if (value !== "fsync" && value !== "content-only" && value !== "none") {
+    if (value !== "fsync" && value !== "none") {
         failDurableAtomicFileWrite("input", "$options.durability");
     }
     return value;

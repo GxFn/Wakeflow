@@ -25,6 +25,13 @@ export const filesystemMutation = {
     async openExclusive(path, flags, mode) {
         return await open(path, flags, mode);
     },
+    /**
+     * 打开一个锁文件（ADR-0033）：`flags` 由调用方给出，可以带 `O_CREAT`（锁文件只建不删）与内核咨询锁的
+     * 标志，原样转发。测试在这里看见每一次取锁，并可以让某一次停在取锁之前。
+     */
+    async openLockFile(path, flags, mode) {
+        return await open(path, flags, mode);
+    },
     async link(existingPath, newPath) {
         await link(existingPath, newPath);
     },

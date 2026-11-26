@@ -3,8 +3,6 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
-import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
-import { wakeflowProgramInstructionRecompositionLockRef } from "../workspace-host-resource-catalog.js";
 import { parseWakeflowProgramInstructionInspectionRequest, WakeflowProgramInstructionInspectionError, } from "./wakeflow-program-instruction-inspection.js";
 /**
  * Program Instruction 锁内重组和显式恢复共享的机械合同。
@@ -23,7 +21,6 @@ const ERROR_MESSAGES = {
     conflict: "Wakeflow Program Instruction source changed before atomic publication.",
     "lock-timeout": "Wakeflow Program Instruction recomposition lock acquisition timed out.",
     "lock-unsafe": "Wakeflow Program Instruction recomposition lock is unsafe.",
-    "recovery-not-required": "Wakeflow Program Instruction recomposition has no lock residue to recover.",
     "recovery-required": "Wakeflow Program Instruction recomposition requires explicit recovery.",
     aborted: "Wakeflow Program Instruction recomposition was aborted before commit.",
     "effect-failure": "Wakeflow Program Instruction candidate could not be published safely.",
@@ -126,23 +123,6 @@ export async function assertCurrentUserWakeflowProgramInstructionRoot(root, expe
         throw error;
     }
 }
-export function admitWakeflowProgramInstructionLockOperations(request) {
-    for (const recipe of ["exclusive-create", "exact-retire"]) {
-        try {
-            createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
-                expectedMatrixDigest: request.expectedMatrixDigest,
-                declarationId: `host-runtime.${request.profile.hostId}.instruction-lock`,
-                recipe,
-            });
-        }
-        catch (error) {
-            if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-                failWakeflowProgramInstructionRecomposition("input", "$request.matrix", error);
-            }
-            throw error;
-        }
-    }
-}
 export function wakeflowProgramInstructionInspectionRequest(request, signal) {
     return Object.freeze({
         matrix: request.matrix,
@@ -158,9 +138,6 @@ export function wakeflowProgramInstructionInspectionRequest(request, signal) {
 export function wakeflowProgramInstructionTargetRef(request) {
     return request.profile.instructionFileName;
 }
-export function wakeflowProgramInstructionLockRef(request) {
-    return wakeflowProgramInstructionRecompositionLockRef(request.profile);
-}
 export function wakeflowProgramInstructionLockOptions(options) {
     return {
         acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
@@ -170,6 +147,7 @@ export function wakeflowProgramInstructionLockOptions(options) {
         ...(options.signal === undefined ? {} : { signal: options.signal }),
     };
 }
+/** 程序指令重组锁（ADR-0033）的失败：已经提交之后的任何失败都是提交结果不确定。 */
 export function mapWakeflowProgramInstructionLockError(error, committed) {
     if (committed) {
         failWakeflowProgramInstructionRecomposition("commit-uncertain", "$resourcePath");
@@ -182,14 +160,6 @@ export function mapWakeflowProgramInstructionLockError(error, committed) {
     }
     if (error.reason === "timeout") {
         failWakeflowProgramInstructionRecomposition("lock-timeout", "$lock");
-    }
-    if (error.reason === "root-scope" || error.reason === "parent") {
-        failWakeflowProgramInstructionRecomposition("root-scope", "$root");
-    }
-    if (error.reason === "owner-active" ||
-        error.reason === "residue-changed" ||
-        error.reason === "release-failure") {
-        failWakeflowProgramInstructionRecomposition("recovery-required", "$lock");
     }
     failWakeflowProgramInstructionRecomposition("lock-unsafe", "$lock");
 }

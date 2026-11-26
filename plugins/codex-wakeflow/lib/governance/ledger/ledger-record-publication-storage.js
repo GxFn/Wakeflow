@@ -2,13 +2,12 @@ import { DurableDirectoryTreeCandidateError, inspectDirectoryTreeCandidate, } fr
 import { DurableDirectoryTreePublicationError, publishDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
 import { RootedDirectoryTreeRemovalError, removeRootedDirectoryTree, } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { admitWakeflowResourceOperation, WakeflowResourceProcessingContractError, } from "../../foundation/resource/resource-processing-contract.js";
 import { loadLedgerAuthorityRecord } from "./ledger-authority-reader.js";
 import { computeLedgerAuthorityRecordDigest, } from "./ledger-authority-record.js";
-import { LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS, } from "./ledger-authority-storage-policy.js";
-import { throwLedgerAuthorityStoreError as fail, LedgerAuthorityStoreError, } from "./ledger-authority-store-contract.js";
+import { LEDGER_DURABLE_DIRECTORY_MODE } from "./ledger-authority-storage-policy.js";
+import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
 import { createLedgerAuthorityResourceCatalog } from "./ledger-resource-catalog.js";
 function admitLedgerResourceOperation(plan, resourcePath, recipe) {
     const declaration = createLedgerAuthorityResourceCatalog(plan.record).find((entry) => entry.placement.relativePath === resourcePath);
@@ -74,59 +73,6 @@ export async function retireLedgerRecordPublicationStage(root, plan, signal) {
                 fail("aborted", "$signal", error);
             fail("recovery-required", "$stage", error);
         }
-        throw error;
-    }
-}
-export async function prepareLedgerRecordPublicationLockRecovery(root, lockRef) {
-    let observation;
-    try {
-        observation = await inspectRootedExclusiveFileLock(root, lockRef);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("lock-unsafe", "$lock", error);
-        }
-        throw error;
-    }
-    if (observation.status !== "held" || observation.ownerState !== "inactive") {
-        return;
-    }
-    try {
-        await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("recovery-required", "$lock", error);
-        }
-        throw error;
-    }
-}
-function mapLockError(error) {
-    if (error.reason === "timeout")
-        fail("lock-timeout", "$lock");
-    if (error.reason === "aborted")
-        fail("aborted", "$signal");
-    if (error.reason === "unsafe-lock" ||
-        error.reason === "parent" ||
-        error.reason === "root-scope") {
-        fail("lock-unsafe", "$lock");
-    }
-    fail("recovery-required", "$lock");
-}
-export async function withLedgerRecordPublicationLock(root, lockRef, signal, action) {
-    try {
-        return await withRootedExclusiveFileLock(root, lockRef, action, {
-            acquireTimeoutMilliseconds: LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-            // 账本记录锁是轻档：留下的失效锁由下一次获取退休（1.4.1 第 1 段清单 2.1 节 L7）。
-            durability: "content-only",
-            ...(signal === undefined ? {} : { signal }),
-        });
-    }
-    catch (error) {
-        if (error instanceof LedgerAuthorityStoreError)
-            throw error;
-        if (error instanceof RootedExclusiveFileLockError)
-            mapLockError(error);
         throw error;
     }
 }

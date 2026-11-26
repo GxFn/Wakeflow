@@ -74,7 +74,10 @@ path, so a file moved later is a file Wakeflow can no longer re-read.
 3. A `preview` call alone still derives the plan without writing - use it
    when you want to look first. An `apply` that carries that preview's
    `planDigest` is refused if the plan changed in between.
-4. If an apply is interrupted, finish it with recover.
+4. If an apply is interrupted, finish it with recover. A record and a recover
+   never run at the same time: `evidence-lock-timeout` (retryable) means
+   another window's record is still running - wait and call again, do not
+   recover it.
 
 Because identity derives from content, recording the same content twice is not
 a duplicate: the second call reports it as already recorded and returns the

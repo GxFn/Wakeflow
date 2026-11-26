@@ -1,7 +1,8 @@
 import { DurableAtomicFileWriteError, replaceFileAtomically, } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { RootedExclusiveFileLockError, retireDeadRootedExclusiveFileLock, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { assertCurrentUserWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthorityDesiredPlacements, assertWakeflowConfigAuthorityNotAborted, assertWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthoritySourcePolicy, currentWakeflowConfigAuthorityUserId, failWakeflowConfigAuthorityReplacement as fail, mapWakeflowConfigAuthorityLockError, matchesWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityReplacementOptions, prepareWakeflowConfigAuthorityDesired, readCurrentWakeflowConfigAuthority, sameWakeflowConfigAuthoritySource, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
+import { settleStagesOfDeadWriters, withWorkspaceLock } from "../kernel/workspace-locks.js";
+import { assertCurrentUserWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthorityDesiredPlacements, assertWakeflowConfigAuthorityNotAborted, assertWakeflowConfigAuthorityRoot, assertWakeflowConfigAuthoritySourcePolicy, currentWakeflowConfigAuthorityUserId, failWakeflowConfigAuthorityReplacement as fail, mapWakeflowConfigAuthorityLockError, matchesWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityExpectation, parseWakeflowConfigAuthorityReplacementOptions, prepareWakeflowConfigAuthorityDesired, readCurrentWakeflowConfigAuthority, sameWakeflowConfigAuthoritySource, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
 import { WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE, WAKEFLOW_CONFIG_FILE_REF, } from "./wakeflow-config-authority-snapshot.js";
 /**
  * Wakeflow Configuration：Config 权威记录的正常读取、幂等判断与条件替换路径。
@@ -119,21 +120,21 @@ export async function replaceWakeflowConfigAuthority(root, desiredModelValue, ex
     assertWakeflowConfigAuthorityNotAborted(parsed.signal);
     let committed = false;
     try {
-        // 上一个替换配置的进程死在锁里时，这把锁没有别的清理者（1.4.2）。
-        await retireDeadRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, {
-            relatedTargetResourcePaths: [WAKEFLOW_CONFIG_FILE_REF],
-        });
-        return await withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, () => replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
-            committed = true;
-        }), wakeflowConfigAuthorityLockOptions(parsed));
+        return await withWorkspaceLock(root, "config-authority", async () => {
+            // 上一个替换配置的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
+            await settleStagesOfDeadWriters(root, [WAKEFLOW_CONFIG_FILE_REF], parsed.signal);
+            return replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
+                committed = true;
+            });
+        }, wakeflowConfigAuthorityLockOptions(parsed));
     }
     catch (error) {
         if (error instanceof WakeflowConfigAuthorityReplacementError)
             throw error;
-        if (error instanceof RootedExclusiveFileLockError) {
+        if (error instanceof KernelFileLockError) {
             mapWakeflowConfigAuthorityLockError(error, committed);
         }
         fail(committed ? "commit-uncertain" : "replacement-failure", "$resourcePath", error);
     }
 }
-export { WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";
+export { WakeflowConfigAuthorityReplacementError, } from "./wakeflow-config-authority-replacement-contract.js";

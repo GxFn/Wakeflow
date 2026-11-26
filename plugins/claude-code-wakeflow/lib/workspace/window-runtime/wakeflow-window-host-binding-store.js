@@ -7,7 +7,8 @@ import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/dur
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { createFileAtomically, DurableAtomicFileWriteError, } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
@@ -141,37 +142,12 @@ async function recoverStages(root, targets, signal) {
         throw error;
     }
 }
-async function prepareStaleLockRecovery(root, authority, signal) {
-    let lock;
-    try {
-        lock = await inspectRootedExclusiveFileLock(root, authority.lockRef);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError)
-            fail("lock", "$lock");
-        throw error;
-    }
-    if (lock.status === "absent")
-        return;
-    if (lock.ownerState !== "inactive")
-        fail("lock", "$lock");
-    await recoverStages(root, authority.bindingRefs, signal);
-    try {
-        await retireRootedExclusiveFileLockResidue(root, authority.lockRef, lock);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("recovery-required", "$lock");
-        }
-        throw error;
-    }
-}
 async function readInventory(root, authority, signal) {
     let directory;
     try {
-        // 登记表的成员之外，最多还有登记锁、它的创建暂存与一份登记文件的暂存。
+        // 登记表的成员之外，最多还有一份登记文件的暂存和一个文件锁版本留下的登记锁。
         directory = await readStableResourceDirectory(root, authority.bindingRootRef, {
-            maximumEntries: authority.bindingRefs.length + 3,
+            maximumEntries: authority.bindingRefs.length + 2,
             ...(signal === undefined ? {} : { signal }),
         });
     }
@@ -187,13 +163,12 @@ async function readInventory(root, authority, signal) {
     const expected = new Set(authority.bindingRefs);
     const bindings = [];
     for (const entry of directory.entries) {
-        if (entry.resourcePath === authority.lockRef) {
-            // 持有者死在锁已链接、创建暂存还没退役的那一刻时，锁是两个链接。
-            privateNode(entry.node, "file", "$lock", 2n);
-            continue;
-        }
         // 登记留下的原子暂存不是成员；清它们的是下一次登记。
         if (hasDurableAtomicFileStagePrefix(entry.name))
+            continue;
+        // 文件锁版本（1.4.3 及之前）的登记被强杀后留下的锁文件也不是成员：它挡住登记表，就挡住了删掉它的
+        // 那次维护（ADR-0033 决定 10）。与清理一起只活一个版本。
+        if (entry.name === ".registration.lock")
             continue;
         if (!expected.has(entry.resourcePath))
             fail("inventory", "$inventory");
@@ -256,13 +231,7 @@ async function readInventory(root, authority, signal) {
 function mapLockError(error) {
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "timeout" ||
-        error.reason === "unsafe-lock" ||
-        error.reason === "parent" ||
-        error.reason === "root-scope") {
-        fail("lock", "$lock");
-    }
-    fail("recovery-required", "$lock");
+    fail("lock", "$lock");
 }
 function sameInventory(left, right) {
     return canonicalizeJson(left, "$leftInventory") === canonicalizeJson(right, "$rightInventory");
@@ -303,12 +272,13 @@ export async function withWakeflowWindowHostBindingStore(root, authoritySource, 
     const options = parseOptions(optionsValue);
     assertNotAborted(options.signal);
     const authority = typeof authoritySource === "function" ? await authoritySource() : authoritySource;
-    await prepareStaleLockRecovery(root, authority, options.signal);
+    let entered = false;
     try {
-        return await withRootedExclusiveFileLock(root, authority.lockRef, async () => {
+        // 登记锁（ADR-0033）：两个宿主的登记共用一把；上一次登记留下的暂存在锁内先恢复（见下）。
+        return await withWorkspaceLock(root, "window-binding", async () => {
+            entered = true;
             const current = typeof authoritySource === "function" ? await authoritySource() : authority;
-            if (current.lockRef !== authority.lockRef ||
-                current.bindingRootRef !== authority.bindingRootRef ||
+            if (current.bindingRootRef !== authority.bindingRootRef ||
                 current.programId !== authority.programId ||
                 current.resourceProfile.hostId !== authority.resourceProfile.hostId) {
                 fail("input", "$authority");
@@ -330,9 +300,7 @@ export async function withWakeflowWindowHostBindingStore(root, authoritySource, 
         });
     }
     catch (error) {
-        if (error instanceof WakeflowWindowHostBindingStoreError)
-            throw error;
-        if (error instanceof RootedExclusiveFileLockError)
+        if (!entered && error instanceof KernelFileLockError)
             mapLockError(error);
         throw error;
     }

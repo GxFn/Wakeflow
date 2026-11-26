@@ -4,7 +4,6 @@ import { computeSha256Digest, parseSha256Digest, } from "../foundation/crypto/sh
 import { parsePlainRecord, pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
 import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
 import { isAbortSignal } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
@@ -20,7 +19,6 @@ import { validateWakeflowConfigRootPlacements, WakeflowConfigRootPlacementError,
  * 错误、P1 所有者与权限策略、调用方预期和目标字节在此保持唯一解释，避免两条路径
  * 形成不同的 Config 权威记录准入规则。
  */
-export const WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF = parsePortableResourcePath(".wakeflow-config-authority.lock");
 const WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS = 10_000;
 const ERROR_MESSAGES = {
     input: "Wakeflow config authority replacement input is invalid.",
@@ -36,7 +34,6 @@ const ERROR_MESSAGES = {
     conflict: "Wakeflow config authority no longer matches its expected source.",
     "lock-timeout": "Wakeflow config authority replacement lock acquisition timed out.",
     "lock-unsafe": "Wakeflow config authority replacement lock is unsafe.",
-    "recovery-not-required": "Wakeflow config authority replacement has no lock residue to recover.",
     "recovery-required": "Wakeflow config authority replacement residue cannot be recovered automatically.",
     aborted: "Wakeflow config authority replacement was aborted before commit.",
     "replacement-failure": "Wakeflow config authority could not be replaced safely.",
@@ -307,6 +304,7 @@ export function wakeflowConfigAuthorityLockOptions(options) {
         ...(options.signal === undefined ? {} : { signal: options.signal }),
     };
 }
+/** 配置权威锁（ADR-0033）的失败：已经提交之后的任何失败都是提交结果不确定。 */
 export function mapWakeflowConfigAuthorityLockError(error, committed) {
     if (committed) {
         failWakeflowConfigAuthorityReplacement("commit-uncertain", "$resourcePath");
@@ -319,12 +317,6 @@ export function mapWakeflowConfigAuthorityLockError(error, committed) {
     }
     if (error.reason === "timeout") {
         failWakeflowConfigAuthorityReplacement("lock-timeout", "$lock");
-    }
-    if (error.reason === "root-scope" || error.reason === "parent") {
-        failWakeflowConfigAuthorityReplacement("root-scope", "$root");
-    }
-    if (error.reason === "owner-active" || error.reason === "residue-changed") {
-        failWakeflowConfigAuthorityReplacement("recovery-required", "$lock");
     }
     failWakeflowConfigAuthorityReplacement("lock-unsafe", "$lock");
 }

@@ -13,12 +13,14 @@ import { ManagedEvidenceRecordTreePlanError, planManagedEvidenceRecordTree, } fr
 import { DemandResultReviewSnapshotError, readDemandResultReviewSnapshot, } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail } from "../../kernel/error.js";
+import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import { runPublicationTransaction, } from "../../kernel/publication-transaction.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { admitRecordEvidenceResult, parseRecordEvidenceRequest, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_SCHEMA_VERSION, WAKEFLOW_RECORD_EVIDENCE_PUBLIC_TOOL_NAME, } from "./contract.js";
 import { deriveDemandCapacityBlockers, MANAGED_EVIDENCE_RECORD_EVENT_OCCUPANCY, deriveEvidenceEventIdentity, deriveEvidencePlanDigest, evidencePlanSummary, evidencePreviewNext, } from "./decide.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 function parseDemandId(value) {
     try {
@@ -379,6 +381,30 @@ async function applyEvidence(context, input, plan) {
         publication: completionPublication(completion),
     });
 }
+/**
+ * 证据的记录与它的 recover 在一把锁里先后进行（ADR-0033 的 `evidence-publication`）。没有它，另一个窗口
+ * 跟着 status 的 `demand-recovery` 调 recover 时，会把一次还在跑的记录接过去做完，原来那次调用随后以
+ * 对不上的盘面失败（真实进程里量出来的，§13.293）。等不到锁是可重试的冲突：有一次记录或恢复正在进行。
+ */
+async function withEvidencePublicationLock(context, operation) {
+    let entered = false;
+    try {
+        return await withWorkspaceLock(context.root, "evidence-publication", () => {
+            entered = true;
+            return operation();
+        }, signalOptions(context.options.signal));
+    }
+    catch (error) {
+        if (entered || !(error instanceof KernelFileLockError))
+            throw error;
+        if (error.reason === "aborted")
+            fail("io-failure", "aborted", "$signal", { cause: error });
+        fail("concurrency-conflict", `evidence-lock-${error.reason}`, "$request.demandId", {
+            cause: error,
+            retryable: error.reason === "timeout",
+        });
+    }
+}
 async function recoverEvidence(context, operationId) {
     const demandId = parseDemandId(operationId);
     let recovered;
@@ -463,8 +489,8 @@ export async function executeRecordEvidenceRequest(value, options = {}) {
         open: (root) => openContext(root, options),
         close: async () => { },
         plan: planEvidence,
-        apply: (context, input, plan) => afterMutationRefresh(context.root, context.options.signal, () => applyEvidence(context, input, plan)),
-        recover: (context, operationId) => afterMutationRefresh(context.root, context.options.signal, () => recoverEvidence(context, operationId)),
+        apply: (context, input, plan) => afterMutationRefresh(context.root, context.options.signal, () => withEvidencePublicationLock(context, () => applyEvidence(context, input, plan))),
+        recover: (context, operationId) => afterMutationRefresh(context.root, context.options.signal, () => withEvidencePublicationLock(context, () => recoverEvidence(context, operationId))),
         next: async (context, phase) => phase.mode === "preview"
             ? evidencePreviewNext(phase.planned)
             : nextAfterMutation(context, phase.outcome.demandId),

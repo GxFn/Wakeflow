@@ -5,7 +5,6 @@ import { RootedDirectory, RootedDirectoryError, } from "../../foundation/filesys
 import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { createWakeflowWorkspaceStaticResourceMatrix, parseWakeflowWorkspaceStaticResourceMatrix, WakeflowWorkspaceStaticResourceMatrixError, } from "../wakeflow-workspace-static-resource-matrix.js";
-import { createWakeflowWorkspaceStaticResourceOperationContext, WakeflowWorkspaceStaticResourceOperationContextError, } from "../wakeflow-workspace-static-resource-operation-context.js";
 import { parseWakeflowWorkspaceHostResourceProfile, WAKEFLOW_WORKSPACE_HOST_IDS, WakeflowWorkspaceHostResourceProfileError, } from "../workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority, WakeflowGitignoreBodyAuthorityError, } from "./wakeflow-gitignore-body-authority.js";
 /**
@@ -27,7 +26,6 @@ const ERROR_MESSAGES = {
     conflict: "Wakeflow Gitignore source changed before atomic publication.",
     "lock-timeout": "Wakeflow Gitignore recomposition lock acquisition timed out.",
     "lock-unsafe": "Wakeflow Gitignore recomposition lock is unsafe.",
-    "recovery-not-required": "Wakeflow Gitignore recomposition has no lock residue to recover.",
     "recovery-required": "Wakeflow Gitignore recomposition requires explicit recovery.",
     aborted: "Wakeflow Gitignore recomposition was aborted before commit.",
     "effect-failure": "Wakeflow Gitignore candidate could not be published safely.",
@@ -194,23 +192,6 @@ export async function assertCurrentUserWakeflowGitignoreRecompositionRoot(root, 
         throw error;
     }
 }
-export function admitWakeflowGitignoreRecompositionLockOperations(request) {
-    for (const recipe of ["exclusive-create", "exact-retire"]) {
-        try {
-            createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {
-                expectedMatrixDigest: request.expectedMatrixDigest,
-                declarationId: "workspace.ignore-integration-lock",
-                recipe,
-            });
-        }
-        catch (error) {
-            if (error instanceof WakeflowWorkspaceStaticResourceOperationContextError) {
-                failWakeflowGitignoreRecomposition("input", "$request.matrix", error);
-            }
-            throw error;
-        }
-    }
-}
 export function wakeflowGitignoreInspectionRequest(request, signal) {
     return Object.freeze({
         matrix: request.matrix,
@@ -228,6 +209,7 @@ export function wakeflowGitignoreRecompositionLockOptions(options) {
         ...(options.signal === undefined ? {} : { signal: options.signal }),
     };
 }
+/** `.gitignore` 重组锁（ADR-0033）的失败：已经提交之后的任何失败都是提交结果不确定。 */
 export function mapWakeflowGitignoreRecompositionLockError(error, committed) {
     if (committed) {
         failWakeflowGitignoreRecomposition("commit-uncertain", "$resourcePath");
@@ -240,14 +222,6 @@ export function mapWakeflowGitignoreRecompositionLockError(error, committed) {
     }
     if (error.reason === "timeout") {
         failWakeflowGitignoreRecomposition("lock-timeout", "$lock");
-    }
-    if (error.reason === "root-scope" || error.reason === "parent") {
-        failWakeflowGitignoreRecomposition("root-scope", "$root");
-    }
-    if (error.reason === "owner-active" ||
-        error.reason === "residue-changed" ||
-        error.reason === "release-failure") {
-        failWakeflowGitignoreRecomposition("recovery-required", "$lock");
     }
     failWakeflowGitignoreRecomposition("lock-unsafe", "$lock");
 }

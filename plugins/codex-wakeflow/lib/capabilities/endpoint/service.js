@@ -29,7 +29,7 @@ import { createWakeflowWindowHostBindingInStore, inspectWakeflowWindowHostBindin
 import { parseWakeflowWindowHostHandle, parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import { compileWakeflowWindowLaunchIntents, computeWakeflowWindowLaunchExecutionDigest, } from "../../workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { compileWakeflowWindowRuntimeDesiredTopology, } from "../../workspace/window-runtime/wakeflow-window-runtime-desired-topology.js";
-import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRef, wakeflowWindowHostBindingRootRef, } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRef, wakeflowWindowHostBindingRootRef, } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet, } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import { parseWakeflowWorkspaceHostResourceProfile, wakeflowWorkspaceHostLocatorProvider, } from "../../workspace/workspace-host-resource-profile.js";
@@ -152,7 +152,6 @@ async function openContext(root, hostFacade, envelope, options) {
             identityProfile: facade.identityProfile,
             bindingRefs: topology.windows.map((entry) => wakeflowWindowHostBindingRef(facade.resourceProfile, entry.windowId)),
             bindingRootRef: wakeflowWindowHostBindingRootRef(facade.resourceProfile),
-            lockRef: wakeflowWindowHostBindingMutationLockRef(facade.resourceProfile),
         }),
         signal: options.signal,
         clock: options.clock,

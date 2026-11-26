@@ -1,51 +1,33 @@
-import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { parsePlainRecord } from "../data/passive-own-data.js";
-import { createUuidV4 } from "../identity/uuid-v4.js";
-import { ownedByAnotherUser } from "../node/current-user.js";
 import { readMonotonicClock } from "../time/monotonic-clock.js";
 import { isMonotonicDeadlineReached, monotonicDeadlineAfter, monotonicDeadlineRemaining, } from "../time/monotonic-deadline.js";
 import { monotonicDurationFromMilliseconds } from "../time/monotonic-duration.js";
-import { DurableAtomicFileStageAddressError, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "./durable-atomic-file-stage-address.js";
-import { unlinkRegularFileExactly } from "./exact-regular-file-unlink.js";
-import { parsePortableResourcePath } from "./portable-resource-path.js";
-import { acquireRootedExclusiveFileLock, inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, settleRootedExclusiveFileLockLease, withRootedExclusiveFileLockLease, } from "./rooted-exclusive-file-lock.js";
-import { readStableResourceDirectory, StableDirectoryReadError } from "./stable-directory-read.js";
+import { acquireKernelFileLock, KernelFileLockError, } from "./kernel-file-lock.js";
 export class RootedReadWriteScopeError extends Error {
     name = "RootedReadWriteScopeError";
     code = "rooted-read-write-scope";
     path = "$scope";
     reason;
-    constructor(reason) {
-        super(`Read/write admission failed: ${reason}.`);
+    constructor(reason, options) {
+        super(`Read/write admission failed: ${reason}.`, options);
         this.reason = reason;
     }
 }
-const READER = /^reader-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.lock$/u;
-/**
- * Whether `name` is one of this scope's own lock files in its area: the admission latch, the
- * writer lock or a reader lease. Read-only inspectors use it to tell this protocol's residue from
- * foreign content; it grants nothing.
- */
-export function isRootedReadWriteScopeLockName(name) {
-    return name === "latch.lock" || name === "writer.lock" || READER.test(name);
-}
-const MAXIMUM_ENTRIES = 1024;
-const RETRY_MILLISECONDS = 20;
-/** Shared-only workloads never drain readers: retire dead ones once this many leases pile up (§13.161 F4). */
-const READER_RETIREMENT_THRESHOLD = 64;
-function fail(reason) {
-    throw new RootedReadWriteScopeError(reason);
+const DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS = 30_000;
+const MAXIMUM_ACQUIRE_TIMEOUT_MILLISECONDS = 300_000;
+function fail(reason, cause) {
+    throw new RootedReadWriteScopeError(reason, cause === undefined ? undefined : { cause });
 }
 function optionsOf(value) {
     const record = parsePlainRecord(value, "$options");
     if (Object.keys(record).some((key) => !["signal", "acquireTimeoutMilliseconds", "beforeEnter"].includes(key)))
         fail("input");
-    const budget = record.acquireTimeoutMilliseconds ?? 30_000;
+    const budget = record.acquireTimeoutMilliseconds ?? DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS;
     if (typeof budget !== "number" ||
         !Number.isSafeInteger(budget) ||
         budget <= 0 ||
-        budget > 300_000)
+        budget > MAXIMUM_ACQUIRE_TIMEOUT_MILLISECONDS)
         fail("input");
     if (record.signal !== undefined &&
         (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
@@ -61,211 +43,62 @@ function optionsOf(value) {
             : { beforeEnter: record.beforeEnter }),
     };
 }
-/** An unknown owner is reported, never retired: the caller waits on it like a live one (§13.161 F2). */
-async function retireInactive(root, ref) {
+/** 锁原语的失败说成作用域的失败；别的错误原样上抛。 */
+function failFromLock(error) {
+    if (!(error instanceof KernelFileLockError))
+        throw error;
+    if (error.reason === "timeout" || error.reason === "aborted" || error.reason === "unsupported") {
+        fail(error.reason, error);
+    }
+    fail(error.reason === "input" ? "input" : "unsafe", error);
+}
+/** 在两次获取共用的期限之内拿一把锁。 */
+async function acquireWithin(root, lockRef, mode, deadline, signal) {
+    const now = readMonotonicClock();
+    if (isMonotonicDeadlineReached(deadline, now))
+        fail("timeout");
+    const remaining = monotonicDeadlineRemaining(deadline, now);
     try {
-        const observed = await inspectRootedExclusiveFileLock(root, ref);
-        if (observed.status === "absent")
-            return "absent";
-        if (observed.ownerState === "unknown")
-            return "unknown";
-        if (observed.ownerState === "active")
-            return "active";
-        await retireRootedExclusiveFileLockResidue(root, ref, observed);
+        return await acquireKernelFileLock(root, lockRef, mode, {
+            acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999999n) / 1000000n)),
+            ...(signal === undefined ? {} : { signal }),
+        });
     }
     catch (error) {
-        // Readers release without the admission latch. A changed inspection is not
-        // absence or corruption: keep admission closed and inspect again on the next admission attempt.
-        if (error instanceof RootedExclusiveFileLockError && error.reason === "residue-changed")
-            return "active";
-        throw error;
+        failFromLock(error);
     }
-    return "retired";
-}
-/** No time-based stealing. Only private create stages owned by dead writers are discarded. */
-async function entriesOf(root, area) {
-    const listing = await readStableResourceDirectory(root, area, {
-        maximumEntries: MAXIMUM_ENTRIES,
-    });
-    const directory = listing.directoryNode;
-    if (directory.permissionBits !== 0o700 || ownedByAnotherUser(directory.userId))
-        fail("unsafe");
-    const readers = [];
-    for (const entry of listing.entries) {
-        if (entry.node.kind !== "file" ||
-            entry.node.permissionBits !== 0o600 ||
-            entry.node.userId !== directory.userId)
-            fail("unsafe");
-        if (entry.name === "latch.lock" || entry.name === "writer.lock")
-            continue;
-        if (READER.test(entry.name)) {
-            readers.push(entry.resourcePath);
-            continue;
-        }
-        let stage;
-        try {
-            stage = parseDurableAtomicFileStageFileName(entry.name);
-        }
-        catch (error) {
-            if (error instanceof DurableAtomicFileStageAddressError)
-                fail("unsafe");
-            throw error;
-        }
-        if (stage.operation !== "create" || stage.mode !== 0o600)
-            fail("unsafe");
-        const owner = readDurableAtomicFileStageOwnerState(stage, entry.node);
-        // A live contender's in-flight latch or lease create stage is not residue (§13.161 F1).
-        if (owner === "active")
-            continue;
-        if (owner !== "inactive")
-            fail("recovery-required");
-        await unlinkRegularFileExactly(root, entry.resourcePath, { expectedNode: entry.node });
-    }
-    return readers;
 }
 /**
- * Reader registration and writer closure share one short latch. A waiting writer keeps
- * writer.lock while readers finish; readers release their own unique files without that latch.
- * Business intents are not owned here: beforeEnter must enforce the caller's recovery reservation.
+ * 在读写作用域里执行 `operation`。操作的结果或错误就是这次调用的结果；准入失败报
+ * `RootedReadWriteScopeError`，`beforeEnter` 的错误原样上抛。
  */
-export async function withRootedReadWriteScope(root, area, mode, operation, value = {}) {
+export async function withRootedReadWriteScope(root, locks, mode, operation, value = {}) {
     if ((mode !== "shared" && mode !== "exclusive") ||
         typeof operation !== "function" ||
         types.isProxy(operation))
         fail("input");
     const options = optionsOf(value);
-    const budget = options.acquireTimeoutMilliseconds ?? 30_000;
-    const deadline = monotonicDeadlineAfter(readMonotonicClock(), monotonicDurationFromMilliseconds(budget));
-    const latchRef = parsePortableResourcePath(`${area}/latch.lock`);
-    const writerRef = parsePortableResourcePath(`${area}/writer.lock`);
-    const readerRef = parsePortableResourcePath(`${area}/reader-${createUuidV4()}.lock`);
-    let lease = null;
-    // Locks whose latest observation had an unknown owner; a later absent/retired/active
-    // observation of the same lock clears it, so a spent budget names the right cause.
-    const unknownOwners = new Set();
-    const exhausted = () => fail(unknownOwners.size > 0 ? "recovery-required" : "timeout");
-    const check = () => {
-        if (options.signal?.aborted === true)
-            fail("aborted");
-        // Waiting on an unknown owner only becomes a recovery request once the budget is spent.
-        if (isMonotonicDeadlineReached(deadline, readMonotonicClock()))
-            exhausted();
-    };
-    /** True while the lock at `ref` is held by a live or unknown owner. */
-    const held = async (ref) => {
-        const owner = await retireInactive(root, ref);
-        if (owner === "unknown")
-            unknownOwners.add(ref);
-        else
-            unknownOwners.delete(ref);
-        return owner === "active" || owner === "unknown";
-    };
-    const acquire = async (ref) => {
-        try {
-            return await acquireRootedExclusiveFileLock(root, ref, lockOptions());
-        }
-        catch (error) {
-            if (error instanceof RootedExclusiveFileLockError && error.reason === "timeout") {
-                check();
-                exhausted();
-            }
-            throw error;
-        }
-    };
-    const wait = async () => {
-        check();
-        try {
-            await delay(RETRY_MILLISECONDS, undefined, options.signal === undefined ? {} : { signal: options.signal });
-        }
-        catch {
-            fail("aborted");
-        }
-    };
-    const lockOptions = () => {
-        check();
-        const remaining = monotonicDeadlineRemaining(deadline, readMonotonicClock());
-        return {
-            acquireTimeoutMilliseconds: Math.max(1, Number((remaining + 999999n) / 1000000n)),
-            durability: "content-only",
-            ...(options.signal === undefined ? {} : { signal: options.signal }),
-        };
-    };
-    const latched = async (body) => {
-        check();
-        await held(latchRef);
-        const latch = await acquire(latchRef);
-        try {
-            return await body();
-        }
-        finally {
-            await latch.release();
-        }
-    };
-    const leaseRef = mode === "shared" ? readerRef : writerRef;
+    if (options.signal?.aborted === true)
+        fail("aborted");
+    const deadline = monotonicDeadlineAfter(readMonotonicClock(), monotonicDurationFromMilliseconds(options.acquireTimeoutMilliseconds));
+    const gate = await acquireWithin(root, locks.gate, mode, deadline, options.signal);
+    let scope;
     try {
-        while (lease === null) {
-            try {
-                lease = await latched(async () => {
-                    const readers = await entriesOf(root, area);
-                    if (await held(writerRef))
-                        return null;
-                    if (mode === "shared" && readers.length >= READER_RETIREMENT_THRESHOLD) {
-                        for (const ref of readers)
-                            await retireInactive(root, ref);
-                    }
-                    await options.beforeEnter?.();
-                    check();
-                    const acquired = await acquire(leaseRef);
-                    // Ownership begins at acquisition, before the short latch can fail to settle.
-                    lease = acquired;
-                    return acquired;
-                });
-            }
-            catch (error) {
-                if (!transientListing(error))
-                    throw error;
-            }
-            if (lease === null)
-                await wait();
-        }
-        if (mode === "exclusive") {
-            let drained = false;
-            while (!drained) {
-                try {
-                    drained = await latched(async () => {
-                        let active = false;
-                        for (const ref of await entriesOf(root, area))
-                            active = (await held(ref)) || active;
-                        return !active;
-                    });
-                }
-                catch (error) {
-                    if (!transientListing(error))
-                        throw error;
-                    // Reader releases can change a listing while the writer is draining it.
-                }
-                if (!drained)
-                    await wait();
-            }
-        }
-        check();
+        await options.beforeEnter?.();
+        scope = await acquireWithin(root, locks.scope, mode, deadline, options.signal);
     }
     catch (error) {
-        // Admission failed after the lease may have been acquired: the admission error is the outcome;
-        // a release failure behind it is only reported (B10, open-items W8).
-        if (lease !== null) {
-            await settleRootedExclusiveFileLockLease(root, leaseRef, lease, {
-                status: "rejected",
-                reason: error,
-            });
-        }
+        await gate.release();
         throw error;
     }
-    // The operation's result or error is the outcome. A release failure after a committed operation goes
-    // to the composition root's reporter instead of overriding the result (open-items W8).
-    return withRootedExclusiveFileLockLease(root, leaseRef, lease, operation);
-}
-function transientListing(error) {
-    return (error instanceof StableDirectoryReadError &&
-        (error.reason === "source-changed" || error.reason === "expectation-changed"));
+    // 共享者到这里就放开门；独占者留着它，新的共享者因此进不来。
+    if (mode === "shared")
+        await gate.release();
+    try {
+        return await operation();
+    }
+    finally {
+        await scope.release();
+        await gate.release();
+    }
 }

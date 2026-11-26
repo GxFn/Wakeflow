@@ -3,11 +3,11 @@ import { computeSha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parseDenseArray, parsePlainRecord, } from "../../foundation/data/passive-own-data.js";
 import { createDirectoryTreeCandidateDurably, DurableDirectoryTreeCandidateError, planDirectoryTreeCandidate, settleDirectoryTreeCandidateDurably, } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { ledgerAuthorityRootRef, ledgerRecordPublicationLockRef, ledgerRecordPublicationStageRef, } from "./ledger-authority-paths.js";
+import { ledgerAuthorityRootRef, ledgerRecordPublicationStageRef, } from "./ledger-authority-paths.js";
 import { LedgerAuthorityRecordError, parseLedgerAuthorityRecord, renderLedgerAuthorityRecord, } from "./ledger-authority-record.js";
 import { LEDGER_AUTHORITY_MAXIMUM_DOCUMENTS, LEDGER_AUTHORITY_MAXIMUM_TREE_DEPTH, LEDGER_AUTHORITY_MAXIMUM_TREE_ENTRIES, LEDGER_AUTHORITY_MAXIMUM_TREE_FILES, LEDGER_AUTHORITY_MEMBER_MAXIMUM_BYTES, LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES, LEDGER_AUTHORITY_TREE_MAXIMUM_BYTES, LEDGER_DURABLE_DIRECTORY_MODE, LEDGER_DURABLE_FILE_MODE, } from "./ledger-authority-storage-policy.js";
 import { throwLedgerAuthorityStoreError as fail, } from "./ledger-authority-store-contract.js";
-import { ledgerPublicationResourceNodeOrNull, ledgerRecordPublicationStageState, loadExactPublishedLedgerRecord, prepareLedgerRecordPublicationLockRecovery, publishLedgerRecordStage, retireLedgerRecordPublicationStage, withLedgerRecordPublicationLock, } from "./ledger-record-publication-storage.js";
+import { ledgerPublicationResourceNodeOrNull, ledgerRecordPublicationStageState, loadExactPublishedLedgerRecord, publishLedgerRecordStage, retireLedgerRecordPublicationStage, } from "./ledger-record-publication-storage.js";
 function parseMembers(value, record) {
     let entries;
     try {
@@ -106,7 +106,6 @@ function preparePublication(recordValue, membersValue, signal) {
             plan: Object.freeze({
                 record,
                 finalRootRef: ledgerAuthorityRootRef(record),
-                lockRef: ledgerRecordPublicationLockRef(record),
                 stageRef: ledgerRecordPublicationStageRef(record),
                 treePlan,
             }),
@@ -187,22 +186,20 @@ async function stageCandidate(root, prepared, signal) {
     return await createStage(root, prepared, signal);
 }
 /**
- * 在记录标识级互斥锁内整体发布目录树，或幂等复用完全一致的不可变权威记录。
+ * 整体发布目录树，或幂等复用完全一致的不可变权威记录。调用方持有工作区的账本记录锁（ADR-0033）：
+ * 同一条记录的暂存目录只有一个，两次发布不能同时进行。
  *
  * 不记日志：final 在就逐字节核对后复用；不在就把暂存补齐（上一次被打断留下的同一份内容）、
  * 删掉补不了的残留重建，或新建，然后改名生效。被打断的发布由同一个请求再发一次续上。
  */
 export async function publishLedgerAuthorityRecord(root, recordValue, membersValue, signal) {
     const prepared = preparePublication(recordValue, membersValue, signal);
-    await prepareLedgerRecordPublicationLockRecovery(root, prepared.plan.lockRef);
-    return withLedgerRecordPublicationLock(root, prepared.plan.lockRef, signal, async () => {
-        if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
-            const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
-            return Object.freeze({ wroteAuthority: false, loaded });
-        }
-        const candidate = await stageCandidate(root, prepared, signal);
-        await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
+    if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
         const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
-        return Object.freeze({ wroteAuthority: true, loaded });
-    });
+        return Object.freeze({ wroteAuthority: false, loaded });
+    }
+    const candidate = await stageCandidate(root, prepared, signal);
+    await publishLedgerRecordStage(root, prepared.plan, candidate, signal);
+    const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
+    return Object.freeze({ wroteAuthority: true, loaded });
 }

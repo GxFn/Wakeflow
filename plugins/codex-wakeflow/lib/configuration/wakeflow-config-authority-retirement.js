@@ -1,8 +1,9 @@
 import { parseSha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import { DurableResourceRenameError, renameResourceDurably, } from "../foundation/filesystem/durable-resource-rename.js";
+import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory, RootedDirectoryError, } from "../foundation/filesystem/rooted-directory.js";
-import { RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { assertCurrentUserWakeflowConfigAuthorityRoot, currentWakeflowConfigAuthorityUserId, parseWakeflowConfigAuthorityReplacementOptions, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
+import { withWorkspaceLock } from "../kernel/workspace-locks.js";
+import { assertCurrentUserWakeflowConfigAuthorityRoot, currentWakeflowConfigAuthorityUserId, parseWakeflowConfigAuthorityReplacementOptions, WakeflowConfigAuthorityReplacementError, wakeflowConfigAuthorityLockOptions, } from "./wakeflow-config-authority-replacement-contract.js";
 import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigRecord, WAKEFLOW_CONFIG_FILE_REF, WAKEFLOW_DETACHED_CONFIG_FILE_REF, WakeflowConfigAuthoritySnapshotError, } from "./wakeflow-config-authority-snapshot.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow config authority retirement input is invalid.",
@@ -175,7 +176,7 @@ function mapRetirementFailure(error, committed) {
     if (error instanceof WakeflowConfigAuthorityReplacementError) {
         mapReplacementContractError(error);
     }
-    if (error instanceof RootedExclusiveFileLockError) {
+    if (error instanceof KernelFileLockError) {
         if (error.reason === "aborted")
             fail("aborted", "$signal");
         fail(committed ? "commit-uncertain" : "lock", "$lock");
@@ -200,7 +201,7 @@ export async function retireWakeflowConfigAuthority(root, expectedConfigDigestVa
     assertNotAborted(parsed.signal);
     let committed = false;
     try {
-        return await withRootedExclusiveFileLock(root, WAKEFLOW_CONFIG_AUTHORITY_LOCK_REF, () => retireUnderLock(root, expected, parsed, expectedUserId, () => {
+        return await withWorkspaceLock(root, "config-authority", () => retireUnderLock(root, expected, parsed, expectedUserId, () => {
             committed = true;
         }), wakeflowConfigAuthorityLockOptions(parsed));
     }

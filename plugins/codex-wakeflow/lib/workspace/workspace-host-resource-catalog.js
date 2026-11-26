@@ -1,6 +1,6 @@
 import { parsePortableResourcePath, } from "../foundation/filesystem/portable-resource-path.js";
 import { hostPodReceiptsRootRef } from "../kernel/layout.js";
-import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef, wakeflowWindowRuntimeProjectionRootRef, } from "./window-runtime/wakeflow-window-runtime-paths.js";
 import { parseWakeflowWorkspaceHostResourceProfile, } from "./workspace-host-resource-profile.js";
 import { wakeflowHostIdentityRootRef, wakeflowHostProjectionsRootRef, wakeflowHostRuntimeRootRef, wakeflowHostWindowLocatorsRootRef, } from "./workspace-host-runtime-paths.js";
 import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
@@ -48,40 +48,6 @@ function integrationFileDeclaration(declarationId, ownerId, relativePath, tracki
         },
     });
 }
-function transactionFileDeclaration(declarationId, ownerId, relativePath) {
-    return parseWakeflowWorkspaceResourceDeclaration({
-        kind: "WakeflowWorkspaceResourceDeclaration",
-        declarationId,
-        family: "host-runtime",
-        ownerId,
-        scope: "current-host",
-        placement: {
-            root: { kind: "workspace" },
-            relativePath,
-        },
-        tracking: {
-            disposition: "ignored",
-            privacy: "runtime-private",
-        },
-        nodePolicy: {
-            kind: "file",
-            mode: "0600",
-            linkPolicy: "single-link",
-            executablePolicy: "forbidden",
-        },
-        processing: {
-            kind: "resource",
-            role: "transaction-artifact",
-            allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-            recoveryStrategy: "owner-transaction-recovery",
-        },
-    });
-}
-/** 为一个严格 Host Profile 返回其 Program Instruction 专属短锁路径。 */
-export function wakeflowProgramInstructionRecompositionLockRef(profileValue) {
-    const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-    return parsePortableResourcePath(`.wakeflow-program-instruction-${profile.hostId}.lock`);
-}
 function privateProjectionFileDeclaration(declarationId, ownerId, relativePath) {
     return parseWakeflowWorkspaceResourceDeclaration({
         kind: "WakeflowWorkspaceResourceDeclaration",
@@ -124,11 +90,10 @@ export function createWakeflowWorkspaceHostResourceCatalog(profileValue) {
         privateDirectoryDeclaration(`${prefix}.identity-root`, "host-runtime-layout", wakeflowHostIdentityRootRef(profile)),
         privateDirectoryDeclaration(`${prefix}.projections-root`, "host-runtime-layout", wakeflowHostProjectionsRootRef(profile)),
         integrationFileDeclaration(`${prefix}.instruction`, "host-instruction-integration", profile.instructionFileName, "tracked-shareable"),
-        transactionFileDeclaration(`${prefix}.instruction-lock`, "host-instruction-integration", wakeflowProgramInstructionRecompositionLockRef(profile)),
         privateDirectoryDeclaration(`${prefix}.window-runtime-projections-root`, "window-runtime-projection", wakeflowWindowRuntimeProjectionRootRef(profile)),
     ];
     if (profile.surfaces.windowIdentity) {
-        declarations.push(privateDirectoryDeclaration(`${prefix}.window-identity-root`, "window-host-binding", wakeflowWindowHostBindingRootRef(profile)), transactionFileDeclaration(`${prefix}.window-identity-lock`, "window-host-binding", wakeflowWindowHostBindingMutationLockRef(profile)));
+        declarations.push(privateDirectoryDeclaration(`${prefix}.window-identity-root`, "window-host-binding", wakeflowWindowHostBindingRootRef(profile)));
     }
     if (profile.surfaces.podReceipts) {
         declarations.push(privateDirectoryDeclaration(`${prefix}.pod-receipts-root`, "pod-receipts", hostPodReceiptsRootRef(profile.hostId)));

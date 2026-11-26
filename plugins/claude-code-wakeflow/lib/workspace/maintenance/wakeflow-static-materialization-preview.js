@@ -37,7 +37,7 @@ import { compileWakeflowFreshWindowRuntimeAuthority, WakeflowFreshWindowRuntimeA
 import { wakeflowWindowRuntimeProjectionRef } from "../window-runtime/wakeflow-window-runtime-paths.js";
 import { WAKEFLOW_DETACH_WORKSPACE_TARGET_KEY, wakeflowConfigRetirementAuthorityDigest, wakeflowManagedBlockRemovalAuthorityDigest, wakeflowWindowProjectionRetirementAuthorityDigest, } from "./wakeflow-detach-step-authority.js";
 import { WakeflowMaintenanceGateError, wakeflowMaintenanceCoreInspectionForGateContext, } from "./wakeflow-maintenance-gate.js";
-import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import { computeWakeflowStaticMaterializationPreviewDigest, failWakeflowStaticMaterializationPreview as fail, isWakeflowDetachAction, parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, } from "./wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 function assertNotAborted(signal) {
@@ -718,7 +718,7 @@ async function planRequirementBoardRepair(root, request, blockers, steps) {
             : [],
     }));
 }
-/** 维护协议根的四个目录：fresh 与对账修复共用同一步骤，物理创建由 gate 的引导完成。 */
+/** 维护协议根的目录（连同锁目录）：fresh 与对账修复共用同一步骤，物理创建由 gate 的引导完成。 */
 function localProtocolStep(core) {
     return step({
         stepId: "core:local-protocol",
@@ -726,12 +726,7 @@ function localProtocolStep(core) {
         ownerId: "maintenance-bootstrap",
         targetKey: "local-protocol",
         sourceDigest: core.local.protocolDigest,
-        targetDigest: resourceDigest([
-            WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
-            WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
-            WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
-            WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-        ]),
+        targetDigest: resourceDigest(WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG),
         dependsOn: [],
     });
 }

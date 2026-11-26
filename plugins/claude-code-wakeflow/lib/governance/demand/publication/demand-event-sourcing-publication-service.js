@@ -4,7 +4,8 @@ import { PassiveOwnDataError, parsePlainRecord, } from "../../../foundation/data
 import { DurableResourceEntrySettlementError, settleObservedResourceEntry, } from "../../../foundation/filesystem/durable-resource-entry-settlement.js";
 import { parsePortableResourcePath, } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
+import { withWorkspaceLock } from "../../../kernel/workspace-locks.js";
 import { LedgerAuthorityStore, LedgerAuthorityStoreError, } from "../../ledger/ledger-authority-store.js";
 import { admitDemandAuthority, DemandAuthorityError } from "../model/demand-authority.js";
 import { assertNoActiveDemand } from "./demand-active-guard.js";
@@ -13,7 +14,7 @@ import { assertPendingPackage, claimPackageForDemandPublication, exactClaimedPac
 import { loadFinalDemandPublication, materializeDemandPublicationStage, publishDemandStage, } from "./demand-event-sourcing-publication-stage.js";
 import { assertPrivatePublicationNode, initializePublicationStorage, publicationNodeOrNull, readPublicationTransactionAt, recoverPublicationTransactionStages, retirePublicationFile, samePublicationTransaction, } from "./demand-event-sourcing-publication-storage.js";
 import { createDemandEventSourcingPublicationTransaction, DemandEventSourcingPublicationTransactionError, } from "./demand-event-sourcing-publication-transaction.js";
-import { demandFinalPublicationMarkerRef, demandPublicationLockRef, demandStagePublicationMarkerRef, } from "./demand-publication-paths.js";
+import { demandFinalPublicationMarkerRef, demandStagePublicationMarkerRef, } from "./demand-publication-paths.js";
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源发布流程编排。
  *
@@ -154,26 +155,25 @@ function mapLockError(error) {
         fail("lock-timeout", "$lock");
     if (error.reason === "aborted")
         fail("aborted", "$signal");
-    if (error.reason === "unsafe-lock" ||
-        error.reason === "parent" ||
-        error.reason === "root-scope") {
-        fail("lock-unsafe", "$lock");
-    }
-    fail("recovery-required", "$lock");
+    fail("lock-unsafe", "$lock");
 }
-async function runLocked(root, demandId, signal, operation) {
+/**
+ * 在 Demand 发布锁内执行。全部 Demand 共用一把（ADR-0033 决定 3）：两个 Demand 的发布先后进行；
+ * 持有者死掉时内核收走它，没有要退役的残留。
+ */
+async function runLocked(root, signal, operation) {
+    let entered = false;
     try {
-        return await withRootedExclusiveFileLock(root, demandPublicationLockRef(demandId), operation, {
+        return await withWorkspaceLock(root, "demand-publication", () => {
+            entered = true;
+            return operation();
+        }, {
             acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-            // Demand 发布锁是轻档：留下的失效锁由下一次发布退休（1.4.1 第 1 段清单 2.1 节 L6）。
-            durability: "content-only",
             ...(signal === undefined ? {} : { signal }),
         });
     }
     catch (error) {
-        if (error instanceof DemandEventSourcingPublicationServiceError)
-            throw error;
-        if (error instanceof RootedExclusiveFileLockError)
+        if (!entered && error instanceof KernelFileLockError)
             mapLockError(error);
         throw error;
     }
@@ -271,8 +271,7 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
     let publicationIntentWriteAttempted = false;
     try {
         await initializePublicationStorage(root, signal);
-        await retireInactivePublicationLock(root, transaction.demandId, signal);
-        return await runLocked(root, transaction.demandId, signal, async () => {
+        return await runLocked(root, signal, async () => {
             const idempotent = await loadIdempotentResult(root, ledgerStore, transaction, signal);
             if (idempotent !== null)
                 return idempotent;
@@ -294,34 +293,6 @@ export async function publishDemandFromPackage(root, ledgerStore, inputValue, op
             publicationAuthority = "unknown";
         }
         rethrowWithPublicationAuthority(error, publicationAuthority);
-    }
-}
-/** 流程锁的持有者确实不在了就收掉它（与看板、投影的正常入口同一做法，ADR-0014 决定 2）。 */
-async function retireInactivePublicationLock(root, demandId, signal) {
-    assertNotAborted(signal);
-    const lockRef = demandPublicationLockRef(demandId);
-    let observation;
-    try {
-        observation = await inspectRootedExclusiveFileLock(root, lockRef);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("recovery-required", "$lock");
-        }
-        throw error;
-    }
-    if (observation.status !== "held" || observation.ownerState !== "inactive") {
-        return;
-    }
-    assertNotAborted(signal);
-    try {
-        await retireRootedExclusiveFileLockResidue(root, lockRef, observation);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("recovery-required", "$lock");
-        }
-        throw error;
     }
 }
 function parentOf(ref) {
@@ -407,8 +378,7 @@ export async function recoverDemandPublication(root, ledgerStore, demandIdValue,
         }
         transaction = observed?.transaction ?? null;
         await initializePublicationStorage(root, signal);
-        await retireInactivePublicationLock(root, demandId, signal);
-        return await runLocked(root, demandId, signal, async () => {
+        return await runLocked(root, signal, async () => {
             const fresh = await readPendingPublication(root, demandId, signal, true);
             if (fresh === null)
                 fail("not-found", "$transaction");

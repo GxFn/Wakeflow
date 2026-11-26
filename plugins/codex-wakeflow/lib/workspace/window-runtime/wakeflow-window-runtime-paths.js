@@ -14,10 +14,6 @@ export function wakeflowWindowHostBindingRef(profileValue, windowIdValue) {
     const windowId = parseWakeflowDurableIdOfKind(windowIdValue, "window", "$windowId");
     return parsePortableResourcePath(`${wakeflowWindowHostBindingRootRef(profileValue)}/${windowId}.json`);
 }
-/** 当前宿主全部 Window Host Binding mutation 共用的短生命周期独占锁。 */
-export function wakeflowWindowHostBindingMutationLockRef(profileValue) {
-    return parsePortableResourcePath(`${wakeflowWindowHostBindingRootRef(profileValue)}/.registration.lock`);
-}
 export function wakeflowWindowRuntimeProjectionRootRef(profileValue) {
     return parsePortableResourcePath(`${wakeflowHostProjectionsRootRef(profileValue)}/window-runtime`);
 }

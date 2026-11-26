@@ -20,7 +20,6 @@ const CHAIN_MAXIMUM_DEPTH = 8;
 const RECORD_MAXIMUM_BYTES = 64 * 1024;
 const LISTING_MAXIMUM_ENTRIES = 1024;
 const TOKEN_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/u;
-const RESOURCE_PATTERN = /^[A-Za-z0-9_.:/-]{1,256}$/u;
 /** 错误自己的位置记号：`$` 开头的结构路径（`$stage/after-sync`、`$/anchorEvidence/0`）。 */
 const ERROR_PATH_PATTERN = /^\$[A-Za-z0-9_.:/[\]-]{0,127}$/u;
 const MESSAGE_MAXIMUM_CODE_POINTS = 240;
@@ -175,7 +174,6 @@ function buildRecord(input, recordedAt) {
         tool: input.tool !== undefined && TOKEN_PATTERN.test(input.tool) ? input.tool : null,
         hostId: input.hostId !== undefined && TOKEN_PATTERN.test(input.hostId) ? input.hostId : null,
         event: input.event !== undefined && TOKEN_PATTERN.test(input.event) ? input.event : null,
-        resource: input.resource !== undefined && RESOURCE_PATTERN.test(input.resource) ? input.resource : null,
         error: isWakeflowError(input.error) ? input.error.toPublicDetails() : null,
         chain: describeIncidentChain(input.error),
         ...(frames.length === 0 ? {} : { frames }),

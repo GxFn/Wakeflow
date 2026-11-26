@@ -3,7 +3,6 @@ import { computeWakeflowConfigDigest, } from "../../configuration/wakeflow-confi
 import { readWakeflowConfigAuthoritySnapshot, readWakeflowDetachedConfigRecord, WakeflowConfigAuthoritySnapshotError, } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableAtomicFileStageRecoveryError, recoverDurableAtomicFileStagesForTargets, } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, retireRootedExclusiveFileLockResidue, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import { assertWakeflowHostMaintenanceCapability, assertWakeflowHostMaintenanceContributionCapability, WakeflowHostMaintenanceCapabilityError, } from "./wakeflow-host-maintenance-capability.js";
 import { createWakeflowMaintenanceExecutionIntent, reconstructWakeflowMaintenanceExecutionFromIntent, WakeflowMaintenanceExecutionIntentError, } from "./wakeflow-maintenance-execution-intent.js";
@@ -11,8 +10,7 @@ import { assertWakeflowMaintenanceExecutionIntentCapacity, assertWakeflowMainten
 import { parseWakeflowMaintenanceExecutionPlan, } from "./wakeflow-maintenance-execution-plan.js";
 import { previewWakeflowMaintenanceExecution, WakeflowMaintenanceExecutionPreviewError, } from "./wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceGateError, withExistingWakeflowMaintenanceGate, withWakeflowMaintenanceGate, } from "./wakeflow-maintenance-gate.js";
-import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_GATE_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceIntentRef, } from "./wakeflow-maintenance-operation-id.js";
 import { parseWakeflowMaintenanceWriter, WakeflowMaintenanceWriterError, } from "./wakeflow-maintenance-writer.js";
 import { isWakeflowDetachAction, parseWakeflowStaticMaterializationPreviewRequest, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
 import { executeWakeflowStaticMaterializationStep, WakeflowStaticMaterializationStepExecutionError, } from "./wakeflow-static-materialization-step-executor.js";
@@ -335,34 +333,6 @@ async function advanceIntent(root, context, sourceValue, plan, requestValue, req
         receipts: Object.freeze(receipts),
     });
 }
-async function retireInactiveCorrelatedGate(root, operationId) {
-    let gate;
-    try {
-        gate = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("gate", "$gate", operationId);
-        }
-        throw error;
-    }
-    if (gate.status === "absent")
-        return;
-    if (gate.ownerState !== "inactive")
-        fail("gate", "$gate", operationId);
-    if (!gate.record.token.endsWith(`-${wakeflowMaintenanceOperationUuid(operationId)}`)) {
-        fail("gate", "$operationId", operationId);
-    }
-    try {
-        await retireRootedExclusiveFileLockResidue(root, WAKEFLOW_MAINTENANCE_GATE_REF, gate);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError) {
-            fail("recovery-required", "$gate", operationId);
-        }
-        throw error;
-    }
-}
 function gateOptions(options, signal = options.signal) {
     return {
         ...(options.acquireTimeoutMilliseconds === undefined
@@ -606,7 +576,6 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(root, opera
             ? await detachedConfigRecord(root, options.signal, operationId)
             : null;
         const sourceConfig = assertRecoveryConfigState(plan, reconstructed.completedSteps, current, retired, operationId);
-        await retireInactiveCorrelatedGate(root, operationId);
         return await withExistingWakeflowMaintenanceGate(root, operationId, async (context) => {
             const currentIntent = await readWakeflowMaintenanceExecutionIntent(root, operationId);
             if (currentIntent.intentDigest !== intentSource.intentDigest ||

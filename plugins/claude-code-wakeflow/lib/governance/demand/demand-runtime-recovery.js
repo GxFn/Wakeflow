@@ -2,20 +2,18 @@ import { readWakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflo
 import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
-import { materializeDirectoryPath } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, retireRootedExclusiveFileLockResidue, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
 import { fail } from "../../kernel/error.js";
+import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { demandLifecycleJournalRef, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, } from "../../kernel/layout.js";
 import { openDemandOperationRoot } from "./demand-operation-authority-context.js";
 import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import { DEMAND_FILE_EVENT_STORE_FILE_MODE, DemandFileEventStore, DemandFileEventStoreError, } from "./event-sourcing/demand-file-event-store.js";
 import { DemandStageResidueError, inspectDemandStageResidue, retireDemandStageResidue, } from "./event-sourcing/demand-stage-residue.js";
 import { parseDemandIdentityDocument } from "./model/demand-identity.js";
-import { DEMAND_PUBLICATION_LOCKS_ROOT_REF, demandPublicationLockRef, } from "./publication/demand-publication-paths.js";
 const DEMAND_NAME = /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const IDENTITY_REF = parsePortableResourcePath("identity.json");
 /** 节点期望是私有 CAS 输入，只发布其摘要；不把 PID、候选文件名或机器路径发到模型。 */
@@ -192,20 +190,11 @@ export async function applyDemandRuntimeRecovery(workspaceRoot, expected, option
     if (current.digest !== expected.digest || current.blockers.length > 0) {
         fail("precondition-failed", "recovery-plan-drift", "$planDigest");
     }
-    await materializeDirectoryPath(workspaceRoot, DEMAND_PUBLICATION_LOCKS_ROOT_REF, {
-        mode: 0o700,
-        ...options,
-    });
     const recovered = [];
     for (const demand of expected.demands) {
         const demandId = parseWakeflowDurableIdOfKind(demand.demandId, "demand");
-        const lockRef = demandPublicationLockRef(demandId);
-        const lock = await inspectRootedExclusiveFileLock(workspaceRoot, lockRef);
-        if (lock.status === "held" && lock.ownerState === "inactive") {
-            await retireRootedExclusiveFileLockResidue(workspaceRoot, lockRef, lock);
-        }
-        // 与发布服务同一把 Demand 发布锁，同为轻档（1.4.1 第 1 段清单 2.1 节 L6）。
-        await withRootedExclusiveFileLock(workspaceRoot, lockRef, async () => {
+        // 与发布服务同一把 Demand 发布锁（ADR-0033）：逐个 Demand 拿、做完就放。
+        await withWorkspaceLock(workspaceRoot, "demand-publication", async () => {
             const fresh = await inspectDemandRuntimeRecovery(workspaceRoot, options);
             const observed = fresh.demands.find((candidate) => candidate.demandId === demandId);
             if (observed === undefined)
@@ -225,7 +214,7 @@ export async function applyDemandRuntimeRecovery(workspaceRoot, expected, option
             finally {
                 await root.close();
             }
-        }, { ...options, durability: "content-only" });
+        }, options);
     }
     return Object.freeze(recovered);
 }

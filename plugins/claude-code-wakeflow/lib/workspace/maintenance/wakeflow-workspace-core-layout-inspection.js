@@ -1,15 +1,14 @@
 import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { DurableAtomicFileStageAddressError, hasDurableAtomicFileStagePrefix, parseDurableAtomicFileStageFileName, readDurableAtomicFileStageOwnerState, } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import { isRootedDirectory, RootedDirectoryError, } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
-import { isRootedReadWriteScopeLockName } from "../../foundation/filesystem/rooted-read-write-scope.js";
 import { readStableResourceDirectory, StableDirectoryReadError, } from "../../foundation/filesystem/stable-directory-read.js";
 import { ownedByAnotherUser, requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
+import { isWorkspaceLockFileName, isWorkspaceLockHeld } from "../../kernel/workspace-locks.js";
 import { parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_LOCAL_ROOT_REF, WAKEFLOW_MAINTENANCE_GATE_REF, WAKEFLOW_MAINTENANCE_ROOT_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_LOCAL_ROOT_REF, WAKEFLOW_MAINTENANCE_ROOT_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow workspace core layout inspection input is invalid.",
     "root-scope": "Wakeflow workspace root changed during layout inspection.",
@@ -174,60 +173,33 @@ function maintenanceResidues(names) {
     return Object.freeze([...names].sort().map(maintenanceResidue));
 }
 // An unsafe gate is a conflict whether or not the maintenance directories exist.
-function prefixProtocolStatus(lockState, stagePresent) {
+function prefixProtocolStatus(lockState) {
     if (lockState === "unsafe")
         return "conflict";
-    if (lockState === "active")
-        return "busy";
-    return lockState !== "absent" || stagePresent ? "recovery-required" : "bootstrap-prefix";
-}
-/** 准入目录里的一个条目是不是确定由死掉的进程留下的：本协议的锁文件或 create 暂存，所有者已不在。 */
-async function deadAdmissionEntry(root, entry) {
-    const node = entry.node;
-    if (node.kind !== "file" || node.permissionBits !== 0o600 || ownedByAnotherUser(node.userId)) {
-        return false;
-    }
-    if (isRootedReadWriteScopeLockName(entry.name)) {
-        try {
-            const lock = await inspectRootedExclusiveFileLock(root, entry.resourcePath);
-            return lock.status === "absent" || lock.ownerState === "inactive";
-        }
-        catch (error) {
-            if (!(error instanceof RootedExclusiveFileLockError))
-                throw error;
-            if (error.reason === "aborted")
-                fail("aborted", "$signal", error);
-            return false;
-        }
-    }
-    if (!hasDurableAtomicFileStagePrefix(entry.name))
-        return false;
-    try {
-        const stage = parseDurableAtomicFileStageFileName(entry.name);
-        return (stage.operation === "create" &&
-            stage.mode === 0o600 &&
-            readDurableAtomicFileStageOwnerState(stage, node) === "inactive");
-    }
-    catch (error) {
-        if (error instanceof DurableAtomicFileStageAddressError)
-            return false;
-        throw error;
-    }
+    return lockState === "active" ? "busy" : "bootstrap-prefix";
 }
 /**
- * 操作准入目录里是不是只有死掉的进程留下的东西（1.4.1 段 1b，清单第 3 项第 3 行）。全新初始化的应用死在
- * 独占范围里，会留下写者锁与准入闩；以前目录里只要有任何条目就不算全新，于是那次初始化再也预览不出来，
- * 而能收掉这些锁的正是它自己——应用在维护闩之下进入独占范围时，准入会退役死掉的闩、写者锁、读者租约
- * 与 create 暂存。这里只读、不删；认的是那个准入认的同一个封闭集合，活着的、判断不出的、不认识的条目
- * 都照旧算不兼容。
+ * 锁目录里是不是只有本协议的锁文件。锁文件不带任何状态——没有人持有时它与不存在没有区别——所以一次没有
+ * 做完的初始化留下的锁目录不妨碍下一次按"全新"来预览。不认识的名字、不是 0600 普通文件的条目都算不兼容。
  */
-async function admissionHoldsOnlyDeadResidue(root, admissionRef, signal) {
-    const contents = await readDirectory(root, admissionRef, signal);
-    for (const entry of contents.entries) {
-        if (!(await deadAdmissionEntry(root, entry)))
-            return false;
+async function locksRootHoldsOnlyLockFiles(root, locksRef, signal) {
+    const contents = await readDirectory(root, locksRef, signal);
+    return contents.entries.every((entry) => isWorkspaceLockFileName(entry.name) &&
+        entry.node.kind === "file" &&
+        entry.node.permissionBits === 0o600 &&
+        !ownedByAnotherUser(entry.node.userId));
+}
+async function gateLockState(root) {
+    try {
+        return (await isWorkspaceLockHeld(root, "maintenance-gate")) ? "active" : "absent";
     }
-    return true;
+    catch (error) {
+        if (!(error instanceof KernelFileLockError))
+            throw error;
+        if (error.reason === "unsafe-lock")
+            return "unsafe";
+        fail("inspection", "$gate", error);
+    }
 }
 async function inspectLocal(root, signal, issueCodes) {
     const localResource = await optionalResource(root, WAKEFLOW_LOCAL_ROOT_REF);
@@ -279,54 +251,25 @@ async function inspectLocal(root, signal, issueCodes) {
     }
     const runtime = await readDirectory(root, WAKEFLOW_RUNTIME_ROOT_REF, signal);
     // `incidents` 是边界诊断的可丢弃落点（§13.166 G1）：它的存在不说明工作区已被使用，不影响 fresh 兼容。
-    if (runtime.entries.some((entry) => entry.name !== "maintenance" &&
-        entry.name !== "operation-admission" &&
-        entry.name !== "incidents")) {
+    if (runtime.entries.some((entry) => entry.name !== "maintenance" && entry.name !== "locks" && entry.name !== "incidents")) {
         freshCompatible = false;
     }
-    const admission = entryNamed(runtime, "operation-admission");
-    if (admission !== null) {
-        if (!validPrivateDirectory(admission.node))
+    const locks = entryNamed(runtime, "locks");
+    if (locks !== null) {
+        if (!validPrivateDirectory(locks.node))
             freshCompatible = false;
-        else if (!(await admissionHoldsOnlyDeadResidue(root, admission.resourcePath, signal))) {
+        else if (!(await locksRootHoldsOnlyLockFiles(root, locks.resourcePath, signal))) {
             freshCompatible = false;
         }
     }
-    const stagePresent = runtime.entries.some((entry) => hasDurableAtomicFileStagePrefix(entry.name));
-    if (stagePresent)
-        issueCodes.push("maintenance-gate-stage-residue");
     const maintenanceEntry = entryNamed(runtime, "maintenance");
-    let lockState = "absent";
-    try {
-        const lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-        if (lock.status === "held") {
-            lockState = lock.ownerState === "active" ? "active" : "inactive-or-unknown";
-            freshCompatible = false;
-        }
-    }
-    catch (error) {
-        if (!(error instanceof RootedExclusiveFileLockError))
-            throw error;
-        if (error.reason === "aborted")
-            fail("aborted", "$signal", error);
-        if (error.reason === "root-scope")
-            fail("root-scope", "$root", error);
-        if (error.reason === "unsafe-lock") {
-            lockState = "unsafe";
-            freshCompatible = false;
-        }
-        else if (error.reason === "residue-changed") {
-            lockState = "inactive-or-unknown";
-            freshCompatible = false;
-        }
-        else {
-            fail("inspection", "$gate", error);
-        }
-    }
+    const lockState = await gateLockState(root);
+    if (lockState !== "absent")
+        freshCompatible = false;
     if (lockState === "unsafe")
         issueCodes.push("maintenance-gate-unsafe");
     if (maintenanceEntry === null) {
-        const status = prefixProtocolStatus(lockState, stagePresent);
+        const status = prefixProtocolStatus(lockState);
         return Object.freeze({
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",
@@ -365,7 +308,7 @@ async function inspectLocal(root, signal, issueCodes) {
     }
     const transactionsEntry = entryNamed(maintenance, "transactions");
     if (transactionsEntry === null) {
-        const status = prefixProtocolStatus(lockState, stagePresent);
+        const status = prefixProtocolStatus(lockState);
         return Object.freeze({
             status,
             freshCompatible: freshCompatible && status === "bootstrap-prefix",
@@ -392,22 +335,26 @@ async function inspectLocal(root, signal, issueCodes) {
         });
     }
     const transactions = await readDirectory(root, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, signal);
-    const residuePresent = transactions.entries.length > 0 || stagePresent;
-    if (transactions.entries.length > 0) {
+    const residuePresent = transactions.entries.length > 0;
+    if (residuePresent) {
         issueCodes.push("maintenance-transaction-residue");
         freshCompatible = false;
     }
+    // 门被持有就是有一次维护在跑；没有人持有而事务目录里留着东西，是上一次维护没有做完。锁目录不在而别的
+    // 都在，是从文件锁的版本更新上来的工作区（ADR-0033 决定 10）：协议还差这一段，对账以修复模式补上它。
     const status = lockState === "unsafe"
         ? "conflict"
         : lockState === "active"
             ? "busy"
-            : lockState === "inactive-or-unknown" || residuePresent
+            : residuePresent
                 ? "recovery-required"
-                : "idle";
+                : locks === null
+                    ? "bootstrap-prefix"
+                    : "idle";
     return Object.freeze({
         status,
-        freshCompatible: freshCompatible && status === "idle",
-        protocolComplete: true,
+        freshCompatible: freshCompatible && (status === "idle" || status === "bootstrap-prefix"),
+        protocolComplete: locks !== null,
         residues: maintenanceResidues(transactions.entries.map((entry) => entry.name)),
         nodeDigest: localNodeDigest,
         protocolDigest: computeCanonicalJsonSha256Digest({

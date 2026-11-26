@@ -12,9 +12,6 @@ export { WAKEFLOW_CONFIG_KIND, WAKEFLOW_CONFIG_SCHEMA_VERSION, } from "../contra
  * 布局的其余部分并入本模块。
  */
 export const WAKEFLOW_LOCAL_RUNTIME_ROOT_REF = parsePortableResourcePath(".wakeflow-local/runtime", "$layout");
-/** Cross-process operation admission is private coordination, never business authority. */
-export const WORKSPACE_OPERATION_SCOPES_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/operation-admission`);
-export const WORKSPACE_MAINTENANCE_GATE_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance.lock`);
 export const WORKSPACE_MAINTENANCE_TRANSACTIONS_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/maintenance/transactions`);
 /** 边界事故记录目录（§13.166 G1）：私有、有界、可丢弃的诊断落点，不是任何状态权威。 */
 export const WAKEFLOW_INCIDENTS_ROOT_REF = parsePortableResourcePath(`${WAKEFLOW_LOCAL_RUNTIME_ROOT_REF}/incidents`);
@@ -27,8 +24,6 @@ export const WAKEFLOW_ACTIVE_CURRENT_ROOT_REF = parsePortableResourcePath(".wake
 export const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF = parsePortableResourcePath(`${WAKEFLOW_ACTIVE_ROOT_REF}/index.md`, "$layout");
 /** 工作区级当前状态投影（人读，确定性重写）。 */
 export const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF = parsePortableResourcePath(`${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/workspace-current-status.md`, "$layout");
-/** 投影器的短期互斥锁。 */
-export const WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF = parsePortableResourcePath(`${WAKEFLOW_ACTIVE_ROOT_REF}/projector.lock`, "$layout");
 /**
  * 每 Demand 一组人读页面所在的目录：`.wakeflow-active/projections/<demandId>/`。
  * 页面不进 Demand 根：根是带负载摘要的权威树，派生页面不能改变它的摘要。

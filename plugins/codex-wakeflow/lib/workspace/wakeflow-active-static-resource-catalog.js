@@ -1,5 +1,5 @@
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF, WAKEFLOW_ACTIVE_ROOT_REF, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, } from "../kernel/layout.js";
+import { REQUIREMENT_BOARD_INDEX_REF, REQUIREMENT_BOARD_ROOT_REF, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, WAKEFLOW_ACTIVE_ROOT_REF, WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF, WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF, } from "../kernel/layout.js";
 import { parseWakeflowWorkspaceResourceDeclaration, privateWorkspaceDirectoryDeclaration, } from "./workspace-resource-declaration.js";
 /**
  * Wakeflow Workspace / Active：共享活动根的静态资源声明。
@@ -49,32 +49,10 @@ const WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG = Object.freeze([
 ]);
 const WAKEFLOW_ACTIVE_WORKSPACE_INDEX_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-index", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF);
 const WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION = projectionDeclaration("active.workspace-status", "active-workspace-projection", WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF);
-const WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: "active.workspace-projection-lock",
-    family: "active",
-    ownerId: "active-workspace-projection",
-    scope: "host-neutral",
-    placement: { root: { kind: "workspace" }, relativePath: WAKEFLOW_ACTIVE_PROJECTION_LOCK_REF },
-    tracking: { disposition: "ignored", privacy: "runtime-private" },
-    nodePolicy: {
-        kind: "file",
-        mode: "0600",
-        linkPolicy: "single-link",
-        executablePolicy: "forbidden",
-    },
-    processing: {
-        kind: "resource",
-        role: "transaction-artifact",
-        allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-        recoveryStrategy: "owner-transaction-recovery",
-    },
-});
 export const WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG = Object.freeze([
     ...WAKEFLOW_ACTIVE_LAYOUT_RESOURCE_CATALOG,
     WAKEFLOW_ACTIVE_WORKSPACE_INDEX_RESOURCE_DECLARATION,
     WAKEFLOW_ACTIVE_WORKSPACE_STATUS_RESOURCE_DECLARATION,
-    WAKEFLOW_ACTIVE_PROJECTION_LOCK_RESOURCE_DECLARATION,
 ]);
 /** Active Layout 两级容器策略的语义摘要；维护计划用它做步骤目标。 */
 export const WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST = computeCanonicalJsonSha256Digest({

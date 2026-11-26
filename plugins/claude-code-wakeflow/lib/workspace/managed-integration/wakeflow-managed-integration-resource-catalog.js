@@ -9,7 +9,6 @@ import { parseWakeflowWorkspaceResourceDeclaration, } from "../workspace-resourc
  * 不能根据当前执行宿主生成互相覆盖的不同 block。
  */
 export const WAKEFLOW_GITIGNORE_REF = parsePortableResourcePath(".gitignore");
-export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF = parsePortableResourcePath(".wakeflow-gitignore-recomposition.lock");
 export const WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: "workspace.ignore-integration",
@@ -37,35 +36,7 @@ export const WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION = parseWakeflowWorks
         recoveryStrategy: "recompose-owned-content",
     },
 });
-export const WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION = parseWakeflowWorkspaceResourceDeclaration({
-    kind: "WakeflowWorkspaceResourceDeclaration",
-    declarationId: "workspace.ignore-integration-lock",
-    family: "workspace",
-    ownerId: "workspace-ignore-integration",
-    scope: "host-neutral",
-    placement: {
-        root: { kind: "workspace" },
-        relativePath: WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_REF,
-    },
-    tracking: {
-        disposition: "ignored",
-        privacy: "runtime-private",
-    },
-    nodePolicy: {
-        kind: "file",
-        mode: "0600",
-        linkPolicy: "single-link",
-        executablePolicy: "forbidden",
-    },
-    processing: {
-        kind: "resource",
-        role: "transaction-artifact",
-        allowedMutationRecipes: ["exclusive-create", "exact-retire"],
-        recoveryStrategy: "owner-transaction-recovery",
-    },
-});
 /** Managed Integration 职责所有者的确定性静态资源目录。 */
 export const WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG = Object.freeze([
     WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
-    WAKEFLOW_GITIGNORE_RECOMPOSITION_LOCK_RESOURCE_DECLARATION,
 ]);

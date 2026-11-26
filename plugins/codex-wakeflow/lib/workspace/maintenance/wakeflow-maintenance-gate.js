@@ -1,13 +1,14 @@
 import { types } from "node:util";
-import { threadId } from "node:worker_threads";
 import { parseSha256Digest, Sha256Error, } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { DurableDirectoryMaterializationError, materializeDirectoryPath, } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { isRootedDirectory, } from "../../foundation/filesystem/rooted-directory.js";
-import { inspectRootedExclusiveFileLock, RootedExclusiveFileLockError, withRootedExclusiveFileLock, } from "../../foundation/filesystem/rooted-exclusive-file-lock.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import { materializeWorkspaceLocksRoot, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
-import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, wakeflowMaintenanceOperationUuid, } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_GATE_REF, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, WAKEFLOW_RUNTIME_ROOT_REF, } from "./wakeflow-maintenance-resource-catalog.js";
+import { retireWakeflowFileLockResidue } from "./wakeflow-file-lock-residue.js";
+import { createWakeflowMaintenanceOperationId, parseWakeflowMaintenanceOperationId, WakeflowMaintenanceOperationIdError, } from "./wakeflow-maintenance-operation-id.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 const ERROR_MESSAGES = {
     input: "Wakeflow maintenance gate input is invalid.",
@@ -135,9 +136,14 @@ function assertOperation(value) {
         fail("input", "$operation");
     }
 }
-async function materialize(root, resourcePath, signal) {
+/** 自举的一步：建出一段 0700 私有目录，或（`locks`）锁目录连同它的锁文件。 */
+async function materialize(root, target, signal) {
     try {
-        await materializeDirectoryPath(root, resourcePath, {
+        if (target === "locks") {
+            await materializeWorkspaceLocksRoot(root, signal);
+            return;
+        }
+        await materializeDirectoryPath(root, target, {
             mode: 0o700,
             ...(signal === undefined ? {} : { signal }),
         });
@@ -148,22 +154,22 @@ async function materialize(root, resourcePath, signal) {
                 fail("aborted", "$signal", error);
             fail("effect-failure", "$bootstrap", error);
         }
+        if (error instanceof KernelFileLockError)
+            fail("effect-failure", "$bootstrap", error);
         throw error;
     }
 }
 function mapLockError(error) {
     if (error.reason === "aborted")
-        fail("aborted", "$signal");
+        fail("aborted", "$signal", error);
     if (error.reason === "timeout")
-        fail("busy", "$gate");
-    if (error.reason === "owner-active" ||
-        error.reason === "residue-changed" ||
-        error.reason === "release-failure") {
-        fail("recovery-required", "$gate");
-    }
+        fail("busy", "$gate", error);
     if (error.reason === "input")
-        fail("input", error.path);
-    fail("bootstrap-conflict", "$gate");
+        fail("input", error.path, error);
+    if (error.reason === "unsafe-lock" || error.reason === "parent") {
+        fail("bootstrap-conflict", "$gate", error);
+    }
+    fail("effect-failure", "$gate", error);
 }
 /**
  * 解析一个仍在当前 gate callback 内有效的 context，并验证它属于指定 Workspace 根。
@@ -186,11 +192,9 @@ export function wakeflowMaintenanceCoreInspectionForGateContext(value, root) {
     return inspection;
 }
 async function runCorrelatedGate(root, operationId, options, operation, prepare) {
-    const operationUuid = wakeflowMaintenanceOperationUuid(operationId);
-    const expectedLockToken = `${process.pid}-${threadId}-${operationUuid}`;
     try {
-        return await withRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF, async () => {
-            const admittedCoreInspection = await prepare?.(expectedLockToken);
+        return await withWorkspaceLock(root, "maintenance-gate", async () => {
+            const admittedCoreInspection = await prepare?.();
             const context = Object.freeze({
                 operationId,
             });
@@ -200,16 +204,15 @@ async function runCorrelatedGate(root, operationId, options, operation, prepare)
                 CONTEXT_CORE_INSPECTIONS.set(context, admittedCoreInspection);
             }
             try {
-                return await withWorkspaceOperationScope(root, "exclusive", async () => operation(context), {
+                return await withWorkspaceOperationScope(root, "exclusive", async () => {
+                    const result = await operation(context);
+                    // 做成了的维护顺手删掉文件锁版本留下的锁目录；放在最后，计划核对的任何观察都在它之前。
+                    await retireWakeflowFileLockResidue(root, options.signal);
+                    return result;
+                }, {
                     ...(options.signal === undefined ? {} : { signal: options.signal }),
-                    maintenanceGuard: async () => {
-                        assertWakeflowMaintenanceGateContext(context, root);
-                        const current = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-                        if (current.status !== "held" ||
-                            current.ownerState !== "active" ||
-                            current.record.token !== expectedLockToken)
-                            fail("recovery-required", "$gate");
-                    },
+                    // 门在这个回调结束之前一直由本进程持有；活着的 context 就是持有它的凭证。
+                    maintenanceGuard: async () => assertWakeflowMaintenanceGateContext(context, root),
                 });
             }
             finally {
@@ -225,13 +228,12 @@ async function runCorrelatedGate(root, operationId, options, operation, prepare)
                 ? {}
                 : { retryDelayMilliseconds: options.retryDelayMilliseconds }),
             ...(options.signal === undefined ? {} : { signal: options.signal }),
-            tokenUuidFactory: () => operationUuid,
         });
     }
     catch (error) {
         if (error instanceof WakeflowMaintenanceGateError)
             throw error;
-        if (error instanceof RootedExclusiveFileLockError)
+        if (error instanceof KernelFileLockError)
             mapLockError(error);
         throw error;
     }
@@ -281,21 +283,8 @@ export async function withExistingWakeflowMaintenanceGate(rootValue, operationId
         signal: options.signal,
     }, operationValue);
 }
-async function admitLockedCoreInspection(root, before, expectedLockToken, signal) {
-    let lock;
-    try {
-        lock = await inspectRootedExclusiveFileLock(root, WAKEFLOW_MAINTENANCE_GATE_REF);
-    }
-    catch (error) {
-        if (error instanceof RootedExclusiveFileLockError)
-            mapLockError(error);
-        throw error;
-    }
-    if (lock.status !== "held" ||
-        lock.ownerState !== "active" ||
-        lock.record.token !== expectedLockToken) {
-        fail("recovery-required", "$gate");
-    }
+/** 门已经拿到：重新检查核心布局，确认预览时看到的活动布局没有变、协议目录齐全且没有残留。 */
+async function admitLockedCoreInspection(root, before, signal) {
     let after;
     try {
         after = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
@@ -315,7 +304,7 @@ async function admitLockedCoreInspection(root, before, expectedLockToken, signal
     if (after.local.status !== "busy" ||
         !after.local.protocolComplete ||
         after.issueCodes.length !== 0) {
-        fail(after.issueCodes.some((code) => code === "maintenance-transaction-residue" || code === "maintenance-gate-stage-residue")
+        fail(after.issueCodes.includes("maintenance-transaction-residue")
             ? "recovery-required"
             : "bootstrap-conflict", "$bootstrap");
     }
@@ -358,9 +347,9 @@ export async function withWakeflowMaintenanceGate(rootValue, optionsValue, opera
         options.bootstrap !== "repair") {
         fail("bootstrap-conflict", "$bootstrap");
     }
-    await materialize(rootValue, WAKEFLOW_RUNTIME_ROOT_REF, options.signal);
-    return runCorrelatedGate(rootValue, operationId, options, operationValue, async (expectedLockToken) => {
+    await materialize(rootValue, "locks", options.signal);
+    return runCorrelatedGate(rootValue, operationId, options, operationValue, async () => {
         await materialize(rootValue, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF, options.signal);
-        return admitLockedCoreInspection(rootValue, inspection, expectedLockToken, options.signal);
+        return admitLockedCoreInspection(rootValue, inspection, options.signal);
     });
 }

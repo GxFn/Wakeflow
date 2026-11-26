@@ -3,7 +3,7 @@ import { parseWakeflowWorkspaceHostResourceProfile, WakeflowWorkspaceHostResourc
 import { createWakeflowWindowHostBindingResourceCatalog } from "./wakeflow-window-host-binding-resource-catalog.js";
 import { parseWakeflowWindowHostIdentityProfile, WakeflowWindowHostIdentityProfileError, } from "./wakeflow-window-host-identity-profile.js";
 import { compileWakeflowWindowRuntimeDesiredTopology, WakeflowWindowRuntimeDesiredTopologyError, } from "./wakeflow-window-runtime-desired-topology.js";
-import { wakeflowWindowHostBindingMutationLockRef, wakeflowWindowHostBindingRootRef, } from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "./wakeflow-window-runtime-paths.js";
 const ERROR_MESSAGES = {
     profile: "Window Host Binding Store authority profiles are inconsistent.",
     topology: "Window Host Binding Store authority topology is invalid.",
@@ -80,6 +80,5 @@ export function compileWakeflowWindowHostBindingStoreAuthority(configValue, reso
         identityProfile,
         bindingRefs,
         bindingRootRef: wakeflowWindowHostBindingRootRef(resourceProfile),
-        lockRef: wakeflowWindowHostBindingMutationLockRef(resourceProfile),
     });
 }

@@ -43,7 +43,7 @@ import { WakeflowWindowRuntimeProjectionError } from "../window-runtime/wakeflow
 import { ensureWakeflowWindowRuntimeSkeleton, retireWakeflowWindowRuntimeProjections, } from "../window-runtime/wakeflow-window-runtime-projection-maintenance.js";
 import { WAKEFLOW_DETACH_WORKSPACE_TARGET_KEY, wakeflowConfigRetirementAuthorityDigest, wakeflowManagedBlockRemovalAuthorityDigest, wakeflowWindowProjectionRetirementAuthorityDigest, } from "./wakeflow-detach-step-authority.js";
 import { assertWakeflowMaintenanceGateContext, WakeflowMaintenanceGateError, } from "./wakeflow-maintenance-gate.js";
-import { WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION, WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION, WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION, } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import { parseWakeflowStaticMaterializationPreview, parseWakeflowStaticMaterializationPreviewRequest, WakeflowStaticMaterializationPreviewError, wakeflowStaticMaterializationActionUsesCurrentConfig, } from "./wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout, WakeflowWorkspaceCoreLayoutInspectionError, } from "./wakeflow-workspace-core-layout-inspection.js";
 /**
@@ -168,12 +168,7 @@ async function optionalConfigSnapshot(root, signal) {
     }
 }
 async function executeLocalProtocol(root, step, signal) {
-    assertStepTarget(step, authorityDigest([
-        WAKEFLOW_LOCAL_ROOT_RESOURCE_DECLARATION,
-        WAKEFLOW_RUNTIME_ROOT_RESOURCE_DECLARATION,
-        WAKEFLOW_MAINTENANCE_ROOT_RESOURCE_DECLARATION,
-        WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_RESOURCE_DECLARATION,
-    ]));
+    assertStepTarget(step, authorityDigest(WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG));
     let core;
     try {
         core = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
@@ -308,14 +303,11 @@ async function executeRequirementBoardInitialization(root, step, recovering, sig
         throw error;
     }
 }
-async function executeActiveWorkspaceProjection(root, step, desired, recovering, signal) {
+async function executeActiveWorkspaceProjection(root, step, desired, signal) {
     const projection = renderWakeflowFreshActiveProjection(desired);
     assertStepTarget(step, projection.authorityDigest);
     try {
-        const result = await publishActiveProjection(root, projection.files, {
-            recovering,
-            ...(signal === undefined ? {} : { signal }),
-        });
+        const result = await publishActiveProjection(root, projection.files, signal === undefined ? {} : { signal });
         // fresh 工作区里的目标只能是缺失或本 owner 写过的；任何 unsafe 都是 owner 失败。
         if (result.disposition === "unsafe")
             fail("owner", "$projection");
@@ -963,7 +955,7 @@ export async function executeWakeflowStaticMaterializationStep(root, gateContext
         return fail("plan", `$step.kind:${step.kind}`);
     }
     if (step.kind === "publish-fresh-active-workspace-projection") {
-        return executeActiveWorkspaceProjection(root, step, desired, recovering, signal);
+        return executeActiveWorkspaceProjection(root, step, desired, signal);
     }
     if (step.kind === "materialize-ledger-layout") {
         return executeLedgerLayout(root, step, request, desired, recovering, signal);

@@ -37,9 +37,14 @@ function mapContextError(error) {
     }
     throw error;
 }
+/**
+ * 任务包自己的路径只有成员名与下标，接在请求路径后面一起交回：调用方才知道是哪一处。1.4.3 的 tmux 一轮里，
+ * 测试契约有两步引用同一条验收标准，拒绝只说 `relation`，Controller 看不出是哪一步。
+ */
 function mapPackageError(error) {
     if (error instanceof TaskPackageError) {
-        fail("invalid-request", "task-package", "$request.taskPackage", { cause: error });
+        const inner = error.path.startsWith("$") ? error.path.slice(1) : "";
+        fail("invalid-request", "task-package", `$request.taskPackage${inner}`, { cause: error });
     }
     throw error;
 }

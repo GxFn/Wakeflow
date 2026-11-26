@@ -62,9 +62,11 @@ repository is refused - finish or supersede the first.
 A test package additionally carries the frozen test contract: the approved
 steps bound to acceptance-criteria items, the allowed skills, the setup, the
 attempt budget and the stop conditions. Freeze it deliberately, because the
-test window is not allowed to revise it. The contract must carry one step for
-every acceptance criterion - planning refuses `test-contract-uncovered:<item>`
-and `step-item-unknown` names the real count as `acceptance-items:<n>` -
+test window is not allowed to revise it. The contract must carry exactly one
+step for every acceptance criterion - put every check a criterion needs into
+its one step; a second step on the same criterion is refused as `task-package`
+with the step's place in `path`, a criterion without a step as
+`test-contract-uncovered:<item>`, and `step-item-unknown` names the real count as `acceptance-items:<n>` -
 because a Demand gets one test contract per generation and completion requires
 that contract to cover the whole list.
 
@@ -97,7 +99,9 @@ Your three paragraphs are the only part a target reads first, so write them as
 instructions to a competent colleague who has not been in this conversation:
 what to achieve, where to focus, what not to touch. When the work must be
 committed, say so here: under the host's auto mode a target can be refused an
-action its prompt never asked for. Do not restate the package
+action its prompt never asked for. Do not ask for raw `git show` or `git log`
+output in the report: it carries the author's name and email into the archive,
+and the import already records each reported commit. Do not restate the package
 - the target reads it - and do not put an absolute local path or a handle in
 them, nor a host session id: the prompt is archived with the Demand, and the
 target takes the callback's destination from the callback permit its import
@@ -105,7 +109,8 @@ returns, not from the prompt (`references/desktop-flow.md`, "The callback").
 
 ## Quick Demand
 
-For a small change the user asks for directly - one repository, one
+A quick Demand always runs in the main pod: in another pod's Controller window
+send the user to that pod's Design window instead. For a small change the user asks for directly - one repository, one
 implementation task, nothing to test separately - `wakeflow_quick_demand` does
 steps 3 to 7 in one confirmed step instead of five turns. Give it the
 repository, a short title, the user's request in their words and, when they

@@ -131,6 +131,9 @@ Enough for the Controller to split it into tasks; not a line-by-line design.
 **Testing decision.** Whether this needs real-environment testing, and if so
 what environment and what has to be exercised. The Controller freezes a test
 contract from this, so vagueness here becomes an untestable contract later.
+With real-environment testing that contract must cover every acceptance
+criterion with one step, so write only criteria the test window can check and
+never promise that the Controller will check one outside the contract.
 For a real environment name the environment reference, where each
 configuration value comes from, how data is prepared and reset, which
 resources are exclusive and which shared, and which operations are allowed.

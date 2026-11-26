@@ -3,6 +3,7 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
 import { computeDemandEventStreamCommitDigest } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import {
@@ -28,6 +29,7 @@ import {
 } from "../../governance/demand/publication/demand-event-sourcing-publication-service.js";
 import {
   createDemandEventSourcingPublicationTransaction,
+  type DemandEventSourcingPublicationTransaction,
   DemandEventSourcingPublicationTransactionError,
 } from "../../governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import type { DemandEventSourcingPublicationResult } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
@@ -63,6 +65,7 @@ import {
   type DemandServiceOptions,
   type DemandSliceContext,
 } from "./context.js";
+import { retireDemandRoot } from "./archive.js";
 import {
   admitDemandCreationResult,
   parseDemandCreationRequest,
@@ -500,6 +503,47 @@ async function pendingPublicationOf(context: DemandSliceContext, demandId: strin
   }
 }
 
+/**
+ * 一次再也认领不了的创建（L10）：暂存或根已经在，需求包却在它认领之前被撤回、或被别的 Demand 认领。
+ * 这个 Demand 从未认领过任何东西，暂存与根里只有创建自己写下的字节；重放只会一直报认领冲突，根留着，
+ * pod 一直被占。出口是退役：删掉暂存，根先改名再删，然后以 `creation-abandoned` 说明没有可恢复的了。
+ * 包仍可认领（pending 且摘要未变）或已经是这个 Demand 的，不归这里管。调用方持有这个 pod 的变更锁。
+ */
+async function abandonUnclaimableCreation(
+  context: DemandSliceContext,
+  pending: Readonly<DemandEventSourcingPublicationTransaction>,
+): Promise<void> {
+  const source = await readRequirementClaimState(
+    context.root,
+    pending.requirementId,
+    context.signal,
+  );
+  const claimable =
+    source !== null &&
+    source.state.status === "pending" &&
+    source.digest === pending.expectedClaimStateDigest;
+  if (claimable || source?.state.claim?.demandId === pending.demandId) return;
+  try {
+    await removeRootedDirectoryTree(
+      context.root,
+      pending.stageRef,
+      { missing: "ignore", ...signalOptions(context.signal) },
+      "$stage",
+    );
+  } catch (error: unknown) {
+    fail("io-failure", "demand-stage-remove", "$stage", { cause: error });
+  }
+  await retireDemandRoot(context.root, pending.demandId, pending.identityDigest, context.signal, {
+    residual: true,
+  });
+  fail("precondition-failed", "creation-abandoned", "$request.operationId", {
+    details: {
+      requirementId: pending.requirementId,
+      packageStatus: source?.state.status ?? "absent",
+    },
+  });
+}
+
 async function recoverCreate(
   context: DemandSliceContext,
   operationId: string,
@@ -517,6 +561,7 @@ async function recoverCreate(
         context.signal,
       );
       await assertNoActiveDemand(context.root, context.signal, demandId, pending.identity.podId);
+      await abandonUnclaimableCreation(context, pending);
       return recoverCreateLocked(context, operationId);
     },
     context.signal,

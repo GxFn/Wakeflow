@@ -88,9 +88,12 @@ test("参考按 code 给出处理办法与各切片的 reason；注记点名的 
         "append-candidates-pending",
         "evidence-publication-pending",
         "demand-publication",
+        "creation-abandoned",
         "authority-reference-unknown",
       ]
         .map((reason) => `fail("precondition-failed", "${reason}", "$x");`)
+        // 带注记的模板 reason（占位符拆开写，同上一条测试）。
+        .concat(['fail("precondition-failed", `authority-$', "{error.reason}`, path);"].join(""))
         .join("\n"),
     },
   ]);
@@ -99,7 +102,7 @@ test("参考按 code 给出处理办法与各切片的 reason；注记点名的 
   ok(text.includes("## `idempotency-mismatch` - this idempotency key already belongs"));
   ok(
     text.includes(
-      "- **all**: `append-candidates-pending`, `authority-reference-unknown`, `binding-changed`, `claim-held`",
+      "- **all**: `append-candidates-pending`, `authority-<reason>`, `authority-reference-unknown`, `binding-changed`, `claim-held`",
     ),
   );
   ok(text.includes("- `request-digest` - the key was used with a different request body."));

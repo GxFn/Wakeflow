@@ -4,6 +4,7 @@ import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -399,6 +400,86 @@ test("创建被打断在认领之前：同一个请求再发一次沿用标记�
   equal(identity.createdAt, firstAt);
   equal(existsSync(path.join(demandRoot, "transactions", "publication.json")), false);
   equal(existsSync(indexPath), true);
+});
+
+test("创建被打断在认领之前、需求包随后被撤回：recover 退役这个认领不了的根并放开 pod（L10）", {
+  timeout: 60_000,
+}, async (t) => {
+  const workspace = await fixture(t);
+  const root = workspace.root;
+  writeDrafts(workspace);
+  const publishRequest = {
+    root,
+    mode: "preview",
+    action: "publish",
+    package: packageInput(workspace, { confirmation: { confirmedAt: CONFIRMED_AT } }),
+  };
+  const ready = await executeRequirementPublicationRequest(publishRequest, { clock });
+  if (ready.kind !== "WakeflowRequirementPublicationPreview" || ready.planDigest === null)
+    throw new Error("Expected a ready preview.");
+  const published = await executeRequirementPublicationRequest(
+    { ...publishRequest, mode: "apply", planDigest: ready.planDigest },
+    { clock },
+  );
+  if (published.kind !== "WakeflowRequirementPublicationMutation")
+    throw new Error("Expected a mutation.");
+  const createRequest = {
+    root,
+    mode: "apply",
+    requirementId: published.package.requirementId,
+    demand: { title: "被打断", goal: "之后包被撤回。", completionDefinition: "看 recover。" },
+  };
+  const boardPath = path.join(root, ".wakeflow-active/current/board");
+  chmodSync(boardPath, 0o500);
+  try {
+    await rejects(executeDemandCreationRequest(createRequest, { clock }));
+  } finally {
+    chmodSync(boardPath, 0o700);
+  }
+  const current = path.join(root, ".wakeflow-active/current");
+  const demandId = readdirSync(current).find((name) => name.startsWith("demand_"));
+  if (demandId === undefined) throw new Error("Expected the Demand root in place.");
+
+  const withdrawRequest = {
+    root,
+    mode: "preview",
+    action: "withdraw",
+    requirementId: published.package.requirementId,
+    expectedStateDigest: published.package.stateDigest,
+    reason: "不做了",
+  };
+  const withdrawPreview = await executeRequirementPublicationRequest(withdrawRequest, { clock });
+  if (
+    withdrawPreview.kind !== "WakeflowRequirementPublicationPreview" ||
+    withdrawPreview.planDigest === null
+  )
+    throw new Error("Expected a ready withdrawal.");
+  await executeRequirementPublicationRequest(
+    { ...withdrawRequest, mode: "apply", planDigest: withdrawPreview.planDigest },
+    { clock },
+  );
+
+  // 这次创建再也认领不了：recover 把根退役并说明，不再一直报认领冲突。
+  await rejects(
+    executeDemandCreationRequest({ root, mode: "recover", operationId: demandId }, { clock }),
+    (error: unknown) =>
+      error instanceof WakeflowError &&
+      error.code === "precondition-failed" &&
+      error.reason === "creation-abandoned" &&
+      error.details?.requirementId === published.package.requirementId &&
+      error.details?.packageStatus === "withdrawn",
+  );
+  equal(existsSync(path.join(current, demandId)), false, "the unclaimable root is still there");
+  deepEqual(
+    readdirSync(current).filter((name) => name.includes(demandId)),
+    [],
+    "no retired remainder of the root",
+  );
+
+  // pod 放开了：原请求只剩"包已撤回"这一条阻塞，不再有 pod-busy。
+  const again = await executeDemandCreationRequest(createRequest, { clock });
+  if (again.kind !== "WakeflowDemandCreationPreview") throw new Error("Expected a preview.");
+  deepEqual(again.blockers, ["package-claim:withdrawn"]);
 });
 
 test("阻塞：缺章、隐私命中、测试决策与类型不符；未知窗口与设计面是错误", {

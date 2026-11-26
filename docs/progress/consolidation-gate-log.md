@@ -6918,3 +6918,12 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证（第 1 档）。** `wf verify quick --changed`：类型、架构、lint，103 个测试文件 544/544；制品在开发工作树里重建（不是部署）；`smoke:artifacts` 4/4；`tests/artifacts` 53/53；`wf handoff` 见提交。没有过完整门：留给 1.4.4 的收口。
 
 **结论：范围已定；内核锁的决定记录等用户过目；L10 的第一批修了三条、判定一条不改。**
+
+### 13.291 L10 里单独修的第二批：认领不了的创建有了出口；打不开 Demand 的拒绝指向 status（2026-11-25）
+
+- **创建的 recover 遇到需求包已不是 pending（原先"没有核实"的一条）：核实出一条死路，已修。** 先写了一条探查测试：创建被打断在认领之前（根已就位、发布标记还在），随后需求包被撤回——撤回照常成功；创建的 recover 报 `concurrency-conflict/publication-cas-mismatch`（还标着可重试）；原请求重发被 `package-claim:withdrawn` 与 `pod-busy` 挡住；根一直留着，pod 一直被占，没有任何调用能结束它。包被另一个 pod 的创建认领时是同一种盘面。修法：recover 在重放之前先看这次创建还认领得了吗——包仍是 pending 且摘要未变，或者已经是这个 Demand 的，照旧；否则这次创建作废：删暂存，根用现成的"先改名、再删"退役，然后以 `precondition-failed/creation-abandoned` 说明（`details` 带需求包标识与它现在的状态）。这个 Demand 从未认领过任何东西，根里只有创建自己写下的字节。调用方本来就持有这个 pod 的变更锁。测试钉住：recover 报 `creation-abandoned`，根与退役名都不在，原请求只剩"包已撤回"一条阻塞。`refusals.md` 加这条原因的说明。
+- **规划、投递、证据、评审打开 Demand 被拒时不带出口：改文本，不改代码。** 读了四个切片：打开失败的那一刻它们手里只有工作区根与 Demand 标识，没有配置也没有账本根；要在拒绝里点名恢复的调用，四处都得在失败路径上再读一遍配置、开一次账本根。`status` 已经会给出 `demand-recovery` 的路由，所以只在 `refusals.md` 里给 `authority-<reason>` 加一句：带 `demand-authority` 时这个 Demand 可能停在被打断的写入上，先带 `demandId` 读 status。途中看到规划、投递、评审三个切片里有三份一模一样的错误映射，留给存储接口迁移时合并。
+- **还没做的。** 证据的 recover 在真实进程里走一次；证据负载暂存那一半。
+- **验证（第 0 档；这一批的制品没有重建）。** `wf verify quick --changed`：类型、架构、lint、未使用代码，54 个测试文件 328/328；`refusals:build` 已重新生成参考。**制品重建这一步被权限判定拒绝，没有绕过**：所以这一次提交之后 `plugins/` 里的字节落后于源码，`build:check` 会报不一致，`smoke:artifacts` 与 `tests/artifacts` 没有对这一批跑。等用户允许重建之后补上并单独提交。
+
+**结论：L10 里值得单独修的 7 条，修了 4 条（其中 2 条是先用测试证实的），1 条判定不改，1 条用文本接住，剩证据的两处核实。**

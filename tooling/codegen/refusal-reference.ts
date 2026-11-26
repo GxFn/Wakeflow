@@ -89,6 +89,10 @@ const REASON_NOTES: Readonly<Record<string, string>> = Object.freeze({
     "an evidence recording on this Demand was cut short. Call `wakeflow_record_evidence` with `mode: recover` and `demandId` = `details.demandId` (this tool's recover takes no `operationId`), then repeat the call.",
   "demand-publication":
     "the creation of this Demand was cut short. With `details.tool`, recover with `wakeflow_create_demand` and the Demand id. Without it the create tool itself refused (apply or `mode: recover`): a writer of that creation may still be running - wait, then send the same request again.",
+  "creation-abandoned":
+    "this unfinished creation could never claim its requirement package (`details.packageStatus`: withdrawn, or claimed by another Demand), so its recover removed the unclaimed Demand root and the pod is free. Nothing is left to recover: do not retry - create from a package that is pending.",
+  "authority-<reason>":
+    "the Demand, or the configuration behind it, could not be opened for this call. With `demand-authority` the Demand may be stopped on an interrupted write: read `wakeflow_status` with its `demandId` before retrying - a `demand-recovery` route there names the recover call.",
   "authority-reference-unknown":
     "the task package cites a ledger member that the Demand's requirement packages do not contain. Use the member references the inspection of the requirement returned.",
 });

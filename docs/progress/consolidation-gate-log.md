@@ -7053,3 +7053,13 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 0 档 `wf verify quick --changed`：281 个测试文件，1,571/1,571，回执 `.build/verification/run-qJwj3x/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
 
 **结论：批 2 完成，净减 100 行；两批合计 `src` 净减 902 行。下一批是私有节点的策略只有一处判断。**
+
+### 13.299 1.4.5 批 3：私有节点的策略只有一处判断（2026-11-26）
+
+- **改了什么。** 新模块 `src/foundation/filesystem/private-node-policy.ts`（36 行）：`isPrivateFile(node, allowedLinkCounts = [1n])` 与 `isPrivateDirectory(node)`，判断"当前用户拥有的 0600 单链接文件 / 0700 目录"。15 个模块的 26 处调用改用它们，失败时报什么仍由各处自己说；14 个本地函数删掉（10 个策略函数、4 个只包了一层当前用户查询的）。提交 `4583b8e4`：`src` 20 个文件 +108 / −252（净减 144 行），`tests` 添一个纯测试文件（84 行），已有测试没有改。机械改动由 Opus 子代理做，我定规则、读了新模块与两个调用点的差异。
+- **比预计少。** 清点数到的 626 行"节点策略"里，大部分不是这一条策略：公开的 0644 / 0755 节点、只看模式的观察、把模式当数据抄走或算摘要的。真正逐字重复这条策略的约 180 行。
+- **没有动的。** 核对的事实不一样的都留着：不查属主的（工作认领、钩子观察等）、只查模式的、按哪一项不合格分别报原因的（活动投影）、模式是参数的。另有两处用的是更严的属主规则（取不到当前用户就一律拒绝）：维护意图存储与核心布局检查；别处是取不到就不查。在唯一支持的平台上两者没有差别，这一批没有去统一。
+- **对外。** 没有变化：`refusals:check` 189 个原因不变，检查的先后次序保留。
+- **验证。** 第 0 档 `wf verify quick --changed`：154 个测试文件，789/789，回执 `.build/verification/run-aGAvwH/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
+
+**结论：批 3 完成，净减 144 行；三批合计 `src` 净减 1,046 行。批 4 要改拒绝原因的名字，先给用户清单。**

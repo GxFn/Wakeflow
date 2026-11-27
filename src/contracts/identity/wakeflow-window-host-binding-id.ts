@@ -1,4 +1,4 @@
-import { WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
+import { WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX } from "./wakeflow-typed-id-prefixes.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
@@ -8,7 +8,7 @@ import {
 } from "../../foundation/identity/uuid-v4.js";
 
 /**
- * Wakeflow Workspace / Window Runtime：Window Host Binding 的代际身份。
+ * Wakeflow Contracts / Identity：Window Host Binding 的代际身份。
  *
  * Binding 是可替换的运行时路由事实，不是持久业务实体，因此不进入 durable ID kind
  * 词汇。每次新建或未来替换都会获得新的随机 UUIDv4；相同 Agent observation 的幂等

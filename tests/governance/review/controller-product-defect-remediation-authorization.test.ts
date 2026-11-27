@@ -7,7 +7,7 @@ import {
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { parseDemandEventStreamRevision } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventStreamRevision } from "../../../src/contracts/identity/demand-event-stream-position.js";
 import {
   ControllerProductDefectRemediationAuthorizationError,
   type CreateControllerProductDefectRemediationAuthorizationInput,

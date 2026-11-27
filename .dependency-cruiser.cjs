@@ -10,14 +10,8 @@
 const LEGACY_DOMAIN_ROOTS = "configuration|workspace|governance";
 const HOST_NEUTRAL_RUNTIME = `^src/(?:${LEGACY_DOMAIN_ROOTS}|kernel|capabilities)/`;
 
-const WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES =
-  "^src/workspace/(?:maintenance/(?:wakeflow-static-materialization-preview|wakeflow-static-materialization-step-executor)|(?:wakeflow-shared-coordination-layout|wakeflow-workspace-static-resource-matrix))\\.ts$";
-
-const WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS =
-  "^src/governance/(?:delivery/window-work-claim-resource-catalog|demand/demand-resource-catalog|ledger/(?:ledger-authority-(?:layout|store|storage-policy)|ledger-resource-catalog))\\.ts$";
-
 const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
-  "^src/workspace/(?:window-runtime/(?:wakeflow-agent-host-window-observation-authority|wakeflow-window-host-binding(?:-id|-store-authority|-store)?|wakeflow-window-host-identity-profile|wakeflow-window-runtime-projection-inspection)|workspace-(?:host-resource-profile|resource-declaration|shared-runtime-resource-catalog)|wakeflow-legacy-residue-scan)\\.ts$";
+  "^src/workspace/(?:window-runtime/(?:wakeflow-window-host-binding(?:-store-authority|-store)?|wakeflow-window-host-identity-profile|wakeflow-window-runtime-projection-inspection)|workspace-host-resource-profile|wakeflow-legacy-residue-scan)\\.ts$";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -135,28 +129,11 @@ module.exports = {
 
     // ---- 过渡：旧树内部接缝（随 L1 删除旧树时一并删除）---------------------
     {
-      name: "transitional-configuration-uses-only-workspace-resource-contract",
+      name: "layer-configuration-imports-only-listed-layers",
       severity: "error",
-      comment: "Configuration 只可复用 Workspace 的纯资源声明合同，不能取得 Workspace 状态或执行能力。",
+      comment: "configuration 只引用 foundation、contracts、kernel 与自己。",
       from: { path: "^src/configuration/" },
-      to: {
-        path: "^src/workspace/",
-        pathNot: "^src/workspace/workspace-resource-declaration\\.ts$",
-      },
-    },
-    {
-      name: "transitional-workspace-governance-composition-source-is-explicit",
-      severity: "error",
-      comment: "只有 Workspace 初始化与静态矩阵组合根可以取得 Governance owner 能力。",
-      from: { path: "^src/workspace/", pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES },
-      to: { path: "^src/governance/" },
-    },
-    {
-      name: "transitional-workspace-governance-composition-target-is-explicit",
-      severity: "error",
-      comment: "Workspace 组合缝只能取得已列明的 Governance 布局、目录和初始化 owner。",
-      from: { path: WORKSPACE_GOVERNANCE_COMPOSITION_SOURCES },
-      to: { path: "^src/governance/", pathNot: WORKSPACE_GOVERNANCE_COMPOSITION_TARGETS },
+      to: { path: "^src/", pathNot: "^src/(?:foundation|contracts|kernel|configuration)/" },
     },
     {
       name: "transitional-governance-uses-only-workspace-contract-seams",

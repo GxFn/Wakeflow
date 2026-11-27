@@ -1,7 +1,7 @@
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../workspace/workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 import { WAKEFLOW_CONFIG_FILE_REF } from "./wakeflow-config-authority-snapshot.js";
 
 /**

@@ -10,7 +10,7 @@ import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-pub
 import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { parseUuidV4 } from "../../src/foundation/identity/uuid-v4.js";
 import { parseWakeflowMaintenanceOperationId } from "../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import { parseWakeflowWindowHostBindingId } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 
 /**
  * 0 级（纯逻辑）：请求 Schema 里每一条标识与摘要的 `pattern` 都等于代码信赖的那条领域规则（a-spec 第 3.2 节

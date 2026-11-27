@@ -27,7 +27,7 @@ import {
   DemandEventStreamPositionError,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-} from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+} from "../../../src/contracts/identity/demand-event-stream-position.js";
 
 /**
  * Governance / Demand Event Sourcing 提交记录（ADR-0005），0 级（纯逻辑）测试：流位置与文件名词汇、

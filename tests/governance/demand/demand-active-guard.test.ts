@@ -26,8 +26,8 @@ import { createDemandEventSourcingPublicationTransaction } from "../../../src/go
 import {
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
-  demandFinalRootRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,

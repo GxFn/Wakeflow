@@ -1,4 +1,7 @@
-import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../contracts/identity/wakeflow-durable-id.js";
 import { isWakeflowHostId, type WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import {
   type PortableResourcePath,
@@ -102,6 +105,16 @@ const DEMAND_ID_PATTERN =
 function parseDemandIdText(value: string): string {
   if (!DEMAND_ID_PATTERN.test(value)) fail("invalid-request", "demand-id", "$demandId");
   return value;
+}
+
+function parseDemandId(value: string): WakeflowDurableId<"demand"> {
+  return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
+}
+
+export function demandFinalRootRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(demandId)}`,
+  );
 }
 
 /** 生命周期事务（完成、取消、续接）的步骤日志目录（0700）；活动根删除后日志仍可恢复。 */

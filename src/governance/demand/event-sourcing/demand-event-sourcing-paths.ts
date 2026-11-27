@@ -13,7 +13,7 @@ import {
   type DemandEventCommitSequence,
   DemandEventStreamPositionError,
   parseDemandEventCommitSequence,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：本地文件事件存储的路径词汇。

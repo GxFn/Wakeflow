@@ -62,8 +62,8 @@ import {
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   demandFinalPublicationMarkerRef,
-  demandFinalRootRef,
 } from "../../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../../src/kernel/layout.js";
 import { parseLedgerAuthorityMemberReference } from "../../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../../src/kernel/active-projection.js";
 import { durableAtomicFileStageRefForTest } from "../../../foundation/filesystem/durable-atomic-file-test-support.js";

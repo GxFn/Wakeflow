@@ -1,7 +1,7 @@
-import { ModuleError } from "../../../foundation/error/module-error.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 
 /**
- * Wakeflow Governance / Demand Event Sourcing：逻辑事件流修订号词汇。
+ * Wakeflow Contracts / Identity：逻辑事件流修订号词汇。
  *
  * 逻辑事件修订号与物理提交槽位都从 1 开始且必须连续。修订号 0 只表示追加操作预期
  * 事件流为空，不会出现在持久化事件中；`commitSequence`独立计数一次命令提交。

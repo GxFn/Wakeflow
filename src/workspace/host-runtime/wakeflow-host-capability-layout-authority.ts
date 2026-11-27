@@ -10,7 +10,7 @@ import type {
   WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "../../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace / Host Runtime：当前宿主 capability 父目录的纯目标权威。

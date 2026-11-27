@@ -15,7 +15,7 @@ import {
 } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {

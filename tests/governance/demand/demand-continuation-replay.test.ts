@@ -15,7 +15,7 @@ import {
   type DemandAggregateState,
   parseDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupControllerTestReviewDecisionServiceFixture,

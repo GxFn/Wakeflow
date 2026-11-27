@@ -4,7 +4,7 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../../workspace/workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 import {
   LEDGER_ARCHIVES_ROOT_REF,
   LEDGER_REQUIREMENTS_ROOT_REF,

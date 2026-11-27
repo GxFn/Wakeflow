@@ -17,7 +17,7 @@ import {
 } from "../foundation/resource/resource-processing-contract.js";
 
 /**
- * Wakeflow Workspace：资源声明的纯数据合同。
+ * Wakeflow Kernel / Workspace Resource Declaration：资源声明的纯数据合同。
  *
  * 本模块把 Foundation 的机械处理合同与资源分类、唯一职责所有者、逻辑根目录位置、
  * 版本控制与隐私策略，以及文件系统节点策略组合成冻结声明。位置只引用 Workspace

@@ -37,7 +37,7 @@ import {
   computeDemandEventStreamCommitDigest,
   type DemandEventStreamCommitWriter,
 } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 import { ledgerAuthorityMemberRef } from "../../governance/ledger/ledger-authority-paths.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
 import {

@@ -35,7 +35,7 @@ import {
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
   parseDemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：跨事件版本稳定的持久化事件封装。

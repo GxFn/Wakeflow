@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   deriveManagedEvidenceId,
   ManagedEvidenceCapturePlanningService,

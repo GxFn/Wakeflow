@@ -86,7 +86,7 @@ import type {
   DemandSupplementPackage,
   DemandTargetTaskState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,

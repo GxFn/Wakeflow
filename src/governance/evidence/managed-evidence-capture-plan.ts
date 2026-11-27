@@ -15,7 +15,7 @@ import {
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
   parseDemandEventStreamRevision,
-} from "../demand/event-sourcing/demand-event-stream-position.js";
+} from "../../contracts/identity/demand-event-stream-position.js";
 import {
   type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,

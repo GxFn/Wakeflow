@@ -481,7 +481,7 @@ Claude catalog必须将其node policy明确为非可执行private file。
 - [新 Rooted filesystem](../../src/foundation/filesystem/rooted-directory.ts)、[atomic file write](../../src/foundation/filesystem/durable-atomic-file-write.ts) 与 [exclusive lock](../../src/foundation/filesystem/rooted-exclusive-file-lock.ts)：已实现的底层 mechanical effect。
 - [关闭目录树候选](../../src/foundation/filesystem/durable-directory-tree-candidate.ts) 与 [整体发布](../../src/foundation/filesystem/durable-directory-tree-publication.ts)：same-root final-mode stage 的关闭计划、partial exact retry、稳定复验与单次 durable rename commit point。
 - [新 Resource Processing Contract](../../src/foundation/resource/resource-processing-contract.ts)：七种resource role、闭合allowed recipe set、recovery strategy、directory container与单operation admission的Foundation合同。
-- [新 Workspace Resource Declaration](../../src/workspace/workspace-resource-declaration.ts)：family、owner、scope、逻辑root placement、tracking/privacy、node policy与processing compatibility的纯数据合同。
+- [新 Workspace Resource Declaration](../../src/kernel/workspace-resource-declaration.ts)：family、owner、scope、逻辑root placement、tracking/privacy、node policy与processing compatibility的纯数据合同。
 - [新 Host Resource Profile Contract](../../src/workspace/workspace-host-resource-profile.ts)：仅对matrix形状有影响的宿主静态数据、portable path/component和通用关系合同。
 - [Codex Host Resource Profile](../../src/hosts/codex/wakeflow-workspace-host-resource-profile.ts)：Codex宿主拥有的窄资源表面值，不含host effect或live capability结论。
 - [Claude Code Host Resource Profile](../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.ts)：Claude Code宿主的8类matrix-shaping resource surface静态值，不导入settings/lifecycle/observer实现。

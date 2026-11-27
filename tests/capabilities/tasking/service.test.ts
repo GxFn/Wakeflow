@@ -6,7 +6,7 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {

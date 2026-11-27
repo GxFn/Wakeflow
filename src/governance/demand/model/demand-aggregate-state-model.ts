@@ -4,8 +4,8 @@ import type { EvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import type { UtcInstant } from "../../../foundation/time/utc-instant.js";
-import type { WakeflowWindowHostBindingId } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
-import type { WakeflowWorkspaceHostId } from "../../../workspace/workspace-host-resource-profile.js";
+import type { WakeflowWindowHostBindingId } from "../../../contracts/identity/wakeflow-window-host-binding-id.js";
+import type { WakeflowHostId } from "../../../contracts/vocabulary/wakeflow-host-id.js";
 import type {
   DeliveryDisposition,
   DeliveryEvidenceKind,
@@ -63,7 +63,7 @@ export interface DemandCurrentDeliveryBase {
   readonly envelopeDigest: Sha256Digest;
   readonly promptDigest: Sha256Digest;
   readonly generation: number;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly bindingId: WakeflowWindowHostBindingId;
   readonly fence: Readonly<DemandDeliveryFenceSummary>;
 }

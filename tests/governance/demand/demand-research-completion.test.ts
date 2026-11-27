@@ -44,7 +44,7 @@ import {
   DemandAggregateStateError,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { requirementLineageRecordRef } from "../../../src/governance/demand/model/requirement-lineage.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
   createDemandCompletion,

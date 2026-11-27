@@ -1,4 +1,4 @@
-import type { WakeflowWorkspaceHostWorktreeLaunch } from "../../workspace/workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostWorktreeLaunch } from "../../contracts/vocabulary/wakeflow-host-worktree-launch.js";
 
 /**
  * Wakeflow Governance / Pod：closing pod 仍在的检出的处置引导（gate-log §13.94 D10）。

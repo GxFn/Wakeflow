@@ -2,7 +2,7 @@ import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF } from "./workspace-host-runtim
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace：所有宿主本地运行目录共同使用的 host profiles 父容器。

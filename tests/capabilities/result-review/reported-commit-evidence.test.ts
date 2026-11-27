@@ -8,7 +8,7 @@ import {
   executeImplementationReviewDecisionRequest,
   executeTargetResultImportRequest,
 } from "../../../src/capabilities/result-review/service.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import type { DeliveredTarget } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupDeliveryWorkspaceFixture,

@@ -5,7 +5,7 @@ import { type Fail, failWith, ModuleError } from "../../foundation/error/module-
 import { createWakeflowWorkspaceHostResourceCatalog } from "../workspace-host-resource-catalog.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION } from "../workspace-host-runtime-resource-catalog.js";
-import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "../../kernel/workspace-resource-declaration.js";
 import { createWakeflowWindowRuntimeProjectionResourceCatalog } from "./wakeflow-window-runtime-resource-catalog.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,

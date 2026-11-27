@@ -1,7 +1,7 @@
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { parseDemandEventStreamRevision } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventStreamRevision } from "../../../src/contracts/identity/demand-event-stream-position.js";
 import type { CreateControllerTestReviewDecisionInput } from "../../../src/governance/review/controller-test-review-decision.js";
 
 export const TEST_REVIEW_REPORTED_AT = parseUtcInstant("2026-08-29T12:34:00.000Z");

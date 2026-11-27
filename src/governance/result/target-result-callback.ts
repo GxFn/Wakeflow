@@ -26,7 +26,7 @@ import {
   parseWakeflowWindowHostBindingId,
   type WakeflowWindowHostBindingId,
   WakeflowWindowHostBindingIdError,
-} from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+} from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import {
   computeDeliveryPromptDigest,
   DeliveryEnvelopeError,

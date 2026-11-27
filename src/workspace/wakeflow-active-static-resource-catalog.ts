@@ -13,7 +13,7 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace / Active：共享活动根的静态资源声明。

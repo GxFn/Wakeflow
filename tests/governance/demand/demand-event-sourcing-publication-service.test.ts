@@ -52,7 +52,6 @@ import {
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import {
   DEMAND_PUBLICATION_MARKER_REF,
-  demandFinalRootRef,
   demandPublicationStageRef,
   demandStagePublicationMarkerRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
@@ -63,6 +62,7 @@ import {
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
+  demandFinalRootRef,
   REQUIREMENT_BOARD_INDEX_REF,
   requirementClaimStateRef,
 } from "../../../src/kernel/layout.js";

@@ -38,7 +38,7 @@ import {
 import {
   DemandEventStreamPositionError,
   parseDemandEventCommitSequence,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 import {
   assertDemandFileEventStoreDirectory,
   assertDemandFileEventStoreFile,

@@ -6,7 +6,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWindowHostBinding } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding.js";
-import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import { createWakeflowWindowHostBindingResourceCatalog } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-resource-catalog.js";
 import { parseWakeflowWindowHostHandle } from "../../../src/workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";

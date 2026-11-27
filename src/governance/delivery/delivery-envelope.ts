@@ -53,10 +53,10 @@ import {
   parseWakeflowWindowHostBindingId,
   type WakeflowWindowHostBindingId,
   WakeflowWindowHostBindingIdError,
-} from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
-import type { WakeflowWorkspaceHostId } from "../../workspace/workspace-host-resource-profile.js";
-import { WAKEFLOW_WORKSPACE_HOST_IDS } from "../../workspace/workspace-host-resource-profile.js";
-import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
+} from "../../contracts/identity/wakeflow-window-host-binding-id.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { WAKEFLOW_HOST_IDS } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 import {
   computeTaskPackageDigest,
   parseTaskPackage,
@@ -194,7 +194,7 @@ const MAXIMUM_REWORK_OBSERVATION_CODE_POINTS = 1_024;
 const REWORK_CHECK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const HOST_IDS = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
+const HOST_IDS = new Set<string>(WAKEFLOW_HOST_IDS);
 const LANGUAGES = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
 
 /** 投递 prompt 的字符上限：规则住在内核 `prompt-digest`（§13.97 D3），这里再导出给渲染侧。 */
@@ -650,7 +650,7 @@ export interface DeliveryEnvelopeTarget {
 }
 
 export interface DeliveryEnvelopeRoute {
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windowId: WakeflowDurableId<"window">;
   readonly bindingId: WakeflowWindowHostBindingId;
   readonly bindingDigest: Sha256Digest;
@@ -800,7 +800,7 @@ export function parseDeliveryEnvelope(value: unknown): Readonly<DeliveryEnvelope
       taskPackageDigest: digest(wire.target.taskPackageDigest, "$/target/taskPackageDigest"),
     },
     route: {
-      hostId: wire.route.hostId as WakeflowWorkspaceHostId,
+      hostId: wire.route.hostId as WakeflowHostId,
       windowId: parseId(wire.route.windowId, "window", "$/route/windowId"),
       bindingId,
       bindingDigest: digest(wire.route.bindingDigest, "$/route/bindingDigest"),

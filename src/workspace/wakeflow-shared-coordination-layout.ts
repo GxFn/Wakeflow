@@ -19,7 +19,7 @@ import { WORK_CLAIMS_ROOT_REF } from "../kernel/layout.js";
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 import {
   WAKEFLOW_SHARED_COORDINATION_ROOT_RESOURCE_DECLARATION,
   WAKEFLOW_SHARED_RUNTIME_ROOT_RESOURCE_DECLARATION,

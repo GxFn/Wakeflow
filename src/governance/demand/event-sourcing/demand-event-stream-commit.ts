@@ -65,7 +65,7 @@ import {
   type DemandEventStreamRevision,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：一次原子追加产生的不可变提交记录。

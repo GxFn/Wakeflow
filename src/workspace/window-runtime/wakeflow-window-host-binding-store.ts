@@ -47,7 +47,7 @@ import {
 import {
   createWakeflowWindowHostBindingId,
   WakeflowWindowHostBindingIdError,
-} from "./wakeflow-window-host-binding-id.js";
+} from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import type {
   WakeflowWindowHostHandle,
   WakeflowWindowHostIdentityProfile,

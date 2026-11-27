@@ -10,7 +10,7 @@ import {
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { demandEventSourcingSnapshotRef } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventCommitSequence } from "../../../src/contracts/identity/demand-event-stream-position.js";
 import { withFixtureDemandRoot } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
   cleanupControllerImplementationReviewDecisionServiceFixture,

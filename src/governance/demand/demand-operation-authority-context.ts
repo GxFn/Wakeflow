@@ -24,7 +24,7 @@ import {
   type LoadedDemandEventSourcingRootAuthority,
   loadDemandEventSourcingRootAuthority,
 } from "./event-sourcing/demand-event-sourcing-root-authority.js";
-import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 
 /**
  * Wakeflow Governance / Demand：一次业务操作共享的只读组合权威上下文。

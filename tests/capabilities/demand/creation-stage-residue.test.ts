@@ -12,12 +12,9 @@ import {
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
-import {
-  demandFinalRootRef,
-  demandPublicationStageRef,
-} from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandPublicationStageRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { requirementClaimStateRef } from "../../../src/kernel/layout.js";
+import { demandFinalRootRef, requirementClaimStateRef } from "../../../src/kernel/layout.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,

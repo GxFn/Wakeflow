@@ -35,7 +35,7 @@ import {
   WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
 } from "../managed-integration/wakeflow-managed-text-history.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
-import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "../../kernel/workspace-resource-declaration.js";
 import {
   createWakeflowManagedSupportResourceCatalog,
   type WakeflowManagedSupportResourceCatalog,

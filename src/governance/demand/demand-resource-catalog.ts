@@ -6,7 +6,7 @@ import {
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../../workspace/workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 import {
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
   taskPackageProjectionRef,
@@ -24,14 +24,14 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
 } from "./event-sourcing/demand-event-sourcing-paths.js";
-import type { DemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
+import type { DemandEventCommitSequence } from "../../contracts/identity/demand-event-stream-position.js";
 import {
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   demandFinalPublicationMarkerRef,
-  demandFinalRootRef,
 } from "./publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 
 /**
  * Wakeflow Governance / Demand：Demand Event Sourcing 职责所有者的资源目录。

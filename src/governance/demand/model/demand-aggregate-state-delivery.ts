@@ -5,7 +5,7 @@ import {
   wakeflowTargetPhaseAdmission,
 } from "../../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
-import type { WakeflowWindowHostBindingId } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import type { WakeflowWindowHostBindingId } from "../../../contracts/identity/wakeflow-window-host-binding-id.js";
 import { type DeliveryEnvelope, deliveryPurpose } from "../../delivery/delivery-envelope.js";
 import type { DeliveryDisposition, DeliveryOutcome } from "../../delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT, type DeliveryRearm } from "../../delivery/delivery-rearm.js";

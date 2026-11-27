@@ -12,7 +12,7 @@ import {
   renderWakeflowWindowHostBinding,
   WakeflowWindowHostBindingError,
 } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding.js";
-import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import {
   parseWakeflowWindowHostHandle,
   parseWakeflowWindowHostIdentityProfile,

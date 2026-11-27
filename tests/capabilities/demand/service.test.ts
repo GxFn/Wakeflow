@@ -26,10 +26,13 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
-import { demandLifecycleJournalRef, workClaimRef } from "../../../src/kernel/layout.js";
+import {
+  demandFinalRootRef,
+  demandLifecycleJournalRef,
+  workClaimRef,
+} from "../../../src/kernel/layout.js";
 import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
 import {
   cleanupDeliveryWorkspaceFixture,

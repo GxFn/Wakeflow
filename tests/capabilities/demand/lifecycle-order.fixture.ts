@@ -9,9 +9,9 @@ import {
 } from "../../../src/capabilities/demand/lifecycle.js";
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   demandArchivesRootRef,
+  demandFinalRootRef,
   demandLifecycleJournalRef,
   requirementClaimStateRef,
 } from "../../../src/kernel/layout.js";

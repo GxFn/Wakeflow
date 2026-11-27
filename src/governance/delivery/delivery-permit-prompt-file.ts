@@ -42,7 +42,7 @@ import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
 } from "../demand/event-sourcing/demand-file-event-store.js";
-import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 
 export type { DemandPermitPromptKind } from "../demand/event-sourcing/demand-event-sourcing-paths.js";
 

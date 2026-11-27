@@ -13,7 +13,7 @@ import {
 import type {
   DemandEventCommitSequence,
   DemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 
 /** Demand 文件事件存储的容量、回执和稳定错误合同。 */
 

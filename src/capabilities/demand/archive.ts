@@ -38,11 +38,11 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { DEMAND_REBUILDABLE_DIRECTORY_REFS } from "../../governance/demand/demand-interruption.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
 import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {
   demandArchiveRef,
   demandArchivesRootRef,
+  demandFinalRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
 } from "../../kernel/layout.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";

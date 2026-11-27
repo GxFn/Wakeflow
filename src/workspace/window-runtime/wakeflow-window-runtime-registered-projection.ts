@@ -18,7 +18,7 @@ import type {
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import type { WakeflowWindowHostBinding } from "./wakeflow-window-host-binding.js";
-import type { WakeflowWindowHostBindingId } from "./wakeflow-window-host-binding-id.js";
+import type { WakeflowWindowHostBindingId } from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import type { WakeflowWindowRuntimeLogicalRoot } from "./wakeflow-window-runtime-desired-topology.js";
 import {
   wakeflowWindowHostBindingRef,

@@ -14,7 +14,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
-import type { DemandEventStreamRevision } from "../demand/event-sourcing/demand-event-stream-position.js";
+import type { DemandEventStreamRevision } from "../../contracts/identity/demand-event-stream-position.js";
 import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
 
 /**

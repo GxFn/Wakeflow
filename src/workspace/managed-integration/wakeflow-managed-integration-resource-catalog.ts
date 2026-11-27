@@ -2,7 +2,7 @@ import { parsePortableResourcePath } from "../../foundation/filesystem/portable-
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：宿主无关的混合所有权资源目录。

@@ -8,7 +8,7 @@ import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   DemandResultReviewSnapshotError,
   readArchivedDemandResultReviewSnapshot,

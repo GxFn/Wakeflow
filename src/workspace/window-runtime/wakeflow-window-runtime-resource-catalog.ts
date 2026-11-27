@@ -3,7 +3,7 @@ import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-res
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 import { compileWakeflowWindowRuntimeUnregisteredProjectionSet } from "./wakeflow-window-runtime-unregistered-projection.js";
 
 /**

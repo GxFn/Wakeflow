@@ -6,8 +6,8 @@ import {
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../../workspace/workspace-resource-declaration.js";
-import { demandFinalRootRef } from "../demand/publication/demand-publication-paths.js";
+} from "../../kernel/workspace-resource-declaration.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,

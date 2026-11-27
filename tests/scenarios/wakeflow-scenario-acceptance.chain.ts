@@ -52,7 +52,6 @@ import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../../src/governance/deli
 import { DELIVERY_REARM_LIMIT } from "../../src/governance/delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,
@@ -76,6 +75,7 @@ import {
   readHostHookObservations,
 } from "../../src/kernel/hook-observations.js";
 import {
+  demandFinalRootRef,
   demandProjectionIndexRef,
   demandProjectionProgressRef,
   hostHookObservationsRootRef,

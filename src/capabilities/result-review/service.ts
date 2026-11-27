@@ -62,7 +62,7 @@ import {
   computeDemandEventStreamCommitDigest,
   type DemandEventStreamCommitWriter,
 } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { parseDemandEventStreamRevision } from "../../governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventStreamRevision } from "../../contracts/identity/demand-event-stream-position.js";
 import {
   computeDemandAggregateStateDigest,
   type DemandTargetTaskState,

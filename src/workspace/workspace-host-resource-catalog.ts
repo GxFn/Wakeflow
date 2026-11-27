@@ -18,7 +18,7 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace：由宿主静态画像编译资源声明。

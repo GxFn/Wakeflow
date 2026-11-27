@@ -24,7 +24,7 @@ import {
   createDemandIdentity,
   renderDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,

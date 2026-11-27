@@ -10,7 +10,7 @@ import {
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { demandLifecycleJournalRef } from "../../kernel/layout.js";
+import { demandFinalRootRef, demandLifecycleJournalRef } from "../../kernel/layout.js";
 import { DEMAND_RECOVERY_TOOLS } from "../../kernel/next-projection.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../evidence/managed-evidence-resource-paths.js";
 import { locateLatestDemandArchive } from "../observation/demand-archive-locator.js";
@@ -23,10 +23,7 @@ import {
   DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
   DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
 } from "./event-sourcing/demand-event-sourcing-paths.js";
-import {
-  DEMAND_PUBLICATION_MARKER_REF,
-  demandFinalRootRef,
-} from "./publication/demand-publication-paths.js";
+import { DEMAND_PUBLICATION_MARKER_REF } from "./publication/demand-publication-paths.js";
 
 /**
  * Wakeflow Governance / Demand：一个 Demand 停在哪一个被打断的事务上（1.4.1 段 1b）。

@@ -85,7 +85,7 @@ import {
   type WakeflowWindowHostBinding,
   type WakeflowWindowHostBindingLaunch,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
-import { createWakeflowWindowHostBindingId } from "../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { createWakeflowWindowHostBindingId } from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import {
   createWakeflowWindowHostBindingInStore,
   inspectWakeflowWindowHostBindingInventory,

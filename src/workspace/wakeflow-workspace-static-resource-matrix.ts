@@ -21,7 +21,7 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourcePlacement,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
 
 /**

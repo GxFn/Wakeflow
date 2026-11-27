@@ -6,7 +6,7 @@ import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-re
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "./workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 
 /** Wakeflow Workspace：宿主中立共享运行时与协调根的静态资源目录。 */
 

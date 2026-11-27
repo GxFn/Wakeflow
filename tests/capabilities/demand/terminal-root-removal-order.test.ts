@@ -7,10 +7,9 @@ import { executeDemandCompletionRequest } from "../../../src/capabilities/demand
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
+import { demandFinalRootRef, demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,
   createAcceptedDemandCompletionWorkspaceFixture,

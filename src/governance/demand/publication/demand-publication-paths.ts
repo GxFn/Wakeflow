@@ -6,7 +6,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
-import { WAKEFLOW_ACTIVE_CURRENT_ROOT_REF } from "../../../kernel/layout.js";
+import { demandFinalRootRef } from "../../../kernel/layout.js";
 
 /**
  * Wakeflow Governance / Demand Publication：Workspace 内创建事务、暂存目录、逐 Demand
@@ -29,12 +29,6 @@ export const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF = parsePortableResourcePat
  */
 function parseDemandId(value: string): WakeflowDurableId<"demand"> {
   return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
-}
-
-export function demandFinalRootRef(demandId: string): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(demandId)}`,
-  );
 }
 
 export function demandPublicationStageRef(demandId: string): PortableResourcePath {

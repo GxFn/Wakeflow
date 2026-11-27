@@ -9,7 +9,7 @@ import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../../../src/foundation/resource/resource-processing-contract.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   createManagedEvidencePublicationTransactionResourceDeclaration,
   createManagedEvidenceRecordResourceDeclaration,

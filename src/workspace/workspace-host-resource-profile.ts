@@ -1,3 +1,7 @@
+import {
+  WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES,
+  type WakeflowWorkspaceHostWorktreeLaunch,
+} from "../contracts/vocabulary/wakeflow-host-worktree-launch.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
@@ -63,13 +67,6 @@ export interface WakeflowWorkspaceHostStatuslineAsset {
 export interface WakeflowWorkspaceHostHelperAsset {
   readonly fileName: WakeflowWorkspaceHostResourceComponent;
 }
-
-export const WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES = Object.freeze([
-  "claude-worktree-flag",
-  "git-worktree",
-] as const);
-export type WakeflowWorkspaceHostWorktreeLaunch =
-  (typeof WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES)[number];
 
 export const WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES = Object.freeze([
   "add-dir-flag",

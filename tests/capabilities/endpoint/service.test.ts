@@ -46,7 +46,7 @@ import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
 import { workspaceLockRef } from "../../../src/kernel/workspace-locks.js";
-import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { loadSensitive } from "../../support/load-sensitive.js";

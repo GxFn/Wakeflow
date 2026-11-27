@@ -14,9 +14,12 @@ import {
   demandRecoveryTool,
   inspectDemandRecoveryRoute,
 } from "../../../src/governance/demand/demand-interruption.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
-import { demandArchiveRef, demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
+import {
+  demandArchiveRef,
+  demandFinalRootRef,
+  demandLifecycleJournalRef,
+} from "../../../src/kernel/layout.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
 

@@ -15,7 +15,7 @@ import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
   WakeflowWorkspaceResourceDeclarationError,
-} from "../workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace / Support：Config topology 驱动的受管 Support 资源目录。

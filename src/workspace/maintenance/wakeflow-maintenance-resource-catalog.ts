@@ -7,7 +7,7 @@ import { WORKSPACE_LOCKS_ROOT_REF } from "../../kernel/workspace-locks.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../workspace-resource-declaration.js";
+} from "../../kernel/workspace-resource-declaration.js";
 /**
  * Wakeflow Workspace / Maintenance：Workspace 核心私有根与维护协议静态资源目录。
  *

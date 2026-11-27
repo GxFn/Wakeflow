@@ -21,7 +21,7 @@ import {
 } from "../../../src/governance/delivery/delivery-envelope.js";
 import type { DeliveryOutcome } from "../../../src/governance/delivery/delivery-outcome.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { renderCodexWindowLaunchInstructions } from "../../../src/hosts/codex/codex-window-launch-instructions.js";
 import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-transport-port.js";

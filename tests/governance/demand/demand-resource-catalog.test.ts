@@ -27,20 +27,20 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
-import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventCommitSequence } from "../../../src/contracts/identity/demand-event-stream-position.js";
 import {
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
   demandFinalPublicationMarkerRef,
-  demandFinalRootRef,
   demandPublicationStageRef,
 } from "../../../src/governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import {
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
   taskPackageProjectionRef,
 } from "../../../src/governance/tasking/task-package-projection-paths.js";
-import type { WakeflowWorkspaceResourceNodePolicy } from "../../../src/workspace/workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceNodePolicy } from "../../../src/kernel/workspace-resource-declaration.js";
 
 const DEMAND_ID = parseWakeflowDurableIdOfKind(
   "demand_11111111-1111-4111-8111-111111111111",

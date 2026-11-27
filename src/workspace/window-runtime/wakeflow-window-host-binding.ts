@@ -36,7 +36,7 @@ import {
   parseWakeflowWindowHostBindingId,
   type WakeflowWindowHostBindingId,
   WakeflowWindowHostBindingIdError,
-} from "./wakeflow-window-host-binding-id.js";
+} from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import {
   parseWakeflowWindowHostHandle,
   type WakeflowWindowHostHandle,

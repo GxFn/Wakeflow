@@ -31,7 +31,7 @@ import {
   type LoadedDemandEventSourcingRootAuthority,
 } from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandEventStreamCommitWriter } from "../../governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
+import { demandFinalRootRef } from "../../kernel/layout.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,

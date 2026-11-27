@@ -52,7 +52,7 @@ import {
   type DemandEventStreamRevision,
   parseDemandEventCommitSequence,
   parseDemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变、带版本的快照。

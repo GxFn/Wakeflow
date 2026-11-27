@@ -10,9 +10,11 @@ import {
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { DEMAND_LIFECYCLE_JOURNAL_KIND } from "../../../src/governance/demand/demand-interruption.js";
-import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { WORKSPACE_MAINTENANCE_TRANSACTIONS_REF } from "../../../src/kernel/layout.js";
+import {
+  demandFinalRootRef,
+  WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
+} from "../../../src/kernel/layout.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,

@@ -40,7 +40,7 @@ import {
 import type {
   DemandEventCommitSequence,
   DemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 import {
   type DemandFileEventSnapshotPublishReceipt,
   type DemandFileEventSnapshotReadResult,

@@ -6,7 +6,7 @@ import {
   WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES,
   WakeflowWorkspaceResourceDeclarationError,
   type WakeflowWorkspaceResourceDeclarationErrorReason,
-} from "../../src/workspace/workspace-resource-declaration.js";
+} from "../../src/kernel/workspace-resource-declaration.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

@@ -11,7 +11,7 @@ import {
 import type {
   DemandEventCommitSequence,
   DemandEventStreamRevision,
-} from "../demand/event-sourcing/demand-event-stream-position.js";
+} from "../../contracts/identity/demand-event-stream-position.js";
 import { DemandFileEventStoreError } from "../demand/event-sourcing/demand-file-event-store-contract.js";
 import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-file-event-store-reader.js";
 import type {

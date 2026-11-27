@@ -62,7 +62,8 @@ import {
   DemandIdentityError,
   parseDemandIdentity,
 } from "../model/demand-identity.js";
-import { demandFinalRootRef, demandPublicationStageRef } from "./demand-publication-paths.js";
+import { demandFinalRootRef } from "../../../kernel/layout.js";
+import { demandPublicationStageRef } from "./demand-publication-paths.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing Publication：跨资源恢复计划。

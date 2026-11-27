@@ -15,7 +15,7 @@ import {
   takeWorkClaim,
   type WorkClaim,
 } from "../../src/kernel/work-claims.js";
-import { createWakeflowWindowHostBindingId } from "../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { createWakeflowWindowHostBindingId } from "../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 
 useDisposableDurability();

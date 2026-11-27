@@ -29,7 +29,7 @@ import {
   type DemandEventSourcingRootInventoryErrorReason,
   inspectDemandEventSourcingRootInventory,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
-import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventCommitSequence } from "../../../src/contracts/identity/demand-event-stream-position.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";

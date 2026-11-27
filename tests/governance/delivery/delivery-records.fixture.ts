@@ -23,7 +23,7 @@ import {
 } from "../../../src/governance/delivery/delivery-rearm.js";
 import { computeTaskPackageDigest } from "../../../src/governance/tasking/task-package.js";
 import { createWorkClaim, type WorkClaim } from "../../../src/kernel/work-claims.js";
-import { parseWakeflowWindowHostBindingId } from "../../../src/workspace/window-runtime/wakeflow-window-host-binding-id.js";
+import { parseWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import {
   createTaskPackageFixture,
   TARGET_TASK_ID,

@@ -5,7 +5,7 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-c
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
 import { parseWakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
-import type { WakeflowWorkspaceResourceNodePolicy } from "../../src/workspace/workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceNodePolicy } from "../../src/kernel/workspace-resource-declaration.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

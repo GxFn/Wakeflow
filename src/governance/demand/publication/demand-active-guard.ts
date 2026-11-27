@@ -27,6 +27,7 @@ import {
 import { fail } from "../../../kernel/error.js";
 import {
   DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
+  demandFinalRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
 } from "../../../kernel/layout.js";
 import {
@@ -50,7 +51,6 @@ import {
 import {
   DEMAND_PUBLICATION_MARKER_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
-  demandFinalRootRef,
 } from "./demand-publication-paths.js";
 
 /**

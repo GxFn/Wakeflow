@@ -55,7 +55,7 @@ import {
 import {
   type DemandEventCommitSequence,
   parseDemandEventCommitSequence,
-} from "./demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 import { DEMAND_FILE_EVENT_STORE_FILE_MODE } from "./demand-file-event-store.js";
 
 /**

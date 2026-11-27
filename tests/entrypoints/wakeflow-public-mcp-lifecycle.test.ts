@@ -18,9 +18,8 @@ import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakefl
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { DemandEventSourcingRepository } from "../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { demandFinalRootRef } from "../../src/governance/demand/publication/demand-publication-paths.js";
 import type { TaskPackage } from "../../src/governance/tasking/task-package.js";
-import { workClaimRef } from "../../src/kernel/layout.js";
+import { demandFinalRootRef, workClaimRef } from "../../src/kernel/layout.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,

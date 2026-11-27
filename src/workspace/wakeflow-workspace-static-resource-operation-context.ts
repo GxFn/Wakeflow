@@ -11,7 +11,7 @@ import {
   type WakeflowWorkspaceStaticResourceMatrix,
 } from "./wakeflow-workspace-static-resource-matrix.js";
 import type { WakeflowWorkspaceHostId } from "./workspace-host-resource-profile.js";
-import type { WakeflowWorkspaceResourceDeclaration } from "./workspace-resource-declaration.js";
+import type { WakeflowWorkspaceResourceDeclaration } from "../kernel/workspace-resource-declaration.js";
 
 /**
  * Wakeflow Workspace：静态资源的一次机械操作上下文。

@@ -103,8 +103,8 @@ domain-validated model
 
 约束：
 
-- parser 必须先完成被动 JSON 数据准入和 Schema validation，再重建领域模型的固定字段顺序；
-- writer 只能序列化领域 parser 签发的模型；
+- parser 只用于进程边界上的第一次领域解析：读盘的文档，以及请求里 Schema 表达不了的原始子对象。它先完成被动 JSON 数据准入和 Schema validation，再重建领域模型的固定字段顺序；进程内已经有类型的值不再经过 parser（1.4.5 修订，用户 2026-11-27 裁决，gate-log §13.304）；
+- writer 只序列化领域模型类型的值，不再重新解析。模型只由本 codec 的 `parse…` / `create…` 构造，其他模块不以字面量、展开或 `as` 构造模型（类型与评审保证）。序列化本身仍做 JSON 数据准入（规范化 JSON 的遍历），reader 对每份文档做完整解析与往返核对，所以写错的模型在下一次读时 fail closed，不会被静默接受。需要在运行时证明"出自签发方"的对象（预备提交、暂存地址、已签发的事务与记录）继续用 WeakSet 签发标记；
 - reader 拒绝非 deterministic pretty representation，不自动重排或修复已有 authority；
 - Schema 只拥有 portable structure/lexical contract；typed reference、集合关系、authority 与 state transition 继续由领域 owner 校验；
 - compact canonical JSON 只用于 semantic digest、wire comparison 或显式协议，不再作为另一种普通 standalone 文件展示格式。

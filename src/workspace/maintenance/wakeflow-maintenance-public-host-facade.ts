@@ -1,9 +1,7 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { WakeflowWorkspaceHostTransportTable } from "../host-runtime/wakeflow-host-window-transport.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowMaintenanceExecutionPlan } from "./wakeflow-maintenance-execution-plan.js";
 import type { WakeflowMaintenanceExecutionTransactionReceipt } from "./wakeflow-maintenance-execution-transaction.js";
 import type { WakeflowMaintenanceOperationId } from "./wakeflow-maintenance-operation-id.js";
@@ -23,7 +21,7 @@ export interface WakeflowMaintenancePublicHostExecutionOptions {
  * entrypoint 组装一个实现；共享协调器因此既不导入具体宿主，也不能按请求切换能力。
  */
 export interface WakeflowMaintenancePublicHostFacade {
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   /**
    * 已装载制品的根（realpath）；入口在装载时从自身位置推导，无法解析时为 null。维护拒绝包含
    * 该制品或位于其中的工作区根，以及与之重叠的配置根（旧实现 bootstrap 的同一护栏，§13.124）。

@@ -9,10 +9,10 @@ import {
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+  WAKEFLOW_HOST_IDS,
+  type WakeflowHostId,
+} from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
 /**
@@ -40,7 +40,7 @@ export type WakeflowGitignoreRule = string & {
 export interface WakeflowGitignoreBodyAuthority {
   readonly kind: typeof WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND;
   readonly schemaVersion: typeof WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
-  readonly hostIds: readonly WakeflowWorkspaceHostId[];
+  readonly hostIds: readonly WakeflowHostId[];
   readonly rules: readonly WakeflowGitignoreRule[];
   readonly body: string;
   readonly bodyDigest: Sha256Digest;
@@ -107,22 +107,19 @@ function coveredByPrivateRoot(resourcePath: PortableResourcePath): boolean {
 function profileSet(
   values: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
 ): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
-  if (values.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length) {
+  if (values.length !== WAKEFLOW_HOST_IDS.length) {
     fail("profile-set", "$profiles");
   }
-  const byHostId = new Map<
-    WakeflowWorkspaceHostId,
-    Readonly<WakeflowWorkspaceHostResourceProfile>
-  >();
+  const byHostId = new Map<WakeflowHostId, Readonly<WakeflowWorkspaceHostResourceProfile>>();
   for (const profile of values) {
     if (byHostId.has(profile.hostId)) fail("profile-set", "$profiles");
     byHostId.set(profile.hostId, profile);
   }
-  if (WAKEFLOW_WORKSPACE_HOST_IDS.some((hostId) => !byHostId.has(hostId))) {
+  if (WAKEFLOW_HOST_IDS.some((hostId) => !byHostId.has(hostId))) {
     fail("profile-set", "$profiles");
   }
   return Object.freeze(
-    WAKEFLOW_WORKSPACE_HOST_IDS.map((hostId) => {
+    WAKEFLOW_HOST_IDS.map((hostId) => {
       const profile = byHostId.get(hostId);
       if (profile === undefined) fail("profile-set", "$profiles");
       return profile;

@@ -15,7 +15,7 @@ import {
   removeRootedDirectoryTree,
 } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
-import { WAKEFLOW_WORKSPACE_HOST_IDS } from "../workspace-host-resource-profile.js";
+import { WAKEFLOW_HOST_IDS } from "../../contracts/vocabulary/wakeflow-host-id.js";
 
 /**
  * Wakeflow Workspace / Maintenance：文件锁版本（1.4.3 及之前）留下的锁目录与锁文件（ADR-0033 决定 10）。
@@ -48,7 +48,7 @@ const FILE_REFS = Object.freeze([
   ref(".wakeflow-active/projector.lock"),
   ref(".wakeflow-config-authority.lock"),
   ref(".wakeflow-gitignore-recomposition.lock"),
-  ...WAKEFLOW_WORKSPACE_HOST_IDS.flatMap((hostId) => [
+  ...WAKEFLOW_HOST_IDS.flatMap((hostId) => [
     ref(`.wakeflow-program-instruction-${hostId}.lock`),
     ref(`.wakeflow-local/runtime/hosts/${hostId}/identity/window-bindings/.registration.lock`),
   ]),

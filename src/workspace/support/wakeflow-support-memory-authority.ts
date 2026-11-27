@@ -14,8 +14,8 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type {
-  WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceComponent,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
@@ -44,7 +44,7 @@ export interface WakeflowSupportMemoryAuthority {
   readonly surfaceId: WakeflowDurableId<"surface">;
   readonly windowId: WakeflowDurableId<"window">;
   readonly role: WakeflowSupportRole;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly instructionFileName: WakeflowWorkspaceHostResourceComponent;
   readonly declarationId: string;
   readonly language: WakeflowPresentationLanguage;
@@ -77,10 +77,7 @@ function dataLiteral(value: string, path: string): string {
   }
 }
 
-function declarationId(
-  surfaceId: WakeflowDurableId<"surface">,
-  hostId: WakeflowWorkspaceHostId,
-): string {
+function declarationId(surfaceId: WakeflowDurableId<"surface">, hostId: WakeflowHostId): string {
   return `support.${surfaceId}.instruction.${hostId}`;
 }
 
@@ -224,7 +221,7 @@ function digestBasis(
   surfaceId: WakeflowDurableId<"surface">,
   windowId: WakeflowDurableId<"window">,
   role: WakeflowSupportRole,
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   instructionFileName: WakeflowWorkspaceHostResourceComponent,
   language: WakeflowPresentationLanguage,
   bodyDigest: Sha256Digest,

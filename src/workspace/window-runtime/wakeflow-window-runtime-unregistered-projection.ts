@@ -34,10 +34,8 @@ import { type Fail, failWith, ModuleError } from "../../foundation/error/module-
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   compileWakeflowWindowRuntimeDesiredTopology,
   WakeflowWindowRuntimeDesiredTopologyError,
@@ -85,7 +83,7 @@ export interface WakeflowWindowRuntimeUnregisteredProjection {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND;
   readonly schemaVersion: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION;
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windowId: WakeflowDurableId<"window">;
   readonly role: WakeflowWindowRuntimeDesiredWindow["role"];
   readonly logicalRoot: WakeflowWindowRuntimeLogicalRoot;
@@ -124,7 +122,7 @@ export interface WakeflowWindowRuntimeUnregisteredProjectionSet {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_SET_KIND;
   readonly schemaVersion: 1;
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly projectionRootRef: PortableResourcePath;
   readonly desiredTopologyDigest: Sha256Digest;
   readonly entries: readonly Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry>[];
@@ -356,7 +354,7 @@ export function parseWakeflowWindowRuntimeUnregisteredProjectionDocument(
 
 function projectionFor(
   programId: WakeflowDurableId<"program">,
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   desiredTopologyDigest: Sha256Digest,
   window: Readonly<WakeflowWindowRuntimeDesiredWindow>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjection> {

@@ -11,10 +11,8 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS } from "./wakeflow-window-runtime-desired-topology.js";
 
 /**
@@ -70,7 +68,7 @@ export interface WakeflowWindowLaunchIntent {
   readonly worktree: Readonly<WakeflowWindowWorktreeIntent> | null;
   readonly attachedWorktrees: readonly Readonly<WakeflowWindowAttachedWorktree>[];
   readonly host: Readonly<{
-    readonly hostId: WakeflowWorkspaceHostId;
+    readonly hostId: WakeflowHostId;
     readonly profileDigest: Sha256Digest;
   }>;
   readonly create: Readonly<{
@@ -89,7 +87,7 @@ export interface WakeflowWindowLaunchIntent {
 export interface WakeflowWindowLaunchIntentSet {
   readonly kind: "WakeflowWindowLaunchIntentSet";
   readonly schemaVersion: 1;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly configDigest: Sha256Digest;
   readonly profileDigest: Sha256Digest;
   readonly intents: readonly Readonly<WakeflowWindowLaunchIntent>[];

@@ -16,9 +16,9 @@ import {
 } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-} from "../workspace-host-resource-profile.js";
+  WAKEFLOW_HOST_IDS,
+  type WakeflowHostId,
+} from "../../contracts/vocabulary/wakeflow-host-id.js";
 
 /**
  * Wakeflow Workspace / Maintenance：宿主维护操作的共享数据边界。
@@ -42,7 +42,7 @@ export interface WakeflowHostMaintenanceOperation {
 export interface WakeflowHostMaintenanceContribution {
   readonly kind: "WakeflowHostMaintenanceContribution";
   readonly schemaVersion: 1;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly capabilityId: string;
   readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
@@ -61,7 +61,7 @@ export interface WakeflowHostMaintenanceOperationInput {
 }
 
 export interface CreateWakeflowHostMaintenanceContributionRequest {
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly capabilityId: string;
   readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
@@ -85,7 +85,7 @@ const fail: Fail<WakeflowHostMaintenanceContributionErrorReason> = failWith(
   WakeflowHostMaintenanceContributionError,
 );
 
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
+const HOST_ID_SET = new Set<string>(WAKEFLOW_HOST_IDS);
 const COMPONENT_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const OPERATION_ID_PATTERN = /^[a-z][a-z0-9-]*(?::[a-z0-9_][a-z0-9_-]*)+$/u;
 const BLOCKER_CODE_PATTERN = /^[a-z][a-z0-9_-]*(?::[a-z0-9_][a-z0-9_-]*)*$/u;
@@ -344,7 +344,7 @@ export function parseWakeflowHostMaintenanceContribution(
   const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> = Object.freeze({
     kind: "WakeflowHostMaintenanceContribution",
     schemaVersion: 1,
-    hostId: record.hostId as WakeflowWorkspaceHostId,
+    hostId: record.hostId as WakeflowHostId,
     capabilityId: parseIdentity(
       record.capabilityId,
       "$contribution.capabilityId",

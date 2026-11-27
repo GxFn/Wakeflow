@@ -12,10 +12,8 @@ import {
 } from "./wakeflow-active-static-resource-catalog.js";
 import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "./workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -38,7 +36,7 @@ export const WAKEFLOW_WORKSPACE_STATIC_RESOURCE_MATRIX_KIND =
 
 export interface WakeflowWorkspaceStaticResourceMatrix {
   readonly kind: typeof WAKEFLOW_WORKSPACE_STATIC_RESOURCE_MATRIX_KIND;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly sharedDigest: Sha256Digest;
   readonly matrixDigest: Sha256Digest;
   readonly declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
@@ -212,7 +210,7 @@ function sharedDigest(
 }
 
 function matrixDigest(
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
 ): Sha256Digest {
   return computeCanonicalJsonSha256Digest({

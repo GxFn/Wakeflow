@@ -3,10 +3,10 @@ import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+  WAKEFLOW_HOST_IDS,
+  type WakeflowHostId,
+} from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   renderWakeflowGitignoreRootRule,
   type WakeflowGitignoreRule,
@@ -35,7 +35,7 @@ export const WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION = 1 as con
 export interface WakeflowSupportGitignoreBodyAuthority {
   readonly kind: "WakeflowSupportGitignoreBodyAuthority";
   readonly schemaVersion: typeof WAKEFLOW_SUPPORT_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION;
-  readonly hostIds: readonly WakeflowWorkspaceHostId[];
+  readonly hostIds: readonly WakeflowHostId[];
   readonly rules: readonly WakeflowGitignoreRule[];
   readonly body: string;
   readonly bodyDigest: Sha256Digest;
@@ -52,8 +52,7 @@ export function createWakeflowSupportGitignoreBodyAuthority(
   // 摘要基础里的 hostIds 按协议宿主顺序，与调用方给出的次序无关。
   const profiles = [...profileValues].sort(
     (left, right) =>
-      WAKEFLOW_WORKSPACE_HOST_IDS.indexOf(left.hostId) -
-      WAKEFLOW_WORKSPACE_HOST_IDS.indexOf(right.hostId),
+      WAKEFLOW_HOST_IDS.indexOf(left.hostId) - WAKEFLOW_HOST_IDS.indexOf(right.hostId),
   );
   const rules = new Set<WakeflowGitignoreRule>();
   for (const profile of profiles) {

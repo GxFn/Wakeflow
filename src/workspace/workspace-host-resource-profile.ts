@@ -1,4 +1,8 @@
 import {
+  WAKEFLOW_HOST_IDS,
+  type WakeflowHostId,
+} from "../contracts/vocabulary/wakeflow-host-id.js";
+import {
   WAKEFLOW_WORKSPACE_HOST_WORKTREE_LAUNCHES,
   type WakeflowWorkspaceHostWorktreeLaunch,
 } from "../contracts/vocabulary/wakeflow-host-worktree-launch.js";
@@ -24,10 +28,6 @@ import {
 
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND =
   "WakeflowWorkspaceHostResourceProfile" as const;
-
-export const WAKEFLOW_WORKSPACE_HOST_IDS = Object.freeze(["codex", "claude-code"] as const);
-
-export type WakeflowWorkspaceHostId = (typeof WAKEFLOW_WORKSPACE_HOST_IDS)[number];
 
 export const WAKEFLOW_WORKSPACE_HOST_RESOURCE_SURFACE_NAMES = Object.freeze([
   "windowIdentity",
@@ -154,7 +154,7 @@ export function wakeflowWorkspaceHostLocatorProvider(
 
 export interface WakeflowWorkspaceHostResourceProfile {
   readonly kind: typeof WAKEFLOW_WORKSPACE_HOST_RESOURCE_PROFILE_KIND;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly runtimeDirectoryName: WakeflowWorkspaceHostResourceComponent;
   readonly instructionFileName: WakeflowWorkspaceHostResourceComponent;
   readonly surfaces: Readonly<WakeflowWorkspaceHostResourceSurfaces>;
@@ -179,7 +179,7 @@ const fail: Fail<WakeflowWorkspaceHostResourceProfileErrorReason> = failWith(
   WakeflowWorkspaceHostResourceProfileError,
 );
 
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
+const HOST_ID_SET = new Set<string>(WAKEFLOW_HOST_IDS);
 const PROFILE_FIELDS = new Set([
   "kind",
   "hostId",
@@ -237,11 +237,11 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
   }
 }
 
-function parseHostId(value: unknown): WakeflowWorkspaceHostId {
+function parseHostId(value: unknown): WakeflowHostId {
   if (typeof value !== "string" || !HOST_ID_SET.has(value)) {
     fail("host", "$/hostId");
   }
-  return value as WakeflowWorkspaceHostId;
+  return value as WakeflowHostId;
 }
 
 function parseComponent(value: unknown, path: string): WakeflowWorkspaceHostResourceComponent {

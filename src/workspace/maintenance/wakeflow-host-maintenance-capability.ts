@@ -2,10 +2,8 @@ import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type {
   WakeflowHostMaintenanceContribution,
   WakeflowHostMaintenanceOperation,
@@ -43,7 +41,7 @@ export interface WakeflowHostMaintenanceOperationReceipt {
 
 export interface WakeflowHostMaintenanceCapability {
   readonly kind: "WakeflowHostMaintenanceCapability";
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly capabilityId: string;
   readonly planContribution: (
     root: RootedDirectory,

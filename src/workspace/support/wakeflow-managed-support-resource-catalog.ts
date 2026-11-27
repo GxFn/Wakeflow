@@ -7,10 +7,8 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -37,7 +35,7 @@ export const WAKEFLOW_MANAGED_SUPPORT_RESOURCE_CATALOG_KIND =
 export interface WakeflowManagedSupportResourceCatalog {
   readonly kind: typeof WAKEFLOW_MANAGED_SUPPORT_RESOURCE_CATALOG_KIND;
   readonly configDigest: Sha256Digest;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly catalogDigest: Sha256Digest;
   readonly declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 }

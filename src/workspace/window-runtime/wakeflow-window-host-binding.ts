@@ -31,7 +31,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
-import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import {
   parseWakeflowWindowHostBindingId,
   type WakeflowWindowHostBindingId,
@@ -63,7 +63,7 @@ export interface WakeflowWindowHostBinding {
   readonly kind: typeof WAKEFLOW_WINDOW_HOST_BINDING_KIND;
   readonly schemaVersion: typeof WAKEFLOW_WINDOW_HOST_BINDING_VERSION;
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windowId: WakeflowDurableId<"window">;
   readonly bindingId: WakeflowWindowHostBindingId;
   readonly handle: Readonly<WakeflowWindowHostHandle>;
@@ -89,7 +89,7 @@ export interface WakeflowWindowHostBindingLaunch {
 
 interface CreateWakeflowWindowHostBindingInput {
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windowId: WakeflowDurableId<"window">;
   readonly bindingId: WakeflowWindowHostBindingId;
   readonly handle: Readonly<WakeflowWindowHostHandle>;

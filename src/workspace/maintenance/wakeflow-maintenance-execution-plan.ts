@@ -2,10 +2,8 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type {
   WakeflowHostMaintenanceContribution,
   WakeflowHostMaintenanceOperation,
@@ -38,7 +36,7 @@ export interface WakeflowSharedMaintenanceExecutionStep {
 export interface WakeflowHostMaintenanceExecutionStep {
   readonly boundary: "host-capability";
   readonly stepId: string;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly capabilityId: string;
   readonly operationId: string;
   readonly operationKind: string;
@@ -58,7 +56,7 @@ export interface WakeflowMaintenanceExecutionPlan {
   readonly kind: "WakeflowMaintenanceExecutionPlan";
   readonly schemaVersion: 1;
   readonly executionBoundary: "preview-only";
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly status: "ready" | "blocked";
   readonly blockerCodes: readonly string[];
   readonly sharedPreview: Readonly<WakeflowStaticMaterializationPreview>;
@@ -97,7 +95,7 @@ function sharedStep(
 }
 
 function hostStep(
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   capabilityId: string,
   operation: Readonly<WakeflowHostMaintenanceOperation>,
   dependencies: readonly string[],
@@ -179,7 +177,7 @@ function computeWakeflowMaintenanceExecutionPlanDigest(
 }
 
 function buildPlan(
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   preview: Readonly<WakeflowStaticMaterializationPreview>,
   contribution: Readonly<WakeflowHostMaintenanceContribution> | null,
 ): Readonly<WakeflowMaintenanceExecutionPlan> {

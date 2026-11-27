@@ -9,10 +9,8 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：由 Config 编译的期望窗口拓扑。
@@ -54,7 +52,7 @@ export interface WakeflowWindowRuntimeDesiredTopology {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_KIND;
   readonly schemaVersion: typeof WAKEFLOW_WINDOW_RUNTIME_DESIRED_TOPOLOGY_VERSION;
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windows: readonly Readonly<WakeflowWindowRuntimeDesiredWindow>[];
   readonly desiredTopologyDigest: Sha256Digest;
 }

@@ -10,7 +10,7 @@ import {
   findWakeflowWorkspaceStaticResourceByDeclarationId,
   type WakeflowWorkspaceStaticResourceMatrix,
 } from "./wakeflow-workspace-static-resource-matrix.js";
-import type { WakeflowWorkspaceHostId } from "./workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "../kernel/workspace-resource-declaration.js";
 
 /**
@@ -26,7 +26,7 @@ export const WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND =
 
 export interface WakeflowWorkspaceStaticResourceOperationContext {
   readonly kind: typeof WAKEFLOW_WORKSPACE_STATIC_RESOURCE_OPERATION_CONTEXT_KIND;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly matrixDigest: Sha256Digest;
   readonly declaration: Readonly<WakeflowWorkspaceResourceDeclaration>;
   readonly operation: Readonly<WakeflowResourceOperation>;

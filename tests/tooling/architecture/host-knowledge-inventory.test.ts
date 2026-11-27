@@ -37,7 +37,7 @@ const INVENTORY: Readonly<Record<string, readonly [count: number, why: string]>>
   // 观察器的导入闭包按 D1 限于 foundation 与 kernel，搬不进宿主层（入口里的注释写着原委）。
   "src/entrypoints/wakeflow-hook-observer.ts": [11, "shared observer entry; closure rule D1"],
   "src/workspace/wakeflow-legacy-residue-scan.ts": [1, "0.9.x residue kinds"],
-  "src/workspace/workspace-host-resource-profile.ts": [14, "the host profile contract itself"],
+  "src/workspace/workspace-host-resource-profile.ts": [12, "the host profile contract itself"],
 });
 
 function sourceFiles(directory: string, out: string[] = []): string[] {

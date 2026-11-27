@@ -5,9 +5,9 @@ import {
 } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-} from "../workspace-host-resource-profile.js";
+  WAKEFLOW_HOST_IDS,
+  type WakeflowHostId,
+} from "../../contracts/vocabulary/wakeflow-host-id.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：宿主窗口不透明身份的静态准入画像。
@@ -39,7 +39,7 @@ export interface WakeflowWindowHostHandle {
 
 export interface WakeflowWindowHostIdentityProfile {
   readonly kind: typeof WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly handleKind: WakeflowWindowHostHandleKind;
   readonly maximumHandleLength: number;
   readonly reservedHandleValues: readonly string[];
@@ -74,7 +74,7 @@ const HANDLE_FIELDS = Object.freeze(["kind", "value"] as const);
 const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in profile text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
+const HOST_ID_SET = new Set<string>(WAKEFLOW_HOST_IDS);
 
 function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {
@@ -165,7 +165,7 @@ export function parseWakeflowWindowHostIdentityProfile(
   );
   return Object.freeze({
     kind: WAKEFLOW_WINDOW_HOST_IDENTITY_PROFILE_KIND,
-    hostId: parsed.hostId as WakeflowWorkspaceHostId,
+    hostId: parsed.hostId as WakeflowHostId,
     handleKind: handleKind(parsed.handleKind, "$profile.handleKind"),
     maximumHandleLength,
     reservedHandleValues,

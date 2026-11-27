@@ -13,10 +13,8 @@ import { type Fail, failWith, ModuleError } from "../../foundation/error/module-
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowWindowHostBinding } from "./wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostBindingId } from "../../contracts/identity/wakeflow-window-host-binding-id.js";
 import type { WakeflowWindowRuntimeLogicalRoot } from "./wakeflow-window-runtime-desired-topology.js";
@@ -43,7 +41,7 @@ export interface WakeflowWindowRuntimeRegisteredProjection {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND;
   readonly schemaVersion: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION;
   readonly programId: WakeflowDurableId<"program">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly windowId: WakeflowDurableId<"window">;
   readonly role: WakeflowWindowRuntimeUnregisteredProjection["role"];
   readonly logicalRoot: WakeflowWindowRuntimeLogicalRoot;

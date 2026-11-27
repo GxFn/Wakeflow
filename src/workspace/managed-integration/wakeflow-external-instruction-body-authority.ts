@@ -17,8 +17,8 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type {
-  WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceComponent,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
@@ -64,7 +64,7 @@ export interface WakeflowExternalInstructionBodyAuthority {
   readonly programId: WakeflowDurableId<"program">;
   readonly target: Readonly<WakeflowExternalInstructionTarget>;
   readonly targetKey: string;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly instructionFileName: WakeflowWorkspaceHostResourceComponent;
   readonly language: WakeflowPresentationLanguage;
   readonly windowIds: readonly WakeflowDurableId<"window">[];

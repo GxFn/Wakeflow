@@ -14,8 +14,8 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import type {
-  WakeflowWorkspaceHostId,
   WakeflowWorkspaceHostResourceComponent,
   WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
@@ -45,7 +45,7 @@ export interface WakeflowProgramInstructionBodyAuthority {
   readonly schemaVersion: typeof WAKEFLOW_PROGRAM_INSTRUCTION_BODY_AUTHORITY_SCHEMA_VERSION;
   readonly programId: WakeflowDurableId<"program">;
   readonly controllerWindowId: WakeflowDurableId<"window">;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly instructionFileName: WakeflowWorkspaceHostResourceComponent;
   readonly language: WakeflowPresentationLanguage;
   readonly body: string;
@@ -201,7 +201,7 @@ function renderBody(
 function authorityDigestBasis(
   programId: WakeflowDurableId<"program">,
   controllerWindowId: WakeflowDurableId<"window">,
-  hostId: WakeflowWorkspaceHostId,
+  hostId: WakeflowHostId,
   instructionFileName: WakeflowWorkspaceHostResourceComponent,
   language: WakeflowPresentationLanguage,
   bodyDigest: Sha256Digest,

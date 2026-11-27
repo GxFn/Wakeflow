@@ -6,10 +6,8 @@ import {
   createWakeflowWorkspaceHostResourceCatalog,
   hostProfileHasOperationSurface,
 } from "../workspace-host-resource-catalog.js";
-import type {
-  WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfile,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "../../kernel/workspace-resource-declaration.js";
 
 /**
@@ -22,7 +20,7 @@ import type { WakeflowWorkspaceResourceDeclaration } from "../../kernel/workspac
 export interface WakeflowHostCapabilityLayoutAuthority {
   readonly kind: "WakeflowHostCapabilityLayoutAuthority";
   readonly schemaVersion: 1;
-  readonly hostId: WakeflowWorkspaceHostId;
+  readonly hostId: WakeflowHostId;
   readonly declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
   readonly authorityDigest: Sha256Digest;
 }

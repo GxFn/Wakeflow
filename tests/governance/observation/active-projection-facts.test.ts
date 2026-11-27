@@ -17,6 +17,7 @@ import {
   type WakeflowConfigAuthoritySnapshot,
 } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -62,7 +63,10 @@ const FEATURE_POD_ID = "pod_dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const FEATURE_PRODUCT_WINDOW_ID = "window_eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const BINDING_ID = "window_binding_ffffffff-ffff-4fff-8fff-ffffffffffff";
 const HEAD_COMMIT = "0123456789abcdef0123456789abcdef01234567";
-const DEMAND_ID = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const DEMAND_ID = parseWakeflowDurableIdOfKind(
+  "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "demand",
+);
 
 interface Fixture {
   readonly base: string;

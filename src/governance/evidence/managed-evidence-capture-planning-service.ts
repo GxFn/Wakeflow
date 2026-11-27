@@ -135,7 +135,6 @@ export type ManagedEvidenceCapturePlanningServiceErrorReason =
   | "source-changed"
   | "kind"
   | "capacity"
-  | "identity"
   | "time"
   | "manifest"
   | "operation-failure";
@@ -150,7 +149,6 @@ const ERROR_MESSAGES = {
   "source-changed": "Managed evidence capture planning source changed during observation.",
   kind: "Managed evidence capture planning kind does not match its source.",
   capacity: "Managed evidence capture planning source exceeds its capacity.",
-  identity: "Managed evidence capture planning identity derivation failed.",
   time: "Managed evidence capture planning capture time failed.",
   manifest: "Managed evidence capture planning manifest is invalid.",
   "operation-failure": "Managed evidence capture planning failed.",

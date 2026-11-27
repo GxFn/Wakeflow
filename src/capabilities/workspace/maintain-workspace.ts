@@ -29,11 +29,7 @@ import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -323,17 +319,11 @@ type SliceOutcome =
       >[];
     }>;
 
-/** 公共 Maintenance 请求由 wire Schema 解析；失败以 `invalid-request` 报出。 */
-function parseWakeflowMaintenancePublicRequest(value: unknown): WakeflowMaintenancePublicRequest {
-  let json: JsonValue;
-  try {
-    json = parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) {
-      fail("invalid-request", "not-json", error.path);
-    }
-    throw error;
-  }
+/**
+ * 公共 Maintenance 请求由 wire Schema 解析；失败以 `invalid-request` 报出。拿到的是命令外壳已被动解析过的
+ * JSON（R13），这里只跑 Schema。
+ */
+function parseWakeflowMaintenancePublicRequest(json: JsonValue): WakeflowMaintenancePublicRequest {
   const result = validateRequest(json);
   if (!result.ok) {
     fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
@@ -1553,7 +1543,7 @@ function assembleResult(
   });
 }
 
-function parseRequest(value: unknown): Readonly<{
+function parseRequest(value: JsonValue): Readonly<{
   readonly envelope: PublicationTransactionEnvelope;
   readonly input: SliceInput;
 }> {

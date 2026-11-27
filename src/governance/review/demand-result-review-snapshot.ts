@@ -200,9 +200,9 @@ function supersededResultsOf(
   targetTaskId: WakeflowDurableId<"target-task">,
 ): readonly WakeflowDurableId<"target-result">[] {
   const superseded = new Set(
-    sources.targetResults
-      .filter((entry) => entry.result.supersedes !== undefined)
-      .map((entry) => entry.result.supersedes as WakeflowDurableId<"target-result">),
+    sources.targetResults.flatMap(({ result }) =>
+      result.supersedes === undefined ? [] : [result.supersedes],
+    ),
   );
   return Object.freeze(
     sources.targetResults

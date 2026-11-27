@@ -2034,9 +2034,7 @@ function assemblePreview(
   );
 }
 
-export {
-  computeWakeflowStaticMaterializationPreviewDigest,
-  parseWakeflowStaticMaterializationPreview,
-  type WakeflowStaticMaterializationPreview,
-  type WakeflowStaticMaterializationPreviewRequest,
+export type {
+  WakeflowStaticMaterializationPreview,
+  WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";

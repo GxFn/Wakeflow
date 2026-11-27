@@ -1,34 +1,19 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
-import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import {
-  parseWakeflowHostMaintenanceContribution,
-  type WakeflowHostMaintenanceContribution,
-  WakeflowHostMaintenanceContributionError,
-  type WakeflowHostMaintenanceOperation,
+import type {
+  WakeflowHostMaintenanceContribution,
+  WakeflowHostMaintenanceOperation,
 } from "./wakeflow-host-maintenance-contribution.js";
-import {
-  parseWakeflowStaticMaterializationPreview,
-  type WakeflowStaticMaterializationPreview,
-  WakeflowStaticMaterializationPreviewError,
-  type WakeflowStaticMaterializationStep,
-  type WakeflowStaticMaterializationStepKind,
+import type {
+  WakeflowStaticMaterializationPreview,
+  WakeflowStaticMaterializationStep,
+  WakeflowStaticMaterializationStepKind,
 } from "./wakeflow-static-materialization-preview-contract.js";
 
 /**
@@ -82,14 +67,7 @@ export interface WakeflowMaintenanceExecutionPlan {
   readonly planDigest: Sha256Digest;
 }
 
-export type WakeflowMaintenanceExecutionPlanErrorReason =
-  | "input"
-  | "host"
-  | "shared-preview"
-  | "host-contribution"
-  | "matrix"
-  | "order"
-  | "digest";
+export type WakeflowMaintenanceExecutionPlanErrorReason = "host-contribution" | "matrix" | "order";
 
 /** 聚合维护执行计划准入失败的稳定、脱敏错误。 */
 export class WakeflowMaintenanceExecutionPlanError extends ModuleError<WakeflowMaintenanceExecutionPlanErrorReason> {
@@ -100,38 +78,7 @@ const fail: Fail<WakeflowMaintenanceExecutionPlanErrorReason> = failWith(
   WakeflowMaintenanceExecutionPlanError,
 );
 
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const JOURNAL_MAXIMUM_STEPS = 256;
-
-function parseHostId(value: unknown, path: string): WakeflowWorkspaceHostId {
-  if (typeof value !== "string" || !HOST_ID_SET.has(value)) {
-    fail("host", path);
-  }
-  return value as WakeflowWorkspaceHostId;
-}
-
-function parseSharedPreview(value: unknown): Readonly<WakeflowStaticMaterializationPreview> {
-  try {
-    return parseWakeflowStaticMaterializationPreview(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("shared-preview", error.path, error);
-    }
-    throw error;
-  }
-}
-
-function parseContribution(value: unknown): Readonly<WakeflowHostMaintenanceContribution> | null {
-  if (value === null) return null;
-  try {
-    return parseWakeflowHostMaintenanceContribution(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowHostMaintenanceContributionError) {
-      fail("host-contribution", error.path, error);
-    }
-    throw error;
-  }
-}
 
 function sharedStep(
   value: Readonly<WakeflowStaticMaterializationStep>,
@@ -273,63 +220,4 @@ export function createWakeflowMaintenanceExecutionPlan(
     fail("matrix", "$profile");
   }
   return buildPlan(profile.hostId, preview, contribution);
-}
-
-function digest(value: unknown, path: string): Sha256Digest {
-  try {
-    return parseSha256Digest(value, path);
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", path, error);
-    throw error;
-  }
-}
-
-function equivalentJson(left: unknown, right: unknown, path: string): boolean {
-  let leftJson: JsonValue;
-  try {
-    leftJson = parseJsonValue(left, path);
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("input", error.path, error);
-    throw error;
-  }
-  return computeCanonicalJsonSha256Digest(leftJson) === computeCanonicalJsonSha256Digest(right);
-}
-
-/** 把任意输入重验为可由两类已知来源唯一推导的聚合执行计划。 */
-export function parseWakeflowMaintenanceExecutionPlan(
-  value: unknown,
-): Readonly<WakeflowMaintenanceExecutionPlan> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$plan");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
-  }
-  if (
-    Object.keys(record).sort().join("\u0000") !==
-      "blockerCodes\u0000executionBoundary\u0000hostContribution\u0000hostId\u0000kind\u0000planDigest\u0000schemaVersion\u0000sharedPreview\u0000status\u0000steps" ||
-    record.kind !== "WakeflowMaintenanceExecutionPlan" ||
-    record.schemaVersion !== 1 ||
-    record.executionBoundary !== "preview-only" ||
-    (record.status !== "ready" && record.status !== "blocked")
-  ) {
-    fail("input", "$plan");
-  }
-  const expected = buildPlan(
-    parseHostId(record.hostId, "$plan.hostId"),
-    parseSharedPreview(record.sharedPreview),
-    parseContribution(record.hostContribution),
-  );
-  if (
-    record.status !== expected.status ||
-    !equivalentJson(record.blockerCodes, expected.blockerCodes, "$plan.blockerCodes") ||
-    !equivalentJson(record.steps, expected.steps, "$plan.steps")
-  ) {
-    fail("order", "$plan");
-  }
-  if (digest(record.planDigest, "$plan.planDigest") !== expected.planDigest) {
-    fail("digest", "$plan.planDigest");
-  }
-  return expected;
 }

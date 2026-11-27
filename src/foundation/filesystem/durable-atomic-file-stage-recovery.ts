@@ -129,8 +129,9 @@ function parentDirectoryRef(resourcePath: PortableResourcePath): PortableResourc
  * 所以留着；目标摘要的计算拒绝占用暂存保留前缀的名字，路径与数组本身是类型化的。
  */
 function targetScopeOf(resourcePaths: readonly PortableResourcePath[]): Readonly<TargetScope> {
+  const [first] = resourcePaths;
   if (
-    resourcePaths.length === 0 ||
+    first === undefined ||
     resourcePaths.length > DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE
   ) {
     fail("input", "$targetResourcePaths");
@@ -153,7 +154,7 @@ function targetScopeOf(resourcePaths: readonly PortableResourcePath[]): Readonly
       throw error;
     }
   }
-  const directoryResourcePath = parentDirectoryRef(paths[0] as PortableResourcePath);
+  const directoryResourcePath = parentDirectoryRef(first);
   if (paths.some((path) => parentDirectoryRef(path) !== directoryResourcePath)) {
     fail("input", "$targetResourcePaths");
   }

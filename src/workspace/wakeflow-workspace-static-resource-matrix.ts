@@ -1,13 +1,6 @@
-import { types } from "node:util";
-
 import { WAKEFLOW_CONFIG_RESOURCE_CATALOG } from "../configuration/wakeflow-config-resource-catalog.js";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../foundation/data/passive-own-data.js";
+import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
@@ -19,16 +12,14 @@ import {
 } from "./wakeflow-active-static-resource-catalog.js";
 import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
-import {
-  WAKEFLOW_WORKSPACE_HOST_IDS,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "./workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-  WakeflowWorkspaceResourceDeclarationError,
   type WakeflowWorkspaceResourcePlacement,
 } from "./workspace-resource-declaration.js";
 import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
@@ -54,11 +45,9 @@ export interface WakeflowWorkspaceStaticResourceMatrix {
 }
 
 export type WakeflowWorkspaceStaticResourceMatrixErrorReason =
-  | "input"
   | "scope"
   | "declaration-id-collision"
-  | "placement-collision"
-  | "digest";
+  | "placement-collision";
 
 /** 静态资源矩阵组合或唯一性准入失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceStaticResourceMatrixError extends ModuleError<WakeflowWorkspaceStaticResourceMatrixErrorReason> {
@@ -81,8 +70,6 @@ const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG,
   ...WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
-
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 
 function compareDeclarationIds(
   left: Readonly<WakeflowWorkspaceResourceDeclaration>,
@@ -179,28 +166,6 @@ function assertPlacementTopology(
   }
 }
 
-function admitParsedDeclarations(
-  shared: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
-  host: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
-): Readonly<{
-  readonly shared: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
-  readonly all: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
-}> {
-  const all = [...shared, ...host];
-  const declarationIds = new Set<string>();
-  for (const declaration of all) {
-    if (declarationIds.has(declaration.declarationId)) {
-      fail("declaration-id-collision", "$/declarations");
-    }
-    declarationIds.add(declaration.declarationId);
-  }
-  assertPlacementTopology(all);
-  return Object.freeze({
-    shared: sortedDeclarations(shared),
-    all: sortedDeclarations(all),
-  });
-}
-
 function admitDeclarations(
   sharedValues: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
   hostValues: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
@@ -222,7 +187,19 @@ function admitDeclarations(
     }
     return declaration;
   });
-  return admitParsedDeclarations(shared, host);
+  const all = [...shared, ...host];
+  const declarationIds = new Set<string>();
+  for (const declaration of all) {
+    if (declarationIds.has(declaration.declarationId)) {
+      fail("declaration-id-collision", "$/declarations");
+    }
+    declarationIds.add(declaration.declarationId);
+  }
+  assertPlacementTopology(all);
+  return Object.freeze({
+    shared: sortedDeclarations(shared),
+    all: sortedDeclarations(all),
+  });
 }
 
 function sharedDigest(
@@ -258,85 +235,6 @@ export function createWakeflowWorkspaceStaticResourceMatrix(
     hostId: profile.hostId,
     sharedDigest: sharedDigest(admitted.shared),
     matrixDigest: matrixDigest(profile.hostId, admitted.all),
-    declarations: admitted.all,
-  });
-}
-
-/**
- * 严格重验静态矩阵的声明、排序、唯一性和两个摘要，并返回解除别名的冻结副本。
- */
-export function parseWakeflowWorkspaceStaticResourceMatrix(
-  value: unknown,
-): Readonly<WakeflowWorkspaceStaticResourceMatrix> {
-  if (typeof value !== "object" || value === null || types.isProxy(value)) {
-    fail("input", "$matrix");
-  }
-  let record: Readonly<Record<string, unknown>>;
-  let declarationValues: readonly unknown[];
-  try {
-    record = parsePlainRecord(value, "$matrix");
-    declarationValues = parseDenseArray(record.declarations, 10_000, "$matrix.declarations");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$matrix", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 5 ||
-    keys[0] !== "declarations" ||
-    keys[1] !== "hostId" ||
-    keys[2] !== "kind" ||
-    keys[3] !== "matrixDigest" ||
-    keys[4] !== "sharedDigest" ||
-    record.kind !== WAKEFLOW_WORKSPACE_STATIC_RESOURCE_MATRIX_KIND ||
-    typeof record.hostId !== "string" ||
-    !HOST_ID_SET.has(record.hostId)
-  ) {
-    fail("input", "$matrix");
-  }
-  let suppliedSharedDigest: Sha256Digest;
-  let suppliedMatrixDigest: Sha256Digest;
-  try {
-    suppliedSharedDigest = parseSha256Digest(record.sharedDigest, "$matrix.sharedDigest");
-    suppliedMatrixDigest = parseSha256Digest(record.matrixDigest, "$matrix.matrixDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", error.path, error);
-    throw error;
-  }
-  const parsedDeclarations = declarationValues.map((declaration, index) => {
-    try {
-      return parseWakeflowWorkspaceResourceDeclaration(declaration);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowWorkspaceResourceDeclarationError) {
-        fail("input", `$/declarations/${index}`, error);
-      }
-      throw error;
-    }
-  });
-  const admitted = admitParsedDeclarations(
-    parsedDeclarations.filter((entry) => entry.scope === "host-neutral"),
-    parsedDeclarations.filter((entry) => entry.scope === "current-host"),
-  );
-  if (
-    parsedDeclarations.length !== admitted.all.length ||
-    parsedDeclarations.some(
-      (entry, index) => entry.declarationId !== admitted.all[index]?.declarationId,
-    )
-  ) {
-    fail("input", "$matrix.declarations");
-  }
-  const hostId = record.hostId as WakeflowWorkspaceHostId;
-  if (
-    sharedDigest(admitted.shared) !== suppliedSharedDigest ||
-    matrixDigest(hostId, admitted.all) !== suppliedMatrixDigest
-  ) {
-    fail("digest", "$matrix");
-  }
-  return Object.freeze({
-    kind: WAKEFLOW_WORKSPACE_STATIC_RESOURCE_MATRIX_KIND,
-    hostId,
-    sharedDigest: suppliedSharedDigest,
-    matrixDigest: suppliedMatrixDigest,
     declarations: admitted.all,
   });
 }

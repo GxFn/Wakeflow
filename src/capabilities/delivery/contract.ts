@@ -22,11 +22,7 @@ import {
   WAKEFLOW_RECORD_DELIVERY_OUTCOME_RESULT_SCHEMA,
   type WakeflowRecordDeliveryOutcomeResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-record-delivery-outcome-result.generated.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
   type RuntimeJsonSchemaValidator,
@@ -76,20 +72,11 @@ const validateRearmResult = createRuntimeJsonSchemaValidator<WakeflowRearmDelive
   WAKEFLOW_REARM_DELIVERY_RESULT_SCHEMA,
 );
 
-function requestJson(value: unknown): JsonValue {
-  try {
-    return parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
-}
-
 function parseRequest<Request>(
   validate: RuntimeJsonSchemaValidator<Request>,
-  value: unknown,
+  value: JsonValue,
 ): Request {
-  const result = validate(requestJson(value));
+  const result = validate(value);
   if (!result.ok)
     fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
       details: { schema: result.detail },
@@ -103,7 +90,7 @@ function admitResult<Result>(validate: RuntimeJsonSchemaValidator<Result>, value
   return result.value;
 }
 
-export function parsePrepareDeliveryRequest(value: unknown): PrepareDeliveryRequest {
+export function parsePrepareDeliveryRequest(value: JsonValue): PrepareDeliveryRequest {
   return parseRequest(validatePrepareRequest, value);
 }
 
@@ -111,7 +98,7 @@ export function admitPrepareDeliveryResult(value: unknown): PrepareDeliveryResul
   return admitResult(validatePrepareResult, value);
 }
 
-export function parseRecordDeliveryOutcomeRequest(value: unknown): RecordDeliveryOutcomeRequest {
+export function parseRecordDeliveryOutcomeRequest(value: JsonValue): RecordDeliveryOutcomeRequest {
   return parseRequest(validateOutcomeRequest, value);
 }
 
@@ -119,7 +106,7 @@ export function admitRecordDeliveryOutcomeResult(value: unknown): RecordDelivery
   return admitResult(validateOutcomeResult, value);
 }
 
-export function parseRearmDeliveryRequest(value: unknown): RearmDeliveryRequest {
+export function parseRearmDeliveryRequest(value: JsonValue): RearmDeliveryRequest {
   return parseRequest(validateRearmRequest, value);
 }
 

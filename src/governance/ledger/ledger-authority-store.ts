@@ -123,7 +123,6 @@ export type {
   LedgerAuthorityMemberInput,
   LedgerAuthorityMemberReference,
   LedgerAuthorityPublicationResult,
-  LedgerAuthorityStoreErrorReason,
   LedgerAuthorityStoreOptions,
   LoadedLedgerAuthorityRecord,
   ResolvedLedgerAuthorityMember,

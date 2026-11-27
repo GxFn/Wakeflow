@@ -422,7 +422,4 @@ export async function recoverDemandPublication(
   }
 }
 
-export {
-  type DemandEventSourcingPublicationResult,
-  DemandEventSourcingPublicationServiceError,
-} from "./demand-event-sourcing-publication-contract.js";
+export type { DemandEventSourcingPublicationResult } from "./demand-event-sourcing-publication-contract.js";

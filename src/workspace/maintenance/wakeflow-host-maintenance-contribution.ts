@@ -70,7 +70,6 @@ export interface CreateWakeflowHostMaintenanceContributionRequest {
 
 export type WakeflowHostMaintenanceContributionErrorReason =
   | "input"
-  | "host"
   | "identity"
   | "digest"
   | "payload"

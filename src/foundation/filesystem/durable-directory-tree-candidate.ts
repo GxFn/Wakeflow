@@ -347,7 +347,6 @@ export type {
   DirectoryTreeCandidatePlanFile,
   DirectoryTreeCandidateProgress,
   DirectoryTreeCandidateResult,
-  DurableDirectoryTreeCandidateErrorReason,
 } from "./directory-tree-candidate-plan.js";
 export {
   DurableDirectoryTreeCandidateError,

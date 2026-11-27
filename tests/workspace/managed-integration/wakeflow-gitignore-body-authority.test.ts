@@ -8,7 +8,6 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import {
   classifyWakeflowGitignoreExactOutsideRules,
   createWakeflowGitignoreBodyAuthority,
-  parseWakeflowGitignoreBodyAuthority,
   WakeflowGitignoreBodyAuthorityError,
   type WakeflowGitignoreBodyAuthorityErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
@@ -178,28 +177,5 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
       createWakeflowGitignoreBodyAuthority([codexWorkspaceHostResourceProfile, collidingClaude]),
     "path",
     "$/profiles/1/surfaces/settingsIntegration/localPath",
-  );
-  const forgedRules = ["/*.tmp", ...authority.rules.slice(1)];
-  const forgedBody = `${forgedRules.join("\n")}\n`;
-  const forged = {
-    ...authority,
-    rules: forgedRules,
-    body: forgedBody,
-    bodyDigest: computeSha256Digest(encodeUtf8(forgedBody)),
-    authorityDigest: computeCanonicalJsonSha256Digest({
-      kind: "WakeflowGitignoreBodyAuthorityDigestBasis",
-      schemaVersion: 1,
-      hostIds: authority.hostIds,
-      rules: forgedRules,
-    }),
-    envelopeTarget: {
-      ...authority.envelopeTarget,
-      body: forgedBody,
-    },
-  };
-  expectAuthorityError(
-    () => parseWakeflowGitignoreBodyAuthority(forged),
-    "authority",
-    "$authority",
   );
 });

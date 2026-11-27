@@ -9,7 +9,6 @@ import {
 import {
   type JsonObject,
   type JsonValue,
-  JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
@@ -68,14 +67,7 @@ const validateResult =
     WAKEFLOW_WINDOW_HOST_BINDING_REGISTRATION_RESULT_SCHEMA,
   );
 
-export function parseWindowBindingRequest(value: unknown): WindowBindingRequest {
-  let json: JsonValue;
-  try {
-    json = parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
+export function parseWindowBindingRequest(json: JsonValue): WindowBindingRequest {
   const result = validateRequest(json);
   if (result.ok) return result.value;
   const operation =

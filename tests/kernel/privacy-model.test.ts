@@ -2,10 +2,8 @@ import { equal, ok } from "node:assert/strict";
 import { test } from "node:test";
 import fc from "fast-check";
 import { scanPrivacyText } from "../../src/kernel/privacy-scan.js";
-import {
-  modelTestOptions,
-  persistModelCounterexample,
-} from "../../tooling/testing/model-options.js";
+import { modelTestOptions } from "../../tooling/testing/model-options.js";
+import { persistModelCounterexample } from "../support/model-counterexample.js";
 
 interface Model {
   credential: boolean;

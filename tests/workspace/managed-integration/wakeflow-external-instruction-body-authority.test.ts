@@ -2,6 +2,7 @@ import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -10,7 +11,6 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import {
   createWakeflowExternalInstructionBodyAuthority,
   listWakeflowExternalInstructionTargets,
-  parseWakeflowExternalInstructionTarget,
   WakeflowExternalInstructionBodyAuthorityError,
   type WakeflowExternalInstructionBodyAuthorityErrorReason,
   wakeflowExternalInstructionPlacementKey,
@@ -84,24 +84,6 @@ test("external instruction targets list only managed-block repositories and exte
     `repository.${MANAGED_BLOCK_REPOSITORY_ID}.root`,
     `support.${EXTERNAL_DESIGN_SURFACE_ID}.root`,
   ]);
-  deepEqual(
-    parseWakeflowExternalInstructionTarget(MANAGED_BLOCK_REPOSITORY_TARGET),
-    MANAGED_BLOCK_REPOSITORY_TARGET,
-  );
-  expectAuthorityError(
-    () => parseWakeflowExternalInstructionTarget({ kind: "repository" }),
-    "input",
-    "$target",
-  );
-  expectAuthorityError(
-    () =>
-      parseWakeflowExternalInstructionTarget({
-        kind: "support-surface",
-        surfaceId: MANAGED_BLOCK_REPOSITORY_ID,
-      }),
-    "input",
-    "$target.surfaceId",
-  );
 });
 
 test("repository instruction authority renders deterministic English content from the primary pod", () => {
@@ -371,10 +353,13 @@ test("external instruction authority rejects targets outside the managed-block p
       createWakeflowExternalInstructionBodyAuthority(
         managedConfig(),
         codexWorkspaceHostResourceProfile,
-        parseWakeflowExternalInstructionTarget({
+        {
           kind: "repository",
-          repositoryId: "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        }),
+          repositoryId: parseWakeflowDurableIdOfKind(
+            "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "repository",
+          ),
+        },
       ),
     "target",
     "$target.repositoryId",

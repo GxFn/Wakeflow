@@ -213,7 +213,6 @@ export async function publishWakeflowSupportMemory(
 
 export {
   WakeflowSupportMemoryPublicationError,
-  type WakeflowSupportMemoryPublicationErrorReason,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationReceipt,
   type WakeflowSupportMemoryPublicationRequest,

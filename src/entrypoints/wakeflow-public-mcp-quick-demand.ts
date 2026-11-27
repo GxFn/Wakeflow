@@ -17,6 +17,7 @@ import {
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { assertNoActiveDemand } from "../governance/demand/publication/demand-active-guard.js";
+import { parsePublicRequestJson } from "../kernel/command-shell.js";
 import { fail, failWithBlockers, toWakeflowError, WakeflowError } from "../kernel/error.js";
 import type { NextProjection } from "../kernel/next-projection.js";
 import {
@@ -695,7 +696,9 @@ export function createQuickDemandExecutor(
   executors: Readonly<QuickDemandExecutors>,
 ): WakeflowPublicMcpExecutor<QuickDemandResult> {
   return async (value, context) => {
-    const request = parseQuickDemandRequest(value);
+    // 这个 executor 不经命令外壳：在自己的入口用外壳的同一个被动解析准入一次，
+    // 再跑一次请求 Schema（R13）。
+    const request = parseQuickDemandRequest(parsePublicRequestJson(value));
     const plan = planOf(await readSnapshot(request.root, context), request);
     if (request.mode === "apply") return apply(request, plan, executors, context);
     return previewResult(plan, await previewBlockers(request.root, plan, context));

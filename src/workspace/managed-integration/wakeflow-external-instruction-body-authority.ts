@@ -8,14 +8,9 @@ import {
   type WakeflowPresentationLanguage,
   type WakeflowProductWindow,
 } from "../../configuration/wakeflow-config.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   MarkdownJsonStringLiteralError,
@@ -79,7 +74,7 @@ export interface WakeflowExternalInstructionBodyAuthority {
   readonly envelopeTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
-export type WakeflowExternalInstructionBodyAuthorityErrorReason = "input" | "target" | "text";
+export type WakeflowExternalInstructionBodyAuthorityErrorReason = "target" | "text";
 
 /** 外部指令正文权威准入失败的稳定、脱敏错误。 */
 export class WakeflowExternalInstructionBodyAuthorityError extends ModuleError<WakeflowExternalInstructionBodyAuthorityErrorReason> {
@@ -89,47 +84,6 @@ export class WakeflowExternalInstructionBodyAuthorityError extends ModuleError<W
 const fail: Fail<WakeflowExternalInstructionBodyAuthorityErrorReason> = failWith(
   WakeflowExternalInstructionBodyAuthorityError,
 );
-
-function parseTargetId<K extends "repository" | "surface">(
-  value: unknown,
-  kind: K,
-  path: string,
-): WakeflowDurableId<K> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, kind, path);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", path, error);
-    throw error;
-  }
-}
-
-/** 快照并校验一个外部指令 target 的形状与类型化标识。 */
-export function parseWakeflowExternalInstructionTarget(
-  value: unknown,
-  path = "$target",
-): Readonly<WakeflowExternalInstructionTarget> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path, error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort().join("\u0000");
-  if (record.kind === "repository" && keys === "kind\u0000repositoryId") {
-    return Object.freeze({
-      kind: "repository",
-      repositoryId: parseTargetId(record.repositoryId, "repository", `${path}.repositoryId`),
-    });
-  }
-  if (record.kind === "support-surface" && keys === "kind\u0000surfaceId") {
-    return Object.freeze({
-      kind: "support-surface",
-      surfaceId: parseTargetId(record.surfaceId, "surface", `${path}.surfaceId`),
-    });
-  }
-  fail("input", path);
-}
 
 /** 一个 target 的稳定文本键；也是物化步骤的 targetKey。 */
 export function wakeflowExternalInstructionTargetKey(

@@ -355,6 +355,5 @@ export {
   type DurableAtomicFileReplaceOptions,
   type DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteError,
-  type DurableAtomicFileWriteErrorReason,
   type DurableAtomicFileWriteResult,
 } from "./durable-atomic-file-write-contract.js";

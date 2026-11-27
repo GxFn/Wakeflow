@@ -201,7 +201,6 @@ export async function replaceWakeflowConfigAuthority(
 
 export {
   WakeflowConfigAuthorityReplacementError,
-  type WakeflowConfigAuthorityReplacementErrorReason,
   type WakeflowConfigAuthorityReplacementOptions,
   type WakeflowConfigAuthorityReplacementReceipt,
 } from "./wakeflow-config-authority-replacement-contract.js";

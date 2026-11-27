@@ -594,7 +594,6 @@ export async function copyFileToCandidateDurably(
 
 export {
   DurableFileCopyCandidateError,
-  type DurableFileCopyCandidateErrorReason,
   type DurableFileCopyCandidateOptions,
   type DurableFileCopyContentExpectation,
 } from "./durable-file-copy-candidate-contract.js";

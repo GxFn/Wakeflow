@@ -132,7 +132,10 @@ import {
   runAppendCommand,
   UNOBSERVED_STREAM_REVISION,
 } from "../../kernel/append-command.js";
-import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
+import {
+  commandShellExecutionOptions,
+  parsePublicRequestJson,
+} from "../../kernel/command-shell.js";
 import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import {
   type HelperObservationFileReference,
@@ -2012,7 +2015,11 @@ async function resolveOutcomeObservation(
   }
   let admitted: RecordDeliveryOutcomeRequest;
   try {
-    admitted = parseRecordDeliveryOutcomeRequest({ ...observation.rest, ...content });
+    // 拼成的是一份新的请求值（已准入的其余成员加文件内容）：按公共请求再准入一次，
+    // 同一个被动解析、同一份 Schema。
+    admitted = parseRecordDeliveryOutcomeRequest(
+      parsePublicRequestJson({ ...observation.rest, ...content }),
+    );
   } catch (error: unknown) {
     if (isWakeflowError(error) && error.code === "invalid-request") {
       fail("precondition-failed", "observation-file-content", `${path}.file`, { cause: error });

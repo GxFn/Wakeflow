@@ -36,8 +36,8 @@ import { createWakeflowProgramInstructionBodyAuthority } from "../../../src/work
 import {
   recomposeWakeflowProgramInstruction,
   WakeflowProgramInstructionRecompositionError,
-  type WakeflowProgramInstructionRecompositionErrorReason,
 } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
+import type { WakeflowProgramInstructionRecompositionErrorReason } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition-contract.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";

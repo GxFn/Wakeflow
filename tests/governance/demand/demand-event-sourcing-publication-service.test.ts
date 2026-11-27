@@ -39,8 +39,8 @@ import {
   renderDemandIdentity,
 } from "../../../src/governance/demand/model/demand-identity.js";
 import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
+import { DemandEventSourcingPublicationServiceError } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import {
-  DemandEventSourcingPublicationServiceError,
   publishDemandFromPackage,
   readPendingDemandPublication,
   recoverDemandPublication,

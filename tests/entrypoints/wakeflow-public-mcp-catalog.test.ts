@@ -33,7 +33,9 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/wo
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
-import { measureWakeflowToolCatalogBytes } from "../../src/kernel/tool-registry.js";
+import { encodeCanonicalJson } from "../../src/foundation/data/canonical-json.js";
+import { parseJsonValue } from "../../src/foundation/data/json-value.js";
+import { publicToolDefinition } from "../../src/kernel/tool-registry.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpServerForTest,
@@ -240,11 +242,12 @@ test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   // 体积预算（Q12）：ADR-0004 的 60 KB 目标改为按实测重定基线并锁住不回退。
   const listBytes = Buffer.byteLength(JSON.stringify(listed.tools), "utf8");
   equal(listBytes <= WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES, true);
-  equal(
-    measureWakeflowToolCatalogBytes(WAKEFLOW_PUBLIC_TOOL_CATALOG) <=
-      WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES,
-    true,
-  );
+  // 同一预算也量公开目录的规范 JSON 字节。
+  const catalogBytes = encodeCanonicalJson(
+    parseJsonValue(WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map(publicToolDefinition), "$catalog"),
+    "$catalog",
+  ).byteLength;
+  equal(catalogBytes <= WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES, true);
 });
 
 test("Codex与Claude Code composition root发布同一二十一工具集合", async () => {

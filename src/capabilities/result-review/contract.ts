@@ -30,11 +30,7 @@ import {
   WAKEFLOW_TEST_REVIEW_DECISION_RESULT_SCHEMA,
   type WakeflowTestReviewDecisionResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-test-review-decision-result.generated.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
   type RuntimeJsonSchemaValidator,
@@ -106,20 +102,11 @@ const validateTestDecisionResult =
     WAKEFLOW_TEST_REVIEW_DECISION_RESULT_SCHEMA,
   );
 
-function requestJson(value: unknown): JsonValue {
-  try {
-    return parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
-}
-
 function parseRequest<Request>(
   validate: RuntimeJsonSchemaValidator<Request>,
-  value: unknown,
+  value: JsonValue,
 ): Request {
-  const result = validate(requestJson(value));
+  const result = validate(value);
   if (!result.ok)
     fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
       details: { schema: result.detail },
@@ -133,7 +120,7 @@ function admitResult<Result>(validate: RuntimeJsonSchemaValidator<Result>, value
   return result.value;
 }
 
-export function parseTargetResultImportRequest(value: unknown): TargetResultImportRequest {
+export function parseTargetResultImportRequest(value: JsonValue): TargetResultImportRequest {
   return parseRequest(validateImportRequest, value);
 }
 
@@ -142,7 +129,7 @@ export function admitTargetResultImportResult(value: unknown): TargetResultImpor
 }
 
 export function parseTargetResultReviewInspectionRequest(
-  value: unknown,
+  value: JsonValue,
 ): TargetResultReviewInspectionRequest {
   return parseRequest(validateInspectionRequest, value);
 }
@@ -154,7 +141,7 @@ export function admitTargetResultReviewInspectionResult(
 }
 
 export function parseImplementationReviewDecisionRequest(
-  value: unknown,
+  value: JsonValue,
 ): ImplementationReviewDecisionRequest {
   return parseRequest(validateImplementationDecisionRequest, value);
 }
@@ -165,7 +152,7 @@ export function admitImplementationReviewDecisionResult(
   return admitResult(validateImplementationDecisionResult, value);
 }
 
-export function parseTestReviewDecisionRequest(value: unknown): TestReviewDecisionRequest {
+export function parseTestReviewDecisionRequest(value: JsonValue): TestReviewDecisionRequest {
   return parseRequest(validateTestDecisionRequest, value);
 }
 

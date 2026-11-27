@@ -13,11 +13,11 @@ import { open as openFileHandle } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import type { DurableDirectoryTreeCandidateErrorReason } from "../../../src/foundation/filesystem/directory-tree-candidate-plan.js";
 import { createDirectoryAtomically } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import {
   createDirectoryTreeCandidateDurably,
   DurableDirectoryTreeCandidateError,
-  type DurableDirectoryTreeCandidateErrorReason,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
   parseDirectoryTreeCandidatePlan,

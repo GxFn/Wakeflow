@@ -6,11 +6,7 @@ import {
   WAKEFLOW_POD_RESULT_SCHEMA,
   type WakeflowPodResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-pod-result.generated.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { fail } from "../../kernel/error.js";
 import type { WakeflowToolRegistration } from "../../kernel/tool-registry.js";
@@ -35,17 +31,8 @@ const validateResult = createRuntimeJsonSchemaValidator<WakeflowPodResultV1>(
   WAKEFLOW_POD_RESULT_SCHEMA,
 );
 
-function requestJson(value: unknown): JsonValue {
-  try {
-    return parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
-}
-
-export function parsePodRequest(value: unknown): PodRequest {
-  const result = validateRequest(requestJson(value));
+export function parsePodRequest(value: JsonValue): PodRequest {
+  const result = validateRequest(value);
   if (!result.ok)
     fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
       details: { schema: result.detail },

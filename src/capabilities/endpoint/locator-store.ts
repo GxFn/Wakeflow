@@ -128,7 +128,7 @@ export function createWindowLocatorRecord(
     bindingId: input.bindingId,
     provider: codec.provider,
     payload,
-    registeredAt: parseUtcInstant(input.registeredAt, "$locator.registeredAt"),
+    registeredAt: input.registeredAt,
   });
 }
 
@@ -168,7 +168,7 @@ function parseWindowLocatorRecord(
       hostId,
       windowId,
       bindingId,
-      registeredAt: record.registeredAt as UtcInstant,
+      registeredAt: parseUtcInstant(record.registeredAt, "$locator.registeredAt"),
       target: {
         provider: codec.provider,
         payload: plainObject(record[codec.provider], "$locator"),

@@ -19,7 +19,6 @@ import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "../../src/workspace/wakef
 import {
   createWakeflowWorkspaceStaticResourceMatrix,
   findWakeflowWorkspaceStaticResourceByDeclarationId,
-  parseWakeflowWorkspaceStaticResourceMatrix,
   WakeflowWorkspaceStaticResourceMatrixError,
 } from "../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
@@ -121,9 +120,6 @@ test("Static Resource Matrix explicitly composes and deterministically sorts cat
   equal(/^sha256:[0-9a-f]{64}$/u.test(codex.sharedDigest), true);
   equal(/^sha256:[0-9a-f]{64}$/u.test(codex.matrixDigest), true);
   deepEqual(createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile), codex);
-  const reparsed = parseWakeflowWorkspaceStaticResourceMatrix(codex);
-  deepEqual(reparsed, codex);
-  notEqual(reparsed.declarations, codex.declarations);
 });
 
 test("Static Resource Matrix rejects a duplicate logical placement", () => {
@@ -206,23 +202,6 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
     if (caught instanceof WakeflowWorkspaceStaticResourceMatrixError) {
       equal(caught.reason, "placement-collision");
     }
-  }
-
-  const valid = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
-  const forged = Object.freeze({
-    ...valid,
-    declarations: Object.freeze(valid.declarations.slice(1)),
-  });
-  let forgedError: unknown;
-  try {
-    parseWakeflowWorkspaceStaticResourceMatrix(forged);
-  } catch (error: unknown) {
-    forgedError = error;
-  }
-  equal(forgedError instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
-  if (forgedError instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-    equal(forgedError.reason, "digest");
-    equal(forgedError.path, "$matrix");
   }
 });
 

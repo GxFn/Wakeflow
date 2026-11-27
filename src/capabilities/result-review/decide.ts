@@ -1,4 +1,8 @@
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   RERUNNABLE_TEST_FAILURE_CLASSIFICATIONS,
   type TestFailureClassification,
@@ -29,9 +33,6 @@ import { findPromptLanding } from "../../kernel/prompt-digest.js";
 
 const MANAGED_EVIDENCE_LOCATOR_ROOT = "artifacts/managed-evidence";
 
-const EVIDENCE_ID_PATTERN =
-  /^evidence_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-
 export type EvidenceLocatorPlan =
   | Readonly<{
       readonly evidenceId: WakeflowDurableId<"evidence">;
@@ -54,16 +55,20 @@ export function planEvidenceLocator(ref: string): EvidenceLocatorPlan | null {
   const rest = ref.slice(prefix.length);
   const slash = rest.indexOf("/");
   if (slash <= 0) return null;
-  const evidenceId = rest.slice(0, slash);
-  if (!EVIDENCE_ID_PATTERN.test(evidenceId)) return null;
+  let evidenceId: WakeflowDurableId<"evidence">;
+  try {
+    evidenceId = parseWakeflowDurableIdOfKind(rest.slice(0, slash), "evidence");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowDurableIdError) return null;
+    throw error;
+  }
   const member = rest.slice(slash + 1);
-  const typedEvidenceId = evidenceId as WakeflowDurableId<"evidence">;
   if (member === "manifest.json") {
-    return Object.freeze({ evidenceId: typedEvidenceId, member: "manifest" as const });
+    return Object.freeze({ evidenceId, member: "manifest" as const });
   }
   if (member.startsWith("payload/") && member.length > "payload/".length) {
     return Object.freeze({
-      evidenceId: typedEvidenceId,
+      evidenceId,
       member: "payload" as const,
       memberRef: member.slice("payload/".length),
     });

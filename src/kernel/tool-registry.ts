@@ -1,5 +1,3 @@
-import { encodeCanonicalJson } from "../foundation/data/canonical-json.js";
-import { parseJsonValue } from "../foundation/data/json-value.js";
 import { fail } from "./error.js";
 
 /**
@@ -195,12 +193,4 @@ export function publicToolDefinition(
     inputSchema: publicInputSchema(registration.requestSchema),
     annotations: registration.annotations,
   });
-}
-
-/** 公开目录的规范 JSON 字节数，作为 `tools/list` 体积预算的度量基准。 */
-export function measureWakeflowToolCatalogBytes(catalog: Readonly<WakeflowToolCatalog>): number {
-  return encodeCanonicalJson(
-    parseJsonValue(catalog.tools.map(publicToolDefinition), "$catalog"),
-    "$catalog",
-  ).byteLength;
 }

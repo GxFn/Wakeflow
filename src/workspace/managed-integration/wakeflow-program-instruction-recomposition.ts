@@ -257,7 +257,6 @@ export async function recomposeWakeflowProgramInstruction(
 
 export {
   WakeflowProgramInstructionRecompositionError,
-  type WakeflowProgramInstructionRecompositionErrorReason,
   type WakeflowProgramInstructionRecompositionOptions,
   type WakeflowProgramInstructionRecompositionReceipt,
   type WakeflowProgramInstructionRecompositionRequest,

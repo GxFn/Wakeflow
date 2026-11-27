@@ -1,4 +1,5 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
+import type { JsonValue } from "../foundation/data/json-value.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { runCommandShell, type CommandShellExecutionOptions } from "./command-shell.js";
 import { fail } from "./error.js";
@@ -35,8 +36,8 @@ interface AppendCommandParsedRequest<Input> {
 
 export interface AppendCommandSpec<Input, Context, Outcome, Result> {
   readonly tool: string;
-  /** 用切片自己的 Schema 解析请求；返回信封与切片输入。 */
-  readonly parseRequest: (value: unknown) => Readonly<AppendCommandParsedRequest<Input>>;
+  /** 用切片自己的 Schema 解析外壳已被动解析过的请求；返回信封与切片输入。 */
+  readonly parseRequest: (value: JsonValue) => Readonly<AppendCommandParsedRequest<Input>>;
   /** 打开本次命令需要的上下文（配置、权威、Demand 根等）。 */
   readonly open: (
     workspaceRoot: RootedDirectory,

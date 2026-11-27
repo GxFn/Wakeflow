@@ -29,9 +29,9 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
-  type LedgerAuthorityStoreErrorReason,
   parseLedgerAuthorityMemberReference,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
+import type { LedgerAuthorityStoreErrorReason } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
 import {
   ledgerAuthorityRootRef,
   ledgerRecordPublicationStageRef,

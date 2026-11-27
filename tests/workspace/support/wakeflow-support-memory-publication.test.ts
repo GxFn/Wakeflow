@@ -27,8 +27,8 @@ import { createWakeflowSupportMemoryAuthority } from "../../../src/workspace/sup
 import {
   publishWakeflowSupportMemory,
   WakeflowSupportMemoryPublicationError,
-  type WakeflowSupportMemoryPublicationErrorReason,
 } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
+import type { WakeflowSupportMemoryPublicationErrorReason } from "../../../src/workspace/support/wakeflow-support-memory-publication-contract.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 

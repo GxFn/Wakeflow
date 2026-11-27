@@ -73,14 +73,6 @@ interface ManagedEvidenceCapturePlanBasis {
 }
 
 const CREATE_FIELDS = Object.freeze(["configDigest", "expectedDemand", "manifest"] as const);
-const PLAN_FIELDS = Object.freeze([
-  "configDigest",
-  "expectedDemand",
-  "kind",
-  "manifest",
-  "planDigest",
-  "schemaVersion",
-] as const);
 const EXPECTATION_FIELDS = Object.freeze([
   "lastEventDigest",
   "lastEventId",
@@ -191,23 +183,4 @@ export function createManagedEvidenceCapturePlan(
     ...basis,
     planDigest: computeCanonicalJsonSha256Digest(basis, "$plan"),
   });
-}
-
-/** 重新解析并验证调用方交回的完整零写capture plan。 */
-export function parseManagedEvidenceCapturePlan(
-  value: unknown,
-): Readonly<ManagedEvidenceCapturePlan> {
-  const record = exactRecord(value, PLAN_FIELDS, "$plan");
-  if (
-    record.kind !== MANAGED_EVIDENCE_CAPTURE_PLAN_KIND ||
-    record.schemaVersion !== MANAGED_EVIDENCE_CAPTURE_PLAN_VERSION
-  ) {
-    fail("input", "$plan");
-  }
-  const basis = buildBasis(record.configDigest, record.expectedDemand, record.manifest);
-  const planDigest = parseDigest(record.planDigest, "$/planDigest");
-  if (planDigest !== computeCanonicalJsonSha256Digest(basis, "$plan")) {
-    fail("relation", "$/planDigest");
-  }
-  return Object.freeze({ ...basis, planDigest });
 }

@@ -177,7 +177,9 @@ export function unmergedAcceptedFacts(
       : [...acceptedBranchFacts(demand.demandId, demand.reviewSnapshot, repositories, "active")],
   );
   // 同一 Demand 既活动又有归档（续做后重开）时只取活动的一份；不依赖看板状态（gate-log §13.130）。
-  const activeIds = new Set((observation.demands.value ?? []).map((demand) => demand.demandId));
+  const activeIds = new Set<string>(
+    (observation.demands.value ?? []).map((demand) => demand.demandId),
+  );
   const archived = (observation.archives.value?.demands ?? []).flatMap((demand) =>
     activeIds.has(demand.demandId)
       ? []

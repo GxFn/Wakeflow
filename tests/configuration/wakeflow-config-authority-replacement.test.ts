@@ -22,8 +22,8 @@ import { publishWakeflowConfigAuthority } from "../../src/configuration/wakeflow
 import {
   replaceWakeflowConfigAuthority,
   WakeflowConfigAuthorityReplacementError,
-  type WakeflowConfigAuthorityReplacementErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-replacement.js";
+import type { WakeflowConfigAuthorityReplacementErrorReason } from "../../src/configuration/wakeflow-config-authority-replacement-contract.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_FILE_REF,

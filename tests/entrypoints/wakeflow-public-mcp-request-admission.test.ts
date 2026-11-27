@@ -190,7 +190,7 @@ test("wakeflow_maintain_workspace through the SDK: a valid preview is answered; 
   );
   deepEqual(
     refusalOf(await call({ ...reconcile, request: { desiredConfig: {} } })),
-    schemaRefusal("$request/action", "const:fresh-initialize"),
+    schemaRefusal("$request/request", "maxProperties"),
   );
   deepEqual(
     refusalOf(
@@ -211,10 +211,10 @@ test("wakeflow_maintain_workspace through the SDK: a valid preview is answered; 
 
 /**
  * 每个 Maintenance 动作配一个不属于它的请求体。Schema 的判别联合按 `mode` 与 `action` 选支；detach 两个动作的
- * `action` 是 `$ref` 到枚举，联合的解释器不跟 `$ref`（foundation `runtime-json-schema.ts` 的 `fixedValues`），
- * 于是 reconfigure 与 reconcile 的预览、以及 apply 的错体，选不出唯一一支，报的是 Ajv 第一支的错误
- * （`$request/action` 的 `const:fresh-initialize`，apply 是 `additional:planDigest`）。这里把今天的路径钉住：
- * 解释器修好之后这几行随之改。
+ * `action` 是 `$ref` 到枚举，联合的解释器跟到定义里取它的取值（foundation `runtime-json-schema.ts` 的
+ * `fixedMembers`），所以 reconfigure 与 reconcile 的预览和 apply 也认得出调用方选的那一支，报的是那个动作的
+ * 请求体规则，不是 Ajv 第一支（fresh-initialize）的 `$request/action` `const:fresh-initialize`；哪个动作都
+ * 不是的 `action` 列出 preview 各支的动作。
  */
 test("every wakeflow_maintain_workspace action refuses a body that belongs to another action as invalid-request with the Schema's path, through the SDK", async (t) => {
   const root = disposableRoot(t, "wakeflow-request-admission-");
@@ -231,8 +231,13 @@ test("every wakeflow_maintain_workspace action refuses a body that belongs to an
   });
   const cases = [
     [preview("fresh-initialize", { desiredConfig: {} }), "$request/request", "required:selection"],
-    [preview("reconfigure", { selection: {} }), "$request/action", "const:fresh-initialize"],
-    [preview("reconcile", { desiredConfig: {} }), "$request/action", "const:fresh-initialize"],
+    [preview("reconfigure", { selection: {} }), "$request/request", "required:desiredConfig"],
+    [preview("reconcile", { desiredConfig: {} }), "$request/request", "maxProperties"],
+    [
+      preview("reconnect", {}),
+      "$request/action",
+      "enum:fresh-initialize.reconfigure.reconcile.detach-repository.detach-workspace",
+    ],
     [
       preview("detach-repository", { desiredConfig: {} }),
       "$request/request",
@@ -245,8 +250,8 @@ test("every wakeflow_maintain_workspace action refuses a body that belongs to an
         mode: "apply",
         planDigest: `sha256:${"1".repeat(64)}`,
       },
-      "$request",
-      "additional:planDigest",
+      "$request/request",
+      "maxProperties",
     ],
     [
       {
@@ -313,6 +318,34 @@ test("Schema-invalid requests to tools of every shape get the structured refusal
   }
 });
 
+test("non-JSON requests to the append shape and to the entry-level quick Demand get invalid-request/not-json through the SDK: one passive parse, the shell's, also at the quick Demand's own entry", async (t) => {
+  const root = disposableRoot(t, "wakeflow-request-admission-");
+  const client = await connectClaudeCode(t);
+  const cases = [
+    [
+      "wakeflow_prepare_delivery",
+      {
+        root,
+        demandId: "demand_11111111-1111-4111-8111-111111111111",
+        idempotencyKey: "admission-1",
+        expectedStreamRevision: Number.NaN,
+      },
+      notJsonRefusal("$request/expectedStreamRevision"),
+    ],
+    [
+      "wakeflow_quick_demand",
+      { root: `${root}${LONE_SURROGATE}`, mode: "preview" },
+      notJsonRefusal("$request/root"),
+    ],
+    ["wakeflow_quick_demand", { root, mode: Number.NaN }, notJsonRefusal("$request/mode")],
+  ] as const;
+  for (const [name, args, expected] of cases) {
+    const envelope = envelopeOf(await client.callTool({ name, arguments: args }));
+    equal(envelope.tool, name);
+    deepEqual(envelope.error, expected, name);
+  }
+});
+
 test("the stale-artifact gate is decided at the entry before admission: a Schema-invalid preview never reaches it, a Schema-invalid apply passes it and is then refused by the Schema", async (t) => {
   const root = disposableRoot(t, "wakeflow-request-admission-");
   let guarded = 0;
@@ -327,7 +360,7 @@ test("the stale-artifact gate is decided at the entry before admission: a Schema
     name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,
     arguments: { ...mismatched, mode: "preview" },
   });
-  deepEqual(refusalOf(preview), schemaRefusal("$request/action", "const:fresh-initialize"));
+  deepEqual(refusalOf(preview), schemaRefusal("$request/request", "maxProperties"));
   equal(guarded, 0);
   const apply = await client.callTool({
     name: WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME,

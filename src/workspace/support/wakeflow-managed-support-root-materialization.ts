@@ -161,14 +161,14 @@ function currentUserId(): bigint {
 function scaffoldPaths(request: Readonly<ParsedRequest>): readonly PortableResourcePath[] {
   return Object.freeze(
     request.catalog.declarations
-      .filter(
-        (entry) =>
-          entry.placement.root.kind === "support-surface" &&
-          entry.placement.root.surfaceId === request.surfaceId &&
-          entry.placement.relativePath !== null &&
-          entry.processing.kind === "directory-container",
+      .flatMap(({ placement, processing }) =>
+        placement.root.kind === "support-surface" &&
+        placement.root.surfaceId === request.surfaceId &&
+        placement.relativePath !== null &&
+        processing.kind === "directory-container"
+          ? [placement.relativePath]
+          : [],
       )
-      .map((entry) => entry.placement.relativePath as PortableResourcePath)
       .sort(),
   );
 }

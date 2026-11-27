@@ -25,9 +25,9 @@ import {
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
-  type DurableAtomicFileWriteErrorReason,
   replaceFileAtomically,
 } from "../../../src/foundation/filesystem/durable-atomic-file-write.js";
+import type { DurableAtomicFileWriteErrorReason } from "../../../src/foundation/filesystem/durable-atomic-file-write-contract.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import {

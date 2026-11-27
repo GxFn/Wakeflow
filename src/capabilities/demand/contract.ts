@@ -30,11 +30,7 @@ import {
   WAKEFLOW_DEMAND_PUBLICATION_RESULT_SCHEMA,
   type WakeflowDemandPublicationResultV1,
 } from "../../contracts/generated/entrypoints/wakeflow-demand-publication-result.generated.js";
-import {
-  type JsonValue,
-  JsonValueError,
-  parseJsonValue,
-} from "../../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   createRuntimeJsonSchemaValidator,
   type RuntimeJsonSchemaValidator,
@@ -65,20 +61,11 @@ export type DemandCancellationResult = Readonly<WakeflowDemandCancellationResult
 export type DemandContinuationRequest = Readonly<WakeflowDemandContinuationRequestV1>;
 export type DemandContinuationResult = Readonly<WakeflowDemandContinuationResultV1>;
 
-function requestJson(value: unknown): JsonValue {
-  try {
-    return parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
-}
-
 function requestParser<Request>(
   validate: RuntimeJsonSchemaValidator<Request>,
-): (value: unknown) => Readonly<Request> {
+): (value: JsonValue) => Readonly<Request> {
   return (value) => {
-    const result = validate(requestJson(value));
+    const result = validate(value);
     if (!result.ok)
       fail("invalid-request", "schema", `$request${result.path.slice(1)}`, {
         details: { schema: result.detail },

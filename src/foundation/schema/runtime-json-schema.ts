@@ -206,80 +206,120 @@ function resolveNode(root: JsonObject, pointer: string): ResolvedSchemaNode | nu
   return null;
 }
 
-/** 一支里取值固定的成员及其允许的取值。 */
-function fixedMembers(
-  branch: Readonly<Record<string, unknown>>,
-): readonly (readonly [string, readonly unknown[]])[] {
-  const properties = isPlainObject(branch.properties) ? branch.properties : {};
-  return Object.entries(properties).flatMap(([name, schema]) => {
-    const allowed = fixedValues(schema);
-    return allowed === null ? [] : [[name, allowed] as const];
-  });
+/** 联合的一支：解析后的指针，与它取值固定的成员及其允许的取值。 */
+interface UnionBranch {
+  readonly pointer: string;
+  readonly fixed: ReadonlyMap<string, readonly unknown[]>;
 }
 
 /** 一个成员 Schema 固定下来的取值：`const` 或 `enum`；都没有返回 null。 */
-function fixedValues(schema: unknown): readonly unknown[] | null {
-  if (!isPlainObject(schema)) return null;
+function fixedValues(schema: Readonly<Record<string, unknown>>): readonly unknown[] | null {
   if (Object.hasOwn(schema, "const")) return [schema.const];
   return Array.isArray(schema.enum) ? schema.enum : null;
 }
 
-/** 这一支里取值固定的成员是否都与实例相符；没有这类成员的一支不算相符。 */
-function branchSelected(
-  branch: Readonly<Record<string, unknown>>,
-  instance: Readonly<Record<string, unknown>>,
-): boolean {
-  const fixed = fixedMembers(branch);
-  return (
-    fixed.length > 0 &&
-    fixed.every(
-      ([name, allowed]) => Object.hasOwn(instance, name) && allowed.includes(instance[name]),
-    )
-  );
-}
-
-/** 实例选中的那一支的指针：恰好一支相符时才有。 */
-function selectedBranch(
-  context: UnionExplainerContext,
+/**
+ * 联合的各支，按书写顺序；走不到的一支是 null。成员 Schema 是本文档内的 `$ref` 时跟到它指向的定义取固定
+ * 的取值（`action: { $ref: "#/$defs/detachAction" }` 的枚举在定义里），与 `resolveNode` 同一套跳转。
+ */
+function unionBranches(
+  root: JsonObject,
   resolved: ResolvedSchemaNode,
   union: string,
-  instance: unknown,
+): readonly (UnionBranch | null)[] {
+  return (resolved.node[union] as readonly unknown[]).map((_branch, index) => {
+    const branch = resolveNode(root, `${resolved.pointer}/${union}/${index}`);
+    if (branch === null) return null;
+    const properties = isPlainObject(branch.node.properties) ? branch.node.properties : {};
+    const fixed = new Map<string, readonly unknown[]>();
+    for (const name of Object.keys(properties)) {
+      const member = resolveNode(root, `${branch.pointer}/properties/${pointerSegment(name)}`);
+      const allowed = member === null ? null : fixedValues(member.node);
+      if (allowed !== null) fixed.set(name, allowed);
+    }
+    return { pointer: branch.pointer, fixed };
+  });
+}
+
+/** 区分各支的成员：至少两支都固定了取值的成员（`mode`、`action`、`kind`），按首次出现的顺序。 */
+function discriminatingMembers(branches: readonly (UnionBranch | null)[]): ReadonlySet<string> {
+  const fixedBy = new Map<string, number>();
+  for (const branch of branches) {
+    for (const name of branch?.fixed.keys() ?? []) fixedBy.set(name, (fixedBy.get(name) ?? 0) + 1);
+  }
+  return new Set([...fixedBy].flatMap(([name, count]) => (count > 1 ? [name] : [])));
+}
+
+function memberMatches(
+  instance: Readonly<Record<string, unknown>>,
+  name: string,
+  allowed: readonly unknown[],
+): boolean {
+  return Object.hasOwn(instance, name) && allowed.includes(instance[name]);
+}
+
+/**
+ * 实例选中的那一支的指针：恰好一支相符时才有。认一支看的是它的区分成员：只有这一支固定的成员（观测来源的
+ * `hostId`、受管路径的 `resourceType`）说不出调用方选的是哪一支，它的取值是这一支自己的规则，选中之后由
+ * 这一支报。一个区分成员都没有的一支（可空联合里唯一的对象支）按它自己的固定成员认；一个固定成员都没有的
+ * 一支不算相符。
+ */
+function selectedBranch(
+  branches: readonly (UnionBranch | null)[],
+  discriminating: ReadonlySet<string>,
+  instance: Readonly<Record<string, unknown>>,
 ): string | null {
-  if (!isPlainObject(instance)) return null;
-  const branches = resolved.node[union] as readonly unknown[];
-  const selected = branches.flatMap((_branch, index) => {
-    const branch = resolveNode(context.root, `${resolved.pointer}/${union}/${index}`);
-    return branch !== null && branchSelected(branch.node, instance) ? [branch.pointer] : [];
+  const selected = branches.flatMap((branch) => {
+    if (branch === null) return [];
+    const own = [...branch.fixed];
+    const shared = own.filter(([name]) => discriminating.has(name));
+    const recognising = shared.length > 0 ? shared : own;
+    const matches =
+      recognising.length > 0 &&
+      recognising.every(([name, allowed]) => memberMatches(instance, name, allowed));
+    return matches ? [branch.pointer] : [];
   });
   return selected.length === 1 ? (selected[0] ?? null) : null;
 }
 
 /**
- * 没有一支相符时，说出区分各支的那个成员该取什么：每一支都把同一个成员固定了取值、而实例给的不在其中，
- * 就报这个成员的枚举错误（`kind` 写成了哪一支都不认的词）。各支不是靠同一个成员区分的返回 null。
+ * 这一支在 `name` 之外、实例给了的每个区分成员上都与实例一致：这一支固定了它，并且实例给的在允许的取值里。
+ * 实例没给的成员不排除任何一支（缺了它由选中那一支的规则去报）。
+ */
+function agreesExcept(
+  branch: UnionBranch,
+  discriminating: ReadonlySet<string>,
+  instance: Readonly<Record<string, unknown>>,
+  name: string,
+): boolean {
+  return [...discriminating].every((member) => {
+    if (member === name || !Object.hasOwn(instance, member)) return true;
+    const allowed = branch.fixed.get(member);
+    return allowed !== undefined && memberMatches(instance, member, allowed);
+  });
+}
+
+/**
+ * 没有一支相符时，说出区分成员该取什么：在其余区分成员都与实例一致的那些支里，这个成员都固定了取值、而实例
+ * 给的不在其中（或没给），就报它的枚举（或缺失）错误——`action` 写成了哪一支都不认的词时，列出的是与实例
+ * `mode` 相同的各支的 `action`。找不到这样的成员、或有一支走不到，返回 null。
  */
 function unmatchedDiscriminator(
-  context: UnionExplainerContext,
-  resolved: ResolvedSchemaNode,
-  union: string,
-  instance: unknown,
+  branches: readonly (UnionBranch | null)[],
+  discriminating: ReadonlySet<string>,
+  instance: Readonly<Record<string, unknown>>,
   instancePath: string,
 ): Readonly<ValidationError> | null {
-  if (!isPlainObject(instance)) return null;
-  const branches = (resolved.node[union] as readonly unknown[]).map((_branch, index) =>
-    resolveNode(context.root, `${resolved.pointer}/${union}/${index}`),
-  );
-  const first = branches[0];
-  if (first === undefined || first === null) return null;
-  for (const [name] of fixedMembers(first.node)) {
-    const allowed = branches.map((branch) =>
-      branch === null
-        ? undefined
-        : fixedMembers(branch.node).find(([member]) => member === name)?.[1],
+  const recognised = branches.flatMap((branch) => (branch === null ? [] : [branch]));
+  if (recognised.length !== branches.length) return null;
+  for (const name of discriminating) {
+    const candidates = recognised.filter((branch) =>
+      agreesExcept(branch, discriminating, instance, name),
     );
-    if (allowed.some((values) => values === undefined)) continue;
-    const values = allowed.flatMap((entry) => entry ?? []);
-    if (Object.hasOwn(instance, name) && values.includes(instance[name])) continue;
+    const allowed = candidates.map((branch) => branch.fixed.get(name));
+    if (candidates.length === 0 || allowed.some((values) => values === undefined)) continue;
+    const values = [...new Set(allowed.flatMap((entry) => entry ?? []))];
+    if (memberMatches(instance, name, values)) continue;
     return Object.freeze({
       instancePath: `${instancePath}/${pointerSegment(name)}`,
       keyword: Object.hasOwn(instance, name) ? "enum" : "required",
@@ -339,9 +379,12 @@ function explainNode(
   if (resolved === null) return null;
   const union = UNION_KEYWORDS.find((keyword) => Array.isArray(resolved.node[keyword]));
   if (union !== undefined) {
-    const branch = selectedBranch(context, resolved, union, instance);
+    if (!isPlainObject(instance)) return null;
+    const branches = unionBranches(context.root, resolved, union);
+    const discriminating = discriminatingMembers(branches);
+    const branch = selectedBranch(branches, discriminating, instance);
     return branch === null
-      ? unmatchedDiscriminator(context, resolved, union, instance, instancePath)
+      ? unmatchedDiscriminator(branches, discriminating, instance, instancePath)
       : explainNode(context, branch, instance, instancePath, depth + 1);
   }
   const validate = context.subValidator(resolved.pointer);
@@ -364,8 +407,8 @@ function explainNode(
  *
  * Ajv 对 oneOf / anyOf 报的是每一支各自的第一条错误，排在最前面的往往来自调用方根本没想用的那一支：
  * 提交来源缺 `commitOid` 被报成"缺 root"（那是受管路径那一支的规则）。请求里的联合都靠取值固定的成员
- * 区分（`mode`、`operation`、`kind`…）：实例与恰好一支的这类成员全部相符时，那一支就是调用方想用的，
- * 单独按它再校验一次、报它的错误，并沿着实例路径往里继续找。认不出唯一的一支、走到本文档之外的引用、
+ * 区分（`mode`、`operation`、`kind`…，见 `selectedBranch`）：实例与恰好一支的这类成员全部相符时，
+ * 那一支就是调用方想用的，单独按它再校验一次、报它的错误，并沿着实例路径往里继续找。认不出唯一的一支、走到本文档之外的引用、
  * 或子 Schema 取不出来，都返回 null——调用方照旧报 Ajv 的第一条错误，所以它只会更准，不会更糟。
  */
 function createUnionExplainer(

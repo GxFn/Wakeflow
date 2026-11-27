@@ -44,7 +44,8 @@ export interface WakeflowPublicMcpExecutionContext {
 
 /**
  * 公共 executor 接收 SDK 原样交出的参数（尚未经 Wakeflow 准入）和请求取消信号，返回领域公共结果；
- * 被动 JSON 解析与请求 Schema 都在它下面（命令外壳与切片合同；快速 Demand 是它自己的合同）。
+ * 被动 JSON 解析与请求 Schema 都在它下面，各一次（命令外壳与切片合同；快速 Demand 不经外壳，在自己的
+ * 入口调用外壳的同一个 `parsePublicRequestJson`，再跑自己合同的 Schema）。
  */
 export type WakeflowPublicMcpExecutor<Result> = (
   value: unknown,
@@ -199,7 +200,9 @@ async function failedToolResult(
 /**
  * 把领域层的无原型JSON快照转换为MCP SDK可移植的标准JSON对象。
  * 文本与structuredContent共享同一Canonical JSON事实，避免两份独立投影漂移；进程脱敏扫的也是这份
- * 事实（规范化本身已经完成 JSON 准入，不再另走一遍）。
+ * 事实（规范化本身已经完成 JSON 准入，不再另走一遍）。命令外壳已按工作区边界检查过自己的结果，这里
+ * 仍要再查：快速 Demand 与续接一步的组合结果从不整体经过外壳（续接的组合可以超过单个结果的上限），
+ * 而这道进程边界与上限是每个 executor 共同的最后一道。
  */
 function successfulToolResult(value: unknown): CallToolResult {
   const text = canonicalizeJson(value, "$result");

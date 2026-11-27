@@ -11,13 +11,12 @@ import {
 } from "../../../src/workspace/maintenance/wakeflow-host-maintenance-contribution.js";
 import {
   createWakeflowMaintenanceExecutionPlan,
-  parseWakeflowMaintenanceExecutionPlan,
   WakeflowMaintenanceExecutionPlanError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
-} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
+} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
@@ -116,7 +115,6 @@ test("aggregate plan inserts exact host operation before Config", () => {
     "core:active-layout",
     "host-effect:claude-portable-settings:program:program_11111111-1111-4111-8111-111111111111",
   ]);
-  deepEqual(parseWakeflowMaintenanceExecutionPlan(plan), plan);
 });
 
 test("aggregate plan represents ordered host operations as a linear dependency chain", () => {

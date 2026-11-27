@@ -7,10 +7,6 @@ import {
   parseDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
-  ManagedEvidenceCapturePlanError,
-  parseManagedEvidenceCapturePlan,
-} from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
-import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationEventSourcingCommand,
@@ -48,23 +44,6 @@ function assertDeepFrozen(value: unknown): void {
   equal(Object.isFrozen(value), true);
   for (const child of Object.values(value)) assertDeepFrozen(child);
 }
-
-test("Capture plan纯合同重验Planning输出并拒绝摘要漂移", () => {
-  const plan = capturePlan();
-  deepEqual(parseManagedEvidenceCapturePlan(structuredClone(plan)), plan);
-  throws(
-    () =>
-      parseManagedEvidenceCapturePlan({
-        ...plan,
-        planDigest: DIGESTS.replacement,
-      }),
-    (error: unknown) =>
-      error instanceof ManagedEvidenceCapturePlanError &&
-      error.reason === "relation" &&
-      error.path === "$/planDigest",
-  );
-  assertDeepFrozen(plan);
-});
 
 test("Publication transaction只持久化Manifest、计划摘要与明确Event Sourcing追加意图", () => {
   const plan = capturePlan();

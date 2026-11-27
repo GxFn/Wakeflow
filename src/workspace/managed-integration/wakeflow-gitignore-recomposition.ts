@@ -252,7 +252,6 @@ export async function recomposeWakeflowWorkspaceGitignore(
 
 export {
   WakeflowGitignoreRecompositionError,
-  type WakeflowGitignoreRecompositionErrorReason,
   type WakeflowGitignoreRecompositionOptions,
   type WakeflowGitignoreRecompositionReceipt,
   type WakeflowGitignoreRecompositionRequest,

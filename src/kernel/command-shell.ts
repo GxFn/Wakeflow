@@ -25,8 +25,8 @@ import {
  * 打开工作区根、建立脱敏边界、由切片打开上下文、执行形状特有的主体、
  * 对结果做脱敏与上限检查、关闭上下文与根。追加形状与效果形状各自只提供主体。
  *
- * 公共 MCP 请求在这里第一次被准入（R13）：SDK 的校验器放行、入口不再解析，这里的被动 JSON 解析
- * 失败即 `invalid-request/not-json`；随后切片的 `parseRequest` 跑唯一一次请求 Schema。
+ * 公共 MCP 请求在这里第一次被准入（R13）：SDK 的校验器放行、入口不再解析，这里唯一一次被动 JSON
+ * 解析失败即 `invalid-request/not-json`；随后切片的 `parseRequest` 拿这份 JSON 跑唯一一次请求 Schema。
  */
 
 export interface CommandShellSpec<Envelope extends { readonly root: string }, Input, Context> {
@@ -99,7 +99,12 @@ export interface CommandShellBinding<Envelope, Input> {
   readonly workspaceRoot: RootedDirectory;
 }
 
-function requestJson(value: unknown): JsonValue {
+/**
+ * 公共请求唯一的被动 JSON 解析（R13）：失败即 `invalid-request/not-json`，路径指到第一个不是 JSON 的成员。
+ * 外壳对每个请求调用它一次；不经外壳的入口（快速 Demand 的 executor）在自己的入口调用同一个函数，
+ * 切片合同的请求解析只接 `JsonValue`，从不再解析一遍。
+ */
+export function parsePublicRequestJson(value: unknown): JsonValue {
   try {
     return parseJsonValue(value, "$request");
   } catch (error: unknown) {
@@ -137,7 +142,7 @@ export async function runCommandShell<
   ) => Promise<Result>,
   options: Readonly<CommandShellExecutionOptions> = {},
 ): Promise<Result> {
-  const json = requestJson(value);
+  const json = parsePublicRequestJson(value);
   assertWithinByteLimit(json, "publicRequestBytes", "$request");
   const { envelope, input } = spec.parseRequest(json);
   const payload = payloadWithoutRoot(json);
@@ -189,6 +194,9 @@ export async function runCommandShell<
           ]);
         }
         const assembled = await body(context, binding, boundary);
+        // 这道结果检查只有外壳做得了：边界里的工作区实路径、ledger 根与宿主句柄只在上下文里；快速
+        // Demand 与续接一步的内部调用、直接调用 executor 的工具也都不经 MCP 入口。入口那道进程边界
+        // 另管不经外壳的组合结果，两道互不替代。`Result` 是切片的类型，扫描与度量要 JSON 值，所以先解析。
         const assembledJson = parseJsonValue(assembled, "$result");
         assertPublicJson(assembledJson, boundary, "$result");
         assertWithinByteLimit(assembledJson, "publicResultBytes", "$result");

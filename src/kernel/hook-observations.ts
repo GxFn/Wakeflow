@@ -533,12 +533,18 @@ function parseHostHookObservation(value: JsonValue): Readonly<HostHookObservatio
     event: object.event as HostHookEvent,
     sessionId: object.sessionId as string,
     cwd: object.cwd as string,
-    recordedAt: object.recordedAt as UtcInstant,
+    recordedAt: millisecondInstant(object.recordedAt, "$record.recordedAt"),
     turnId: object.turnId as string | null,
-    promptDigest: object.promptDigest as Sha256Digest | null,
-    lastAssistantMessageDigest: object.lastAssistantMessageDigest as Sha256Digest | null,
+    promptDigest: optionalDigest(object.promptDigest, "$record.promptDigest"),
+    lastAssistantMessageDigest: optionalDigest(
+      object.lastAssistantMessageDigest,
+      "$record.lastAssistantMessageDigest",
+    ),
     transcriptRef: object.transcriptRef as string | null,
-    artifactManifestDigest: optionalKey(object, "artifactManifestDigest") as Sha256Digest | null,
+    artifactManifestDigest: optionalDigest(
+      optionalKey(object, "artifactManifestDigest"),
+      "$record.artifactManifestDigest",
+    ),
     artifactVersion: optionalKey(object, "artifactVersion") as string | null,
     notificationType: optionalKey(object, "notificationType") as string | null,
     permissionMode: optionalKey(object, "permissionMode") as string | null,
@@ -600,7 +606,7 @@ function expandCompactInstant(value: string): UtcInstant | null {
   const iso = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}.${value.slice(15, 18)}Z`;
   const milliseconds = Date.parse(iso);
   if (!Number.isFinite(milliseconds)) return null;
-  return new Date(milliseconds).toISOString() === iso ? (iso as UtcInstant) : null;
+  return new Date(milliseconds).toISOString() === iso ? parseUtcInstant(iso) : null;
 }
 
 /**

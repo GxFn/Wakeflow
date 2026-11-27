@@ -45,7 +45,6 @@ export type JsonValueErrorReason =
   | "lone-surrogate"
   | "cycle"
   | "maximum-depth"
-  | "invalid-container"
   | "proxy"
   | "record-prototype"
   | "symbol-key"
@@ -55,19 +54,23 @@ export type JsonValueErrorReason =
   | "array-slot"
   | "array-extra-property";
 
-const PASSIVE_REASON_MAP = {
+/**
+ * 被动读取的失败在这里能出现的那几种。`parseValue` 只把对象交给 `parsePlainRecord`、只把数组交给
+ * 上限为数组最大长度的 `parseDenseArray`，也不做属性选择，所以 `value-type`、`array-length` 与
+ * `property-selection` 不会出现；真出现了，被动读取的错误原样上抛，不改写成 JSON 值的分类。
+ */
+const PASSIVE_REASON_MAP: Readonly<
+  Partial<Record<PassiveOwnDataErrorReason, JsonValueErrorReason>>
+> = Object.freeze({
   proxy: "proxy",
-  "value-type": "invalid-container",
   "record-prototype": "record-prototype",
   "symbol-key": "symbol-key",
   "non-enumerable-property": "non-enumerable-property",
   "accessor-property": "accessor-property",
-  "property-selection": "invalid-container",
   "array-prototype": "array-prototype",
-  "array-length": "invalid-container",
   "array-slot": "array-slot",
   "array-extra-property": "array-extra-property",
-} as const satisfies Readonly<Record<PassiveOwnDataErrorReason, JsonValueErrorReason>>;
+});
 
 /**
  * JSON 值准入的稳定错误。
@@ -95,7 +98,8 @@ function readPassiveSnapshot<Result>(operation: () => Result): Result {
     return operation();
   } catch (error: unknown) {
     if (error instanceof PassiveOwnDataError) {
-      fail(PASSIVE_REASON_MAP[error.reason], error.path);
+      const reason = PASSIVE_REASON_MAP[error.reason];
+      if (reason !== undefined) fail(reason, error.path);
     }
     throw error;
   }

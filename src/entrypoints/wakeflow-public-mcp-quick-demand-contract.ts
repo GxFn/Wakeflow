@@ -6,7 +6,7 @@ import {
   type WakeflowQuickDemandResultV1,
   WAKEFLOW_QUICK_DEMAND_RESULT_SCHEMA,
 } from "../contracts/generated/entrypoints/wakeflow-quick-demand-result.generated.js";
-import { type JsonValue, JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
+import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 import { fail } from "../kernel/error.js";
 import type { WakeflowToolRegistration } from "../kernel/tool-registry.js";
@@ -48,14 +48,8 @@ const validateResult = createRuntimeJsonSchemaValidator<WakeflowQuickDemandResul
   WAKEFLOW_QUICK_DEMAND_RESULT_SCHEMA,
 );
 
-export function parseQuickDemandRequest(value: unknown): QuickDemandRequest {
-  let json: JsonValue;
-  try {
-    json = parseJsonValue(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof JsonValueError) fail("invalid-request", "not-json", error.path);
-    throw error;
-  }
+/** 请求 Schema 唯一的一次运行；被动 JSON 解析在 executor 的入口，用命令外壳的同一个函数。 */
+export function parseQuickDemandRequest(json: JsonValue): QuickDemandRequest {
   const parsed = validateRequest(json);
   if (!parsed.ok) {
     fail("invalid-request", "schema", `$request${parsed.path.slice(1)}`, {

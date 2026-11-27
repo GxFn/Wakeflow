@@ -1,4 +1,5 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
+import type { JsonValue } from "../foundation/data/json-value.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   type CommandShellBinding,
@@ -64,7 +65,8 @@ export type PublicationTransactionPhase<Plan, Outcome> =
 export interface PublicationTransactionSpec<Input, Context, Plan, Outcome, Result> {
   readonly tool: string;
   readonly mutationScope: "shared" | "exclusive" | "maintenance";
-  readonly parseRequest: (value: unknown) => Readonly<{
+  /** 用切片自己的 Schema 解析外壳已被动解析过的请求；返回信封与切片输入。 */
+  readonly parseRequest: (value: JsonValue) => Readonly<{
     readonly envelope: PublicationTransactionEnvelope;
     readonly input: Input;
   }>;

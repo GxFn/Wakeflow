@@ -35,7 +35,7 @@ import type { WakeflowMaintenanceWriter } from "../../../src/workspace/maintenan
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
-} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
+} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";

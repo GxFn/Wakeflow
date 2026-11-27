@@ -1,6 +1,10 @@
 import type { WakeflowConfigPod } from "../../configuration/wakeflow-config.js";
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+  WakeflowDurableIdError,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
@@ -206,7 +210,7 @@ export interface ObservedBoard {
 }
 
 export interface ObservedDemand {
-  readonly demandId: string;
+  readonly demandId: WakeflowDurableId<"demand">;
   readonly status: "observed" | "unavailable";
   readonly issue: string | null;
   readonly loaded: Readonly<LoadedDemandEventSourcingRootAuthority> | null;
@@ -371,8 +375,6 @@ const HOOK_RECORDS_MAXIMUM = HOST_HOOK_RECORDS_MAXIMUM;
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const SETTINGS_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$settings.maximumBytes");
 const INDEX_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$boardIndex.maximumBytes");
-const DEMAND_DIRECTORY_PATTERN =
-  /^demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CLAIM_FILE_PATTERN =
   /^(window_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
 
@@ -440,30 +442,42 @@ async function observeBoard(
   });
 }
 
+/** 活动根下的一个目录名是 Demand 身份时返回它；别的名字不是 Demand 目录。 */
+function demandIdOf(name: string): WakeflowDurableId<"demand"> | null {
+  try {
+    return parseWakeflowDurableIdOfKind(name, "demand");
+  } catch (error: unknown) {
+    if (error instanceof WakeflowDurableIdError) return null;
+    throw error;
+  }
+}
+
 async function listActiveDemandIds(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
-): Promise<readonly string[]> {
+): Promise<readonly WakeflowDurableId<"demand">[]> {
   const listing = await readStableResourceDirectoryOrNull(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, {
     maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
     ...signalOptions(signal),
   });
   if (listing === null) return [];
   return listing.entries
-    .filter((entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
+    .flatMap((entry) => {
+      const demandId = entry.node.kind === "directory" ? demandIdOf(entry.name) : null;
+      return demandId === null ? [] : [demandId];
+    })
     .sort();
 }
 
 async function observeDemand(
   root: RootedDirectory,
   store: LedgerAuthorityStore,
-  demandId: string,
+  demandId: WakeflowDurableId<"demand">,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedDemand>> {
   let demandRoot: RootedDirectory | null = null;
   try {
-    demandRoot = await openDemandOperationRoot(root, demandId as WakeflowDurableId<"demand">);
+    demandRoot = await openDemandOperationRoot(root, demandId);
     const loaded = await loadDemandEventSourcingRootAuthority(
       demandRoot,
       store,
@@ -1119,7 +1133,7 @@ function archivedDemandCandidates(
   demands: ObservedDomain<readonly Readonly<ObservedDemand>[]>,
 ): readonly Readonly<ArchivedDemandCandidate>[] {
   if (board.value === null) fail("precondition-failed", "board-unavailable", "$archives");
-  const active = new Set((demands.value ?? []).map((demand) => demand.demandId));
+  const active = new Set<string>((demands.value ?? []).map((demand) => demand.demandId));
   return Object.freeze(
     board.value.states.flatMap((state) => {
       const candidate = terminalCandidateOf(state);

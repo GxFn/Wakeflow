@@ -2,6 +2,7 @@ import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { parseWindowBindingRequest } from "../../../src/capabilities/endpoint/contract.js";
+import { parseJsonValue } from "../../../src/foundation/data/json-value.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 
 /**
@@ -28,10 +29,15 @@ const DESKTOP_OBSERVATION = Object.freeze({
   desktop: { sessionId: "local_5f0c6a52-2f5e-4f7e-9a39-1b2c3d4e5f60" },
 });
 
+/** 请求先过命令外壳做的那次被动 JSON 解析，合同只接 JSON 值（R13）。 */
+function parse(request: unknown) {
+  return parseWindowBindingRequest(parseJsonValue(request, "$request"));
+}
+
 /** 拒绝的 `code/reason`、路径与 Schema 令牌。 */
 function refusal(request: unknown): readonly [string, string, string | undefined] {
   try {
-    parseWindowBindingRequest(request);
+    parse(request);
   } catch (error: unknown) {
     if (!(error instanceof WakeflowError)) throw error;
     return [`${error.code}/${error.reason}`, error.path, error.details?.schema];
@@ -54,7 +60,7 @@ test("replace 与 relocate 缺 expectedBindingId 或 expectedBindingDigest：拒
         "required:expectedBindingDigest",
       ]);
       equal(
-        parseWindowBindingRequest({
+        parse({
           ...base,
           expectedBindingId: BINDING,
           expectedBindingDigest: DIGEST,
@@ -102,5 +108,5 @@ test("点名操作的分支决定拒绝码：register 多带 CAS 字段报 addit
     "invalid-request/schema",
   );
   equal(refusal([])[0], "invalid-request/schema");
-  throws(() => parseWindowBindingRequest({ root: ROOT, operation: 7 }), WakeflowError);
+  throws(() => parse({ root: ROOT, operation: 7 }), WakeflowError);
 });

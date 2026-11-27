@@ -129,7 +129,6 @@ export type TargetResultErrorReason =
   | "digest"
   | "path"
   | "time"
-  | "claim"
   | "report"
   | "relation";
 

@@ -297,3 +297,135 @@ test("判别联合的拒绝说的是实例选中的那一支（ADR-0029）：按
     true,
   );
 });
+
+test("判别成员是本文档内的 `$ref` 时，联合的解释器跟到定义里取它固定的取值：选中的那一支照样认得出；只有一支固定的成员不参与认支", () => {
+  const validate = createRuntimeJsonSchemaValidator<unknown>({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:union-ref:v1",
+    oneOf: [
+      { $ref: "#/$defs/initialize" },
+      { $ref: "#/$defs/reconfigure" },
+      { $ref: "#/$defs/detach" },
+    ],
+    $defs: {
+      initialize: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "request"],
+        properties: {
+          action: { const: "initialize" },
+          request: {
+            type: "object",
+            additionalProperties: false,
+            required: ["selection"],
+            properties: { selection: { type: "object" } },
+          },
+          // 可空联合：唯一的对象支与别的支不共有固定成员，按它自己的 `kind` 认。
+          lineage: {
+            oneOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                required: ["kind", "id"],
+                properties: { kind: { const: "retest" }, id: { type: "string" } },
+              },
+            ],
+          },
+        },
+      },
+      reconfigure: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "request"],
+        properties: {
+          action: { $ref: "#/$defs/reconfigureAction" },
+          request: {
+            type: "object",
+            additionalProperties: false,
+            required: ["desired"],
+            properties: { desired: { type: "object" } },
+          },
+        },
+      },
+      reconfigureAction: { $ref: "#/$defs/reconfigureActionValue" },
+      reconfigureActionValue: { const: "reconfigure" },
+      detach: {
+        type: "object",
+        additionalProperties: false,
+        required: ["action", "host", "request"],
+        properties: {
+          action: { $ref: "#/$defs/detachAction" },
+          host: { $ref: "#/$defs/host" },
+          request: { type: "object", additionalProperties: false, maxProperties: 0 },
+        },
+      },
+      detachAction: { enum: ["detach-one", "detach-all"] },
+      host: { enum: ["codex", "claude-code"] },
+    },
+  });
+  const cases: ReadonlyArray<readonly [unknown, string, string]> = [
+    // 两跳的 `$ref` 到 const；Ajv 的第一条错误是第一支的 `const:initialize`。
+    [{ action: "reconfigure", request: { selection: {} } }, "$/request", "required:desired"],
+    // `$ref` 到 enum。
+    [
+      { action: "detach-all", host: "codex", request: { desired: {} } },
+      "$/request",
+      "maxProperties",
+    ],
+    // `host` 只有 detach 一支固定：取错或缺了，认的仍是 detach，报它自己的规则。
+    [{ action: "detach-all", host: "gpt", request: {} }, "$/host", "enum:codex.claude-code"],
+    [{ action: "detach-all", request: {} }, "$", "required:host"],
+    [
+      { action: "initialize", request: { selection: {} }, lineage: { kind: "retest", id: 1 } },
+      "$/lineage/id",
+      "type:string",
+    ],
+    // 哪一支都不认：引用里的取值也列出来。
+    [
+      { action: "attach", request: {} },
+      "$/action",
+      "enum:initialize.reconfigure.detach-one.detach-all",
+    ],
+  ];
+  for (const [value, expectedPath, expectedDetail] of cases) {
+    const rejected = validate(parseJsonValue(value));
+    equal(rejected.ok, false, JSON.stringify(value));
+    if (!rejected.ok) {
+      equal(rejected.path, expectedPath, JSON.stringify(value));
+      equal(rejected.detail, expectedDetail, JSON.stringify(value));
+    }
+  }
+  equal(validate(parseJsonValue({ action: "detach-one", host: "codex", request: {} })).ok, true);
+
+  // 两个区分成员：`action` 哪一支都不认时，列出的是与实例 `mode` 相同的各支的取值（含 `$ref` 里的）。
+  const twoMembers = createRuntimeJsonSchemaValidator<unknown>({
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "urn:wakeflow:test:union-two-members:v1",
+    oneOf: [
+      {
+        type: "object",
+        required: ["mode", "action"],
+        properties: { mode: { const: "preview" }, action: { const: "a" } },
+      },
+      {
+        type: "object",
+        required: ["mode", "action"],
+        properties: { mode: { const: "preview" }, action: { $ref: "#/$defs/more" } },
+      },
+      {
+        type: "object",
+        required: ["mode", "action"],
+        properties: { mode: { const: "apply" }, action: { const: "z" } },
+      },
+      { type: "object", required: ["mode"], properties: { mode: { const: "recover" } } },
+    ],
+    $defs: { more: { enum: ["b", "c"] } },
+  });
+  const rejected = twoMembers(parseJsonValue({ mode: "preview", action: "x" }));
+  equal(rejected.ok, false);
+  if (!rejected.ok) {
+    equal(rejected.path, "$/action");
+    equal(rejected.detail, "enum:a.b.c");
+  }
+});

@@ -9,7 +9,6 @@ import {
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
@@ -560,7 +559,7 @@ async function demandRecoveries(
       );
     }
   }
-  const active = new Set(demands.map((demand) => demand.demandId));
+  const active = new Set<string>(demands.map((demand) => demand.demandId));
   for (const demandId of journalIds) {
     if (!active.has(demandId)) await ask(demandId, { root: "absent" }, null);
   }
@@ -1659,10 +1658,7 @@ async function readDemandForVerify(
   let demandRoot: RootedDirectory | null = null;
   let writer: DemandVerifyReading["writer"] = UNREADABLE_WRITER;
   try {
-    demandRoot = await openDemandOperationRoot(
-      context.root,
-      demand.demandId as WakeflowDurableId<"demand">,
-    );
+    demandRoot = await openDemandOperationRoot(context.root, demand.demandId);
     // 写者戳先于门报告：只读提交、不回放，根一打开就能读；之后门报告失败也不改变它。
     const writers = await new DemandEventSourcingRepository(demandRoot).readWriters(
       signalOptions(context.options.signal),
@@ -1738,7 +1734,7 @@ async function gateFacts(
 ): Promise<Readonly<WorkspaceGateFacts>> {
   const { observation, snapshot } = context;
   const demands = observation.demands.value ?? [];
-  const activeIds = new Set(demands.map((demand) => demand.demandId));
+  const activeIds = new Set<string>(demands.map((demand) => demand.demandId));
   const board = observation.board.value;
   const orphans = new Set(orphanWorkClaims(observation).map((claim) => claim.claimId));
   const bindingsObserved = observation.bindings.every((host) => host.status === "observed");

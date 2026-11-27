@@ -1277,7 +1277,7 @@ function assembleTerminalResult(
 async function executeTerminal<Request extends TerminalRequest, Result>(
   action: "complete" | "cancel",
   tool: string,
-  parse: (value: unknown) => Request,
+  parse: (value: JsonValue) => Request,
   admit: (value: unknown) => Result,
   value: unknown,
   options: DemandServiceOptions,

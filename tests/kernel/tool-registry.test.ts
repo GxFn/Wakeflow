@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   createWakeflowToolCatalog,
-  measureWakeflowToolCatalogBytes,
   publicToolDefinition,
   WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES,
   type WakeflowToolRegistration,
@@ -78,7 +77,6 @@ test("tool catalog 准入唯一名字、绑定名与 Schema 身份，并按形�
     "name",
     "title",
   ]);
-  equal(measureWakeflowToolCatalogBytes(catalog) > 0, true);
 
   rejects([registration(), registration({ executor: "other" })], "tool-catalog-duplicate-name");
   rejects(

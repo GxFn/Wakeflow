@@ -18,8 +18,8 @@ import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   copyFileToCandidateDurably,
   DurableFileCopyCandidateError,
-  type DurableFileCopyCandidateErrorReason,
 } from "../../../src/foundation/filesystem/durable-file-copy-candidate.js";
+import type { DurableFileCopyCandidateErrorReason } from "../../../src/foundation/filesystem/durable-file-copy-candidate-contract.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";

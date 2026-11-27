@@ -1,16 +1,6 @@
 import { WAKEFLOW_ACTIVE_ROOT, WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
@@ -64,7 +54,7 @@ export interface WakeflowGitignoreExactOutsideClassification {
   readonly exactNegatedRules: readonly WakeflowGitignoreRule[];
 }
 
-export type WakeflowGitignoreBodyAuthorityErrorReason = "profile-set" | "path" | "authority";
+export type WakeflowGitignoreBodyAuthorityErrorReason = "profile-set" | "path";
 
 /** Gitignore body authority 准入失败的稳定、脱敏错误。 */
 export class WakeflowGitignoreBodyAuthorityError extends ModuleError<WakeflowGitignoreBodyAuthorityErrorReason> {
@@ -78,7 +68,6 @@ const fail: Fail<WakeflowGitignoreBodyAuthorityErrorReason> = failWith(
 const ACTIVE_ROOT_REF = parsePortableResourcePath(WAKEFLOW_ACTIVE_ROOT);
 const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
-const GITIGNORE_MAGIC_CHARACTERS = new Set(["\\", "*", "?", "[", "]", "#", "!"]);
 
 function lexicalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -100,35 +89,6 @@ export function renderWakeflowGitignoreRootRule(
   directory: boolean,
 ): WakeflowGitignoreRule {
   return rootRule(resourcePath, directory);
-}
-
-function isLiteralRootRule(value: string): boolean {
-  if (!value.startsWith("/") || value === "/") return false;
-  let encodedPath = value.slice(1);
-  if (encodedPath.endsWith("/")) encodedPath = encodedPath.slice(0, -1);
-  if (encodedPath.length === 0) return false;
-  let resourcePath = "";
-  for (let index = 0; index < encodedPath.length; index += 1) {
-    const character = encodedPath[index];
-    if (character === undefined) return false;
-    if (character === "\\") {
-      const escaped = encodedPath[index + 1];
-      if (escaped === undefined || !GITIGNORE_MAGIC_CHARACTERS.has(escaped)) {
-        return false;
-      }
-      resourcePath += escaped;
-      index += 1;
-      continue;
-    }
-    if (GITIGNORE_MAGIC_CHARACTERS.has(character)) return false;
-    resourcePath += character;
-  }
-  try {
-    parsePortableResourcePath(resourcePath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function coveredByPrivateRoot(resourcePath: PortableResourcePath): boolean {
@@ -220,128 +180,6 @@ export function createWakeflowGitignoreBodyAuthority(
       component: WAKEFLOW_GITIGNORE_COMPONENT,
       owner: WAKEFLOW_GITIGNORE_OWNER,
       body,
-    }),
-  });
-}
-
-function authorityRecord(value: unknown): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value, "$authority");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
-    throw error;
-  }
-}
-
-/** 重新验证正文、规则、宿主集合和两个摘要，返回解除别名的冻结 authority。 */
-export function parseWakeflowGitignoreBodyAuthority(
-  value: unknown,
-): Readonly<WakeflowGitignoreBodyAuthority> {
-  const record = authorityRecord(value);
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 8 ||
-    keys[0] !== "authorityDigest" ||
-    keys[1] !== "body" ||
-    keys[2] !== "bodyDigest" ||
-    keys[3] !== "envelopeTarget" ||
-    keys[4] !== "hostIds" ||
-    keys[5] !== "kind" ||
-    keys[6] !== "rules" ||
-    keys[7] !== "schemaVersion" ||
-    record.kind !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND ||
-    record.schemaVersion !== WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION ||
-    typeof record.body !== "string" ||
-    !record.body.isWellFormed()
-  ) {
-    fail("authority", "$authority");
-  }
-  let hostIdValues: readonly unknown[];
-  let ruleValues: readonly unknown[];
-  try {
-    hostIdValues = parseDenseArray(
-      record.hostIds,
-      WAKEFLOW_WORKSPACE_HOST_IDS.length,
-      "$authority.hostIds",
-    );
-    ruleValues = parseDenseArray(record.rules, 256, "$authority.rules");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
-    throw error;
-  }
-  if (
-    hostIdValues.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length ||
-    hostIdValues.some((hostId, index) => hostId !== WAKEFLOW_WORKSPACE_HOST_IDS[index]) ||
-    ruleValues.length === 0 ||
-    ruleValues.some(
-      (rule) =>
-        typeof rule !== "string" ||
-        !rule.isWellFormed() ||
-        rule.normalize("NFC") !== rule ||
-        !isLiteralRootRule(rule),
-    )
-  ) {
-    fail("authority", "$authority");
-  }
-  const rules = Object.freeze(ruleValues as readonly WakeflowGitignoreRule[]);
-  if (
-    new Set(rules).size !== rules.length ||
-    rules.some((rule, index) => index > 0 && lexicalCompare(rules[index - 1] ?? "", rule) >= 0) ||
-    record.body !== `${rules.join("\n")}\n`
-  ) {
-    fail("authority", "$authority");
-  }
-  let bodyDigest: Sha256Digest;
-  let suppliedAuthorityDigest: Sha256Digest;
-  try {
-    bodyDigest = parseSha256Digest(record.bodyDigest, "$authority.bodyDigest");
-    suppliedAuthorityDigest = parseSha256Digest(
-      record.authorityDigest,
-      "$authority.authorityDigest",
-    );
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("authority", error.path, error);
-    throw error;
-  }
-  const hostIds = Object.freeze(hostIdValues as readonly WakeflowWorkspaceHostId[]);
-  if (
-    computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||
-    computeCanonicalJsonSha256Digest({
-      kind: "WakeflowGitignoreBodyAuthorityDigestBasis",
-      schemaVersion: WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION,
-      hostIds,
-      rules,
-    }) !== suppliedAuthorityDigest
-  ) {
-    fail("authority", "$authority");
-  }
-  let target: Readonly<Record<string, unknown>>;
-  try {
-    target = parsePlainRecord(record.envelopeTarget, "$authority.envelopeTarget");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
-    throw error;
-  }
-  if (
-    Object.keys(target).sort().join("\u0000") !== "body\u0000component\u0000owner" ||
-    target.component !== WAKEFLOW_GITIGNORE_COMPONENT ||
-    target.owner !== WAKEFLOW_GITIGNORE_OWNER ||
-    target.body !== record.body
-  ) {
-    fail("authority", "$authority");
-  }
-  return Object.freeze({
-    kind: WAKEFLOW_GITIGNORE_BODY_AUTHORITY_KIND,
-    schemaVersion: WAKEFLOW_GITIGNORE_BODY_AUTHORITY_SCHEMA_VERSION,
-    hostIds,
-    rules,
-    body: record.body,
-    bodyDigest,
-    authorityDigest: suppliedAuthorityDigest,
-    envelopeTarget: Object.freeze({
-      component: WAKEFLOW_GITIGNORE_COMPONENT,
-      owner: WAKEFLOW_GITIGNORE_OWNER,
-      body: record.body,
     }),
   });
 }

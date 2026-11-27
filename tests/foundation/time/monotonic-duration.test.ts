@@ -5,7 +5,6 @@ import {
   type MonotonicDuration,
   MonotonicDurationError,
   type MonotonicDurationErrorReason,
-  monotonicDurationBetween,
   monotonicDurationFromMilliseconds,
 } from "../../../src/foundation/time/monotonic-duration.js";
 
@@ -35,22 +34,6 @@ function asMilliseconds(value: unknown): number {
   return value as number;
 }
 
-test("duration between ordered moments preserves exact nanoseconds", () => {
-  const cases = [
-    [0n, 0n, 0n],
-    [0n, 1n, 1n],
-    [10n, 15n, 5n],
-    [1_000_000_000n, 1_000_000_001n, 1n],
-  ] as const;
-
-  for (const [startValue, endValue, expected] of cases) {
-    const start = readMonotonicClock(() => startValue);
-    const end = readMonotonicClock(() => endValue);
-    const duration: MonotonicDuration = monotonicDurationBetween(start, end);
-    equal(duration, expected);
-  }
-});
-
 test("non-negative safe integer milliseconds convert without loss", () => {
   const cases = [
     [0, 0n],
@@ -64,19 +47,6 @@ test("non-negative safe integer milliseconds convert without loss", () => {
     const duration: MonotonicDuration = monotonicDurationFromMilliseconds(milliseconds);
     equal(duration, expected);
   }
-});
-
-test("an end moment before start is rejected as an ordering error", () => {
-  const start = readMonotonicClock(() => 11n);
-  const end = readMonotonicClock(() => 10n);
-  const error = expectMonotonicDurationError(
-    () => monotonicDurationBetween(start, end),
-    "moment-order",
-    "$end",
-  );
-
-  equal(error.message.includes("11"), false);
-  equal(error.message.includes("10"), false);
 });
 
 test("millisecond conversion rejects negative, fractional, and unsafe values", () => {
@@ -110,7 +80,7 @@ test("MonotonicDuration is distinct from raw bigint and MonotonicMoment", () => 
   equal(uncheckedRaw, raw);
   equal(uncheckedMoment, moment);
 
-  const checked: MonotonicDuration = monotonicDurationBetween(moment, moment);
+  const checked: MonotonicDuration = monotonicDurationFromMilliseconds(0);
   equal(checked, 0n);
 });
 

@@ -152,10 +152,6 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
-function currentUserId(): bigint {
-  return requireCurrentUserId(() => fail("inspection", "$root"));
-}
-
 function nodeDigest(node: Readonly<FileNodeSnapshot>): Sha256Digest {
   return computeCanonicalJsonSha256Digest({
     kind: node.kind,
@@ -185,7 +181,9 @@ function directoryDigest(read: Readonly<StableDirectoryReadResult>): Sha256Diges
 
 function validPrivateDirectory(node: Readonly<FileNodeSnapshot>): boolean {
   return (
-    node.kind === "directory" && node.permissionBits === 0o700 && node.userId === currentUserId()
+    node.kind === "directory" &&
+    node.permissionBits === 0o700 &&
+    node.userId === requireCurrentUserId(() => fail("inspection", "$root"))
   );
 }
 

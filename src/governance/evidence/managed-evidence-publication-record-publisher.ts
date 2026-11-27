@@ -13,6 +13,7 @@ import {
 } from "../../foundation/filesystem/durable-directory-tree-publication.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -22,7 +23,6 @@ import {
   RootedResourceParentHandleError,
 } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -38,10 +38,7 @@ import {
   requireCurrentManagedEvidencePublicationTransaction,
   type StoredManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-store.js";
-import {
-  MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
-  type ManagedEvidenceRecordTreePlan,
-} from "./managed-evidence-record-tree-plan.js";
+import type { ManagedEvidenceRecordTreePlan } from "./managed-evidence-record-tree-plan.js";
 import { createManagedEvidenceRecordResourceDeclaration } from "./managed-evidence-resource-catalog.js";
 
 /**
@@ -227,16 +224,6 @@ async function inspectPhysicalState(
   });
 }
 
-function assertPrivateRootNode(node: Readonly<FileNodeSnapshot>, owner: "stage" | "final"): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-    ownedByAnotherUser(node.userId)
-  ) {
-    fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
-  }
-}
-
 async function inspectTree(
   root: RootedDirectory,
   path: PortableResourcePath,
@@ -245,7 +232,9 @@ async function inspectTree(
   owner: "stage" | "final",
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
-  assertPrivateRootNode(expectedNode, owner);
+  if (!isPrivateDirectory(expectedNode)) {
+    fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
+  }
   try {
     return await inspectDirectoryTreeCandidate(root, path, plan.directoryPlan, {
       expectedRootNode: expectedNode,

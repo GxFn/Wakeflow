@@ -30,6 +30,10 @@ import {
   splitPortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../../foundation/filesystem/private-node-policy.js";
+import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
@@ -39,7 +43,6 @@ import {
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -135,15 +138,7 @@ export function assertPrivatePublicationNode(
   path: string,
   admittedFileLinks: readonly bigint[] = [1n],
 ): void {
-  if (
-    node.kind !== kind ||
-    node.permissionBits !==
-      (kind === "file"
-        ? DEMAND_EVENT_SOURCING_PUBLICATION_FILE_MODE
-        : DEMAND_EVENT_SOURCING_PUBLICATION_DIRECTORY_MODE) ||
-    (kind === "file" && !admittedFileLinks.includes(node.linkCount)) ||
-    ownedByAnotherUser(node.userId)
-  ) {
+  if (kind === "file" ? !isPrivateFile(node, admittedFileLinks) : !isPrivateDirectory(node)) {
     fail("conflict", path);
   }
 }

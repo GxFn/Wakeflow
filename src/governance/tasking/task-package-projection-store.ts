@@ -26,13 +26,16 @@ import {
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../foundation/filesystem/private-node-policy.js";
+import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -251,35 +254,6 @@ function parseMaterializeOptions(
   return Object.freeze({ signal: parsed.signal });
 }
 
-function assertPrivateNode(
-  node: Readonly<FileNodeSnapshot>,
-  kind: "file" | "directory",
-  path: string,
-): void {
-  if (
-    kind === "file" &&
-    node.kind === "file" &&
-    node.permissionBits === TASK_PACKAGE_PROJECTION_FILE_MODE &&
-    node.linkCount === 2n &&
-    (currentUserIdOrNull() === null || node.userId === currentUserIdOrNull())
-  ) {
-    // 原子 create 的已发布目标在 stage 退休前短暂拥有两个硬链接；调用方必须重试，
-    // 不能在提交者尚未完成耐久结算时把它宣布为 current。
-    fail("recovery-required", path);
-  }
-  if (
-    node.kind !== kind ||
-    node.permissionBits !==
-      (kind === "file"
-        ? TASK_PACKAGE_PROJECTION_FILE_MODE
-        : TASK_PACKAGE_PROJECTION_DIRECTORY_MODE) ||
-    (kind === "file" && node.linkCount !== 1n) ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    fail("node-policy", path);
-  }
-}
-
 async function projectionNodeOrNull(
   root: RootedDirectory,
   taskPackageId: WakeflowDurableId<"task-package">,
@@ -342,7 +316,10 @@ async function loadProjection(
   const resourcePath = taskPackageProjectionRef(taskPackageId);
   const node = await projectionNodeOrNull(root, taskPackageId);
   if (node === null) fail("projection-not-found", "$projection");
-  assertPrivateNode(node, "file", "$projection");
+  // 原子 create 的已发布目标在 stage 退休前短暂拥有两个硬链接；调用方必须重试，
+  // 不能在提交者尚未完成耐久结算时把它宣布为 current。
+  if (isPrivateFile(node, [2n])) fail("recovery-required", "$projection");
+  if (!isPrivateFile(node)) fail("node-policy", "$projection");
   let source: Readonly<DeterministicJsonFileResult>;
   try {
     source = await readDeterministicJsonFile(root, resourcePath, {
@@ -516,7 +493,7 @@ export class TaskPackageProjectionStore {
       }
       throw error;
     }
-    assertPrivateNode(projectionRoot.node, "directory", "$projectionRoot");
+    if (!isPrivateDirectory(projectionRoot.node)) fail("node-policy", "$projectionRoot");
     const resourcePath = taskPackageProjectionRef(taskPackageId);
     let disposition: "created" | "current" = "created";
     try {

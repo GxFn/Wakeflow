@@ -27,6 +27,10 @@ import {
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../../foundation/filesystem/private-node-policy.js";
+import {
   isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
@@ -38,7 +42,6 @@ import {
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
-import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -64,10 +67,7 @@ import {
   type DemandEventCommitSequence,
   parseDemandEventCommitSequence,
 } from "./demand-event-stream-position.js";
-import {
-  DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
-  DEMAND_FILE_EVENT_STORE_FILE_MODE,
-} from "./demand-file-event-store.js";
+import { DEMAND_FILE_EVENT_STORE_FILE_MODE } from "./demand-file-event-store.js";
 
 /**
  * Wakeflow Governance / Demand Event Sourcing：不可变快照文件存储。
@@ -191,27 +191,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
-function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    fail("node-policy", "$snapshots");
-  }
-}
-
-function assertPrivateFile(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "file" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
-    node.linkCount !== 1n ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    fail("node-policy", path);
-  }
-}
-
 function sameDirectoryRead(
   left: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
   right: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
@@ -246,7 +225,7 @@ async function readDirectory(
         ...(signal === undefined ? {} : { signal }),
       },
     );
-    assertPrivateDirectory(result.directoryNode);
+    if (!isPrivateDirectory(result.directoryNode)) fail("node-policy", "$snapshots");
     return result;
   } catch (error: unknown) {
     if (error instanceof DemandFileEventSnapshotStoreError) throw error;
@@ -267,7 +246,7 @@ async function readSnapshotAt(
   node: Readonly<FileNodeSnapshot>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandFileEventSnapshotObservation>> {
-  assertPrivateFile(node, "$snapshot");
+  if (!isPrivateFile(node)) fail("node-policy", "$snapshot");
   try {
     const read = await readDeterministicJsonFile(root, resourcePath, {
       maximumBytes: DEMAND_FILE_EVENT_SNAPSHOT_MAXIMUM_BYTES,

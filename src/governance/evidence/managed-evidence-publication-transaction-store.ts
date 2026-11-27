@@ -20,6 +20,7 @@ import {
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
+import { isPrivateFile } from "../../foundation/filesystem/private-node-policy.js";
 import {
   isRootedDirectory,
   type RootedDirectory,
@@ -28,7 +29,6 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
@@ -164,18 +164,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function assertJournalNode(node: Readonly<FileNodeSnapshot>): void {
-  const userId = currentUserIdOrNull();
-  if (
-    node.kind !== "file" ||
-    node.permissionBits !== MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_MODE ||
-    node.linkCount !== 1n ||
-    (userId !== null && node.userId !== userId)
-  ) {
-    fail("conflict", "$transaction");
-  }
-}
-
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
   if (
@@ -245,7 +233,7 @@ async function readStoredAtNode(
   expectedNode: Readonly<FileNodeSnapshot>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
-  assertJournalNode(expectedNode);
+  if (!isPrivateFile(expectedNode)) fail("conflict", "$transaction");
   let source: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
   try {
     source = await readDeterministicJsonFile(root, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF, {

@@ -192,10 +192,6 @@ function parseRequest(value: unknown): Readonly<ParsedRequest> {
   });
 }
 
-function currentUserId(): bigint {
-  return requireCurrentUserId(() => fail("source-policy", "$source"));
-}
-
 async function readSource(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -466,7 +462,7 @@ export async function inspectWakeflowWorkspaceGitignore(
   assertRoot(rootValue);
   const request = parseRequest(requestValue);
   throwIfAborted(request.signal);
-  const expectedUserId = currentUserId();
+  const expectedUserId = requireCurrentUserId(() => fail("source-policy", "$source"));
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {
     context = createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {

@@ -152,10 +152,6 @@ function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFile
   );
 }
 
-function currentUserId(): bigint {
-  return requireCurrentUserId(() => fail("source-invalid", "$source"));
-}
-
 function assertReadback(
   request: ReturnType<typeof parseWakeflowSupportMemoryPublicationRequest>,
   before: Readonly<WakeflowSupportMemoryInspection>,
@@ -180,7 +176,7 @@ function assertReadback(
     effect.node.kind !== "file" ||
     effect.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
     effect.node.linkCount !== 1n ||
-    effect.node.userId !== currentUserId() ||
+    effect.node.userId !== requireCurrentUserId(() => fail("source-invalid", "$source")) ||
     source.resourcePath !== effect.resourcePath ||
     source.digest !== effect.digest ||
     source.byteCount !== effect.byteCount ||

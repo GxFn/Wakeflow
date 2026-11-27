@@ -14,8 +14,11 @@ import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
-import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../foundation/filesystem/private-node-policy.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
@@ -27,7 +30,6 @@ import { StableFileReadError } from "../../foundation/filesystem/stable-file-rea
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -234,23 +236,6 @@ function parseInspectOptions(
   });
 }
 
-function privateNode(
-  node: Readonly<FileNodeSnapshot>,
-  kind: "directory" | "file",
-  path: string,
-  maximumLinks = 1n,
-): void {
-  const currentUserId = currentUserIdOrNull();
-  if (
-    node.kind !== kind ||
-    node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
-    (kind === "file" && (node.linkCount < 1n || node.linkCount > maximumLinks)) ||
-    (currentUserId !== null && node.userId !== currentUserId)
-  ) {
-    fail("layout", path);
-  }
-}
-
 async function recoverStages(
   root: RootedDirectory,
   targets: readonly PortableResourcePath[],
@@ -292,7 +277,7 @@ async function readInventory(
     }
     throw error;
   }
-  privateNode(directory.directoryNode, "directory", "$bindingRoot");
+  if (!isPrivateDirectory(directory.directoryNode)) fail("layout", "$bindingRoot");
   const expected = new Set(authority.bindingRefs);
   const bindings: Readonly<WakeflowWindowHostBinding>[] = [];
   for (const entry of directory.entries) {
@@ -302,7 +287,7 @@ async function readInventory(
     // 那次维护（ADR-0033 决定 10）。与清理一起只活一个版本。
     if (entry.name === ".registration.lock") continue;
     if (!expected.has(entry.resourcePath)) fail("inventory", "$inventory");
-    privateNode(entry.node, "file", "$inventory");
+    if (!isPrivateFile(entry.node)) fail("layout", "$inventory");
     let read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
     try {
       read = await readDeterministicJsonFile(root, entry.resourcePath, {

@@ -8,6 +8,10 @@ import {
   sameFileNodeSnapshot,
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../../foundation/filesystem/private-node-policy.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -15,7 +19,6 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../../foundation/filesystem/stable-directory-read.js";
-import { ownedByAnotherUser } from "../../../foundation/node/current-user.js";
 import {
   inspectManagedEvidenceRecordSetInventory,
   type ManagedEvidenceRecordSetInventory,
@@ -45,7 +48,6 @@ import {
   parseDemandPermitPromptKind,
 } from "./demand-event-sourcing-paths.js";
 import {
-  DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
   DEMAND_FILE_EVENT_STORE_MAXIMUM_COMMITS,
 } from "./demand-file-event-store.js";
@@ -180,24 +182,11 @@ function assertArtifactNames(
 }
 
 function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    ownedByAnotherUser(node.userId)
-  ) {
-    fail("node-policy", path);
-  }
+  if (!isPrivateDirectory(node)) fail("node-policy", path);
 }
 
 function assertFile(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "file" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
-    node.linkCount !== 1n ||
-    ownedByAnotherUser(node.userId)
-  ) {
-    fail("node-policy", path);
-  }
+  if (!isPrivateFile(node)) fail("node-policy", path);
 }
 
 function mapReadError(error: StableDirectoryReadError, path: string): never {

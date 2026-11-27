@@ -141,10 +141,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function currentEffectiveUserId(): bigint {
-  return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
-}
-
 async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {
   try {
     const node = await root.assertCurrent("$root");
@@ -284,7 +280,7 @@ export async function publishWakeflowConfigAuthority(
   assertRoot(root);
   const parsed = parseOptions(options);
   throwIfAborted(parsed.signal);
-  const expectedUserId = currentEffectiveUserId();
+  const expectedUserId = requireCurrentUserId(() => fail("unsupported-platform", "$root"));
   const model = parseModel(modelValue);
   const bytes = renderModelBytes(model);
   const expectedConfigDigest = computeModelDigest(model);

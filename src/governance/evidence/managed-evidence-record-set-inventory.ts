@@ -17,6 +17,7 @@ import {
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
@@ -25,7 +26,6 @@ import {
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
@@ -212,16 +212,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     ),
     signal: record.signal as AbortSignal | undefined,
   });
-}
-
-function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== 0o700 ||
-    ownedByAnotherUser(node.userId)
-  ) {
-    fail("node-policy", path);
-  }
 }
 
 function mapDirectoryError(error: StableDirectoryReadError): never {
@@ -427,7 +417,7 @@ async function inspectStage(
   if (address.evidenceId !== transaction.manifest.evidenceId) {
     fail("transaction", "$stage");
   }
-  assertDirectory(entry.node, "$stage");
+  if (!isPrivateDirectory(entry.node)) fail("node-policy", "$stage");
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   try {
     return await inspectDirectoryTreeCandidateProgress(
@@ -507,7 +497,7 @@ export async function inspectManagedEvidenceRecordSetInventory(
   }
 
   const before = await readContainer(root, options.expectedRootNode, options.signal);
-  assertDirectory(before.directoryNode, "$managedEvidence");
+  if (!isPrivateDirectory(before.directoryNode)) fail("node-policy", "$managedEvidence");
   const recordEntries: StableDirectoryEntry[] = [];
   let stageEntry: Readonly<StableDirectoryEntry> | undefined;
   for (const entry of before.entries) {

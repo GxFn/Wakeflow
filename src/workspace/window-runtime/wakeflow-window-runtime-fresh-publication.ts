@@ -25,6 +25,10 @@ import {
   splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../foundation/filesystem/private-node-policy.js";
+import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -38,7 +42,6 @@ import {
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -203,12 +206,7 @@ function assertPrivateNode(
   kind: "directory" | "file",
   path: string,
 ): void {
-  if (
-    node.kind !== kind ||
-    node.permissionBits !== (kind === "directory" ? 0o700 : 0o600) ||
-    (kind === "file" && node.linkCount !== 1n) ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
+  if (kind === "directory" ? !isPrivateDirectory(node) : !isPrivateFile(node)) {
     fail("prefix-conflict", path);
   }
 }

@@ -9,11 +9,11 @@ import {
   sameFileNodeIdentity,
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
+import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { fail as failWakeflow } from "../../kernel/error.js";
 import {
   LedgerAuthorityStore,
@@ -24,7 +24,6 @@ import {
   type LoadedDemandEventSourcingRootAuthority,
   loadDemandEventSourcingRootAuthority,
 } from "./event-sourcing/demand-event-sourcing-root-authority.js";
-import { DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE } from "./event-sourcing/demand-file-event-store-contract.js";
 import { demandFinalRootRef } from "./publication/demand-publication-paths.js";
 
 /**
@@ -99,13 +98,7 @@ export async function openDemandOperationRoot(
     if (error instanceof RootedDirectoryError) fail("root", error);
     throw error;
   }
-  if (
-    observation.node.kind !== "directory" ||
-    observation.node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserIdOrNull() !== null && observation.node.userId !== currentUserIdOrNull())
-  ) {
-    fail("root");
-  }
+  if (!isPrivateDirectory(observation.node)) fail("root");
   let demandRoot: RootedDirectory | undefined;
   try {
     demandRoot = await RootedDirectory.open(

@@ -27,12 +27,12 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -230,16 +230,6 @@ async function loadExactJournal(
   return stored;
 }
 
-function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE ||
-    ownedByAnotherUser(node.userId)
-  ) {
-    fail("stage-conflict", path);
-  }
-}
-
 function admitEvidenceRootMaterialization(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): void {
@@ -299,7 +289,7 @@ async function ensureEvidenceRoot(
     }
     throw error;
   }
-  assertPrivateDirectory(observation.node, "$managedEvidenceRoot");
+  if (!isPrivateDirectory(observation.node)) fail("stage-conflict", "$managedEvidenceRoot");
 }
 
 async function ensureDirectory(

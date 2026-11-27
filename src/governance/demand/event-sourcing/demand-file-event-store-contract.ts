@@ -6,7 +6,10 @@ import {
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
-import { currentUserIdOrNull } from "../../../foundation/node/current-user.js";
+import {
+  isPrivateDirectory,
+  isPrivateFile,
+} from "../../../foundation/filesystem/private-node-policy.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   type DemandEventStreamCommit,
@@ -156,13 +159,7 @@ export function assertDemandFileEventStoreDirectory(
   node: Readonly<FileNodeSnapshot>,
   path: string,
 ): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    failDemandFileEventStore("node-policy", path);
-  }
+  if (!isPrivateDirectory(node)) failDemandFileEventStore("node-policy", path);
 }
 
 export function assertDemandFileEventStoreFile(
@@ -170,14 +167,7 @@ export function assertDemandFileEventStoreFile(
   path: string,
   admittedLinkCounts: readonly bigint[] = [1n],
 ): void {
-  if (
-    node.kind !== "file" ||
-    node.permissionBits !== DEMAND_FILE_EVENT_STORE_FILE_MODE ||
-    !admittedLinkCounts.includes(node.linkCount) ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    failDemandFileEventStore("node-policy", path);
-  }
+  if (!isPrivateFile(node, admittedLinkCounts)) failDemandFileEventStore("node-policy", path);
 }
 
 export function sameDemandEventStreamCommit(

@@ -25,6 +25,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../foundation/filesystem/private-node-policy.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -115,15 +116,6 @@ export interface ActiveLayoutInspection {
   readonly observationDigest: Sha256Digest;
 }
 
-function privateDirectoryCurrent(node: Readonly<FileNodeSnapshot>): boolean {
-  const user = currentUserIdOrNull();
-  return (
-    node.kind === "directory" &&
-    node.permissionBits === ACTIVE_PROJECTION_DIRECTORY_MODE &&
-    (user === null || node.userId === user)
-  );
-}
-
 function nodeDigest(node: Readonly<FileNodeSnapshot>): Sha256Digest {
   return computeCanonicalJsonSha256Digest({
     kind: node.kind,
@@ -145,7 +137,7 @@ async function inspectLayoutEntry(
     }
     return Object.freeze({
       resourcePath,
-      status: privateDirectoryCurrent(resource.node) ? ("current" as const) : ("conflict" as const),
+      status: isPrivateDirectory(resource.node) ? ("current" as const) : ("conflict" as const),
       nodeDigest: nodeDigest(resource.node),
     });
   } catch (error: unknown) {
@@ -252,7 +244,7 @@ async function ensureLayoutDirectory(
   const errorPath = `$activeLayout/${resourcePath}`;
   const existing = await existingLayoutDirectory(root, resourcePath, errorPath);
   const node = existing ?? (await createLayoutDirectory(root, resourcePath, errorPath, signal));
-  if (!privateDirectoryCurrent(node)) {
+  if (!isPrivateDirectory(node)) {
     fail("precondition-failed", "active-layout-node-policy", errorPath);
   }
   if (existing !== null && !recovering) {

@@ -15,6 +15,7 @@ import {
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -24,7 +25,6 @@ import {
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -151,13 +151,7 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== 0o700 ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    fail("prefix-conflict", path);
-  }
+  if (!isPrivateDirectory(node)) fail("prefix-conflict", path);
 }
 
 function resourceParent(resourcePath: PortableResourcePath): PortableResourcePath {
@@ -247,11 +241,7 @@ async function inspectPartialTree(
     const directory = await readDirectory(root, parent, childNames.size + 1, signal);
     if (
       directory.entries.some(
-        (entry) =>
-          !childNames.has(entry.name) ||
-          entry.node.kind !== "directory" ||
-          entry.node.permissionBits !== 0o700 ||
-          (currentUserIdOrNull() !== null && entry.node.userId !== currentUserIdOrNull()),
+        (entry) => !childNames.has(entry.name) || !isPrivateDirectory(entry.node),
       ) ||
       (requireComplete && directory.entries.length !== childNames.size)
     ) {

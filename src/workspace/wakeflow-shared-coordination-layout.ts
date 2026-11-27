@@ -6,14 +6,13 @@ import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
-import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
+import { isPrivateDirectory } from "../foundation/filesystem/private-node-policy.js";
 import {
   isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../foundation/node/abort-signal.js";
-import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -120,16 +119,6 @@ function fail(
   );
 }
 
-function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
-  if (
-    node.kind !== "directory" ||
-    node.permissionBits !== 0o700 ||
-    (currentUserIdOrNull() !== null && node.userId !== currentUserIdOrNull())
-  ) {
-    fail("layout", path);
-  }
-}
-
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
@@ -172,7 +161,7 @@ async function optionalDirectory(
   try {
     const observation = await root.inspectResourceOrNull(ref, "$layout");
     if (observation === null) return false;
-    assertDirectory(observation.node, `$layout/${ref}`);
+    if (!isPrivateDirectory(observation.node)) fail("layout", `$layout/${ref}`);
     return true;
   } catch (error: unknown) {
     if (error instanceof WakeflowSharedCoordinationLayoutError) throw error;

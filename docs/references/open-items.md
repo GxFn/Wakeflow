@@ -596,6 +596,10 @@
   - 与报告不符：r4 与计划第 5 节第 3 项说另两个工具里"漏成 `unexpected`"（会写事故记录）；按 `kernel/error.ts:258-281` 的翻译与家族表，出来的是 `precondition-failed`。
   - 状态：计划主题 C"`next` 由一张表给出"（路由的 `next` 只写一个函数，r4 第 3 条）顺带统一；统一成 `io-failure` 是计划第 5 节第 3 项的建议，等用户。
 
+- **G18** [低 / 缺陷] 一个基础层错误类的码没有 `wakeflow-` 前缀，走到公开边界会报成 `unexpected`（2026-11-27，1.4.5 续篇第二波，§13.303）
+  - 事实：`RootedReadWriteScopeError`（`src/foundation/filesystem/rooted-read-write-scope.ts`）的码是 `rooted-read-write-scope`。旧错误家族表与它的静态扫描只认 `wakeflow-` 开头的码，所以这个类既不在表里、也不会被扫描发现缺失；它未经翻译走到边界时落进 `unexpected` / `unhandled`，超时也就不再可重试。今天唯一的调用方（操作范围）自己把它翻成了 `operation-scope-<原因>`，所以现场没有表现
+  - 状态：没有修。主题 B 的"链上只翻一次"会碰到这个类，届时把码改对并登记进表
+
 ## H. Demand 流程中的死角与产品语义缺口
 
 H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §13.135/§13.136 修复并经现场。§13.165 批次 0 把 H3 的升级选项文本与需求文档改为实际路径、给 H6 的 resolution 出口补了文字；H2、H5、H7、H8、H10 与补充包并入的实现仍开放（Q7、Q10）；它们不因正常闭环或完成门修复而自动关闭。

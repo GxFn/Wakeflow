@@ -36,7 +36,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -118,7 +118,6 @@ export type WakeflowManagedSupportRootMaterializationErrorReason =
   | "surface"
   | "placement"
   | "root-policy"
-  | "aborted"
   | "effect";
 
 const ERROR_MESSAGES = {
@@ -129,7 +128,6 @@ const ERROR_MESSAGES = {
   surface: "Wakeflow managed support root surface is unavailable.",
   placement: "Wakeflow managed support root placement is unsafe.",
   "root-policy": "Wakeflow managed support root violates its node policy.",
-  aborted: "Wakeflow managed support root materialization was aborted.",
   effect: "Wakeflow managed support root could not be materialized safely.",
 } as const satisfies Readonly<Record<WakeflowManagedSupportRootMaterializationErrorReason, string>>;
 
@@ -399,7 +397,6 @@ async function ensureScaffold(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("effect", `$supportRoot/${relativePath}`, error);
     }
     throw error;
@@ -422,7 +419,7 @@ export async function inspectWakeflowManagedSupportRoot(
 ): Promise<Readonly<WakeflowManagedSupportRootInspection>> {
   assertWorkspaceRoot(workspaceRootValue);
   const request = parseRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const placement = await placementFor(workspaceRootValue, request);
   const expectedUserId = currentUserId();
   const paths = scaffoldPaths(request);
@@ -489,7 +486,7 @@ export async function materializeWakeflowManagedSupportRoot(
 ): Promise<Readonly<WakeflowManagedSupportRootMaterializationReceipt>> {
   assertWorkspaceRoot(workspaceRootValue);
   const request = parseRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const placement = await placementFor(workspaceRootValue, request);
   const key = `support.${request.surfaceId}.root`;
   let materialized: Awaited<ReturnType<typeof materializeAbsoluteDirectoryPlacement>>;
@@ -500,7 +497,6 @@ export async function materializeWakeflowManagedSupportRoot(
     });
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (
         error.reason === "symlink" ||
         error.reason === "not-directory" ||

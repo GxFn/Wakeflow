@@ -360,7 +360,6 @@ async function readSnapshot(root: string, context: Context) {
     return await readWakeflowConfigAuthoritySnapshot(directory, { signal: context.signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", `config-${error.reason}`, "$request.root", { cause: error });
     }
     throw error;

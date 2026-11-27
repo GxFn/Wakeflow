@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -15,6 +15,7 @@ import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -181,15 +182,14 @@ test("managed block file creates, appends, stays current and refuses edited or f
   const controller = new AbortController();
   controller.abort();
   const cancelled = await fixture(t);
-  await expectBlockFileError(
+  await rejects(
     () =>
       recomposeWakeflowManagedBlockFile(
         cancelled.root,
         { ...request(authority), signal: controller.signal },
         { createMode: 0o644 },
       ),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   equal(existsSync(cancelled.gitignore), false);
 });

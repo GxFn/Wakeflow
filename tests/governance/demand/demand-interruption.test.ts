@@ -15,7 +15,7 @@ import {
   inspectDemandRecoveryRoute,
 } from "../../../src/governance/demand/demand-interruption.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { demandArchiveRef, demandLifecycleJournalRef } from "../../../src/kernel/layout.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { disposableRoot } from "../../support/temp-root.js";
@@ -266,7 +266,6 @@ test("已中止的信号：抛出 io-failure aborted", async (t) => {
     inspectDemandRecoveryRoute(target.workspace, target.ledger, DEMAND_ID, ABSENT, {
       signal: controller.signal,
     }),
-    (error: unknown) =>
-      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+    OperationAbortedError,
   );
 });

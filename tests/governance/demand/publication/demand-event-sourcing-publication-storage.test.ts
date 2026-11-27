@@ -31,6 +31,7 @@ import {
   parsePortableResourcePath,
 } from "../../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../../src/foundation/time/utc-instant.js";
 import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
@@ -211,7 +212,7 @@ function isServiceError(
     (errorPath === undefined || error.path === errorPath);
 }
 
-const aborted = isServiceError("aborted", "$signal");
+const aborted = OperationAbortedError;
 const catalogFailure = isServiceError("operation-failure", "$catalog");
 
 test("admitDemandPublicationResourceOperation 只准入目录登记资源声明的方案", () => {

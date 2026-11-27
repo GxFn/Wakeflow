@@ -157,7 +157,6 @@ export async function assertExpectedDurableAtomicFileTarget(
     );
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "input") fail("input", "$resourcePath", error);
       if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
         fail("root-scope", "$resourcePath", error);

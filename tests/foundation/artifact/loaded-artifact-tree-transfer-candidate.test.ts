@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -29,6 +29,7 @@ import { createDirectoryAtomically } from "../../../src/foundation/filesystem/du
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 interface TransferFixture {
   readonly sourcePath: string;
@@ -243,7 +244,7 @@ test("loaded artifact transfer rejects cancellation and a tampered plan", async 
   const plan = await transferPlan(current);
   const controller = new AbortController();
   controller.abort();
-  await expectCandidateError(
+  await rejects(
     () =>
       materializeLoadedArtifactTreeTransferCandidate(
         current.sourceRoot,
@@ -251,8 +252,7 @@ test("loaded artifact transfer rejects cancellation and a tampered plan", async 
         plan,
         { signal: controller.signal },
       ),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
 
   const tampered = {

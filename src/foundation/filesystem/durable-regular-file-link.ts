@@ -1,7 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -80,7 +80,6 @@ export type DurableRegularFileLinkErrorReason =
   | "link-failure"
   | "commit-uncertain"
   | "durability-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -102,7 +101,6 @@ const ERROR_MESSAGES = {
   "link-failure": "Regular file hard-link commit could not be executed safely.",
   "commit-uncertain": "Regular file linked-pair commit could not be proven exact.",
   "durability-failure": "Regular file linked pair could not be synchronized safely.",
-  aborted: "Regular file link was aborted before commit.",
   "close-failure": "A regular file link handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableRegularFileLinkErrorReason, string>>;
 
@@ -143,10 +141,6 @@ function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableRes
     if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -478,7 +472,7 @@ export async function linkRegularFileWithoutReplacement(
   if (sourcePath === destinationPath) {
     fail("input", "$destinationResourcePath");
   }
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const sourceParent = await openResourceParent(root, sourcePath, "$sourceResourcePath");
   let destinationParent: RootedResourceParentHandle | undefined;
@@ -518,7 +512,7 @@ export async function linkRegularFileWithoutReplacement(
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
 
     try {
       await filesystemMutation.link(

@@ -40,6 +40,7 @@ import {
 } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { deriveUuidV4 } from "../foundation/identity/uuid-v4.js";
+import { OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
@@ -594,19 +595,6 @@ export interface WriteHostHookObservationReceipt {
   readonly disposition: "created" | "current";
 }
 
-function isAbortFailure(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    (error as { readonly reason?: unknown }).reason === "aborted"
-  );
-}
-
-/** 中止一律上抛为内核错误；其他失败交给调用方按自己的语义处理。 */
-function rethrowAbort(error: unknown): void {
-  if (isAbortFailure(error)) fail("io-failure", "aborted", "$signal", { cause: error });
-}
-
 /** 紧凑形 `YYYYMMDDTHHMMSSmmmZ` 还原成 ISO 毫秒形；日期不自洽的合成文件名返回 `null`。 */
 function expandCompactInstant(value: string): UtcInstant | null {
   const iso = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}.${value.slice(15, 18)}Z`;
@@ -653,7 +641,7 @@ async function unlinkPrunedHostHookEntry(
       ...signal,
     });
   } catch (error: unknown) {
-    rethrowAbort(error);
+    if (error instanceof OperationAbortedError) throw error;
   }
 }
 
@@ -729,7 +717,7 @@ async function removeEmptiedHookDirectory(
       "none",
     );
   } catch (error: unknown) {
-    rethrowAbort(error);
+    if (error instanceof OperationAbortedError) throw error;
   }
 }
 
@@ -799,7 +787,7 @@ async function pruneExpiredHostHookObservations(
     for (const { entry } of emptiable.filter((item) => item.kind === "day"))
       await removeEmptiedHookDirectory(root, entry, signal);
   } catch (error: unknown) {
-    rethrowAbort(error);
+    if (error instanceof OperationAbortedError) throw error;
   }
 }
 
@@ -945,7 +933,7 @@ async function candidateVanished(
   candidate: ObservationCandidate,
   error: unknown,
 ): Promise<boolean> {
-  rethrowAbort(error);
+  if (error instanceof OperationAbortedError) throw error;
   if (!(error instanceof StableFileReadError)) return false;
   if (error.reason === "not-found") return true;
   if (error.reason !== "expectation-changed") return false;
@@ -1220,7 +1208,6 @@ async function scanObservations(
     );
     await flush();
   } catch (error: unknown) {
-    rethrowAbort(error);
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
     }
@@ -1336,7 +1323,6 @@ export async function listHostHookStageResidue(
       options.signal === undefined ? {} : { signal: options.signal },
     );
   } catch (error: unknown) {
-    rethrowAbort(error);
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
     }
@@ -1370,7 +1356,7 @@ export async function retireHostHookStageResidue(
       });
       retired += 1;
     } catch (error: unknown) {
-      rethrowAbort(error);
+      if (error instanceof OperationAbortedError) throw error;
     }
   }
   return retired;
@@ -1446,7 +1432,7 @@ export async function readHostHookObservationRecord(
         byteCount: Number(read.byteCount),
       });
     } catch (error: unknown) {
-      rethrowAbort(error);
+      if (error instanceof OperationAbortedError) throw error;
       if (!(error instanceof StableFileReadError) || error.reason !== "not-found") return null;
     }
   }

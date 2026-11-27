@@ -6,11 +6,11 @@ import {
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthorityDesiredPlacements,
-  assertWakeflowConfigAuthorityNotAborted,
   assertWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthoritySourcePolicy,
   currentWakeflowConfigAuthorityUserId,
@@ -46,7 +46,6 @@ import {
 
 function mapAtomicReplaceError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$config");
   if (error.reason === "expectation-changed" || error.reason === "expectation-read-failure") {
     fail("conflict", "$source");
@@ -81,6 +80,7 @@ async function replaceCurrentBytes(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) {
       mapAtomicReplaceError(error);
     }
@@ -121,7 +121,7 @@ async function replaceUnderLock(
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
-  assertWakeflowConfigAuthorityNotAborted(options.signal);
+  throwIfAborted(options.signal);
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
   const current = await readCurrentWakeflowConfigAuthority(root, options.signal, false);
   assertWakeflowConfigAuthoritySourcePolicy(current, expectedUserId);
@@ -145,7 +145,7 @@ async function replaceUnderLock(
   // 前置检查到取得锁之间，配置位置可能变化；执行副作用前必须在锁内重新验证。
   await assertWakeflowConfigAuthorityDesiredPlacements(root, desired.model);
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
-  assertWakeflowConfigAuthorityNotAborted(options.signal);
+  throwIfAborted(options.signal);
 
   const effect = await replaceCurrentBytes(root, current, desired, options.signal);
   markCommitted();
@@ -168,7 +168,7 @@ export async function replaceWakeflowConfigAuthority(
 ): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
   assertWakeflowConfigAuthorityRoot(root);
   const parsed = parseWakeflowConfigAuthorityReplacementOptions(options);
-  assertWakeflowConfigAuthorityNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const expectedUserId = currentWakeflowConfigAuthorityUserId();
   const desired = prepareWakeflowConfigAuthorityDesired(desiredModelValue);
   const expected = parseWakeflowConfigAuthorityExpectation(expectedSnapshotValue, expectedUserId);
@@ -180,7 +180,7 @@ export async function replaceWakeflowConfigAuthority(
   }
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
   await assertWakeflowConfigAuthorityDesiredPlacements(root, desired.model);
-  assertWakeflowConfigAuthorityNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   let committed = false;
   try {
@@ -197,7 +197,11 @@ export async function replaceWakeflowConfigAuthority(
       wakeflowConfigAuthorityLockOptions(parsed),
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthorityReplacementError) throw error;
+    if (
+      error instanceof WakeflowConfigAuthorityReplacementError ||
+      error instanceof OperationAbortedError
+    )
+      throw error;
     if (error instanceof KernelFileLockError) {
       mapWakeflowConfigAuthorityLockError(error, committed);
     }

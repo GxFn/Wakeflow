@@ -5,6 +5,7 @@ import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-contract.js";
@@ -69,7 +70,6 @@ type DurableFileCandidateErrorReason =
   | "candidate-changed"
   | "durability-failure"
   | "cleanup-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -85,7 +85,6 @@ const ERROR_MESSAGES = {
   "candidate-changed": "Durable file candidate changed during preparation.",
   "durability-failure": "Durable file candidate directory entry could not be synchronized.",
   "cleanup-failure": "Failed durable file candidate could not be retired exactly.",
-  aborted: "Durable file candidate preparation was aborted.",
   "close-failure": "Durable file candidate handle could not be closed.",
 } as const satisfies Readonly<Record<DurableFileCandidateErrorReason, string>>;
 
@@ -190,10 +189,6 @@ function snapshotInput(value: unknown): Readonly<InputBytes> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function openFlags(): number {
   const noFollow: unknown = fileSystemConstants.O_NOFOLLOW;
   if (typeof noFollow !== "number") fail("root-scope", "$root");
@@ -269,7 +264,7 @@ async function writeAll(
 ): Promise<void> {
   let offset = 0;
   while (offset < bytes.byteLength) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     let written: number;
     try {
       ({ bytesWritten: written } = await handle.write(
@@ -279,7 +274,7 @@ async function writeAll(
         offset,
       ));
     } catch (cause: unknown) {
-      assertNotAborted(signal);
+      throwIfAborted(signal);
       fail("write-failure", "$candidate", cause);
     }
     if (written <= 0 || written > bytes.byteLength - offset) {
@@ -303,7 +298,7 @@ async function verifyBytes(
   }
   let offset = 0;
   while (offset < input.byteCount) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     const length = Math.min(scratch.byteLength, input.byteCount - offset);
     let filled = 0;
     while (filled < length) {
@@ -316,7 +311,7 @@ async function verifyBytes(
           offset + filled,
         ));
       } catch (cause: unknown) {
-        assertNotAborted(signal);
+        throwIfAborted(signal);
         fail("candidate-changed", "$candidate", cause);
       }
       if (read <= 0 || read > length - filled) {
@@ -329,7 +324,7 @@ async function verifyBytes(
     }
     offset += length;
   }
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   try {
     if ((await handle.read(scratch, 0, 1, input.byteCount)).bytesRead !== 0) {
       fail("candidate-changed", "$candidate");
@@ -385,7 +380,7 @@ export async function createFileCandidateDurably(
 ): Promise<Readonly<DurableFileCandidateResult>> {
   assertRoot(root);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const input = snapshotInput(bytesValue);
   return performCreate(root, resourcePath, input, options, "candidate");
 }
@@ -410,7 +405,7 @@ export async function createDirectoryTreeMemberFileDurably(
     fail("input", "$options");
   }
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const input = snapshotInput(bytesValue);
   return performCreate(
     root,
@@ -469,7 +464,7 @@ async function performCreate(
       fail("create-failure", "$candidate", error);
     }
     await writeAll(handle, input.bytes, options.signal);
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     try {
       await handle.chmod(options.mode);
     } catch (cause: unknown) {

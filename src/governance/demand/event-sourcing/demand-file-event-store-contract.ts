@@ -78,7 +78,6 @@ export type DemandFileEventStoreErrorReason =
   | "append-provenance-conflict"
   | "commit-uncertain"
   | "cleanup-required"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -100,7 +99,6 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Demand File Event Store commit point cannot be proven exact.",
   "cleanup-required":
     "Demand File Event Store committed but candidate retirement requires recovery.",
-  aborted: "Demand File Event Store operation was aborted before its next commit point.",
   "operation-failure": "Demand File Event Store operation failed.",
 } as const satisfies Readonly<Record<DemandFileEventStoreErrorReason, string>>;
 

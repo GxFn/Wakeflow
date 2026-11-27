@@ -86,7 +86,6 @@ export type DurableAtomicFileStageRecoveryErrorReason =
   | "target-conflict"
   | "busy"
   | "cleanup-required"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -100,7 +99,6 @@ const ERROR_MESSAGES = {
   "target-conflict": "Atomic file stage recovery cannot prove its published target.",
   busy: "Atomic file stage recovery inventory changed during observation.",
   "cleanup-required": "Atomic file stage recovery could not retire an exact stage.",
-  aborted: "Atomic file stage recovery was aborted before its next mutation.",
   "operation-failure": "Atomic file stage recovery failed.",
 } as const satisfies Readonly<Record<DurableAtomicFileStageRecoveryErrorReason, string>>;
 
@@ -276,7 +274,6 @@ async function readDirectory(
       : await readStableResourceDirectory(root, directoryResourcePath, options);
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "too-many-entries") fail("capacity", "$directory", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (error.reason === "source-changed") fail("busy", "$directory", error);
@@ -385,7 +382,6 @@ async function assertPublishedTarget(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("target-conflict", "$target", error);
     }
     throw error;
@@ -400,7 +396,6 @@ async function assertPublishedTarget(
     });
   } catch (error: unknown) {
     if (error instanceof DurableRegularFileSettlementError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("target-conflict", "$target", error);
     }
     throw error;
@@ -419,7 +414,6 @@ async function retireStage(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("cleanup-required", "$stage", error);
     }
     throw error;

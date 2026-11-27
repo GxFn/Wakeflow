@@ -10,6 +10,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   closeDemandOperationAuthorityContext,
   DemandOperationAuthorityContextError,
@@ -227,7 +228,6 @@ export type DemandPostAcceptanceRouteErrorReason =
   | "demand-authority"
   | "review"
   | "relation"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -237,7 +237,6 @@ const ERROR_MESSAGES = {
   "demand-authority": "Demand post-acceptance route Demand authority is invalid.",
   review: "Demand post-acceptance route Review Snapshot is invalid.",
   relation: "Demand post-acceptance route sources are inconsistent.",
-  aborted: "Demand post-acceptance route read was aborted.",
   "operation-failure": "Demand post-acceptance route read failed.",
 } as const satisfies Readonly<Record<DemandPostAcceptanceRouteErrorReason, string>>;
 
@@ -673,7 +672,7 @@ function parseInput(
     fail("input");
   }
   const signal = options.signal as AbortSignal | undefined;
-  if (signal?.aborted === true) fail("aborted");
+  throwIfAborted(signal);
   return Object.freeze({
     workspaceRoot: workspaceRootValue,
     demandId,
@@ -686,11 +685,10 @@ function mapContextError(error: DemandOperationAuthorityContextError): never {
   if (error.reason === "config" || error.reason === "stale-config") {
     fail("config");
   }
-  if (error.reason === "demand-authority") fail("demand-authority");
-  fail("aborted");
+  fail("demand-authority");
 }
 
-/** 路线依据的评审快照；读不出按中止与评审两种原因归类。 */
+/** 路线依据的评审快照；读不出归为评审原因，中止原样上抛。 */
 async function readReviewSnapshot(
   demandRoot: Parameters<typeof readDemandResultReviewSnapshot>[0],
   signal: AbortSignal | undefined,
@@ -702,7 +700,6 @@ async function readReviewSnapshot(
     );
   } catch (error: unknown) {
     if (error instanceof DemandResultReviewSnapshotError) {
-      if (error.reason === "aborted") fail("aborted");
       fail("review");
     }
     throw error;

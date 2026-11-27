@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +16,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 async function expectTreeScanError(
   action: () => unknown | Promise<unknown>,
@@ -289,12 +290,11 @@ test("options are explicit, passive, and AbortSignal remains cooperative", async
 
     const controller = new AbortController();
     controller.abort("private-tree-reason");
-    const error = await expectTreeScanError(
+    await rejects(
       () => scanBoundedRootDirectoryTree(root, treeOptions({ signal: controller.signal })),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-tree-reason"),
     );
-    equal(error.message.includes("private-tree-reason"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

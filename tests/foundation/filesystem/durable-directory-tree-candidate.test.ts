@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   lstatSync,
@@ -29,6 +29,7 @@ import { createFileCandidateDurably } from "../../../src/foundation/filesystem/d
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { countFsyncs } from "./fsync-count-probe.js";
@@ -218,13 +219,13 @@ test("directory tree plan rejects non-canonical and over-budget input", async ()
 
   const controller = new AbortController();
   controller.abort();
-  await expectCandidateError(
-    () =>
+  await rejects(
+    async () =>
       planDirectoryTreeCandidate(FILES, {
         ...OPTIONS,
         signal: controller.signal,
       }),
-    "aborted",
+    OperationAbortedError,
   );
 
   const plan = planDirectoryTreeCandidate(FILES, OPTIONS);

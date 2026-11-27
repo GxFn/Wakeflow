@@ -130,14 +130,12 @@ function mapTreeError(error: StableResourceTreeReadError): never {
   ) {
     fail("capacity", "$record");
   }
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   fail("conflict", "$record");
 }
 
-/** 稳定读取失败的归类：中止、根作用域、超过容量；其余读不出都是与预期节点冲突。 */
+/** 稳定读取失败的归类：根作用域、超过容量；其余读不出都是与预期节点冲突。 */
 function failStableRead(error: StableFileReadError, path: "$record" | "$reference"): never {
-  if (error.reason === "aborted") fail("aborted", "$signal", error);
   if (error.reason === "root-scope") fail("root-scope", "$root", error);
   if (error.reason === "too-large") fail("capacity", path, error);
   fail("conflict", path, error);

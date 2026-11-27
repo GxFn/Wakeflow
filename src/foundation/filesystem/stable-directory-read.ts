@@ -24,7 +24,7 @@ import {
   type RootedResourceSnapshot,
   isRootedDirectory,
 } from "./rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的一层稳定目录读取。
@@ -79,7 +79,6 @@ export type StableDirectoryReadErrorReason =
   | "entry-path"
   | "io-failure"
   | "source-changed"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -94,7 +93,6 @@ const ERROR_MESSAGES = {
   "entry-path": "Directory entry cannot form a portable rooted resource path.",
   "io-failure": "Directory target and entry facts could not be observed safely.",
   "source-changed": "Directory or one of its entries changed during the read.",
-  aborted: "Stable directory read was aborted.",
   "close-failure": "A directory read handle could not be closed safely.",
 } as const satisfies Readonly<Record<StableDirectoryReadErrorReason, string>>;
 
@@ -215,10 +213,6 @@ function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function compareText(left: string, right: string): number {
@@ -386,12 +380,12 @@ async function enumerateNames(
   let primaryError: unknown;
   try {
     while (true) {
-      assertNotAborted(signal);
+      throwIfAborted(signal);
       let entry: Readonly<RawNameDirectoryEntry> | null;
       try {
         entry = await directory.read();
       } catch (error: unknown) {
-        assertNotAborted(signal);
+        throwIfAborted(signal);
         const code = readNodeSystemErrorCode(error);
         if (code === "ENOENT" || code === "ENOTDIR" || code === "ELOOP") {
           fail("source-changed", "$entries", error);
@@ -431,7 +425,7 @@ async function enumerateNames(
     if (primaryError === undefined) fail("close-failure", "$entries", cause);
   }
   if (primaryError !== undefined) throw primaryError;
-  assertNotAborted(signal);
+  throwIfAborted(signal);
 
   names.sort(compareText);
   for (let index = 1; index < names.length; index += 1) {
@@ -463,7 +457,7 @@ async function inspectEntry(
   signal: AbortSignal | undefined,
   verification: boolean,
 ): Promise<Readonly<StableDirectoryEntry>> {
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const resourcePath = entryResourcePath(target.directoryResourcePath, name, index);
   let node: Readonly<FileNodeSnapshot>;
   try {
@@ -560,7 +554,7 @@ async function readStableDirectory<DirectoryResourcePath extends PortableResourc
     ) {
       fail("source-changed", target.errorPath);
     }
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     result = Object.freeze({
       directoryResourcePath: target.directoryResourcePath,
       directoryNode: afterPath,
@@ -587,10 +581,10 @@ export async function readStableRootDirectory(
 ): Promise<Readonly<StableDirectoryReadResult<null>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const target = await inspectInitialRoot(root);
   assertExpectedNode(target.node, parsed.expectedNode);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return readStableDirectory(root, target, parsed);
 }
 
@@ -602,10 +596,10 @@ export async function readStableResourceDirectory(
 ): Promise<Readonly<StableDirectoryReadResult<PortableResourcePath>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const target = await inspectInitialResource(root, resourcePath);
   assertExpectedNode(target.node, parsed.expectedNode);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return readStableDirectory(root, target, parsed);
 }
 
@@ -676,7 +670,7 @@ export async function readStableResourceDirectoryPage(
 ): Promise<Readonly<StableDirectoryPage>> {
   assertRoot(root);
   const parsed = parsePageOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const target = await inspectInitialResource(root, resourcePath);
   assertExpectedNode(target.node, parsed.expectedNode);
   return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);
@@ -689,7 +683,7 @@ export async function readStableRootDirectoryPage(
 ): Promise<Readonly<StableDirectoryPage<null>>> {
   assertRoot(root);
   const parsed = parsePageOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const target = await inspectInitialRoot(root);
   assertExpectedNode(target.node, parsed.expectedNode);
   return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);

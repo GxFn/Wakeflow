@@ -26,6 +26,7 @@ import {
   readStableFileDigest,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -34,7 +35,7 @@ import {
   type ActiveLayoutInspection,
   inspectActiveLayout,
 } from "../../kernel/active-projection.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
   type HostHookEvent,
@@ -67,16 +68,10 @@ import {
   type WakeflowLegacyResidueScan,
 } from "../../workspace/wakeflow-legacy-residue-scan.js";
 import type { WakeflowWindowHostBinding } from "../../workspace/window-runtime/wakeflow-window-host-binding.js";
-import {
-  inspectWakeflowWindowHostBindingInventory,
-  WakeflowWindowHostBindingStoreError,
-} from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
+import { inspectWakeflowWindowHostBindingInventory } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import { compileWakeflowWindowHostBindingStoreAuthority } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "../../workspace/window-runtime/wakeflow-window-host-identity-profile.js";
-import {
-  inspectWakeflowWindowRuntimeProjectionSet,
-  WakeflowWindowRuntimeProjectionError,
-} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
+import { inspectWakeflowWindowRuntimeProjectionSet } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   buildDemandControllerRoute,
@@ -408,11 +403,7 @@ async function observeDomain<Value>(
     return Object.freeze({ status: "observed" as const, issue: null, value: await read() });
   } catch (error: unknown) {
     const reason = reasonOf(error);
-    if (reason === null) throw error;
-    if (reason === "aborted") {
-      if (error instanceof WakeflowError) throw error;
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({
       status: "unavailable" as const,
       issue: `${name}:${reason}`,
@@ -440,7 +431,7 @@ async function observeBoard(
       })
     ).digest;
   } catch (error: unknown) {
-    if (!(error instanceof StableFileReadError) || error.reason === "aborted") throw error;
+    if (!(error instanceof StableFileReadError)) throw error;
   }
   return Object.freeze({
     states: listing.states,
@@ -502,8 +493,7 @@ async function observeDemand(
     });
   } catch (error: unknown) {
     const reason = reasonOf(error);
-    if (reason === null) throw error;
-    if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({
       demandId,
       status: "unavailable" as const,
@@ -616,11 +606,8 @@ async function observeHostBindings(
       bindings: inventory.bindings,
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingStoreError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     const reason = reasonOf(error);
-    if (reason === null) throw error;
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({
       hostId: host.hostId,
       status: "unavailable" as const,
@@ -788,11 +775,7 @@ async function observeHostHooks(
     });
   } catch (error: unknown) {
     const reason = reasonOf(error);
-    if (reason === null) throw error;
-    if (reason === "aborted") {
-      if (error instanceof WakeflowError) throw error;
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({
       hostId,
       current,
@@ -841,11 +824,7 @@ export async function observeNewestSessionStartArtifactVersion(
       );
     } catch (error: unknown) {
       const reason = reasonOf(error);
-      if (reason === null) throw error;
-      if (reason === "aborted") {
-        if (error instanceof WakeflowError) throw error;
-        fail("io-failure", "aborted", "$signal", { cause: error });
-      }
+      if (reason === null || error instanceof OperationAbortedError) throw error;
       continue;
     }
     versions.push(...startVersions.values());
@@ -976,8 +955,7 @@ async function observeAssetFile(
       return Object.freeze({ status: "missing", issue: null });
     }
     const reason = reasonOf(error);
-    if (reason === null) throw error;
-    if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({ status: "unavailable", issue: reason });
   }
 }
@@ -1043,8 +1021,7 @@ async function observeSettingsEntry(
     if (error instanceof JsonValueError) return "unreadable";
     if (error instanceof StableFileReadError && error.reason === "not-found") return "missing";
     const reason = reasonOf(error);
-    if (reason === null) throw error;
-    if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return "unreadable";
   }
 }
@@ -1156,11 +1133,8 @@ async function observeHostProjections(
       ),
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowRuntimeProjectionError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     const reason = reasonOf(error);
-    if (reason === null) throw error;
+    if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({
       hostId: host.hostId,
       status: "unavailable" as const,

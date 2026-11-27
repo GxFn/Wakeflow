@@ -183,8 +183,6 @@ function preparePublication(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      // 规划候选树先核对取消信号：已取消的调用是 aborted，不是成员输入问题（镜像测试 §13.169 发现）。
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "capacity") fail("capacity", "$members", error);
       fail("member", "$members", error);
     }
@@ -194,7 +192,6 @@ function preparePublication(
 
 function mapStageError(error: unknown): never {
   if (error instanceof DurableDirectoryTreeCandidateError) {
-    if (error.reason === "aborted") fail("aborted", "$signal", error);
     if (error.reason === "capacity") fail("capacity", "$stage", error);
     fail("conflict", "$stage", error);
   }

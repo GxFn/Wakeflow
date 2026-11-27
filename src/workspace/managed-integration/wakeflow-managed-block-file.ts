@@ -28,7 +28,11 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import {
+  isAbortSignal,
+  OperationAbortedError,
+  throwIfAborted,
+} from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   type ByteCount,
@@ -102,7 +106,6 @@ export type WakeflowManagedBlockFileErrorReason =
   | "target-capacity"
   | "conflict"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -120,7 +123,6 @@ const ERROR_MESSAGES = {
   conflict: "Wakeflow managed block file source changed before atomic publication.",
   "recovery-required":
     "Wakeflow managed block file target has stage residue that requires explicit recovery.",
-  aborted: "Wakeflow managed block file operation was aborted.",
   "effect-failure": "Wakeflow managed block file effect failed.",
   "commit-uncertain": "Wakeflow managed block file commit outcome is uncertain.",
 } as const satisfies Readonly<Record<WakeflowManagedBlockFileErrorReason, string>>;
@@ -212,10 +214,6 @@ function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRe
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function currentUserId(): bigint {
   return requireCurrentUserId(() => fail("unsupported-platform", "$root"));
 }
@@ -264,7 +262,6 @@ async function readSource(
     if (error instanceof WakeflowManagedBlockFileError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);
       }
@@ -296,7 +293,6 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedBlockFileError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
       fail("source", "$source", error);
     }
@@ -309,7 +305,7 @@ async function inspectParsed(
   request: Readonly<ParsedRequest>,
   expectedUserId: bigint,
 ): Promise<Readonly<WakeflowManagedBlockFileInspection>> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const read = await readSource(root, request, expectedUserId);
   let transition: Readonly<WakeflowManagedTextAuthorityTransition>;
   try {
@@ -351,7 +347,6 @@ export async function inspectWakeflowManagedBlockFile(
 
 function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("target-capacity", "$target");
   if (
     error.reason === "target-exists" ||
@@ -400,6 +395,7 @@ async function publishTarget(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
     fail("effect-failure", "$resourcePath", error);
   }
@@ -482,7 +478,7 @@ export async function recomposeWakeflowManagedBlockFile(
   assertRoot(rootValue);
   const createMode = parseOptions(optionsValue);
   const request = parseRequest(requestValue);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const expectedUserId = currentUserId();
   await assertCurrentUserRoot(rootValue, expectedUserId);
   const before = await inspectParsed(rootValue, request, expectedUserId);
@@ -490,7 +486,7 @@ export async function recomposeWakeflowManagedBlockFile(
     return Object.freeze({ disposition: "current", effect: null, inspection: before });
   }
   await assertCurrentUserRoot(rootValue, expectedUserId);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const effect = await publishTarget(rootValue, request, before, createMode);
   let after: Readonly<WakeflowManagedBlockFileInspection>;
   try {
@@ -623,7 +619,7 @@ async function inspectRemovalParsed(
   request: Readonly<ParsedRemovalRequest>,
   expectedUserId: bigint,
 ): Promise<Readonly<WakeflowManagedBlockRemovalInspection>> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const read = await readSource(root, request, expectedUserId);
   const absent = (source: Readonly<StableFileSource> | null) =>
     Object.freeze({
@@ -687,7 +683,6 @@ export async function inspectWakeflowManagedBlockRemoval(
 
 function mapUnlinkError(error: ExactRegularFileUnlinkError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
   }
@@ -722,6 +717,7 @@ async function publishRemoval(
         ...signal,
       });
     } catch (error: unknown) {
+      if (error instanceof OperationAbortedError) throw error;
       if (error instanceof ExactRegularFileUnlinkError) mapUnlinkError(error);
       fail("effect-failure", "$resourcePath", error);
     }
@@ -734,6 +730,7 @@ async function publishRemoval(
       ...signal,
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
     fail("effect-failure", "$resourcePath", error);
   }
@@ -749,7 +746,7 @@ export async function removeWakeflowManagedBlockFile(
 ): Promise<Readonly<WakeflowManagedBlockRemovalReceipt>> {
   assertRoot(rootValue);
   const request = parseRemovalRequest(requestValue);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const expectedUserId = currentUserId();
   await assertCurrentUserRoot(rootValue, expectedUserId);
   const before = await inspectRemovalParsed(rootValue, request, expectedUserId);
@@ -757,7 +754,7 @@ export async function removeWakeflowManagedBlockFile(
     return Object.freeze({ disposition: "current", inspection: before });
   }
   await assertCurrentUserRoot(rootValue, expectedUserId);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   await publishRemoval(rootValue, request, before);
   let after: Readonly<WakeflowManagedBlockRemovalInspection>;
   try {

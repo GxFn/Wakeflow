@@ -4,10 +4,10 @@ import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
 import type { Sha256Digest } from "../crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import type { ByteCount } from "../numeric/byte-count.js";
 import {
-  assertDurableFileCopyNotAborted,
   assertDurableFileCopyRoot,
   DurableFileCopyCandidateError,
   type DurableFileCopyCandidateOptions,
@@ -231,12 +231,12 @@ async function writeChunk(
 ): Promise<void> {
   let written = 0;
   while (written < length) {
-    assertDurableFileCopyNotAborted(signal);
+    throwIfAborted(signal);
     let bytesWritten: number;
     try {
       ({ bytesWritten } = await handle.write(bytes, written, length - written, position + written));
     } catch (cause: unknown) {
-      assertDurableFileCopyNotAborted(signal);
+      throwIfAborted(signal);
       fail("candidate-write-failure", "$candidate", cause);
     }
     if (bytesWritten <= 0 || bytesWritten > length - written) {
@@ -256,13 +256,13 @@ async function copySourceBytes(
   const hasher = createHasher("source-read-failure", "$source");
   let position = 0;
   while (position < expectation.byteCount) {
-    assertDurableFileCopyNotAborted(signal);
+    throwIfAborted(signal);
     const length = Math.min(scratch.byteLength, expectation.byteCount - position);
     let bytesRead: number;
     try {
       ({ bytesRead } = await sourceHandle.read(scratch, 0, length, position));
     } catch (cause: unknown) {
-      assertDurableFileCopyNotAborted(signal);
+      throwIfAborted(signal);
       fail("source-read-failure", "$source", cause);
     }
     if (bytesRead <= 0 || bytesRead > length) {
@@ -280,13 +280,13 @@ async function copySourceBytes(
     position += bytesRead;
   }
 
-  assertDurableFileCopyNotAborted(signal);
+  throwIfAborted(signal);
   try {
     const probe = await sourceHandle.read(scratch, 0, 1, position);
     if (probe.bytesRead !== 0) fail("source-changed", "$source");
   } catch (error: unknown) {
     if (error instanceof DurableFileCopyCandidateError) throw error;
-    assertDurableFileCopyNotAborted(signal);
+    throwIfAborted(signal);
     fail("source-read-failure", "$source", error);
   }
   try {
@@ -335,19 +335,19 @@ async function verifyCandidate(
   expectation: Readonly<ParsedDurableFileCopyExpectation>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<FileNodeSnapshot>> {
-  assertDurableFileCopyNotAborted(signal);
+  throwIfAborted(signal);
   const before = await snapshotHandle(handle, "candidate-changed", "$candidate");
   const scratch = allocateScratch(expectation.byteCount, "$candidate");
   const hasher = createHasher("candidate-changed", "$candidate");
   let position = 0;
   while (position < expectation.byteCount) {
-    assertDurableFileCopyNotAborted(signal);
+    throwIfAborted(signal);
     const length = Math.min(scratch.byteLength, expectation.byteCount - position);
     let bytesRead: number;
     try {
       ({ bytesRead } = await handle.read(scratch, 0, length, position));
     } catch (cause: unknown) {
-      assertDurableFileCopyNotAborted(signal);
+      throwIfAborted(signal);
       fail("candidate-changed", "$candidate", cause);
     }
     if (bytesRead <= 0 || bytesRead > length) {
@@ -363,18 +363,18 @@ async function verifyCandidate(
     }
     position += bytesRead;
   }
-  assertDurableFileCopyNotAborted(signal);
+  throwIfAborted(signal);
   try {
     if ((await handle.read(scratch, 0, 1, position)).bytesRead !== 0) {
       fail("candidate-changed", "$candidate");
     }
   } catch (error: unknown) {
     if (error instanceof DurableFileCopyCandidateError) throw error;
-    assertDurableFileCopyNotAborted(signal);
+    throwIfAborted(signal);
     fail("candidate-changed", "$candidate", error);
   }
   let digest: Sha256Digest;
-  assertDurableFileCopyNotAborted(signal);
+  throwIfAborted(signal);
   try {
     const hashed = hasher.digest();
     if (hashed.byteCount !== expectation.byteCount) {
@@ -454,7 +454,7 @@ export async function copyFileToCandidateDurably(
   assertDurableFileCopyRoot(sourceRootValue, "$sourceRoot");
   assertDurableFileCopyRoot(destinationRootValue, "$destinationRoot");
   const options = parseDurableFileCopyOptions(optionsValue);
-  assertDurableFileCopyNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const sourceResourcePath = parseDurableFileCopyPath(
     sourceResourcePathValue,
     "$sourceResourcePath",
@@ -522,7 +522,7 @@ export async function copyFileToCandidateDurably(
     if (copiedDigest !== expectation.digest) {
       fail("source-mismatch", "$source");
     }
-    assertDurableFileCopyNotAborted(options.signal);
+    throwIfAborted(options.signal);
     try {
       await candidateHandle.chmod(options.mode);
     } catch (cause: unknown) {

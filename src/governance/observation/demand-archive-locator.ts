@@ -188,9 +188,6 @@ async function readPayloadJson(
     );
     return read.value;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     if (
       error instanceof StableFileReadError ||
       error instanceof StrictTextFileError ||
@@ -219,10 +216,7 @@ async function listPayloadDirectory(
       .filter((entry) => entry.node.kind === "directory" || entry.node.kind === "file")
       .map((entry) => entry.name);
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      return Object.freeze([]);
-    }
+    if (error instanceof StableDirectoryReadError) return Object.freeze([]);
     throw error;
   }
 }
@@ -434,7 +428,6 @@ export async function listArchivedDemandIds(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "not-found") return Object.freeze([]);
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
     }
     throw error;
@@ -509,7 +502,6 @@ async function readManifest(
     return read.value;
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `archive-manifest-${error.reason}`, "$archive/manifest", { cause: error });
     }
     if (error instanceof StrictTextFileError) {
@@ -537,7 +529,6 @@ export async function locateLatestDemandArchive(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError && error.reason === "not-found") return null;
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
     }
     throw error;

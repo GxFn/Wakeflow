@@ -17,6 +17,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { readWakeflowConfigAuthoritySnapshot } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
 import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
@@ -251,7 +252,7 @@ test("an interrupted reconfigure reserves all writers until public recovery comp
   await withWorkspaceOperationScope(f.rooted, "shared", async () => {});
 });
 
-test("pod 互斥区里的 Config 复验以内核错误拒绝：过期为 config-stale、读不到为 config-authority、中止为 aborted（§13.161 B3-1）", {
+test("pod 互斥区里的 Config 复验以内核错误拒绝：过期为 config-stale、读不到为 config-authority、中止原样上抛（§13.161 B3-1）", {
   timeout: 20000,
 }, async () => {
   const f = fixture();
@@ -281,8 +282,7 @@ test("pod 互斥区里的 Config 复验以内核错误拒绝：过期为 config-
   writeFileSync(f.config, original);
   await rejects(
     assertDemandOperationConfigCurrentOrFail(f.rooted, snapshot, AbortSignal.abort()),
-    (error: unknown) =>
-      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+    OperationAbortedError,
   );
   rmSync(f.config);
   await rejects(

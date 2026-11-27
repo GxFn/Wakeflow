@@ -21,6 +21,7 @@ import {
   GitReadOnlyProcessError,
   runGitReadOnly,
 } from "../../../src/foundation/git/git-read-only-process.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 interface Repository {
   readonly absolutePath: string;
@@ -252,9 +253,9 @@ test("拿不到结论时给稳定的分类：输入不合法、不是仓库、�
 
   const controller = new AbortController();
   controller.abort();
-  equal(
-    await failureReason(observeGitCommit(repo.root, commit, { signal: controller.signal })),
-    "aborted",
+  await rejects(
+    observeGitCommit(repo.root, commit, { signal: controller.signal }),
+    OperationAbortedError,
   );
 });
 

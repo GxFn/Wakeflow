@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, type Hash } from "node:crypto";
 import path from "node:path";
 
+import { OperationAbortedError } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 
 /**
@@ -24,15 +25,16 @@ export type GitReadOnlyFailureReason =
   | "git-unavailable"
   | "query-failure"
   | "timeout"
-  | "output-limit"
-  | "aborted";
+  | "output-limit";
+
+/** 进程结局的失败分类：中止另抛 `OperationAbortedError`。 */
+type RunFailure = GitReadOnlyFailureReason | "aborted";
 
 const ERROR_MESSAGES = {
   "git-unavailable": "The read-only Git query could not start Git.",
   "query-failure": "The read-only Git query failed.",
   timeout: "The read-only Git query exceeded its execution deadline.",
   "output-limit": "The read-only Git query exceeded its output budget.",
-  aborted: "The read-only Git query was aborted.",
 } as const satisfies Readonly<Record<GitReadOnlyFailureReason, string>>;
 
 const FAILURE_PATHS = {
@@ -40,7 +42,6 @@ const FAILURE_PATHS = {
   "query-failure": "$git",
   timeout: "$git",
   "output-limit": "$git.stdout",
-  aborted: "$options.signal",
 } as const satisfies Readonly<Record<GitReadOnlyFailureReason, string>>;
 
 /** 只读 Git 查询失败的稳定、脱敏错误。 */
@@ -326,14 +327,14 @@ interface RunState {
 }
 
 /** 进程结束或出错时的失败分类；没有失败返回 null。 */
-function failureOf(state: Readonly<RunState>): GitReadOnlyFailureReason | null {
+function failureOf(state: Readonly<RunState>): RunFailure | null {
   if (state.aborted) return "aborted";
   if (state.timedOut) return "timeout";
   if (state.outputExceeded) return "output-limit";
   return null;
 }
 
-function spawnFailure(state: Readonly<RunState>, error: Error): GitReadOnlyFailureReason {
+function spawnFailure(state: Readonly<RunState>, error: Error): RunFailure {
   return (
     failureOf(state) ??
     (readNodeSystemErrorCode(error) === "ENOENT" ? "git-unavailable" : "query-failure")
@@ -345,7 +346,7 @@ function closeOutcome(
   spec: Readonly<QuerySpec>,
   output: OutputAccumulator,
   code: number | null,
-): Readonly<GitReadOnlyResult> | GitReadOnlyFailureReason {
+): Readonly<GitReadOnlyResult> | RunFailure {
   const failure = failureOf(state);
   if (failure !== null) return failure;
   if (code === null || !spec.acceptedExitCodes.includes(code)) return "query-failure";
@@ -391,12 +392,13 @@ function runProcess(
       state.timedOut = true;
       terminate();
     }, spec.timeoutMilliseconds);
-    const finish = (outcome: Readonly<GitReadOnlyResult> | GitReadOnlyFailureReason) => {
+    const finish = (outcome: Readonly<GitReadOnlyResult> | RunFailure) => {
       if (state.settled) return;
       state.settled = true;
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
-      if (typeof outcome === "string") reject(new GitReadOnlyProcessError(outcome));
+      if (outcome === "aborted") reject(new OperationAbortedError());
+      else if (typeof outcome === "string") reject(new GitReadOnlyProcessError(outcome));
       else resolve(outcome);
     };
 

@@ -23,9 +23,8 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
-import { GitCommitObservationError } from "../../foundation/git/git-commit-observation.js";
 import { deriveUuidV4, type UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { OperationAbortedError, signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
@@ -157,7 +156,7 @@ import {
   UNOBSERVED_STREAM_REVISION,
 } from "../../kernel/append-command.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
-import { fail, isWakeflowError, failWithBlockers as rejectWith } from "../../kernel/error.js";
+import { fail, failWithBlockers as rejectWith } from "../../kernel/error.js";
 import { listHelperNudgeRecords } from "../../kernel/helper-observation-file.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,
@@ -313,13 +312,11 @@ const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, 
     ],
     "idempotency-conflict": ["idempotency-mismatch", "request-digest", "$request.idempotencyKey"],
     "decision-rejected": ["precondition-failed", "decision-rejected", "$request"],
-    aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
   });
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "root") {
       fail("root-invalid", "demand-root", "$request.demandId", { cause: error });
     }
@@ -342,7 +339,6 @@ function mapHandlerError(error: unknown): never {
 
 function mapRepositoryError(error: unknown): never {
   if (error instanceof DemandEventSourcingRepositoryError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", "event-stream", "$request.demandId", { cause: error });
   }
   throw error;
@@ -513,7 +509,6 @@ async function loadBindings(
     ).bindings;
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", "binding-store", "$request.demandId", { cause: error });
     }
     throw error;
@@ -600,7 +595,6 @@ async function windowRecords(
     ).bindings.find((entry) => entry.windowId === windowId);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", "binding-store", "$request.demandId", { cause: error });
     }
     throw error;
@@ -922,7 +916,6 @@ function citationFailureOrRethrow(error: unknown): EvidenceCitationFailure {
   if (error instanceof PortableResourcePathError) return "evidence-locator-invalid";
   if (error instanceof Sha256Error) return "evidence-digest-mismatch";
   if (error instanceof StableFileReadError || error instanceof ManagedEvidenceRecordReaderError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "member-not-found") return "evidence-member-missing";
     if (error.reason === "input") return "evidence-locator-invalid";
     return "evidence-unreadable";
@@ -1130,9 +1123,6 @@ async function reportedCommitKind(
       context.options.signal,
     );
   } catch (error: unknown) {
-    if (error instanceof GitCommitObservationError) {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) return null;
     throw error;
   }
@@ -1272,7 +1262,7 @@ async function observeTargetSessionPrompts(
     });
   } catch (error: unknown) {
     if (context.options.signal?.aborted === true) throw error;
-    if (isWakeflowError(error) && error.reason === "aborted") throw error;
+    if (error instanceof OperationAbortedError) throw error;
     return unobservedTargetSessionPrompts("records-unavailable", until);
   }
 }
@@ -1788,7 +1778,6 @@ async function recordedCommitSource(
     return [source.commitOid, { evidenceId, observation: source.observation ?? null }];
   } catch (error: unknown) {
     if (!(error instanceof ManagedEvidenceRecordReaderError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     return null;
   }
 }

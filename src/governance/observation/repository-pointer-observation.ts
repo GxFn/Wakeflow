@@ -19,7 +19,6 @@ import {
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { fail } from "../../kernel/error.js";
 
 /**
  * Wakeflow Governance / Observation：仓库指针文件事实（gate-log §13.94 D2）。
@@ -112,15 +111,6 @@ function unavailable(repositoryId: string, issue: string): Readonly<RepositoryPo
   });
 }
 
-function rethrowAbort(error: unknown): void {
-  if (
-    (error instanceof StableFileReadError || error instanceof StableDirectoryReadError) &&
-    error.reason === "aborted"
-  ) {
-    fail("io-failure", "aborted", "$signal");
-  }
-}
-
 /**
  * 一次指针读取的结果。`missing` 是确认不存在（缺席就是事实），`unreadable` 是打不开或读不
  * 完（缺席只说明没看见），`malformed` 是读得出字节但不是严格文本（对逐个列出的引用文件而言
@@ -144,7 +134,6 @@ async function readPointer(
     const read = await readStrictTextFile(root, ref, { maximumBytes, ...signalOptions(signal) });
     return Object.freeze({ text: read.text.replace(/\n$/u, ""), outcome: "read" as const });
   } catch (error: unknown) {
-    rethrowAbort(error);
     if (error instanceof StableFileReadError) {
       const outcome = error.reason === "not-found" ? ("missing" as const) : ("unreadable" as const);
       return Object.freeze({ text: null, outcome });
@@ -200,7 +189,6 @@ async function directoryEntries(
       unreadable: false,
     });
   } catch (error: unknown) {
-    rethrowAbort(error);
     if (error instanceof StableDirectoryReadError) {
       return Object.freeze({ entries: null, unreadable: error.reason !== "not-found" });
     }

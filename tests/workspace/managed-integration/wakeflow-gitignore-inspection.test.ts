@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-gitignore-body-authority.js";
@@ -267,14 +268,13 @@ test("Gitignore inspection rejects unsafe or semantically conflicting sources", 
     const controller = new AbortController();
     controller.abort();
     const base = request();
-    await expectInspectionError(
+    await rejects(
       () =>
         inspectWakeflowWorkspaceGitignore(current.root, {
           ...base,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      OperationAbortedError,
     );
   });
 

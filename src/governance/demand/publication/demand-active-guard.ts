@@ -22,6 +22,7 @@ import {
   StableDirectoryReadError,
 } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../../foundation/node/abort-signal.js";
 import {
   readStrictTextFile,
   StrictTextFileError,
@@ -42,10 +43,7 @@ import {
   openDemandOperationRoot,
 } from "../demand-operation-authority-context.js";
 import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../event-sourcing/demand-event-sourcing-paths.js";
-import {
-  DemandEventSourcingRepository,
-  DemandEventSourcingRepositoryError,
-} from "../event-sourcing/demand-event-sourcing-repository.js";
+import { DemandEventSourcingRepository } from "../event-sourcing/demand-event-sourcing-repository.js";
 import { DEMAND_IDENTITY_MAXIMUM_BYTES } from "../event-sourcing/demand-event-sourcing-root-authority.js";
 import { DemandIdentityError, parseDemandIdentityDocument } from "../model/demand-identity.js";
 import {
@@ -99,10 +97,7 @@ async function identityPodId(
     });
     return parseDemandIdentityDocument(read.text).podId;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") throw error;
-      return null;
-    }
+    if (error instanceof StableFileReadError) return null;
     if (error instanceof StrictTextFileError || error instanceof DemandIdentityError) return null;
     throw error;
   }
@@ -148,13 +143,7 @@ async function demandIsActive(
       }
     }
   } catch (error: unknown) {
-    if (
-      (error instanceof DemandEventSourcingRepositoryError ||
-        error instanceof StableFileReadError) &&
-      error.reason === "aborted"
-    ) {
-      failure = error;
-    }
+    if (error instanceof OperationAbortedError) failure = error;
   }
   try {
     await closeDemandOperationRoot(demandRoot);
@@ -162,12 +151,6 @@ async function demandIsActive(
     if (failure === undefined) failure = error;
   }
   if (failure !== undefined) {
-    if (
-      failure instanceof DemandEventSourcingRepositoryError ||
-      failure instanceof StableFileReadError
-    ) {
-      fail("io-failure", "aborted", "$signal", { cause: failure });
-    }
     if (failure instanceof DemandOperationAuthorityContextError) {
       fail("io-failure", "demand-root-close", "$demandRoot", { cause: failure });
     }

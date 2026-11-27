@@ -26,6 +26,7 @@ import {
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -110,7 +111,6 @@ type WakeflowWindowHostBindingStoreErrorReason =
   | "inventory"
   | "lock"
   | "recovery-required"
-  | "aborted"
   | "time"
   | "binding-id"
   | "write";
@@ -121,7 +121,6 @@ const ERROR_MESSAGES = {
   inventory: "Window Host Binding inventory is invalid or changed.",
   lock: "Window Host Binding store lock could not be acquired safely.",
   "recovery-required": "Window Host Binding store requires explicit recovery.",
-  aborted: "Window Host Binding store operation was aborted.",
   time: "Window Host Binding store clock could not be read safely.",
   "binding-id": "Window Host Binding ID could not be allocated safely.",
   write: "Window Host Binding authority could not be published safely.",
@@ -235,10 +234,6 @@ function parseInspectOptions(
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function privateNode(
   node: Readonly<FileNodeSnapshot>,
   kind: "directory" | "file",
@@ -273,7 +268,6 @@ async function recoverStages(
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("recovery-required", "$stages");
     }
     throw error;
@@ -294,7 +288,6 @@ async function readInventory(
     });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("layout", "$bindingRoot");
     }
     throw error;
@@ -318,9 +311,6 @@ async function readInventory(
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (error: unknown) {
-      if (error instanceof StableFileReadError && error.reason === "aborted") {
-        fail("aborted", "$signal");
-      }
       if (
         error instanceof StableFileReadError ||
         error instanceof StrictTextFileError ||
@@ -370,11 +360,6 @@ async function readInventory(
   });
 }
 
-function mapLockError(error: KernelFileLockError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
-  fail("lock", "$lock");
-}
-
 function sameInventory(
   left: Readonly<WakeflowWindowHostBindingInventory>,
   right: Readonly<WakeflowWindowHostBindingInventory>,
@@ -404,7 +389,7 @@ export async function inspectWakeflowWindowHostBindingInventory(
     fail("input", "$root");
   }
   const { signal } = parseInspectOptions(optionsValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const first = await readInventory(root, authority, signal);
   const second = await readInventory(root, authority, signal);
   if (!sameInventory(first, second)) fail("inventory", "$inventory");
@@ -431,7 +416,7 @@ export async function withWakeflowWindowHostBindingStore<Result>(
     fail("input", "$store");
   }
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const authority =
     typeof authoritySource === "function" ? await authoritySource() : authoritySource;
   let entered = false;
@@ -470,7 +455,7 @@ export async function withWakeflowWindowHostBindingStore<Result>(
       },
     );
   } catch (error: unknown) {
-    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
+    if (!entered && error instanceof KernelFileLockError) fail("lock", "$lock");
     throw error;
   }
 }
@@ -531,7 +516,6 @@ export async function createWakeflowWindowHostBindingInStore(
     );
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$binding");
       }

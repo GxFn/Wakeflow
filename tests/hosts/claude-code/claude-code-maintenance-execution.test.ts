@@ -17,6 +17,7 @@ import { type TestContext, test } from "node:test";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
   CLAUDE_CODE_DESKTOP_ASSET_REF,
@@ -66,7 +67,6 @@ import {
   checkpointWakeflowMaintenanceExecutionIntent,
   publishWakeflowMaintenanceExecutionIntent,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
-import { WakeflowMaintenanceExecutionPreviewError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import { WakeflowMaintenanceExecutionTransactionError } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
@@ -165,8 +165,7 @@ test("Claude aggregate preview preserves cancellation as an operation outcome", 
       ...request(desiredConfig()),
       signal: controller.signal,
     }),
-    (error: unknown) =>
-      error instanceof WakeflowMaintenanceExecutionPreviewError && error.reason === "aborted",
+    OperationAbortedError,
   );
 });
 

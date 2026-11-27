@@ -19,7 +19,7 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -105,8 +105,7 @@ export type WakeflowProgramInstructionInspectionErrorReason =
   | "source-policy"
   | "envelope"
   | "unknown-managed-body"
-  | "target-capacity"
-  | "aborted";
+  | "target-capacity";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow Program Instruction inspection input is invalid.",
@@ -119,7 +118,6 @@ const ERROR_MESSAGES = {
   envelope: "Wakeflow Program Instruction managed envelope is invalid.",
   "unknown-managed-body": "Wakeflow Program Instruction managed body is not an admitted render.",
   "target-capacity": "Wakeflow Program Instruction candidate exceeds its byte budget.",
-  aborted: "Wakeflow Program Instruction inspection was aborted.",
 } as const satisfies Readonly<Record<WakeflowProgramInstructionInspectionErrorReason, string>>;
 
 /** Program Instruction 只读检查失败的稳定、脱敏错误。 */
@@ -327,7 +325,6 @@ async function readSource(
     }
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);
       }
@@ -361,7 +358,6 @@ async function revalidateSource(
       throw error;
     }
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
       fail("source", "$source", error);
     }
@@ -390,7 +386,7 @@ export async function inspectWakeflowProgramInstruction(
 ): Promise<Readonly<WakeflowProgramInstructionInspection>> {
   assertRoot(rootValue);
   const request = parseWakeflowProgramInstructionInspectionRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {
     context = createWakeflowWorkspaceStaticResourceOperationContext(request.matrix, {

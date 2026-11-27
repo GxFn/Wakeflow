@@ -135,7 +135,6 @@ export async function retireLedgerRecordPublicationStage(
     );
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryTreeRemovalError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("recovery-required", "$stage", error);
     }
     throw error;
@@ -157,7 +156,6 @@ export async function loadExactPublishedLedgerRecord(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("conflict", "$record", error);
     }
     throw error;
@@ -191,7 +189,6 @@ export async function publishLedgerRecordStage(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreePublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "cross-device") fail("root-scope", "$stage", error);
       if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
         fail("recovery-required", "$stage", error);

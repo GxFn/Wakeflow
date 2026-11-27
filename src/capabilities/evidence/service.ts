@@ -188,7 +188,6 @@ async function openContext(
     return Object.freeze({ root, snapshot, options });
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       failWakeflowConfigAuthority(error);
     }
     throw error;
@@ -212,7 +211,6 @@ type FailureRoute = readonly [WakeflowErrorCode, string, string];
  */
 const PLANNING_FAILURE_TABLE: Readonly<Partial<Record<string, FailureRoute>>> = Object.freeze({
   input: ["invalid-request", "selection", "$request.selection"],
-  aborted: ["io-failure", "aborted", "$signal"],
   config: ["precondition-failed", "config-authority", "$request.root"],
   demand: ["precondition-failed", "demand-authority", "$request.demandId"],
   "source-root": ["precondition-failed", "source-root", "$request.selection.source"],
@@ -255,7 +253,6 @@ function mapApplicationError(error: unknown): never {
 
 function mapRepositoryError(error: unknown): never {
   if (error instanceof DemandEventSourcingRepositoryError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", "event-stream", "$request.demandId", { cause: error });
   }
   throw error;
@@ -263,7 +260,6 @@ function mapRepositoryError(error: unknown): never {
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("precondition-failed", `demand-root-${error.reason}`, "$request.demandId", {
       cause: error,
     });
@@ -330,7 +326,6 @@ const DEMAND_TREE_CAPACITY_REASONS: ReadonlySet<string> = new Set([
 ]);
 
 function mapDemandTreeReadError(error: StableResourceTreeReadError): never {
-  if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
   if (error.reason === "source-changed") {
     fail("concurrency-conflict", "demand-root-read-source-changed", "$request.demandId", {
       cause: error,
@@ -577,7 +572,6 @@ async function withEvidencePublicationLock<Result>(
     );
   } catch (error: unknown) {
     if (entered || !(error instanceof KernelFileLockError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("concurrency-conflict", `evidence-lock-${error.reason}`, "$request.demandId", {
       cause: error,
       retryable: error.reason === "timeout",
@@ -626,7 +620,6 @@ async function readSnapshotForNext(
     );
   } catch (error: unknown) {
     if (error instanceof DemandResultReviewSnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", "result-review-snapshot", "$request.demandId", { cause: error });
     }
     throw error;

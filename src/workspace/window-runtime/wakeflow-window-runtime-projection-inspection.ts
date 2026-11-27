@@ -11,7 +11,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { isWakeflowError } from "../../kernel/error.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostResourceProfile,
@@ -58,7 +58,6 @@ export type WakeflowWindowRuntimeProjectionErrorReason =
   | "profile"
   | "topology"
   | "plan"
-  | "aborted"
   | "effect";
 
 const ERROR_MESSAGES = {
@@ -66,7 +65,6 @@ const ERROR_MESSAGES = {
   profile: "Wakeflow window runtime projection host profile is invalid.",
   topology: "Wakeflow window runtime projection topology is invalid.",
   plan: "Wakeflow window runtime projection operation no longer matches the current authority.",
-  aborted: "Wakeflow window runtime projection work was aborted.",
   effect: "Wakeflow window runtime projection could not be published safely.",
 } as const satisfies Readonly<Record<WakeflowWindowRuntimeProjectionErrorReason, string>>;
 
@@ -266,7 +264,6 @@ export async function resolveWakeflowWindowRuntimeProjectionExpectedEntries(
       : Object.freeze({ bindings: Object.freeze([]) });
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal", error);
       return Object.freeze({ kind: "inventory-unavailable" as const });
     }
     throw error;
@@ -326,15 +323,11 @@ export async function inspectWakeflowWindowRuntimeProjectionEntries(
 ): Promise<readonly Readonly<WakeflowWindowRuntimeProjectionInspectedEntry>[]> {
   const inspected: Readonly<WakeflowWindowRuntimeProjectionInspectedEntry>[] = [];
   for (const entry of entries) {
-    let inspection: Awaited<ReturnType<typeof inspectWakeflowWindowRuntimeProjectionDocument>>;
-    try {
-      inspection = await inspectWakeflowWindowRuntimeProjectionDocument(root, entry.target, signal);
-    } catch (error: unknown) {
-      if (isWakeflowError(error) && error.reason === "aborted") {
-        failWindowRuntimeProjection("aborted", "$signal", error);
-      }
-      throw error;
-    }
+    const inspection = await inspectWakeflowWindowRuntimeProjectionDocument(
+      root,
+      entry.target,
+      signal,
+    );
     inspected.push(
       Object.freeze({ entry, status: inspection.status, currentDigest: inspection.currentDigest }),
     );
@@ -347,7 +340,7 @@ export async function inspectWakeflowWindowRuntimeProjectionSet(
   rootValue: RootedDirectory,
   request: InspectWakeflowWindowRuntimeProjectionSetRequest,
 ): Promise<WakeflowWindowRuntimeProjectionSetInspection> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   const inputs = admitWakeflowWindowRuntimeProjectionInputs(
     rootValue,
     request.config,

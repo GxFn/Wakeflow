@@ -31,6 +31,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -96,7 +97,6 @@ export type ManagedEvidencePublicationStageMaterializationErrorReason =
   | "destination-root-scope"
   | "stage-conflict"
   | "capacity"
-  | "aborted"
   | "recovery-required"
   | "operation-failure";
 
@@ -108,7 +108,6 @@ const ERROR_MESSAGES = {
   "destination-root-scope": "Managed evidence publication stage escaped its Demand root.",
   "stage-conflict": "Managed evidence publication stage conflicts with its record plan.",
   capacity: "Managed evidence publication stage exceeds its admitted capacity.",
-  aborted: "Managed evidence publication stage materialization was aborted.",
   "recovery-required":
     "Managed evidence publication stage materialization requires explicit recovery.",
   "operation-failure": "Managed evidence publication stage could not be materialized safely.",
@@ -189,10 +188,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
   try {
     return parseManagedEvidencePublicationTransaction(value);
@@ -205,7 +200,6 @@ function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTr
 }
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") {
     fail("destination-root-scope", "$demandRoot");
   }
@@ -264,7 +258,6 @@ function mapDirectoryError(
   error: DurableDirectoryMaterializationError,
   path: "$managedEvidenceRoot" | "$stage",
 ): "existing" | never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") return "existing";
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("destination-root-scope", "$demandRoot");
@@ -329,7 +322,6 @@ async function ensureDirectory(
 }
 
 function mapCandidateError(error: DurableDirectoryTreeCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$stage");
   if (
     error.reason === "tree-conflict" ||
@@ -401,7 +393,6 @@ async function recoverManifestAtomicStages(
     }
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") {
         fail("destination-root-scope", "$demandRoot", error);
       }
@@ -419,7 +410,6 @@ function assertManifestIsLast(progress: Readonly<DirectoryTreeCandidateProgress>
 }
 
 function mapPayloadError(error: ManagedEvidencePublicationPayloadMaterializationError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
     fail("source-root-scope", "$sourceRoot");
@@ -454,7 +444,6 @@ function assertOnlyManifestMissing(progress: Readonly<DirectoryTreeCandidateProg
 }
 
 function mapManifestWriteError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$manifest");
   if (error.reason === "root-scope") {
     fail("destination-root-scope", "$demandRoot");
@@ -508,7 +497,7 @@ export async function materializeManagedEvidencePublicationStage(
   if (sourceRootValue !== null) assertRoot(sourceRootValue, "$sourceRoot");
   assertRoot(demandRootValue, "$demandRoot");
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const transaction = parseTransaction(transactionValue);
   const stored = await loadExactJournal(demandRootValue, transaction, options.signal);
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);

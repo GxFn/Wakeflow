@@ -40,7 +40,6 @@ export type WakeflowSupportMemoryPublicationErrorReason =
   | "capacity"
   | "conflict"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -50,7 +49,6 @@ const ERROR_MESSAGES = {
   capacity: "Wakeflow support memory publication exceeds its byte budget.",
   conflict: "Wakeflow support memory source changed before atomic publication.",
   "recovery-required": "Wakeflow support memory publication requires explicit recovery.",
-  aborted: "Wakeflow support memory publication was aborted before commit.",
   "effect-failure": "Wakeflow support memory could not be published safely.",
   "commit-uncertain": "Published Wakeflow support memory could not be proven exact.",
 } as const satisfies Readonly<Record<WakeflowSupportMemoryPublicationErrorReason, string>>;
@@ -125,14 +123,6 @@ export function parseWakeflowSupportMemoryPublicationOptions(
     failWakeflowSupportMemoryPublication("input", "$options");
   }
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-export function assertWakeflowSupportMemoryPublicationNotAborted(
-  signal: AbortSignal | undefined,
-): void {
-  if (signal?.aborted === true) {
-    failWakeflowSupportMemoryPublication("aborted", "$signal");
-  }
 }
 
 export function wakeflowSupportMemoryInspectionRequest(

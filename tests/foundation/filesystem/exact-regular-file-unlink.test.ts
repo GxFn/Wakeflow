@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   linkSync,
@@ -31,6 +31,7 @@ import {
   RootedExactResourceHandleError,
 } from "../../../src/foundation/filesystem/rooted-exact-resource-handle.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 /**
@@ -420,16 +421,15 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
 
     const controller = new AbortController();
     controller.abort("private-unlink-reason");
-    const error = await expectUnlinkError(
+    await rejects(
       () =>
         unlinkRegularFileExactly(root, resourcePath, {
           expectedNode: expected.node,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-unlink-reason"),
     );
-    equal(error.message.includes("private-unlink-reason"), false);
     equal(readFileSync(path.join(rootPath, "file"), "utf8"), "value");
   } finally {
     await root.close();

@@ -18,7 +18,7 @@ import {
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import { isAbortSignal, OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import type { WorkspaceLockOptions } from "../kernel/workspace-locks.js";
@@ -80,7 +80,6 @@ export type WakeflowConfigAuthorityReplacementErrorReason =
   | "lock-timeout"
   | "lock-unsafe"
   | "recovery-required"
-  | "aborted"
   | "replacement-failure"
   | "commit-uncertain";
 
@@ -101,7 +100,6 @@ const ERROR_MESSAGES = {
   "lock-unsafe": "Wakeflow config authority replacement lock is unsafe.",
   "recovery-required":
     "Wakeflow config authority replacement residue cannot be recovered automatically.",
-  aborted: "Wakeflow config authority replacement was aborted before commit.",
   "replacement-failure": "Wakeflow config authority could not be replaced safely.",
   "commit-uncertain": "Replaced Wakeflow config authority could not be proven exact.",
 } as const satisfies Readonly<Record<WakeflowConfigAuthorityReplacementErrorReason, string>>;
@@ -217,12 +215,6 @@ export function parseWakeflowConfigAuthorityReplacementOptions(
           ),
     signal: parseSignal(record.signal),
   });
-}
-
-export function assertWakeflowConfigAuthorityNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) {
-    failWakeflowConfigAuthorityReplacement("aborted", "$signal");
-  }
 }
 
 export function currentWakeflowConfigAuthorityUserId(): bigint {
@@ -396,10 +388,8 @@ export async function assertWakeflowConfigAuthorityDesiredPlacements(
 
 /** 提交之前读当前权威快照失败：按快照错误的原因归类，认不出的一律是来源无效。 */
 function failSnapshotRead(error: unknown): never {
+  if (error instanceof OperationAbortedError) throw error;
   if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-    if (error.reason === "aborted") {
-      failWakeflowConfigAuthorityReplacement("aborted", "$signal", error);
-    }
     if (error.reason === "root-scope") {
       failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
     }
@@ -495,9 +485,6 @@ export function mapWakeflowConfigAuthorityLockError(
   }
   if (error.reason === "input") {
     failWakeflowConfigAuthorityReplacement("input", error.path);
-  }
-  if (error.reason === "aborted") {
-    failWakeflowConfigAuthorityReplacement("aborted", "$signal");
   }
   if (error.reason === "timeout") {
     failWakeflowConfigAuthorityReplacement("lock-timeout", "$lock");

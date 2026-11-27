@@ -12,6 +12,7 @@ import {
 } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
@@ -62,7 +63,7 @@ test("durable file candidate 在任何写入前拒绝取消和共享字节", asy
         mode: 0o600,
         signal: controller.signal,
       }),
-      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "aborted",
+      OperationAbortedError,
     );
 
     await rejects(

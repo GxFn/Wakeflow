@@ -27,6 +27,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -81,7 +82,6 @@ export type ManagedEvidencePublicationTransactionStoreErrorReason =
   | "transaction-exists"
   | "conflict"
   | "capacity"
-  | "aborted"
   | "recovery-required"
   | "operation-failure";
 
@@ -91,7 +91,6 @@ const ERROR_MESSAGES = {
   "transaction-exists": "Managed evidence publication transaction journal already exists.",
   conflict: "Managed evidence publication transaction journal is invalid or changed.",
   capacity: "Managed evidence publication transaction journal exceeds its capacity.",
-  aborted: "Managed evidence publication transaction store operation was aborted.",
   "recovery-required":
     "Managed evidence publication transaction journal requires explicit recovery.",
   "operation-failure": "Managed evidence publication transaction store operation failed.",
@@ -165,10 +164,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function assertJournalNode(node: Readonly<FileNodeSnapshot>): void {
   const userId = currentUserIdOrNull();
   if (
@@ -237,7 +232,6 @@ async function journalNodeOrNull(
 
 function mapReadError(error: unknown): never {
   if (error instanceof StableFileReadError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
       fail("root-scope", "$root");
     }
@@ -301,7 +295,7 @@ export async function loadManagedEvidencePublicationTransaction(
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction> | null> {
   assertRoot(root);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const node = await journalNodeOrNull(root);
   return node === null ? null : readStoredAtNode(root, node, options.signal);
 }
@@ -315,7 +309,7 @@ export async function requireCurrentManagedEvidencePublicationTransaction(
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
   assertRoot(root);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   let transaction: Readonly<ManagedEvidencePublicationTransaction>;
   try {
     transaction = parseManagedEvidencePublicationTransaction(transactionValue);
@@ -342,7 +336,6 @@ export async function requireCurrentManagedEvidencePublicationTransaction(
 }
 
 function mapCreateError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$transaction");
   if (error.reason === "target-exists") {
@@ -368,7 +361,7 @@ export async function createManagedEvidencePublicationTransactionJournal(
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
   assertRoot(root);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   let transaction: Readonly<ManagedEvidencePublicationTransaction>;
   try {
     transaction = parseManagedEvidencePublicationTransaction(transactionValue);
@@ -429,7 +422,7 @@ function assertStoredCapability(
   }
 }
 
-/** 退役之前按原节点重读日志：中止与根作用域原样抛，其余读不出都是与当前状态冲突。 */
+/** 退役之前按原节点重读日志：根作用域原样抛，其余读不出都是与当前状态冲突；中止原样上抛。 */
 async function readCurrentForRetirement(
   root: RootedDirectory,
   node: Readonly<FileNodeSnapshot>,
@@ -439,7 +432,6 @@ async function readCurrentForRetirement(
     return await readStoredAtNode(root, node, signal);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationTransactionStoreError) {
-      if (error.reason === "aborted") throw error;
       if (error.reason === "root-scope") throw error;
       fail("conflict", "$transaction", error);
     }
@@ -460,7 +452,6 @@ async function unlinkJournalExactly(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("recovery-required", "$transaction", error);
     }
@@ -477,7 +468,7 @@ export async function retireManagedEvidencePublicationTransactionJournal(
   assertRoot(root);
   const options = parseOptions(optionsValue);
   assertStoredCapability(storedValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   admitMutation(storedValue.transaction, "exact-retire");
   const current = await readCurrentForRetirement(root, storedValue.source.node, options.signal);
   if (

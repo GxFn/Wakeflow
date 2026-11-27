@@ -13,7 +13,7 @@ import {
 } from "../filesystem/portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { GitReadOnlyProcessError, runGitReadOnly } from "./git-read-only-process.js";
 
 /**
@@ -65,8 +65,7 @@ export type GitIgnoreObservationErrorReason =
   | "query-failure"
   | "timeout"
   | "output-limit"
-  | "protocol"
-  | "aborted";
+  | "protocol";
 
 const ERROR_MESSAGES = {
   input: "Git ignore observation input is invalid.",
@@ -76,7 +75,6 @@ const ERROR_MESSAGES = {
   timeout: "Git ignore observation exceeded its execution deadline.",
   "output-limit": "Git ignore observation exceeded its output budget.",
   protocol: "Git ignore observation returned an invalid machine record.",
-  aborted: "Git ignore observation was aborted.",
 } as const satisfies Readonly<Record<GitIgnoreObservationErrorReason, string>>;
 
 /** Git ignore 观察失败的稳定、脱敏错误。 */
@@ -173,10 +171,6 @@ function parseProbePaths(value: unknown): readonly PortableResourcePath[] {
     paths.push(path);
   }
   return Object.freeze(paths);
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$options.signal");
 }
 
 async function assertRootCurrent(root: RootedDirectory, path: string): Promise<void> {
@@ -317,13 +311,13 @@ async function observeGitIgnorePathsInWorkTreeInternal(
   assertRoot(repositoryRootValue, repositoryRootPath);
   assertRoot(workTreeRootValue, workTreeRootPath);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const probePaths = parseProbePaths(probePathValues);
   await assertRootCurrent(repositoryRootValue, repositoryRootPath);
   if (workTreeRootValue !== repositoryRootValue) {
     await assertRootCurrent(workTreeRootValue, workTreeRootPath);
   }
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const result = await runGitCheckIgnore(
     repositoryRootValue,
     workTreeRootValue,
@@ -334,7 +328,7 @@ async function observeGitIgnorePathsInWorkTreeInternal(
   if (workTreeRootValue !== repositoryRootValue) {
     await assertRootCurrent(workTreeRootValue, workTreeRootPath);
   }
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   return parseOutput(result, probePaths);
 }
 

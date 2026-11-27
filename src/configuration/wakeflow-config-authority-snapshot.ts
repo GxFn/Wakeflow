@@ -31,7 +31,11 @@ import {
   WakeflowConfigRootPlacementError,
   type WakeflowConfigRootPlacementReport,
 } from "./wakeflow-config-root-placement.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import {
+  isAbortSignal,
+  OperationAbortedError,
+  throwIfAborted,
+} from "../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Configuration：单次操作范围内的 配置权威快照。
@@ -95,7 +99,6 @@ export type WakeflowConfigAuthoritySnapshotErrorReason =
   | "config"
   | "config-version"
   | "placement"
-  | "aborted"
   | "load-failure";
 
 const ERROR_MESSAGES = {
@@ -110,7 +113,6 @@ const ERROR_MESSAGES = {
   config: "Wakeflow canonical config is not the strict public authority.",
   "config-version": "Wakeflow canonical config uses a schema version this build does not read.",
   placement: "Wakeflow canonical config declares unsafe root placements.",
-  aborted: "Wakeflow config authority snapshot loading was aborted.",
   "load-failure": "Wakeflow config authority snapshot failed closed.",
 } as const satisfies Readonly<Record<WakeflowConfigAuthoritySnapshotErrorReason, string>>;
 
@@ -189,7 +191,6 @@ function mapStableReadError(error: StableFileReadError): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "source-changed") fail("source-changed", "$source");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   fail("source", "$source");
 }
 
@@ -362,7 +363,11 @@ async function loadSnapshot(
 }
 
 function mapLoadFailure(error: unknown): never {
-  if (error instanceof WakeflowConfigAuthoritySnapshotError) throw error;
+  if (
+    error instanceof WakeflowConfigAuthoritySnapshotError ||
+    error instanceof OperationAbortedError
+  )
+    throw error;
   throw new WakeflowConfigAuthoritySnapshotError("load-failure", "$snapshot");
 }
 
@@ -374,7 +379,7 @@ export async function readWakeflowConfigAuthoritySnapshot(
   try {
     assertRoot(root);
     const parsed = parseOptions(options);
-    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    throwIfAborted(parsed.signal);
     return await loadSnapshot(root, parsed, WAKEFLOW_CONFIG_FILE_REF);
   } catch (error: unknown) {
     mapLoadFailure(error);
@@ -392,7 +397,7 @@ export async function readWakeflowDetachedConfigSnapshot(
   try {
     assertRoot(root);
     const parsed = parseOptions(options);
-    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    throwIfAborted(parsed.signal);
     return await loadSnapshot(root, parsed, WAKEFLOW_DETACHED_CONFIG_FILE_REF);
   } catch (error: unknown) {
     mapLoadFailure(error);
@@ -410,7 +415,7 @@ export async function readWakeflowDetachedConfigRecord(
   try {
     assertRoot(root);
     const parsed = parseOptions(options);
-    if (parsed.signal?.aborted === true) fail("aborted", "$signal");
+    throwIfAborted(parsed.signal);
     const read = await readConfigSourceOrNull(
       root,
       WAKEFLOW_DETACHED_CONFIG_FILE_REF,

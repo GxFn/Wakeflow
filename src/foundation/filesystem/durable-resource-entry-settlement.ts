@@ -1,3 +1,4 @@
+import { throwIfAborted } from "../node/abort-signal.js";
 import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { type PortableResourcePath, parsePortableResourcePath } from "./portable-resource-path.js";
 import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
@@ -35,8 +36,7 @@ export type DurableResourceEntrySettlementErrorReason =
   | "inspection-failure"
   | "observation-changed"
   | "durability-failure"
-  | "close-failure"
-  | "aborted";
+  | "close-failure";
 
 const ERROR_MESSAGES = {
   input: "Durable resource entry settlement input is invalid.",
@@ -45,7 +45,6 @@ const ERROR_MESSAGES = {
   "observation-changed": "The resource entry is no longer what the caller observed.",
   "durability-failure": "Durable resource entry settlement could not sync the parent directory.",
   "close-failure": "Durable resource entry settlement could not close the parent directory.",
-  aborted: "Durable resource entry settlement was aborted.",
 } as const satisfies Record<DurableResourceEntrySettlementErrorReason, string>;
 
 export class DurableResourceEntrySettlementError extends Error {
@@ -127,10 +126,6 @@ async function assertObserved(
   }
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 async function openParent(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
@@ -179,7 +174,7 @@ export async function settleObservedResourceEntry(
   options?: DurableResourceEntrySettlementOptions,
 ): Promise<void> {
   const parsed = parseOptions(root, observed, options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   let parent: RootedResourceParentHandle;
   try {
     parent = await openParent(root, resourcePath, parsed.errorPath);
@@ -195,7 +190,7 @@ export async function settleObservedResourceEntry(
   let failure: unknown;
   try {
     await assertObserved(parent, observed, parsed);
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
     await syncParent(parent, parsed.errorPath);
     await assertObserved(parent, observed, parsed);
   } catch (error: unknown) {

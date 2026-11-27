@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -30,6 +30,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { disposableRoot } from "../../support/temp-root.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
@@ -320,16 +321,16 @@ test("options and AbortSignal are closed and passively admitted", async () => {
 
     const controller = new AbortController();
     controller.abort("private-directory-abort");
-    const error = await expectDirectoryError(
+    await rejects(
       () =>
         materializeDirectoryPath(root, resourcePath, {
           mode: 0o700,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError &&
+        !error.message.includes("private-directory-abort"),
     );
-    equal(error.message.includes("private-directory-abort"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

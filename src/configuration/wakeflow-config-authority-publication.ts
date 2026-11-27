@@ -10,7 +10,11 @@ import {
   isRootedDirectory,
   type RootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
-import { isAbortSignal } from "../foundation/node/abort-signal.js";
+import {
+  isAbortSignal,
+  OperationAbortedError,
+  throwIfAborted,
+} from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
@@ -63,7 +67,6 @@ export type WakeflowConfigAuthorityPublicationErrorReason =
   | "capacity"
   | "placement"
   | "target-exists"
-  | "aborted"
   | "publication-failure"
   | "commit-uncertain";
 
@@ -77,7 +80,6 @@ const ERROR_MESSAGES = {
   capacity: "Wakeflow config authority publication exceeds its recoverable byte limit.",
   placement: "Wakeflow config authority publication declares an unsafe root placement.",
   "target-exists": "Wakeflow config authority already exists.",
-  aborted: "Wakeflow config authority publication was aborted before commit.",
   "publication-failure": "Wakeflow config authority could not be published safely.",
   "commit-uncertain": "Published Wakeflow config authority could not be proven exact.",
 } as const satisfies Readonly<Record<WakeflowConfigAuthorityPublicationErrorReason, string>>;
@@ -137,10 +139,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({
     signal: record.signal as AbortSignal | undefined,
   });
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function currentEffectiveUserId(): bigint {
@@ -205,7 +203,6 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
     fail("target-exists", "$resourcePath");
   }
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$config");
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
@@ -232,6 +229,7 @@ async function publishBytes(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) {
       mapAtomicWriteError(error);
     }
@@ -285,7 +283,7 @@ export async function publishWakeflowConfigAuthority(
 ): Promise<Readonly<WakeflowConfigAuthorityPublicationReceipt>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const expectedUserId = currentEffectiveUserId();
   const model = parseModel(modelValue);
   const bytes = renderModelBytes(model);
@@ -295,7 +293,7 @@ export async function publishWakeflowConfigAuthority(
   await assertPlacements(root, model);
   // 位置检查可能触及多个同级根目录；提交前再次确认 Workspace 根目录所有者和当前状态。
   await assertCurrentUserRoot(root, expectedUserId);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const publication = await publishBytes(root, bytes, parsed.signal);
   // 发布已经跨过不替换目标的提交点；此后的失败不能再表述为“提交前已取消”。

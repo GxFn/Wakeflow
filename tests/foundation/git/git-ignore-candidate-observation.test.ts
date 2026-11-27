@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -16,6 +16,7 @@ import {
   type GitIgnoreCandidateObservationErrorReason,
   observeGitIgnoreCandidate,
 } from "../../../src/foundation/git/git-ignore-candidate-observation.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 const GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES = 2 * 1024 * 1024;
 
@@ -185,13 +186,12 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
     const current = await fixture(subtest);
     const controller = new AbortController();
     controller.abort();
-    await expectCandidateError(
+    await rejects(
       () =>
         observeGitIgnoreCandidate(current.root, Buffer.from("/safe/\n"), probes("safe/path"), {
           signal: controller.signal,
         }),
-      "aborted",
-      "$options.signal",
+      OperationAbortedError,
     );
   });
 

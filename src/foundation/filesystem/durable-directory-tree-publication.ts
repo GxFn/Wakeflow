@@ -20,7 +20,7 @@ import {
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
 import { RootedDirectory } from "./rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：清单已闭合的目录树候选整体发布。
@@ -55,8 +55,7 @@ export type DurableDirectoryTreePublicationErrorReason =
   | "cross-device"
   | "commit-uncertain"
   | "durability-failure"
-  | "operation-failure"
-  | "aborted";
+  | "operation-failure";
 
 const ERROR_MESSAGES = {
   input: "Directory tree publication input is invalid.",
@@ -67,7 +66,6 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Directory tree publication commit result could not be proven exact.",
   "durability-failure": "Directory tree publication directory entries could not be synchronized.",
   "operation-failure": "Directory tree publication could not cross its commit point safely.",
-  aborted: "Directory tree publication was aborted before commit.",
 } as const satisfies Readonly<Record<DurableDirectoryTreePublicationErrorReason, string>>;
 
 /** 目录树整体发布失败时返回的稳定、脱敏错误。 */
@@ -185,13 +183,8 @@ function parseCandidate(value: unknown): Readonly<DirectoryTreeCandidateResult> 
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function mapCandidateError(error: DurableDirectoryTreeCandidateError, afterCommit: boolean): never {
   if (afterCommit) fail("commit-uncertain", "$destinationResourcePath");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
     fail("source-changed", "$sourceResourcePath");
   }
@@ -199,7 +192,6 @@ function mapCandidateError(error: DurableDirectoryTreeCandidateError, afterCommi
 }
 
 function mapRenameError(error: DurableResourceRenameError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "destination-exists") {
     fail("destination-exists", "$destinationResourcePath");
   }
@@ -239,7 +231,7 @@ export async function publishDirectoryTreeCandidateDurably(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const candidate = parseCandidate(candidateValue);
   const destinationResourcePath = parsePath(
     destinationResourcePathValue,

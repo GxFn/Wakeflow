@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   linkSync,
@@ -19,6 +19,7 @@ import {
   type WakeflowConfigAuthoritySnapshotErrorReason,
 } from "../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   createMinimalWakeflowConfig,
@@ -222,12 +223,12 @@ test("snapshot options are passive and support cancellation", async () => {
   try {
     const controller = new AbortController();
     controller.abort();
-    await expectSnapshotError(
+    await rejects(
       () =>
         readWakeflowConfigAuthoritySnapshot(root, {
           signal: controller.signal,
         }),
-      "aborted",
+      OperationAbortedError,
     );
     await expectSnapshotError(
       () => readWakeflowConfigAuthoritySnapshot(root, null as never),

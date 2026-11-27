@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -23,6 +23,7 @@ import {
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 interface CopyFixture {
@@ -285,7 +286,7 @@ test("durable file copy removes its candidate when cancelled mid-copy", {
     return false;
   };
   const aborting = abortAfterCreation();
-  await expectCopyError(() => pending, "aborted", "$signal");
+  await rejects(() => pending, OperationAbortedError);
   equal(await aborting, true);
   equal(existsSync(candidatePath), false);
 });
@@ -341,7 +342,7 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
     writeFileSync(path.join(current.sourcePath, "source"), bytes);
     const controller = new AbortController();
     controller.abort();
-    await expectCopyError(
+    await rejects(
       () =>
         copyFileToCandidateDurably(
           current.sourceRoot,
@@ -358,8 +359,7 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
             signal: controller.signal,
           },
         ),
-      "aborted",
-      "$signal",
+      OperationAbortedError,
     );
   });
 });

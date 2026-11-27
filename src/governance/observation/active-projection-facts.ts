@@ -412,7 +412,7 @@ export async function observeProjectionTargets(
     );
     return Object.freeze({ status: "observed" as const, issue: null, value: targets });
   } catch (error: unknown) {
-    if (!(error instanceof WakeflowError) || error.reason === "aborted") throw error;
+    if (!(error instanceof WakeflowError)) throw error;
     return Object.freeze({
       status: "unavailable" as const,
       issue: `projection:${error.reason}`,

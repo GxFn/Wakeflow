@@ -2,7 +2,7 @@ import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -115,7 +115,6 @@ export type DurableDirectoryMaterializationErrorReason =
   | "commit-uncertain"
   | "durability-failure"
   | "path-changed"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -134,7 +133,6 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Created directory target could not be proven exact.",
   "durability-failure": "Created directory and parent could not be synchronized.",
   "path-changed": "Materialized directory path changed during final verification.",
-  aborted: "Directory materialization was aborted before the next mkdir.",
   "close-failure": "A directory materialization handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableDirectoryMaterializationErrorReason, string>>;
 
@@ -176,10 +174,6 @@ function fail(
     path,
     cause === undefined ? undefined : { cause },
   );
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -368,12 +362,12 @@ async function performAtomicCreate(
   let result: Readonly<DurableDirectoryCreateResult> | undefined;
 
   try {
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     await assertParentCurrent(parent);
     if ((await inspectParentTarget(parent, "target-inspection-failure")) !== null) {
       fail("target-exists", "$resourcePath");
     }
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
 
     try {
       await filesystemMutation.mkdir(parent.resourceAbsolutePath, {
@@ -549,7 +543,7 @@ export async function createDirectoryAtomically(
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return performAtomicCreate(root, resourcePath, parsed, "sync");
 }
 
@@ -566,7 +560,7 @@ export async function createTreeCandidateDirectoryAtomically(
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return performAtomicCreate(root, resourcePath, parsed, "deferred");
 }
 
@@ -584,11 +578,11 @@ export async function materializeDirectoryPath(
   assertRoot(root);
   const parsed = parseOptions(options);
   const prefixes = prefixPaths(resourcePath);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const observations: DirectoryMaterializationEntry[] = [];
   for (const prefix of prefixes) {
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
     const existing = await inspectExistingDirectoryOrNull(root, prefix);
     if (existing !== null) {
       observations.push(

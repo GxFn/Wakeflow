@@ -75,8 +75,7 @@ export type ClaudeCodeHostAssetOperationErrorReason =
   | "operation"
   | "read"
   | "source-stale"
-  | "write"
-  | "aborted";
+  | "write";
 
 const ERROR_MESSAGES = {
   input: "Claude host asset operation input is invalid.",
@@ -84,7 +83,6 @@ const ERROR_MESSAGES = {
   read: "Claude host asset could not be read safely.",
   "source-stale": "Claude host asset changed since the plan was made.",
   write: "Claude host asset could not be written safely.",
-  aborted: "Claude host asset operation was aborted.",
 } as const satisfies Readonly<Record<ClaudeCodeHostAssetOperationErrorReason, string>>;
 
 /** 宿主资产操作失败的稳定、脱敏错误。 */
@@ -156,7 +154,6 @@ async function currentAsset(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("read", "$asset", error);
     }
     throw error;
@@ -231,7 +228,6 @@ async function ensureAssetsDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("write", "$asset.directory", error);
     }
     throw error;
@@ -279,7 +275,6 @@ export async function executeClaudeCodeHostAssetOperation(
     });
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "expectation-changed" || error.reason === "target-exists") {
         fail("source-stale", "$asset", error);
       }

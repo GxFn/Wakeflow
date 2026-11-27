@@ -27,6 +27,7 @@ import {
 } from "../../../src/foundation/filesystem/kernel-file-lock.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { holdKernelLockInChildProcess } from "../../support/kernel-lock-process.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
 
@@ -220,7 +221,7 @@ test("不安全与缺席：锁的位置上是符号链接或目录报 unsafe-loc
         signal: controller.signal,
       },
     ),
-    lockError("aborted"),
+    OperationAbortedError,
   );
 });
 

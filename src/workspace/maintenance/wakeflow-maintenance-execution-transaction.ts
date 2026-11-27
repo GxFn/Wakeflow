@@ -19,6 +19,7 @@ import {
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   assertWakeflowHostMaintenanceCapability,
@@ -233,9 +234,10 @@ function failIfWrittenByAnotherArtifact(
   );
 }
 
+/** 事务登记之后的中止带上操作标识：Agent 只凭它调用 recover，所以这里不让中止原样穿出。 */
 function assertNotAborted(
   signal: AbortSignal | undefined,
-  operationId: WakeflowMaintenanceOperationId | null = null,
+  operationId: WakeflowMaintenanceOperationId,
 ): void {
   if (signal?.aborted === true) fail("aborted", "$signal", operationId);
 }
@@ -367,9 +369,6 @@ async function currentConfigSnapshot(
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") {
-        fail("aborted", "$signal", operationId);
-      }
       fail("source-config", "$config", operationId);
     }
     throw error;
@@ -424,7 +423,6 @@ async function detachedConfigRecord(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", operationId);
       fail("source-config", "$detached", operationId);
     }
     throw error;
@@ -516,10 +514,8 @@ async function executeStep(
       );
       return receipt(step, executed.disposition, executed.observationDigest);
     } catch (error: unknown) {
+      if (error instanceof OperationAbortedError) fail("aborted", "$signal", context.operationId);
       if (error instanceof WakeflowStaticMaterializationStepExecutionError) {
-        if (error.reason === "aborted") {
-          fail("aborted", "$signal", context.operationId);
-        }
         fail("step", `$step:${stepId}`, context.operationId);
       }
       throw error;
@@ -632,9 +628,6 @@ function mapGateError(
   persistentTransaction: boolean = false,
 ): never {
   const exposedOperationId = persistentTransaction ? operationId : null;
-  if (error.reason === "aborted") {
-    fail("aborted", "$signal", exposedOperationId);
-  }
   if (error.reason === "stale-preview") {
     fail("plan-stale", "$plan", null);
   }
@@ -665,7 +658,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   const plan = parseWakeflowMaintenanceExecutionPlan(planValue);
   const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
   const signal = effectiveSignal(request.signal, options.signal);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const executionRequestValue = requestWithSignal(request, signal);
   assertRequestMatchesPlan(plan, request);
   if (plan.status !== "ready") fail("plan-blocked", "$plan");
@@ -675,7 +668,6 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
     rederived = await previewWakeflowMaintenanceExecution(root, executionRequestValue, capability);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", null);
       fail("plan-stale", "$plan", null);
     }
     throw error;
@@ -745,7 +737,6 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           );
         } catch (error: unknown) {
           if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
-            if (error.reason === "aborted") fail("aborted", "$signal", null);
             fail("plan-stale", "$plan", null);
           }
           throw error;
@@ -973,6 +964,8 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) throw error;
+    // 恢复总有操作标识：中止带上它，Agent 才能再调一次 recover。
+    if (error instanceof OperationAbortedError) fail("aborted", "$signal", operationId);
     if (error instanceof WakeflowMaintenanceGateError) {
       mapGateError(error, operationId, true);
     }

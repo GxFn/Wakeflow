@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
   type StableFileReadErrorReason,
   type StableFileReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectStableFileReadError(
@@ -304,16 +305,15 @@ test("an already-aborted signal stops before reading", async () => {
   const controller = new AbortController();
   controller.abort(new Error("private abort reason"));
   try {
-    const error = await expectStableFileReadError(
+    await rejects(
       () =>
         readStableFile(root, parsePortableResourcePath("file"), {
           maximumBytes: parseByteCount(1024),
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private abort reason"),
     );
-    equal(error.message.includes("private abort reason"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

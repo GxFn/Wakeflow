@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -14,6 +14,7 @@ import {
   type GitIgnoreObservationErrorReason,
   observeGitIgnorePaths,
 } from "../../../src/foundation/git/git-ignore-observation.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 interface GitFixture {
   readonly absolutePath: string;
@@ -216,10 +217,9 @@ test("Git ignore observation rejects invalid inputs, cancellation, and non-repos
     const current = await fixture(subtest);
     const controller = new AbortController();
     controller.abort();
-    await expectObservationError(
+    await rejects(
       () => observeGitIgnorePaths(current.root, probes("safe/path"), { signal: controller.signal }),
-      "aborted",
-      "$options.signal",
+      OperationAbortedError,
     );
   });
 

@@ -19,6 +19,7 @@ import { test } from "node:test";
 import { type Sha256Digest, Sha256Error } from "../../src/foundation/crypto/sha256.js";
 import { parseDurableAtomicFileStageFileName } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
 import type { UtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
@@ -221,8 +222,7 @@ test("hook 观察记录要求 recordedAt 恰好 3 位小数秒：其他精度写
   // 中止不被当作"读不出"吞掉。
   await rejects(
     readHostHookObservations(root, "claude-code", {}, { signal: AbortSignal.abort() }),
-    (error: unknown) =>
-      isWakeflowError(error) && error.code === "io-failure" && error.reason.endsWith("aborted"),
+    OperationAbortedError,
   );
 });
 

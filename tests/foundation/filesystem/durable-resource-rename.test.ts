@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   mkdirSync,
   mkdtempSync,
@@ -23,6 +23,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 async function expectRenameError(
   action: () => unknown | Promise<unknown>,
@@ -312,16 +313,15 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
 
     const controller = new AbortController();
     controller.abort("private-rename-reason");
-    const error = await expectRenameError(
+    await rejects(
       () =>
         renameResourceDurably(root, source, parsePortableResourcePath("destination"), {
           expectedSourceNode: expected.node,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-rename-reason"),
     );
-    equal(error.message.includes("private-rename-reason"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

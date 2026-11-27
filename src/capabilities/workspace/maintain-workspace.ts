@@ -50,6 +50,7 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import {
   isLocalFilesystemType,
   readFilesystemTypeName,
@@ -74,7 +75,7 @@ import {
   refreshLedgerReadingPagesAfterMaintenance,
 } from "../../governance/observation/active-projection-refresh.js";
 import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
-import { fail, isWakeflowError, WakeflowError } from "../../kernel/error.js";
+import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   type HostHookStageResidueEntry,
   listHostHookStageResidue,
@@ -557,13 +558,11 @@ function desiredConfigFor(
 
 function mapPreviewError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "input")
       fail("invalid-request", "preview-input", "$request", { cause: error });
     fail("precondition-failed", error.reason, "$request", { cause: error });
   }
   if (error instanceof WakeflowStaticMaterializationPreviewError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "root-scope")
       fail("root-invalid", "root-scope", "$request.root", { cause: error });
     if (error.reason === "inspection")
@@ -740,10 +739,7 @@ async function runningArtifactVersion(context: SliceContext): Promise<string | n
     );
     return parseWakeflowArtifactManifestIdentity(read.bytes).version;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      return null;
-    }
+    if (error instanceof StableFileReadError) return null;
     throw error;
   } finally {
     await rooted.close();
@@ -780,7 +776,6 @@ function blockedPlan(blockers: readonly string[]): Readonly<PublicationTransacti
 
 function mapCensusError(error: unknown): never {
   if (error instanceof WakeflowPrivateModeCensusError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "input")
       fail("unexpected", "private-mode-census", "$request.root", { cause: error });
     fail("io-failure", "private-mode-convergence", "$request.root", { cause: error });
@@ -858,10 +853,7 @@ async function hasRecoveryConfig(context: SliceContext): Promise<boolean> {
     // 缺失或不可用配置仍由原静态维护计划解释，不借恢复入口重建未知权威。
     await readWakeflowConfigAuthoritySnapshot(context.root, context.options);
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
-      return false;
-    }
+    if (error instanceof WakeflowConfigAuthoritySnapshotError) return false;
     throw error;
   }
   return true;
@@ -944,7 +936,6 @@ async function planGateResidue(
 
 function mapGateResidueError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceGateResidueError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "changed") {
       fail("precondition-failed", "plan-stale", "$request.planDigest", { cause: error });
     }
@@ -1007,7 +998,6 @@ async function planRuntimeRecovery(
       error instanceof DemandOperationAuthorityContextError ||
       error instanceof StableDirectoryReadError
     ) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
       return blockedPlan([`demand-recovery-${error.reason}`]);
     }
     throw error;
@@ -1081,7 +1071,6 @@ async function currentSnapshotOrNull(
     return await readWakeflowConfigAuthoritySnapshot(context.root, context.options);
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       // C7：版本不认识的配置单独点名。
       if (error.reason === "config-version" && error.schemaVersion !== null) {
         blockers?.push(`config-version-unsupported:${error.schemaVersion}`);
@@ -1135,17 +1124,10 @@ async function activeDemandDirectoryNames(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "not-found") return Object.freeze([]);
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       return "unavailable";
     }
     throw error;
   }
-}
-
-function reasonOf(error: unknown): string | null {
-  if (typeof error !== "object" || error === null) return null;
-  const reason = (error as { readonly reason?: unknown }).reason;
-  return typeof reason === "string" ? reason : null;
 }
 
 /**
@@ -1171,8 +1153,7 @@ async function demandOccupies(
         ))
     );
   } catch (error: unknown) {
-    if (isWakeflowError(error) && error.reason === "aborted") throw error;
-    if (reasonOf(error) === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error instanceof OperationAbortedError) throw error;
     return true;
   } finally {
     if (demandRoot !== null) await closeDemandOperationRoot(demandRoot);
@@ -1679,7 +1660,7 @@ async function refreshRequirementBoardIndexQuietly(context: SliceContext): Promi
     const language = (await currentSnapshotOrNull(context))?.model.presentation.language;
     await refreshRequirementBoardIndex(context.root, context.options.signal, language);
   } catch (error: unknown) {
-    if (!(error instanceof WakeflowError)) throw error;
+    if (!(error instanceof WakeflowError) && !(error instanceof OperationAbortedError)) throw error;
   }
 }
 

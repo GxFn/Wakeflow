@@ -32,7 +32,7 @@ async function inRepository<Result>(
   try {
     return await observe(root);
   } catch (error: unknown) {
-    if (!(error instanceof GitCommitObservationError) || error.reason === "aborted") throw error;
+    if (!(error instanceof GitCommitObservationError)) throw error;
     return null;
   } finally {
     try {

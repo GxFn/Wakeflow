@@ -7,6 +7,7 @@ import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snap
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import {
   inspectWakeflowWorkspaceGitignore,
@@ -15,7 +16,6 @@ import {
 } from "./wakeflow-gitignore-inspection.js";
 import {
   assertCurrentUserWakeflowGitignoreRecompositionRoot,
-  assertWakeflowGitignoreRecompositionNotAborted,
   assertWakeflowGitignoreRecompositionRoot,
   currentWakeflowGitignoreRecompositionUserId,
   failWakeflowGitignoreRecomposition as fail,
@@ -49,8 +49,8 @@ import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-
 
 /** 提交之前的检查失败：按检查错误的原因归类；不是检查错误的一律算观察失败。 */
 function failInspectionBeforeCommit(error: unknown): never {
+  if (error instanceof OperationAbortedError) throw error;
   if (error instanceof WakeflowGitignoreInspectionError) {
-    if (error.reason === "aborted") fail("aborted", "$signal", error);
     if (error.reason === "target-capacity") fail("capacity", "$target", error);
     if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
       fail("input", error.path, error);
@@ -82,7 +82,6 @@ async function inspectCurrent(
 
 function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
     error.reason === "target-exists" ||
@@ -135,6 +134,7 @@ async function publishTarget(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
     fail("effect-failure", "$resourcePath", error);
   }
@@ -199,7 +199,7 @@ async function recomposeUnderLock(
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowGitignoreRecompositionReceipt>> {
-  assertWakeflowGitignoreRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId);
   const before = await inspectCurrent(root, request, options.signal, false);
   if (before.status !== "recompose-required") {
@@ -210,7 +210,7 @@ async function recomposeUnderLock(
     });
   }
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId);
-  assertWakeflowGitignoreRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const effect = await publishTarget(root, before, options.signal);
   markCommitted();
   const after = await inspectCurrent(root, request, options.signal, true);
@@ -232,7 +232,7 @@ export async function recomposeWakeflowWorkspaceGitignore(
 ): Promise<Readonly<WakeflowGitignoreRecompositionReceipt>> {
   assertWakeflowGitignoreRecompositionRoot(rootValue);
   const options = parseWakeflowGitignoreRecompositionOptions(optionsValue);
-  assertWakeflowGitignoreRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
@@ -252,7 +252,11 @@ export async function recomposeWakeflowWorkspaceGitignore(
       wakeflowGitignoreRecompositionLockOptions(options),
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowGitignoreRecompositionError) throw error;
+    if (
+      error instanceof WakeflowGitignoreRecompositionError ||
+      error instanceof OperationAbortedError
+    )
+      throw error;
     if (error instanceof KernelFileLockError) {
       mapWakeflowGitignoreRecompositionLockError(error, committed);
     }

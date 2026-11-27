@@ -400,7 +400,6 @@ function mapBindingStoreError(error: unknown): never {
     if (error.reason === "recovery-required") {
       fail("recovery-required", "binding-store", "$request.windowId", { cause: error });
     }
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", `binding-${error.reason}`, "$request.windowId", { cause: error });
   }
   throw error;
@@ -414,7 +413,6 @@ async function readConfigSnapshot(
     return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       failWakeflowConfigAuthority(error);
     }
     throw error;

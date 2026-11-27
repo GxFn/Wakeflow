@@ -1,5 +1,6 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { currentUserIdOrNull } from "../node/current-user.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
@@ -38,8 +39,7 @@ export type PrivateModeConvergenceErrorReason =
   | "root-scope"
   | "resource-changed"
   | "resource-unsafe"
-  | "chmod-failure"
-  | "aborted";
+  | "chmod-failure";
 
 const ERROR_MESSAGES = {
   input: "Private mode convergence input is invalid.",
@@ -47,7 +47,6 @@ const ERROR_MESSAGES = {
   "resource-changed": "Private node no longer matches the observation it was planned from.",
   "resource-unsafe": "Private node is not a safe mode drift and is never converged.",
   "chmod-failure": "Private node mode could not be changed safely.",
-  aborted: "Private mode convergence was aborted.",
 } as const satisfies Readonly<Record<PrivateModeConvergenceErrorReason, string>>;
 
 export class PrivateModeConvergenceError extends Error {
@@ -213,7 +212,7 @@ export async function convergePrivateNodeMode(
 ): Promise<"converged" | "current"> {
   if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const errorPath = `$${resourcePath}`;
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const observed = await inspectPath(root, resourcePath, errorPath);
   const observedClass = classifyPrivateNode(observed.node);
   if (observedClass === "current") return "current";

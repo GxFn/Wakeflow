@@ -61,7 +61,6 @@ export type DurableFileCopyCandidateErrorReason =
   | "candidate-changed"
   | "durability-failure"
   | "cleanup-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -83,7 +82,6 @@ const ERROR_MESSAGES = {
   "candidate-changed": "Durable file copy candidate changed during verification.",
   "durability-failure": "Durable file copy candidate directory entry could not be synchronized.",
   "cleanup-failure": "Failed durable file copy candidate could not be retired exactly.",
-  aborted: "Durable file copy candidate was aborted before completion.",
   "close-failure": "Durable file copy candidate handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableFileCopyCandidateErrorReason, string>>;
 
@@ -263,12 +261,6 @@ export function parseDurableFileCopyOptions(
     mode: parseMode(record.mode),
     signal: record.signal as AbortSignal | undefined,
   });
-}
-
-export function assertDurableFileCopyNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) {
-    failDurableFileCopyCandidate("aborted", "$signal");
-  }
 }
 
 export function snapshotDurableFileCopyNode(

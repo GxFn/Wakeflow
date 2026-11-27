@@ -9,6 +9,7 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   LEDGER_ARCHIVES_ROOT_REF,
@@ -90,10 +91,6 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 async function inspectEntry(
   root: RootedDirectory,
   policy: Readonly<LedgerAuthorityLayoutEntryPolicy>,
@@ -140,7 +137,7 @@ export async function inspectLedgerAuthorityLayout(
   signal?: AbortSignal,
 ): Promise<Readonly<LedgerAuthorityLayoutInspection>> {
   assertRoot(rootValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   try {
     await rootValue.assertCurrent("$root");
   } catch (error: unknown) {
@@ -152,7 +149,7 @@ export async function inspectLedgerAuthorityLayout(
       LEDGER_AUTHORITY_LAYOUT_POLICIES.map((policy) => inspectEntry(rootValue, policy)),
     ),
   );
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   try {
     await rootValue.assertCurrent("$root");
   } catch (error: unknown) {
@@ -182,7 +179,7 @@ export async function materializeLedgerAuthorityLayout(
   signal?: AbortSignal,
 ): Promise<Readonly<LedgerAuthorityLayoutInspection>> {
   assertRoot(rootValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   try {
     for (const policy of LEDGER_AUTHORITY_LAYOUT_POLICIES) {
       await materializeDirectoryPath(rootValue, policy.resourcePath, {
@@ -192,7 +189,6 @@ export async function materializeLedgerAuthorityLayout(
     }
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("operation-failure", "$initialize", error);
     }
     throw error;

@@ -1,4 +1,4 @@
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { chmodSync, existsSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
@@ -10,6 +10,7 @@ import {
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import {
@@ -195,10 +196,9 @@ test("stage retirement removes the whole stage tree, and an aborted signal remov
   const { plan, files } = publication(requirementRecord("示例需求"));
   const stagePath = physical(rootPath, plan.stageRef);
   await createDirectoryTreeCandidateDurably(root, plan.stageRef, files, CANDIDATE_OPTIONS);
-  await expectStoreError(
+  await rejects(
     () => retireLedgerRecordPublicationStage(root, plan, ABORTED),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   equal(existsSync(stagePath), true);
   await retireLedgerRecordPublicationStage(root, plan, undefined);
@@ -219,10 +219,9 @@ test("stage publication commits the tree and exact loading proves it", async (t)
     files,
     CANDIDATE_OPTIONS,
   );
-  await expectStoreError(
+  await rejects(
     () => publishLedgerRecordStage(root, plan, candidate, ABORTED),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   await publishLedgerRecordStage(root, plan, candidate, undefined);
   equal(existsSync(stagePath), false);
@@ -237,7 +236,7 @@ test("stage publication commits the tree and exact loading proves it", async (t)
     loaded.documents.map((document) => document.digest),
     record.documents.map((document) => document.digest),
   );
-  await expectStoreError(() => load(ABORTED), "aborted", "$signal");
+  await rejects(() => load(ABORTED), OperationAbortedError);
 
   // The stage was renamed away: neither the stale candidate nor a fresh one may publish again.
   await expectStoreError(

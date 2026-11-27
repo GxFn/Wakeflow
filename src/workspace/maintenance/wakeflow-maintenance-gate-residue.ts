@@ -35,10 +35,9 @@ export interface WakeflowMaintenanceGateResidueRetirement {
   readonly stagesRetired: number;
 }
 
-export type WakeflowMaintenanceGateResidueErrorReason = "aborted" | "changed" | "unretired";
+export type WakeflowMaintenanceGateResidueErrorReason = "changed" | "unretired";
 
 const ERROR_MESSAGES = {
-  aborted: "Wakeflow maintenance gate residue retirement was aborted.",
   changed: "Wakeflow maintenance gate residue changed after it was observed.",
   unretired: "Wakeflow maintenance gate residue could not be retired.",
 } as const satisfies Readonly<Record<WakeflowMaintenanceGateResidueErrorReason, string>>;
@@ -71,7 +70,6 @@ async function observe(
     core = await inspectWakeflowWorkspaceCoreLayout(root, options);
   } catch (error: unknown) {
     if (!(error instanceof WakeflowWorkspaceCoreLayoutInspectionError)) throw error;
-    if (error.reason === "aborted") fail("aborted");
     // 读不出来不是证据：这份计划不出现，原有的预览照它自己的方式报告。
     return null;
   }
@@ -120,9 +118,7 @@ export async function retireWakeflowMaintenanceGateResidue(
     return Object.freeze({ stagesRetired: receipt.retiredStageCount });
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceGateResidueError) throw error;
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      fail(error.reason === "aborted" ? "aborted" : "unretired");
-    }
+    if (error instanceof DurableAtomicFileStageRecoveryError) fail("unretired");
     throw error;
   }
 }

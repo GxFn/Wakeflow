@@ -1,3 +1,4 @@
+import { throwIfAborted } from "../node/abort-signal.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
@@ -38,8 +39,7 @@ export type RootedDirectoryTreeRemovalErrorReason =
   | "inspection-failure"
   | "parent-open-failure"
   | "removal-failure"
-  | "durability-failure"
-  | "aborted";
+  | "durability-failure";
 
 const ERROR_MESSAGES = {
   input: "Rooted directory tree removal input is invalid.",
@@ -50,7 +50,6 @@ const ERROR_MESSAGES = {
   "removal-failure": "Rooted directory tree could not be removed.",
   "durability-failure":
     "Rooted directory tree was removed, but its parent could not be synchronized or closed.",
-  aborted: "Rooted directory tree removal was aborted.",
 } as const satisfies Readonly<Record<RootedDirectoryTreeRemovalErrorReason, string>>;
 
 export class RootedDirectoryTreeRemovalError extends Error {
@@ -79,10 +78,6 @@ interface ParsedRemovalOptions {
 
 function fail(reason: RootedDirectoryTreeRemovalErrorReason, path: string, cause?: unknown): never {
   throw new RootedDirectoryTreeRemovalError(reason, path, cause);
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function parseOptions(
@@ -146,7 +141,7 @@ export async function removeRootedDirectoryTree(
 ): Promise<"removed" | "absent"> {
   if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const options = parseOptions(optionsValue, errorPath);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   let snapshot: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     snapshot = await root.inspectExistingResource(resourcePath, errorPath);
@@ -158,7 +153,7 @@ export async function removeRootedDirectoryTree(
     fail("inspection-failure", errorPath, error);
   }
   if (snapshot.node.kind !== "directory") fail("not-directory", errorPath);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   // 删除之前绑定父目录句柄，删除之后经它同步一次，同步落在删除发生的那个目录上。
   const parent = await openRemovalParent(root, resourcePath, errorPath);
   let primaryError: RootedDirectoryTreeRemovalError | undefined;

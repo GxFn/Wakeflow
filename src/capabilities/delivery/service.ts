@@ -388,13 +388,11 @@ const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, 
     ],
     "idempotency-conflict": ["idempotency-mismatch", "request-digest", "$request.idempotencyKey"],
     "decision-rejected": ["precondition-failed", "decision-rejected", "$request"],
-    aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
   });
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "root") {
       fail("root-invalid", "demand-root", "$request.demandId", { cause: error });
     }
@@ -417,7 +415,6 @@ function mapHandlerError(error: unknown): never {
 
 function mapRepositoryError(error: unknown): never {
   if (error instanceof DemandEventSourcingRepositoryError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", "event-stream", "$request.demandId", { cause: error });
   }
   throw error;
@@ -610,7 +607,6 @@ async function findBinding(
     ).bindings;
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", "binding-store", "$request.targetTaskId", { cause: error });
     }
     throw error;
@@ -803,7 +799,6 @@ async function readSnapshotForNext(
     );
   } catch (error: unknown) {
     if (error instanceof DemandResultReviewSnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", "result-review-snapshot", "$request.demandId", { cause: error });
     }
     throw error;
@@ -1439,7 +1434,6 @@ async function loadSupplementRecord(
     );
   } catch (error: unknown) {
     if (!(error instanceof LedgerAuthorityStoreError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("precondition-failed", `requirement-record-${error.reason}`, "$ledger", { cause: error });
   }
   if (loaded.recordDigest !== lineage.recordDigest) {

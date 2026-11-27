@@ -12,6 +12,7 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import type { RequirementClaimStateSource } from "../../kernel/requirement-board.js";
 import { inspectWorkClaim } from "../../kernel/work-claims.js";
@@ -104,6 +105,8 @@ async function guarded<Outcome extends VerifyGateOutcome | null>(
   try {
     return await probe();
   } catch (error: unknown) {
+    // 中止不是门的失败：照常上抛，剩下的门也不再白跑。
+    if (error instanceof OperationAbortedError) throw error;
     const reason =
       typeof error === "object" &&
       error !== null &&
@@ -111,8 +114,6 @@ async function guarded<Outcome extends VerifyGateOutcome | null>(
       typeof error.reason === "string"
         ? error.reason
         : "error";
-    // 中止不是门的失败：照常上抛，剩下的门也不再白跑。
-    if (reason === "aborted") throw error;
     return gate(name, "unavailable", reason);
   }
 }
@@ -188,9 +189,7 @@ async function payloadFileMismatch(
       })
     ).bytes;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason !== "aborted") {
-      return `${evidenceId}:${file.ref}`;
-    }
+    if (error instanceof StableFileReadError) return `${evidenceId}:${file.ref}`;
     throw error;
   }
   const matches =

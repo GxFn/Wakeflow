@@ -146,14 +146,12 @@ export type DemandResultReviewSnapshotErrorReason =
   | "input"
   | "stream"
   | "relation"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
   input: "Demand Result Review Snapshot input is invalid.",
   stream: "Demand Result Review Snapshot event stream is invalid.",
   relation: "Demand Result Review Snapshot sources are inconsistent.",
-  aborted: "Demand Result Review Snapshot was aborted.",
   "operation-failure": "Demand Result Review Snapshot failed.",
 } as const satisfies Readonly<Record<DemandResultReviewSnapshotErrorReason, string>>;
 
@@ -528,7 +526,6 @@ export async function readDemandResultReviewSnapshot(
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRepositoryError) {
       if (error.reason === "input") fail("input");
-      if (error.reason === "aborted") fail("aborted");
       if (error.reason === "stream" || error.reason === "not-found") {
         fail("stream");
       }
@@ -564,7 +561,6 @@ export async function readArchivedDemandResultReviewSnapshot(
     sources = DemandEventSourcingRepository.auditTargetResultHistoryOfCommits(read.commits);
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) {
-      if (error.reason === "aborted") fail("aborted");
       if (error.reason === "input") fail("input");
       if (ARCHIVED_STREAM_FAILURES.has(error.reason)) fail("stream");
       fail("operation-failure", error);

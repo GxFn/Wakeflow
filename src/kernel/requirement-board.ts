@@ -181,19 +181,16 @@ function withClaimStateLock<Result>(
 /**
  * 索引的刷新（W29，R-ROOT-02）：一次刷新从列举到发布都在锁内，所以任何一次刷新看到的列举都不早于另一次
  * 正在发布的索引。等不到锁沿用索引争用的既有语义（可重试的 `board-index-contended`，调用方静默自愈，
- * 下次刷新补齐）；中止仍以 `-aborted` 结尾原样穿出。
+ * 下次刷新补齐）；中止原样穿出。
  */
 function withIndexLock<Result>(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
 ): Promise<Result> {
-  return withBoardLock(root, signal, operation, (error) => {
-    if (error.reason === "aborted") {
-      fail("io-failure", "board-index-lock-aborted", "$boardIndex", { cause: error });
-    }
-    fail("io-failure", "board-index-contended", "$boardIndex", { cause: error, retryable: true });
-  });
+  return withBoardLock(root, signal, operation, (error) =>
+    fail("io-failure", "board-index-contended", "$boardIndex", { cause: error, retryable: true }),
+  );
 }
 
 const validateState = createRuntimeJsonSchemaValidator<WakeflowRequirementClaimState>(

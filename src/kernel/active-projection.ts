@@ -42,6 +42,7 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../foundation/filesystem/strict-text-file.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
@@ -159,7 +160,7 @@ export async function inspectActiveLayout(
   options: Signal = {},
 ): Promise<Readonly<ActiveLayoutInspection>> {
   assertRoot(root);
-  if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(options.signal);
   const active = await inspectLayoutEntry(root, WAKEFLOW_ACTIVE_ROOT_REF);
   const current = await inspectLayoutEntry(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF);
   const status =
@@ -235,7 +236,6 @@ async function createLayoutDirectory(
     return created.node;
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
       fail("io-failure", `active-layout-${error.reason}`, errorPath, { cause: error });
     }
     throw error;
@@ -270,7 +270,7 @@ export async function materializeActiveLayout(
   options: Readonly<{ readonly recovering: boolean; readonly signal?: AbortSignal }>,
 ): Promise<Readonly<ActiveLayoutMaterializationResult>> {
   assertRoot(root);
-  if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(options.signal);
   const active = await ensureLayoutDirectory(
     root,
     WAKEFLOW_ACTIVE_ROOT_REF,
@@ -998,7 +998,6 @@ function unsafe(
 function classifyReadFailure(error: unknown): string | null {
   if (error instanceof StableFileReadError) {
     if (error.reason === "not-found") return null;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
     if (error.reason === "root-scope") {
       fail("io-failure", "projection-root-scope", "$root", { cause: error });
     }
@@ -1123,7 +1122,6 @@ export type ActiveProjectionRender =
   | (() => Promise<Readonly<ActiveProjectionRendering>>);
 
 function mapWriteError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
   if (
     error.reason === "target-exists" ||
     error.reason === "expectation-changed" ||
@@ -1151,7 +1149,6 @@ async function ensureProjectionDirectories(
       });
     } catch (error: unknown) {
       if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
         fail("io-failure", `projection-directory-${error.reason}`, `$projection/${directory}`, {
           cause: error,
         });
@@ -1211,7 +1208,6 @@ async function listDemandProjectionDirectories(
       return Object.freeze([]);
     }
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
       fail("io-failure", `projection-listing-${error.reason}`, "$projection", { cause: error });
     }
     throw error;
@@ -1239,9 +1235,7 @@ async function retirableMember(
       ? { resourcePath: entry.resourcePath, node: read.node }
       : null;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal");
-    }
+    if (error instanceof OperationAbortedError) throw error;
     return null;
   }
 }
@@ -1258,9 +1252,7 @@ async function retirableMembers(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal");
-    }
+    if (error instanceof OperationAbortedError) throw error;
     return null;
   }
   const members: RetirableMember[] = [];
@@ -1285,7 +1277,6 @@ async function unlinkMember(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
       fail("io-failure", `projection-retire-${error.reason}`, `$projection/${directory}`, {
         cause: error,
       });
@@ -1377,7 +1368,6 @@ async function settleDirectoryStages(
     }
   } catch (error: unknown) {
     if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
     fail("io-failure", "projection-stage", `$projection/${first}`, { cause: error });
   }
 }
@@ -1395,7 +1385,6 @@ async function settleStages(
 }
 
 function mapLockError(error: KernelFileLockError): never {
-  if (error.reason === "aborted") fail("io-failure", "aborted", "$signal");
   if (error.reason === "timeout") {
     fail("io-failure", "projection-contended", "$projection", { cause: error, retryable: true });
   }
@@ -1443,7 +1432,7 @@ export async function publishActiveProjection(
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
   assertRoot(root);
   const signal = options.signal;
-  if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(signal);
   let entered = false;
   try {
     return await withWorkspaceLock(

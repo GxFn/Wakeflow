@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -203,8 +204,7 @@ test("Post-acceptance route拒绝非RootedDirectory与预取消读取", async ()
       readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.request.demandId, {
         signal: abort.signal,
       }),
-      (error: unknown) =>
-        error instanceof DemandPostAcceptanceRouteError && error.reason === "aborted",
+      OperationAbortedError,
     );
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);

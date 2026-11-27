@@ -20,7 +20,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { WakeflowError } from "../../kernel/error.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters } from "../../kernel/workspace-locks.js";
 import {
   assertDemandOperationConfigCurrent,
@@ -337,7 +337,6 @@ function assertHealthyBaseline(
 }
 
 function mapContextError(error: DemandOperationAuthorityContextError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "config" || error.reason === "stale-config") {
     fail("config", error);
   }
@@ -345,7 +344,6 @@ function mapContextError(error: DemandOperationAuthorityContextError): never {
 }
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "transaction-exists") fail("recovery-required", error);
   if (error.reason === "recovery-required") {
     fail("recovery-required", error);
@@ -363,6 +361,7 @@ function settlementFailure(
   );
 }
 
+/** 中止也在这里带上发布效果的权威（unchanged / recoverable / current），调用方据此决定是否 recover。 */
 function contextualizeFailure(
   error: unknown,
   publicationAuthority: ManagedEvidencePublicationEffectAuthority,
@@ -370,7 +369,9 @@ function contextualizeFailure(
   const mapped =
     error instanceof ManagedEvidencePublicationTransactionSettlementError
       ? settlementFailure(error)
-      : error;
+      : error instanceof OperationAbortedError
+        ? new ManagedEvidencePublicationApplicationServiceError("aborted", null, error.reason)
+        : error;
   if (mapped instanceof ManagedEvidencePublicationApplicationServiceError) {
     return new ManagedEvidencePublicationApplicationServiceError(
       mapped.reason,
@@ -417,7 +418,6 @@ async function openSourceRoot(
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) {
       fail("source-root", error);
     }
-    if (error instanceof WakeflowError && error.reason === "aborted") fail("aborted", error);
     throw error;
   }
 }
@@ -446,7 +446,6 @@ async function materializeStage(
     );
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationStageMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", error);
       if (error.reason === "recovery-required") {
         fail("recovery-required", error);
       }
@@ -467,7 +466,6 @@ async function readConfig(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("config", error);
     }
     throw error;
@@ -665,7 +663,7 @@ export class ManagedEvidencePublicationApplicationService {
           failure =
             error instanceof DemandOperationAuthorityContextError
               ? new ManagedEvidencePublicationApplicationServiceError(
-                  error.reason === "aborted" ? "aborted" : "demand",
+                  "demand",
                   error.code,
                   error.reason,
                   publicationAuthority,

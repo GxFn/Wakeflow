@@ -259,7 +259,6 @@ async function readSnapshot(
     return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       failWakeflowConfigAuthority(error);
     }
     throw error;
@@ -315,7 +314,6 @@ async function loadHostBindings(
     ).bindings;
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", "binding-store", "$request.root", { cause: error });
     }
     if (error instanceof RootedDirectoryError) {
@@ -526,7 +524,6 @@ async function planPod(
 
 function mapReplacementError(error: unknown): never {
   if (error instanceof WakeflowConfigAuthorityReplacementError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "conflict" || error.reason === "lock-timeout") {
       fail("concurrency-conflict", `config-${error.reason}`, "$request.root", {
         cause: error,
@@ -586,10 +583,7 @@ async function retireProjectionsQuietly(
         ...signalOptions(context.options.signal),
       });
     } catch (error: unknown) {
-      if (error instanceof WakeflowWindowRuntimeProjectionError) {
-        if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-        continue;
-      }
+      if (error instanceof WakeflowWindowRuntimeProjectionError) continue;
       throw error;
     }
   }
@@ -607,10 +601,7 @@ async function refreshWindowProjectionsQuietly(context: PodSliceContext): Promis
       ...signalOptions(context.options.signal),
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowRuntimeProjectionError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
-      return;
-    }
+    if (error instanceof WakeflowWindowRuntimeProjectionError) return;
     throw error;
   }
 }

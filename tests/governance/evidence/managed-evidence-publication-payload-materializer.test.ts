@@ -19,6 +19,7 @@ import {
   inspectDirectoryTreeCandidateProgress,
 } from "../../../src/foundation/filesystem/durable-directory-tree-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
@@ -416,7 +417,7 @@ test("an already aborted signal fails before any filesystem effect", async (t) =
   const controller = new AbortController();
   controller.abort();
   const aborted = materialize(harness, transaction, plan, { signal: controller.signal });
-  await expectFailure(aborted, "aborted", "$signal");
+  await rejects(aborted, OperationAbortedError);
   equal(existsSync(payloadPath(harness, plan)), false);
 });
 

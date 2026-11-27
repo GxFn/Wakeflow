@@ -98,7 +98,6 @@ export type DurableAtomicFileWriteErrorReason =
   | "durability-failure"
   | "stage-cleanup-failure"
   | "stage-recovery-required"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -124,7 +123,6 @@ const ERROR_MESSAGES = {
   "durability-failure": "Published atomic file directory entry could not be synchronized.",
   "stage-cleanup-failure": "Private atomic file stage could not be retired safely.",
   "stage-recovery-required": "Private atomic file stage recovery requires explicit intervention.",
-  aborted: "Durable atomic file write was aborted before publication.",
   "close-failure": "An atomic file write handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableAtomicFileWriteErrorReason, string>>;
 
@@ -172,12 +170,6 @@ export function failDurableAtomicFileWrite(
   cause?: unknown,
 ): never {
   throw new DurableAtomicFileWriteError(reason, path, cause === undefined ? undefined : { cause });
-}
-
-export function assertDurableAtomicFileNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) {
-    failDurableAtomicFileWrite("aborted", "$signal");
-  }
 }
 
 export function assertDurableAtomicFileRoot(value: unknown): asserts value is RootedDirectory {

@@ -148,7 +148,6 @@ export async function loadPackage(
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `ledger-${error.reason}`, "$ledger", { cause: error });
     }
     throw error;
@@ -344,9 +343,6 @@ async function planCreate(
 function mapPublicationError(error: unknown): never {
   if (error instanceof DemandEventSourcingPublicationServiceError) {
     switch (error.reason) {
-      case "aborted":
-        fail("io-failure", "aborted", "$signal", { cause: error });
-        break;
       case "cas-mismatch":
       case "lock-timeout":
         fail("concurrency-conflict", `publication-${error.reason}`, "$board", {

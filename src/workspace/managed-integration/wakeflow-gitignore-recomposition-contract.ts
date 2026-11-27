@@ -84,7 +84,6 @@ export type WakeflowGitignoreRecompositionErrorReason =
   | "lock-timeout"
   | "lock-unsafe"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -101,7 +100,6 @@ const ERROR_MESSAGES = {
   "lock-timeout": "Wakeflow Gitignore recomposition lock acquisition timed out.",
   "lock-unsafe": "Wakeflow Gitignore recomposition lock is unsafe.",
   "recovery-required": "Wakeflow Gitignore recomposition requires explicit recovery.",
-  aborted: "Wakeflow Gitignore recomposition was aborted before commit.",
   "effect-failure": "Wakeflow Gitignore candidate could not be published safely.",
   "commit-uncertain": "Published Wakeflow Gitignore could not be proven exact.",
 } as const satisfies Readonly<Record<WakeflowGitignoreRecompositionErrorReason, string>>;
@@ -294,14 +292,6 @@ export function parseWakeflowGitignoreRecompositionOptions(
   });
 }
 
-export function assertWakeflowGitignoreRecompositionNotAborted(
-  signal: AbortSignal | undefined,
-): void {
-  if (signal?.aborted === true) {
-    failWakeflowGitignoreRecomposition("aborted", "$signal");
-  }
-}
-
 export function currentWakeflowGitignoreRecompositionUserId(): bigint {
   return requireCurrentUserId(() =>
     failWakeflowGitignoreRecomposition("unsupported-platform", "$root"),
@@ -360,9 +350,6 @@ export function mapWakeflowGitignoreRecompositionLockError(
   }
   if (error.reason === "input") {
     failWakeflowGitignoreRecomposition("input", error.path);
-  }
-  if (error.reason === "aborted") {
-    failWakeflowGitignoreRecomposition("aborted", "$signal");
   }
   if (error.reason === "timeout") {
     failWakeflowGitignoreRecomposition("lock-timeout", "$lock");

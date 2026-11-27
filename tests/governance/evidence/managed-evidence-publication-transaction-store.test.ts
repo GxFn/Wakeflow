@@ -6,6 +6,7 @@ import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   createManagedEvidencePublicationTransaction,
   renderManagedEvidencePublicationTransaction,
@@ -146,11 +147,11 @@ test("Transaction Store拒绝错误节点策略并在预取消时保持absent", 
 
     const controller = new AbortController();
     controller.abort();
-    await expectStoreError(
+    await rejects(
       createManagedEvidencePublicationTransactionJournal(fixture.root, transaction, {
         signal: controller.signal,
       }),
-      "aborted",
+      OperationAbortedError,
     );
     equal(existsSync(fixture.journalPath), false);
   } finally {

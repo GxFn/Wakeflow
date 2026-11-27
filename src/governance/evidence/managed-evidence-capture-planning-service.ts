@@ -34,6 +34,7 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
@@ -87,10 +88,7 @@ import {
   parseManagedEvidenceSourceSelection,
 } from "./managed-evidence-source-selection.js";
 import { ownString } from "../../foundation/data/own-string.js";
-import {
-  type GitCommitObservation,
-  GitCommitObservationError,
-} from "../../foundation/git/git-commit-observation.js";
+import type { GitCommitObservation } from "../../foundation/git/git-commit-observation.js";
 
 /**
  * Wakeflow Governance / Evidence：证据来源的零写捕获规划（切片 8 D1 到 D3）。
@@ -147,7 +145,6 @@ export type ManagedEvidenceCapturePlanningServiceErrorReason =
   | "identity"
   | "time"
   | "manifest"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -163,7 +160,6 @@ const ERROR_MESSAGES = {
   identity: "Managed evidence capture planning identity derivation failed.",
   time: "Managed evidence capture planning capture time failed.",
   manifest: "Managed evidence capture planning manifest is invalid.",
-  aborted: "Managed evidence capture planning was aborted.",
   "operation-failure": "Managed evidence capture planning failed.",
 } as const satisfies Readonly<Record<ManagedEvidenceCapturePlanningServiceErrorReason, string>>;
 
@@ -240,10 +236,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted");
-}
-
 function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
   try {
     return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
@@ -275,7 +267,6 @@ function parseSelection(value: unknown): Readonly<ManagedEvidenceSourceSelection
 function rethrowPlanningError(error: unknown): never {
   if (error instanceof ManagedEvidenceCapturePlanningServiceError) throw error;
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("aborted", error);
     if (error.reason === "config" || error.reason === "stale-config") fail("config", error);
     fail("demand", error);
   }
@@ -294,7 +285,7 @@ async function readKernelSource<T>(
     return await read();
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted" || signal?.aborted === true) fail("aborted", error);
+      if (signal?.aborted === true) throw new OperationAbortedError({ cause: error });
       fail("source", error);
     }
     throw error;
@@ -302,7 +293,6 @@ async function readKernelSource<T>(
 }
 
 function mapStableFileError(error: StableFileReadError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "too-large") fail("capacity", error);
   if (error.reason === "source-changed" || error.reason === "expectation-changed") {
     fail("source-changed", error);
@@ -312,7 +302,6 @@ function mapStableFileError(error: StableFileReadError): never {
 }
 
 function mapArtifactError(error: LoadedArtifactTreeIdentityError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   if (
     error.reason === "entry-limit" ||
     error.reason === "depth-limit" ||
@@ -603,7 +592,6 @@ async function captureManagedPath(
     );
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) fail("source-root", error);
-    if (error instanceof WakeflowError && error.reason === "aborted") fail("aborted", error);
     throw error;
   }
   let result: Readonly<CapturedSource> | undefined;
@@ -667,7 +655,6 @@ async function observeCommit(
     return await observeConfiguredRepositoryCommit(config, source, signal);
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceConfiguredSourceRootError) fail("source-root", error);
-    if (error instanceof GitCommitObservationError) fail("aborted", error);
     throw error;
   }
 }
@@ -794,12 +781,10 @@ async function assertAuthorityCurrent(
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceCapturePlanningServiceError) throw error;
     if (error instanceof DemandOperationAuthorityContextError) {
-      if (error.reason === "aborted") fail("aborted", error);
       if (error.reason === "stale-config") fail("config", error);
       fail("demand", error);
     }
     if (error instanceof DemandEventSourcingRootAuthorityError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("demand", error);
     }
     throw error;
@@ -889,7 +874,7 @@ export class ManagedEvidenceCapturePlanningService {
     optionsValue: ManagedEvidenceCapturePlanningOptions = {},
   ): Promise<ManagedEvidenceCapturePreview> {
     const options = parseOptions(optionsValue);
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     const demandId = parseDemandId(demandIdValue);
     const selection = parseSelection(selectionValue);
     let context: Readonly<DemandOperationAuthorityContext> | undefined;

@@ -15,7 +15,7 @@ import {
   StrictTextFileError,
   type StrictTextFileResult,
 } from "../../foundation/filesystem/strict-text-file.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { OperationAbortedError, signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
@@ -188,7 +188,6 @@ async function readPageOrNull(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `reading-page-read-${error.reason}`, "$ledger", { cause: error });
     }
     if (error instanceof StrictTextFileError) {
@@ -212,7 +211,6 @@ async function settleStage(
     );
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", "reading-page-stage", "$ledger", { cause: error });
     }
     throw error;
@@ -251,7 +249,6 @@ async function publishPage(
     }
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `reading-page-write-${error.reason}`, "$ledger", { cause: error });
     }
     throw error;
@@ -269,10 +266,6 @@ function isWriteRace(error: unknown): boolean {
   );
 }
 
-function isAborted(error: unknown): boolean {
-  return error instanceof WakeflowError && error.reason === "aborted";
-}
-
 /** 归档里的评审历史；读不出为 null（页面照样渲染，只说明这一部分读不出）。中止上抛。 */
 async function readHistoryOrNull(
   ledgerRoot: RootedDirectory,
@@ -287,12 +280,12 @@ async function readHistoryOrNull(
       demandArchiveResultAccountsOf(events),
     );
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     const reason =
       typeof error === "object" && error !== null
         ? (error as { readonly reason?: unknown }).reason
         : undefined;
     if (typeof reason !== "string") throw error;
-    if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     return null;
   }
 }
@@ -348,7 +341,7 @@ async function locateCandidates(
         pageRef: demandArchivePageRef(summary.archiveRef),
       });
     } catch (error: unknown) {
-      if (!(error instanceof WakeflowError) || isAborted(error)) throw error;
+      if (!(error instanceof WakeflowError)) throw error;
       unreadable += 1;
     }
   }
@@ -411,9 +404,7 @@ async function ensurePageQuietly(
     return await ensurePage(ledgerRoot, candidate, options, budget);
   } catch (error: unknown) {
     // 一页渲染或写入失败不拖累别的页与索引；中止与编程错误照常上抛。
-    if (!(error instanceof WakeflowError) || isAborted(error) || error.code === "unexpected") {
-      throw error;
-    }
+    if (!(error instanceof WakeflowError) || error.code === "unexpected") throw error;
     return false;
   }
 }
@@ -505,6 +496,7 @@ export async function refreshLedgerReadingPagesQuietly(
   try {
     return await refreshLedgerReadingPages(ledgerRoot, options);
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) return null;
     if (!(error instanceof WakeflowError) || error.code === "unexpected") throw error;
     return null;
   }

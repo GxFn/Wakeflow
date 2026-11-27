@@ -20,6 +20,7 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { publishWakeflowConfigAuthority } from "../../../src/configuration/wakeflow-config-authority-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -29,10 +30,7 @@ import {
   publishRequirementBoardIndex,
 } from "../../../src/kernel/requirement-board.js";
 import { materializeWakeflowHostCapabilityLayout } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
-import {
-  previewWakeflowStaticMaterialization,
-  WakeflowStaticMaterializationPreviewError,
-} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
+import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
 import { recomposeWakeflowManagedBlockFile } from "../../../src/workspace/managed-integration/wakeflow-managed-block-file.js";
 import { recomposeWakeflowProgramInstruction } from "../../../src/workspace/managed-integration/wakeflow-program-instruction-recomposition.js";
@@ -276,8 +274,7 @@ test("static preview preserves cancellation as an operation outcome", async (t) 
       ...request("fresh-initialize", desiredConfig()),
       signal: controller.signal,
     }),
-    (error: unknown) =>
-      error instanceof WakeflowStaticMaterializationPreviewError && error.reason === "aborted",
+    OperationAbortedError,
   );
 });
 

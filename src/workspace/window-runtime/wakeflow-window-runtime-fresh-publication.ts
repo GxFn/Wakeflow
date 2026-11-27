@@ -37,6 +37,7 @@ import {
   readStrictTextFile,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -101,7 +102,6 @@ type WakeflowFreshWindowRuntimePublicationErrorReason =
   | "capacity"
   | "recovery-required"
   | "root-scope"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -112,7 +112,6 @@ const ERROR_MESSAGES = {
   capacity: "Fresh Window Runtime projection exceeds its byte budget.",
   "recovery-required": "Fresh Window Runtime projection stage requires recovery.",
   "root-scope": "Fresh Window Runtime publication lost workspace scope.",
-  aborted: "Fresh Window Runtime publication was aborted.",
   "operation-failure": "Fresh Window Runtime publication failed.",
 } as const satisfies Readonly<Record<WakeflowFreshWindowRuntimePublicationErrorReason, string>>;
 
@@ -255,7 +254,6 @@ async function ensureDirectory(
         });
       } catch (createError: unknown) {
         if (createError instanceof DurableDirectoryMaterializationError) {
-          if (createError.reason === "aborted") fail("aborted", "$signal", createError);
           fail("operation-failure", `$layout/${resourcePath}`, error);
         }
         throw createError;
@@ -283,7 +281,6 @@ async function readPrivateDirectory(
   } catch (error: unknown) {
     if (error instanceof WakeflowFreshWindowRuntimePublicationError) throw error;
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("prefix-conflict", `$inventory/${resourcePath}`, error);
     }
@@ -340,7 +337,6 @@ async function recoverProjectionStages(
   } catch (error: unknown) {
     if (error instanceof WakeflowFreshWindowRuntimePublicationError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("prefix-conflict", "$projectionStages", error);
     }
@@ -405,7 +401,6 @@ async function inspectProjectionInventory(
         fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`, error);
       }
       if (error instanceof StableFileReadError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         if (error.reason === "root-scope") fail("root-scope", "$root", error);
         fail("prefix-conflict", `$projectionInventory/${directoryEntry.name}`, error);
       }
@@ -440,7 +435,6 @@ async function createMissingProjections(
       created += 1;
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileWriteError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         if (error.reason === "capacity") fail("capacity", "$projectionWrite", error);
         if (error.reason === "root-scope") fail("root-scope", "$root", error);
         if (
@@ -476,7 +470,7 @@ export async function publishFreshWakeflowWindowRuntime(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   let authority: Readonly<WakeflowFreshWindowRuntimeAuthority>;
   try {
     authority = compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue);

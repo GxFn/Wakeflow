@@ -9,12 +9,12 @@ import { materializeDirectoryPath } from "../../../src/foundation/filesystem/dur
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWindowHostIdentityProfile } from "../../../src/hosts/claude-code/claude-code-window-host-identity-profile.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
   createWakeflowWindowHostBindingInStore,
   WakeflowWindowHostBindingStoreError,
@@ -234,7 +234,7 @@ test("window runtime projection publish reports an abort as aborted, not as a re
   } catch (error: unknown) {
     caught = error;
   }
-  equal(isWakeflowError(caught) && caught.reason, "aborted");
+  equal(caught instanceof OperationAbortedError, true);
 });
 
 test("window runtime projection refresh keeps unavailable-root errors at the projection boundary", async (t) => {

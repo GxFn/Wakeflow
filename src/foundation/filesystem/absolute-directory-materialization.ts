@@ -13,7 +13,7 @@ import {
 import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的持久化逐级物化。
@@ -54,7 +54,6 @@ export type AbsoluteDirectoryMaterializationErrorReason =
   | "root-open"
   | "materialization"
   | "path-changed"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -66,7 +65,6 @@ const ERROR_MESSAGES = {
   "root-open": "Absolute directory materialization root could not be opened.",
   materialization: "Absolute directory path could not be materialized safely.",
   "path-changed": "Absolute directory path changed during materialization.",
-  aborted: "Absolute directory materialization was aborted.",
   "close-failure": "Absolute directory materialization root could not be closed safely.",
 } as const satisfies Readonly<Record<AbsoluteDirectoryMaterializationErrorReason, string>>;
 
@@ -130,10 +128,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 async function inspect(value: unknown, path: string) {
   try {
     return await inspectAbsoluteDirectoryPlacement(value, path);
@@ -170,7 +164,6 @@ function relativeResourcePath(ancestor: string, target: string) {
 
 function mapMaterializationError(error: DurableDirectoryMaterializationError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-symlink" || error.reason === "parent-symlink") {
     fail("symlink", "$absolutePath");
   }
@@ -237,7 +230,7 @@ export async function materializeAbsoluteDirectoryPlacement(
   optionsValue: AbsoluteDirectoryMaterializationOptions,
 ): Promise<Readonly<AbsoluteDirectoryMaterializationResult>> {
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const initial = await inspect(value, "$absolutePath");
   const absolutePath = initial.absolutePath;
   if (initial.state === "present") {
@@ -265,7 +258,7 @@ export async function materializeAbsoluteDirectoryPlacement(
   const ancestor = nearestAncestor.absolutePath;
   // 先证明相对路径可移植，再打开句柄，避免 input 失败泄漏 root。
   const resourcePath = relativeResourcePath(ancestor, absolutePath);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const materialized = await materializeUnderAncestor(ancestor, resourcePath, options);
 
   const final = await inspect(absolutePath, "$absolutePath");

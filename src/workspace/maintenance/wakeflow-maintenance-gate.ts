@@ -15,6 +15,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { materializeWorkspaceLocksRoot, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { retireWakeflowFileLockResidue } from "./wakeflow-file-lock-residue.js";
@@ -75,7 +76,6 @@ export type WakeflowMaintenanceGateErrorReason =
   | "bootstrap-conflict"
   | "busy"
   | "recovery-required"
-  | "aborted"
   | "effect-failure";
 
 const ERROR_MESSAGES = {
@@ -84,7 +84,6 @@ const ERROR_MESSAGES = {
   "bootstrap-conflict": "Wakeflow maintenance bootstrap prefix is unsafe.",
   busy: "Another Wakeflow maintenance operation holds the gate.",
   "recovery-required": "Wakeflow maintenance gate requires explicit recovery.",
-  aborted: "Wakeflow maintenance gate acquisition was aborted.",
   "effect-failure": "Wakeflow maintenance gate could not be established safely.",
 } as const satisfies Readonly<Record<WakeflowMaintenanceGateErrorReason, string>>;
 
@@ -256,7 +255,6 @@ async function materialize(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("effect-failure", "$bootstrap", error);
     }
     if (error instanceof KernelFileLockError) fail("effect-failure", "$bootstrap", error);
@@ -265,7 +263,6 @@ async function materialize(
 }
 
 function mapLockError(error: KernelFileLockError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal", error);
   if (error.reason === "timeout") fail("busy", "$gate", error);
   if (error.reason === "input") fail("input", error.path, error);
   if (error.reason === "unsafe-lock" || error.reason === "parent") {
@@ -448,7 +445,6 @@ async function admitLockedCoreInspection(
     after = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("bootstrap-conflict", "$bootstrap", error);
     }
     throw error;
@@ -483,7 +479,7 @@ export async function withWakeflowMaintenanceGate<Result>(
   assertRoot(rootValue);
   assertOperation<Result>(operationValue);
   const options = parseOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const operationId = options.operationId ?? createOperationId(options.uuidFactory);
   let inspection: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   try {
@@ -493,7 +489,6 @@ export async function withWakeflowMaintenanceGate<Result>(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("bootstrap-conflict", "$bootstrap", error);
     }
     throw error;

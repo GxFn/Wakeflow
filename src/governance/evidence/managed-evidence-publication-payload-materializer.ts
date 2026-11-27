@@ -32,6 +32,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   type ManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionError,
@@ -68,7 +69,6 @@ export type ManagedEvidencePublicationPayloadMaterializationErrorReason =
   | "destination-root-scope"
   | "stage-conflict"
   | "capacity"
-  | "aborted"
   | "recovery-required"
   | "operation-failure";
 
@@ -79,7 +79,6 @@ const ERROR_MESSAGES = {
   "destination-root-scope": "Managed evidence publication payload escaped its Demand root.",
   "stage-conflict": "Managed evidence publication payload conflicts with its stage plan.",
   capacity: "Managed evidence publication payload exceeds its admitted capacity.",
-  aborted: "Managed evidence publication payload materialization was aborted.",
   "recovery-required":
     "Managed evidence publication payload materialization requires explicit recovery.",
   "operation-failure": "Managed evidence publication payload could not be materialized safely.",
@@ -227,7 +226,6 @@ function assertProgressRelation(
 }
 
 function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") fail("stage-conflict", "$payload");
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("destination-root-scope", "$demandRoot");
@@ -273,7 +271,6 @@ async function ensurePayloadRoot(
 }
 
 function mapCopyError(error: DurableFileCopyCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
     fail("source-root-scope", "$sourceRoot");
@@ -349,7 +346,6 @@ async function materializeFilePayload(
 }
 
 function mapProjectionWriteError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$payload");
   if (error.reason === "root-scope") fail("destination-root-scope", "$demandRoot");
   if (error.reason === "target-exists") fail("stage-conflict", "$payload");
@@ -460,7 +456,6 @@ async function openTreeSource(
 }
 
 function mapTransferError(error: LoadedArtifactTreeTransferCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
     fail("source-root-scope", "$sourceRoot");
@@ -547,7 +542,7 @@ export async function materializeManagedEvidencePublicationPayload(
 ): Promise<readonly PortableResourcePath[]> {
   assertRoot(demandRootValue, "$demandRoot");
   const options = parseOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const transaction = parseTransaction(transactionValue);
   const plan = parseRecordPlan(planValue);
   assertPlanRelation(transaction, plan);

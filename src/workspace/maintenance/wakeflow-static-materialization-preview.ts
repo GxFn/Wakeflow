@@ -28,6 +28,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { LEDGER_AUTHORITY_LAYOUT_DIGEST } from "../../governance/ledger/ledger-authority-layout.js";
 import {
   LedgerAuthorityStore,
@@ -162,10 +163,6 @@ export interface WakeflowStaticMaterializationPreviewOptions {
   readonly gateContext?: Readonly<WakeflowMaintenanceGateContext>;
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 async function configResourceExists(root: RootedDirectory): Promise<boolean> {
   try {
     await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
@@ -192,7 +189,6 @@ async function currentSnapshot(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       // 配置在、只是版本不是本制品读的那一版（open-items C7）：在"读不出"之外单独点名，带上文件里的版本。
       if (error.reason === "config-version" && error.schemaVersion !== null) {
         blockers?.add(`config-version-unsupported:${error.schemaVersion}`);
@@ -426,7 +422,7 @@ async function inspectLedgerParticipant(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const placement = ledgerPlacement(report);
   if (placement === null) {
     addBlocker(blockers, "ledger-placement-unavailable");
@@ -483,7 +479,6 @@ async function inspectLedgerParticipant(
     }
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       addBlocker(blockers, `ledger-layout-${error.reason}`);
     } else {
       throw error;
@@ -545,7 +540,6 @@ async function inspectSupportGitignore(
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedBlockFileError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       addBlocker(blockers, `support-gitignore-${error.reason}`);
     } else {
       throw error;
@@ -578,7 +572,7 @@ async function inspectSupportMemories(
   const catalog = createWakeflowManagedSupportResourceCatalog(desired, request.currentHostProfile);
   const supportIgnore = createWakeflowSupportGitignoreBodyAuthority(request.hostProfiles);
   for (const surface of desired.topology.supportSurfaces) {
-    assertNotAborted(request.signal);
+    throwIfAborted(request.signal);
     if (surface.ownership !== "wakeflow-managed") continue;
     const placement = placementFor(report, surface.surfaceId);
     if (placement === null) {
@@ -643,7 +637,6 @@ async function inspectSupportMemories(
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowManagedSupportRootMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         addBlocker(blockers, "support-root-unavailable");
         continue;
       }
@@ -729,7 +722,7 @@ async function inspectSupportMemories(
         );
       }
       for (const peer of peerHostProfiles(request)) {
-        assertNotAborted(request.signal);
+        throwIfAborted(request.signal);
         try {
           const peerCatalog = createWakeflowManagedSupportResourceCatalog(desired, peer);
           const peerMemory = await inspectWakeflowSupportMemory(root, supportRoot, {
@@ -761,7 +754,6 @@ async function inspectSupportMemories(
           }
         } catch (error: unknown) {
           if (error instanceof WakeflowSupportMemoryInspectionError) {
-            if (error.reason === "aborted") fail("aborted", "$signal", error);
             addBlocker(blockers, `peer-support-memory-${error.reason}`);
           } else {
             throw error;
@@ -781,7 +773,6 @@ async function inspectSupportMemories(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowSupportMemoryInspectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         addBlocker(blockers, `support-memory-${error.reason}`);
       } else {
         throw error;
@@ -806,7 +797,7 @@ async function inspectExternalInstructions(
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
   for (const target of listWakeflowExternalInstructionTargets(desired)) {
-    assertNotAborted(request.signal);
+    throwIfAborted(request.signal);
     const placement =
       report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ??
       null;
@@ -853,7 +844,7 @@ async function inspectExternalInstructions(
         );
       }
       for (const peer of peerHostProfiles(request)) {
-        assertNotAborted(request.signal);
+        throwIfAborted(request.signal);
         try {
           const peerInspected = await inspectWakeflowExternalInstruction(externalRoot, {
             profile: peer,
@@ -884,7 +875,6 @@ async function inspectExternalInstructions(
           }
         } catch (error: unknown) {
           if (error instanceof WakeflowExternalInstructionInspectionError) {
-            if (error.reason === "aborted") fail("aborted", "$signal", error);
             addBlocker(blockers, `peer-external-instruction-${error.reason}`);
           } else {
             throw error;
@@ -893,7 +883,6 @@ async function inspectExternalInstructions(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowExternalInstructionInspectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         addBlocker(blockers, `external-instruction-${error.reason}`);
       } else {
         throw error;
@@ -928,7 +917,7 @@ async function planRequirementBoardRepair(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   if (blockers.has("active-layout-unavailable")) return;
   if (!(await requirementBoardRootAbsent(root))) return;
   steps.push(
@@ -972,7 +961,7 @@ async function planHostCapabilityLayoutRepair(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   let authorityDigest: Sha256Digest;
   try {
     const authority = compileWakeflowHostCapabilityLayoutAuthority(request.currentHostProfile);
@@ -994,7 +983,6 @@ async function planHostCapabilityLayoutRepair(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       addBlocker(blockers, `host-capability-layout-${error.reason}`);
       return;
     }
@@ -1050,7 +1038,7 @@ function planFreshActiveWorkspaceProjection(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): void {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   // 只有 fresh 初始化写投影；之后的投影由观察切片按 Demand 与 pod 变更重算（§13.94 D5），
   // reconfigure 与 reconcile 的 apply 结束后由工作区切片触发一次刷新，preview 不再检查它。
   if (request.action !== "fresh-initialize") return;
@@ -1108,7 +1096,6 @@ async function previewCoreInspection(
       );
     } catch (error: unknown) {
       if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("inspection", "$coreLayout", error);
       }
       throw error;
@@ -1393,7 +1380,6 @@ async function planGitignoreRecomposition(working: Readonly<PreviewWorkingSet>):
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       addBlocker(blockers, `gitignore-${error.reason}`);
     } else {
       throw error;
@@ -1433,7 +1419,6 @@ async function planProgramInstructionRecomposition(
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       addBlocker(blockers, `program-instruction-${error.reason}`);
     } else {
       throw error;
@@ -1448,7 +1433,7 @@ async function planPeerProgramInstructionRecompositions(
 ): Promise<void> {
   const { rootValue, request, current, blockers, steps } = working;
   for (const peer of peerHostProfiles(request)) {
-    assertNotAborted(request.signal);
+    throwIfAborted(request.signal);
     try {
       const peerMatrix = createWakeflowWorkspaceStaticResourceMatrix(peer);
       const peerProgram = await inspectWakeflowProgramInstruction(rootValue, {
@@ -1479,7 +1464,6 @@ async function planPeerProgramInstructionRecompositions(
       }
     } catch (error: unknown) {
       if (error instanceof WakeflowProgramInstructionInspectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         addBlocker(blockers, `peer-program-instruction-${error.reason}`);
       } else {
         throw error;
@@ -1573,13 +1557,13 @@ export async function previewWakeflowStaticMaterialization(
   ) {
     fail("input", "$options");
   }
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
   const core = await previewCoreInspection(rootValue, request, optionsValue);
   const blockers = new Set<string>();
   const steps: WakeflowStaticMaterializationStep[] = [];
   const current = await currentSnapshot(rootValue, request.signal, blockers);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
 
   if (isWakeflowDetachAction(request.action)) {
     // 退出路径（ADR-0024）只删：托管块 → 窗口投影 → 宿主步（由宿主贡献给出）→ Config 收尾。
@@ -1629,7 +1613,7 @@ async function planManagedBlockRemovals(
       (target.kind === "repository" && target.repositoryId === repositoryId),
   );
   for (const target of targets) {
-    assertNotAborted(request.signal);
+    throwIfAborted(request.signal);
     const placement =
       report.roots.find((entry) => entry.key === wakeflowExternalInstructionPlacementKey(target)) ??
       null;
@@ -1649,7 +1633,7 @@ async function planManagedBlockRemovals(
     }
     try {
       for (const profile of allHostProfiles(request)) {
-        assertNotAborted(request.signal);
+        throwIfAborted(request.signal);
         const peer = profile.hostId !== request.currentHostProfile.hostId;
         const baseKey = wakeflowExternalInstructionTargetKey(target);
         const targetKey = peer ? `${baseKey}:${profile.hostId}` : baseKey;
@@ -1696,7 +1680,6 @@ async function planManagedBlockRemovals(
           );
         } catch (error: unknown) {
           if (error instanceof WakeflowManagedBlockFileError) {
-            if (error.reason === "aborted") fail("aborted", "$signal", error);
             if (error.reason === "unknown-managed-body") {
               addBlocker(blockers, `detach-unknown-managed-body:${targetKey}`);
             } else {
@@ -1755,7 +1738,6 @@ async function planManagedBlockRemoval(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowManagedBlockFileError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "unknown-managed-body") {
         addBlocker(blockers, `detach-unknown-managed-body:${input.targetKey}`);
       } else {
@@ -1778,7 +1760,7 @@ async function planWorkspaceRootBlockRemovals(
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   try {
     const ignore = createWakeflowGitignoreBodyAuthority(request.hostProfiles);
     await planManagedBlockRemoval(
@@ -1810,7 +1792,7 @@ async function planWorkspaceRootBlockRemovals(
     }
   }
   for (const profile of allHostProfiles(request)) {
-    assertNotAborted(request.signal);
+    throwIfAborted(request.signal);
     const peer = profile.hostId !== request.currentHostProfile.hostId;
     let authority: ReturnType<typeof createWakeflowProgramInstructionBodyAuthority>;
     try {
@@ -1880,7 +1862,7 @@ async function planWindowProjectionRetirement(
   let present = false;
   for (const profile of request.hostProfiles) {
     for (const windowId of windowIds) {
-      assertNotAborted(request.signal);
+      throwIfAborted(request.signal);
       if (await projectionFileExists(root, profile, windowId)) {
         present = true;
         break;
@@ -2056,7 +2038,7 @@ function assemblePreview(
   );
   const currentConfigDigest = current?.configDigest ?? null;
   const desiredConfigDigest = desired === null ? null : computeWakeflowConfigDigest(desired);
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   const plan = {
     kind: "WakeflowStaticMaterializationPreview" as const,
     schemaVersion: 1 as const,
@@ -2082,6 +2064,5 @@ export {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
   type WakeflowStaticMaterializationPreview,
-  WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";

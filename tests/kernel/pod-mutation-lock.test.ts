@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { withPodMutation } from "../../src/kernel/pod-mutation-lock.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
@@ -39,11 +40,10 @@ test("pod 互斥区：正常进入并释放；锁的路径上不是普通文件�
       error.retryable === false,
   );
   equal(entered, 1);
-  // 中止在进入之前被观察到：io-failure/aborted，而不是冲突。
+  // 中止在进入之前被观察到：是中止，而不是冲突。
   await rejects(
     withPodMutation(f.root, POD_ID, async () => ++entered, AbortSignal.abort()),
-    (error: unknown) =>
-      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+    OperationAbortedError,
   );
   equal(entered, 1);
 });

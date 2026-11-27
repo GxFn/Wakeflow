@@ -1,5 +1,6 @@
 import { types } from "node:util";
 import { parsePlainRecord } from "../data/passive-own-data.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readMonotonicClock } from "../time/monotonic-clock.js";
 import {
   isMonotonicDeadlineReached,
@@ -50,7 +51,7 @@ export class RootedReadWriteScopeError extends Error {
   override readonly name = "RootedReadWriteScopeError";
   readonly code = "rooted-read-write-scope";
   readonly path = "$scope";
-  readonly reason: "input" | "unsafe" | "unsupported" | "timeout" | "aborted";
+  readonly reason: "input" | "unsafe" | "unsupported" | "timeout";
   constructor(reason: RootedReadWriteScopeError["reason"], options?: ErrorOptions) {
     super(`Read/write admission failed: ${reason}.`, options);
     this.reason = reason;
@@ -105,7 +106,7 @@ function optionsOf(
 /** 锁原语的失败说成作用域的失败；别的错误原样上抛。 */
 function failFromLock(error: unknown): never {
   if (!(error instanceof KernelFileLockError)) throw error;
-  if (error.reason === "timeout" || error.reason === "aborted" || error.reason === "unsupported") {
+  if (error.reason === "timeout" || error.reason === "unsupported") {
     fail(error.reason, error);
   }
   fail(error.reason === "input" ? "input" : "unsafe", error);
@@ -150,7 +151,7 @@ export async function withRootedReadWriteScope<Result>(
   )
     fail("input");
   const options = optionsOf(value);
-  if (options.signal?.aborted === true) fail("aborted");
+  throwIfAborted(options.signal);
   const deadline = monotonicDeadlineAfter(
     readMonotonicClock(),
     monotonicDurationFromMilliseconds(options.acquireTimeoutMilliseconds),

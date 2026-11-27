@@ -21,7 +21,7 @@ import {
   type RootedResourceSnapshot,
   isRootedDirectory,
 } from "./rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内稳定、有界的普通文件读取。
@@ -77,7 +77,6 @@ export type StableFileReadErrorReason =
   | "too-large"
   | "io-failure"
   | "source-changed"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -91,7 +90,6 @@ const ERROR_MESSAGES = {
   "too-large": "Stable file read target exceeds the caller or runtime byte limit.",
   "io-failure": "Stable file bytes could not be read and hashed safely.",
   "source-changed": "Stable file target changed while it was being read.",
-  aborted: "Stable file read was aborted.",
   "close-failure": "Stable file handle could not be closed safely.",
 } as const satisfies Readonly<Record<StableFileReadErrorReason, string>>;
 
@@ -191,10 +189,6 @@ function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
     listed: record.listed === true,
     signal: record.signal,
   });
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -350,7 +344,7 @@ async function readExactFile(
   let position = 0;
 
   while (position < byteCount) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     const remaining = byteCount - position;
     const length = Math.min(STABLE_FILE_READ_CHUNK_BYTES, remaining);
     const target = capture ?? scratch;
@@ -361,7 +355,7 @@ async function readExactFile(
     try {
       ({ bytesRead } = await handle.read(target, offset, length, position));
     } catch (cause: unknown) {
-      assertNotAborted(signal);
+      throwIfAborted(signal);
       fail("io-failure", "$resourcePath", cause);
     }
     if (bytesRead <= 0 || bytesRead > length) {
@@ -378,14 +372,14 @@ async function readExactFile(
     position += bytesRead;
   }
 
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const growthProbe = allocateReadBuffer(1);
   try {
     const probe = await handle.read(growthProbe, 0, 1, byteCount);
     if (probe.bytesRead !== 0) fail("source-changed", "$resourcePath");
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) throw error;
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     fail("io-failure", "$resourcePath", error);
   }
 
@@ -408,7 +402,7 @@ async function readStableFileVersion(
 ): Promise<Readonly<InternalStableFileReadResult>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const initial = parsed.listed ? null : await inspectInitialResource(root, resourcePath);
   const initialNode = initial === null ? listedNodeOf(parsed) : initial.node;
@@ -444,7 +438,7 @@ async function readStableFileVersion(
       }
       finalNode = afterPath.node;
     }
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
 
     result = Object.freeze({
       resourcePath,

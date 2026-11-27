@@ -6,6 +6,7 @@ import {
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import {
   inspectWakeflowSupportMemory,
@@ -14,7 +15,6 @@ import {
   WakeflowSupportMemoryInspectionError,
 } from "./wakeflow-support-memory-inspection.js";
 import {
-  assertWakeflowSupportMemoryPublicationNotAborted,
   failWakeflowSupportMemoryPublication as fail,
   parseWakeflowSupportMemoryPublicationOptions,
   parseWakeflowSupportMemoryPublicationRequest,
@@ -39,7 +39,6 @@ function mapInspectionError(
   afterCommit: boolean,
 ): never {
   if (afterCommit) fail("commit-uncertain", "$resourcePath");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
     error.reason === "input" ||
@@ -68,6 +67,11 @@ async function inspectCurrent(
       wakeflowSupportMemoryInspectionRequest(request, signal),
     );
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) {
+      // 提交之后的中止照旧是提交结果不确定。
+      if (afterCommit) fail("commit-uncertain", "$resourcePath");
+      throw error;
+    }
     if (error instanceof WakeflowSupportMemoryInspectionError) {
       mapInspectionError(error, afterCommit);
     }
@@ -77,7 +81,6 @@ async function inspectCurrent(
 
 function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
     error.reason === "target-exists" ||
@@ -129,7 +132,12 @@ async function publishTarget(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof WakeflowSupportMemoryPublicationError) throw error;
+    if (
+      error instanceof WakeflowSupportMemoryPublicationError ||
+      error instanceof OperationAbortedError
+    ) {
+      throw error;
+    }
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
     fail("effect-failure", "$resourcePath", error);
   }
@@ -196,7 +204,7 @@ export async function publishWakeflowSupportMemory(
 ): Promise<Readonly<WakeflowSupportMemoryPublicationReceipt>> {
   const request = parseWakeflowSupportMemoryPublicationRequest(requestValue);
   const options = parseWakeflowSupportMemoryPublicationOptions(optionsValue);
-  assertWakeflowSupportMemoryPublicationNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const before = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, false);
   if (before.status === "current") {
     return Object.freeze({
@@ -205,7 +213,7 @@ export async function publishWakeflowSupportMemory(
       inspection: before,
     });
   }
-  assertWakeflowSupportMemoryPublicationNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const effect = await publishTarget(supportRoot, request, before, options.signal);
   const after = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, true);
   assertReadback(request, before, effect, after);

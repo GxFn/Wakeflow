@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -21,6 +21,7 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowExternalInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-external-instruction-body-authority.js";
 import {
@@ -327,13 +328,12 @@ test("external instruction recomposition rejects unsafe sources, foreign targets
   );
   const controller = new AbortController();
   controller.abort();
-  await expectRecompositionError(
+  await rejects(
     () =>
       recomposeWakeflowExternalInstruction(plain.root, request(null, desired), {
         signal: controller.signal,
       }),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   equal(existsSync(plain.instructionPath), false);
 

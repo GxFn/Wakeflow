@@ -55,7 +55,6 @@ export type DemandEventSourcingPublicationServiceErrorReason =
   | "recovery-required"
   | "lock-timeout"
   | "lock-unsafe"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -70,7 +69,6 @@ const ERROR_MESSAGES = {
   "recovery-required": "Demand Event Sourcing publication requires explicit recovery.",
   "lock-timeout": "Demand Event Sourcing publication lock timed out.",
   "lock-unsafe": "Demand Event Sourcing publication lock is unsafe.",
-  aborted: "Demand Event Sourcing publication was aborted.",
   "operation-failure": "Demand Event Sourcing publication failed.",
 } as const satisfies Readonly<Record<DemandEventSourcingPublicationServiceErrorReason, string>>;
 

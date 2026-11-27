@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -23,6 +23,7 @@ import { createFileCandidateDurably } from "../../../src/foundation/filesystem/d
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import {
@@ -552,10 +553,9 @@ test("an already aborted signal is reported as aborted before any admission writ
   const { rootPath, root } = await ledgerRoot(t);
   const { record, refs } = publication(requirementRecord("示例需求"));
   // 候选树规划先核对信号；§13.169 前这里被映射成 member $members。
-  await expectStoreError(
+  await rejects(
     () => publishLedgerAuthorityRecord(root, record, MEMBERS, AbortSignal.abort()),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   equal(existsSync(physical(rootPath, refs.finalRootRef)), false);
 });

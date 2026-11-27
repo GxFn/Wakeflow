@@ -14,6 +14,7 @@ import {
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { DemandControllerRoute } from "../../../src/governance/controller/demand-controller-route.js";
 import {
@@ -471,11 +472,7 @@ test("域隔离：看板目录被文件顶替只让 board 不可用；声明目�
 
 test("中止信号从任一域上抛，不被隔离成 unavailable", { timeout: 120_000 }, async (t) => {
   const workspace = await maintainedWorkspace(t);
-  await rejects(
-    observe(workspace, "full", AbortSignal.abort()),
-    (error: unknown) =>
-      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
-  );
+  await rejects(observe(workspace, "full", AbortSignal.abort()), OperationAbortedError);
 });
 
 test("孤儿声明与 overall：持有者不是活动 Demand 或绑定不是当前代即孤儿；active / degraded / blocked / maintenance 只看观察记录", {

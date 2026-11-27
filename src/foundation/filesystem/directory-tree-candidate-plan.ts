@@ -14,6 +14,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import {
   addByteCounts,
   type ByteCount,
@@ -110,8 +111,7 @@ export type DurableDirectoryTreeCandidateErrorReason =
   | "target-exists"
   | "tree-conflict"
   | "source-changed"
-  | "operation-failure"
-  | "aborted";
+  | "operation-failure";
 
 const ERROR_MESSAGES = {
   input: "Directory tree candidate input is invalid.",
@@ -122,7 +122,6 @@ const ERROR_MESSAGES = {
   "tree-conflict": "Directory tree candidate does not match its closed plan.",
   "source-changed": "Directory tree candidate changed during verification.",
   "operation-failure": "Directory tree candidate could not be created durably.",
-  aborted: "Directory tree candidate operation was aborted.",
 } as const satisfies Readonly<Record<DurableDirectoryTreeCandidateErrorReason, string>>;
 
 export class DurableDirectoryTreeCandidateError extends Error {
@@ -562,7 +561,7 @@ export function prepareDirectoryTreeCandidate(
   optionsValue: unknown,
 ): Readonly<PreparedDirectoryTreeCandidate> {
   const options = parseOptions(optionsValue);
-  assertDirectoryTreeCandidateNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const values = denseArray(filesValue, options.maximumFiles, "$files");
   if (values.length === 0) fail("input", "$files");
   const files = values.map((value, index): Readonly<PreparedDirectoryTreeCandidateFile> => {
@@ -639,7 +638,7 @@ export function planDirectoryTreeCandidateFromFileDescriptors(
   optionsValue: DirectoryTreeCandidateOptions,
 ): Readonly<DirectoryTreeCandidatePlan> {
   const options = parseOptions(optionsValue);
-  assertDirectoryTreeCandidateNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const values = denseArray(filesValue, options.maximumFiles, "$files");
   if (values.length === 0) fail("input", "$files");
   const files = Object.freeze(values.map(parsePlanFile));
@@ -702,8 +701,4 @@ export function joinDirectoryTreeCandidatePath(
   relativePath: PortableResourcePath,
 ): PortableResourcePath {
   return joinPortableResourcePath(candidateRootPath, relativePath, "$candidatePath");
-}
-
-export function assertDirectoryTreeCandidateNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }

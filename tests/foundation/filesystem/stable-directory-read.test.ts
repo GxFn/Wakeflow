@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,6 +18,7 @@ import {
   type StableDirectoryReadErrorReason,
   type StableDirectoryReadOptions,
 } from "../../../src/foundation/filesystem/stable-directory-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 async function expectStableDirectoryReadError(
   action: () => unknown | Promise<unknown>,
@@ -304,16 +305,15 @@ test("options are closed, passive, and support pre-aborted reads", async () => {
 
     const controller = new AbortController();
     controller.abort("private-abort-reason");
-    const aborted = await expectStableDirectoryReadError(
+    await rejects(
       () =>
         readStableRootDirectory(root, {
           maximumEntries: 0,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-abort-reason"),
     );
-    equal(aborted.message.includes("private-abort-reason"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });
@@ -372,14 +372,13 @@ test("directory pages bound memory, cover every name and reject mutation between
       "expectation-changed",
       "$options.expectedNode",
     );
-    await expectStableDirectoryReadError(
+    await rejects(
       () =>
         readStableResourceDirectoryPage(root, ref, {
           maximumEntries: 2,
           signal: AbortSignal.abort(),
         }),
-      "aborted",
-      "$signal",
+      OperationAbortedError,
     );
     await expectStableDirectoryReadError(
       () => readStableResourceDirectoryPage(root, ref, { maximumEntries: 0 }),

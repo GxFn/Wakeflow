@@ -10,7 +10,7 @@ import {
   type StableDirectoryReadOptions,
   type StableDirectoryReadResult,
 } from "./stable-directory-read.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的有界、确定性目录树遍历。
@@ -72,7 +72,6 @@ export type BoundedDirectoryTreeScanErrorReason =
   | "entry-path"
   | "inspection-failure"
   | "source-changed"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -86,7 +85,6 @@ const ERROR_MESSAGES = {
   "entry-path": "Directory tree contains a non-portable resource path.",
   "inspection-failure": "Directory tree node facts could not be inspected safely.",
   "source-changed": "Directory tree changed while it was being traversed.",
-  aborted: "Bounded directory tree scan was aborted.",
   "close-failure": "A directory tree scan handle could not be closed safely.",
 } as const satisfies Readonly<Record<BoundedDirectoryTreeScanErrorReason, string>>;
 
@@ -133,7 +131,6 @@ const LOWER_REASON_MAP = {
   "entry-path": "entry-path",
   "io-failure": "inspection-failure",
   "source-changed": "source-changed",
-  aborted: "aborted",
   "close-failure": "close-failure",
 } as const satisfies Readonly<
   Record<
@@ -192,10 +189,6 @@ function parseOptions(value: unknown): Readonly<ParsedBoundedDirectoryTreeScanOp
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function compareText(left: string, right: string): number {
@@ -311,7 +304,7 @@ async function scanTree<TreeRootResourcePath extends PortableResourcePath | null
   let treeRootNode: Readonly<FileNodeSnapshot> | undefined;
 
   while (pendingDirectories.length > 0) {
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     const pending = pendingDirectories.pop();
     if (pending === undefined) fail("inspection-failure", "$tree");
 
@@ -334,7 +327,7 @@ async function scanTree<TreeRootResourcePath extends PortableResourcePath | null
 
   if (treeRootNode === undefined) fail("inspection-failure", "$tree");
   entries.sort((left, right) => compareText(left.resourcePath, right.resourcePath));
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   return Object.freeze({
     treeRootResourcePath,
     treeRootNode,
@@ -349,7 +342,7 @@ export async function scanBoundedRootDirectoryTree(
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<null>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return scanTree(root, null, parsed);
 }
 
@@ -361,6 +354,6 @@ export async function scanBoundedResourceDirectoryTree(
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<PortableResourcePath>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return scanTree(root, resourcePath, parsed);
 }

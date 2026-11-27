@@ -200,7 +200,7 @@ const STAGE_DIRECTORY_REFS = Object.freeze([
 ]);
 const DIRECTORY_MAXIMUM_ENTRIES = 16_384;
 
-export type DemandStageResidueErrorReason = "aborted" | "busy" | "directory" | "cleanup-required";
+export type DemandStageResidueErrorReason = "busy" | "directory" | "cleanup-required";
 
 export class DemandStageResidueError extends Error {
   override readonly name = "DemandStageResidueError";
@@ -254,7 +254,6 @@ async function entriesOf(
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "not-found") return [];
-      if (error.reason === "aborted") throw new DemandStageResidueError("aborted", error);
       throw new DemandStageResidueError(
         error.reason === "source-changed" ? "busy" : "directory",
         error,
@@ -293,7 +292,6 @@ async function pairedTargetsPublished(
       if (read.digest !== stage.address.inputDigest) return false;
     } catch (error: unknown) {
       if (!(error instanceof StableFileReadError)) throw error;
-      if (error.reason === "aborted") throw new DemandStageResidueError("aborted", error);
       return false;
     }
   }
@@ -323,7 +321,7 @@ async function inspectDirectoryResidue(
   try {
     listed = await entriesOf(root, directory, signal);
   } catch (error: unknown) {
-    if (!(error instanceof DemandStageResidueError) || error.reason === "aborted") throw error;
+    if (!(error instanceof DemandStageResidueError)) throw error;
     // 读的时候目录正在变：稍后再看。目录自己不对（符号链接、不是目录、条目太多）：不归这里清。
     return { ...NOTHING_TO_RETIRE, busy: error.reason === "busy", retirable: false };
   }
@@ -385,10 +383,7 @@ async function unlinkExactly(
     await unlinkRegularFileExactly(root, ref, { expectedNode, ...signalOptions(signal) });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      throw new DemandStageResidueError(
-        error.reason === "aborted" ? "aborted" : "cleanup-required",
-        error,
-      );
+      throw new DemandStageResidueError("cleanup-required", error);
     }
     throw error;
   }
@@ -462,10 +457,7 @@ async function retireTaskPackageStageResidue(
     return receipt.retiredStageCount;
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      throw new DemandStageResidueError(
-        error.reason === "aborted" ? "aborted" : "cleanup-required",
-        error,
-      );
+      throw new DemandStageResidueError("cleanup-required", error);
     }
     throw error;
   }

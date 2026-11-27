@@ -14,7 +14,7 @@ import {
   parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { signalOptions } from "../foundation/node/abort-signal.js";
+import { OperationAbortedError, signalOptions } from "../foundation/node/abort-signal.js";
 import { WAKEFLOW_LOCAL_RUNTIME_ROOT_REF } from "./layout.js";
 
 /**
@@ -139,7 +139,11 @@ export async function settleStagesOfDeadWriters(
   try {
     await recoverDurableAtomicFileStagesMatchingTargets(root, targets, signalOptions(signal));
   } catch (error: unknown) {
-    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
+    if (
+      !(error instanceof DurableAtomicFileStageRecoveryError) &&
+      !(error instanceof OperationAbortedError)
+    )
+      throw error;
   }
 }
 

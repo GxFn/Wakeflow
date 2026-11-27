@@ -78,7 +78,6 @@ export type ManagedEvidencePublicationTransactionSettlementErrorReason =
   | "event-sourcing"
   | "final"
   | "closure"
-  | "aborted"
   | "recovery-required";
 
 const ERROR_MESSAGES = {
@@ -86,7 +85,6 @@ const ERROR_MESSAGES = {
   "event-sourcing": "Managed evidence publication settlement Event is invalid or conflicting.",
   final: "Managed evidence publication settlement final record is invalid or conflicting.",
   closure: "Managed evidence publication settlement cannot prove its Demand root closure.",
-  aborted: "Managed evidence publication settlement was aborted.",
   "recovery-required": "Managed evidence publication settlement requires explicit recovery.",
 } as const satisfies Readonly<
   Record<ManagedEvidencePublicationTransactionSettlementErrorReason, string>
@@ -160,12 +158,10 @@ function assertCommitRelation(
 }
 
 function mapRootAuthorityError(error: DemandEventSourcingRootAuthorityError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   fail("closure", error);
 }
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
-  if (error.reason === "aborted") fail("aborted", error);
   if (error.reason === "recovery-required") {
     fail("recovery-required", error);
   }
@@ -246,7 +242,6 @@ export async function appendManagedEvidencePublicationEvent(
       throw error;
     }
     if (error instanceof DemandEventSourcingCommandHandlerError) {
-      if (error.reason === "aborted") fail("aborted", error);
       if (error.reason === "concurrency-conflict") {
         fail("recovery-required", error);
       }
@@ -274,7 +269,6 @@ export async function findManagedEvidencePublicationCommit(
       throw error;
     }
     if (error instanceof DemandEventSourcingRepositoryError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("event-sourcing", error);
     }
     throw error;
@@ -294,7 +288,6 @@ async function publishFinal(
     );
   } catch (error: unknown) {
     if (error instanceof ManagedEvidencePublicationRecordPublisherError) {
-      if (error.reason === "aborted") fail("aborted", error);
       if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
         fail("recovery-required", error);
       }
@@ -412,7 +405,6 @@ export async function retireStaleManagedEvidencePublicationTransaction(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateRetirementError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("recovery-required", error);
     }
     throw error;
@@ -487,7 +479,6 @@ export async function loadCurrentManagedEvidencePublicationTransaction(
     );
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("closure", error);
     }
     throw error;

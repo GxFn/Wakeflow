@@ -3,6 +3,7 @@ import { type FileHandle, lstat } from "node:fs/promises";
 import nodePath from "node:path";
 
 import type { Sha256Digest } from "../crypto/sha256.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type DurableAtomicFileStageAddress,
@@ -16,7 +17,6 @@ import {
   recoverDurableAtomicFileStagesMatchingTargets,
 } from "./durable-atomic-file-stage-recovery.js";
 import {
-  assertDurableAtomicFileNotAborted,
   type DurableAtomicFileInputBytes,
   DurableAtomicFileWriteError,
   type DurableAtomicFileWriteErrorReason,
@@ -125,7 +125,6 @@ export async function recoverDurableAtomicFileStagesBeforeWrite(
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) throw error;
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "input") fail("input", "$resourcePath", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       // 并发写入活动暂存文件可能使稳定枚举暂时失败；不替换目标的提交点仍是安全边界。
@@ -143,12 +142,12 @@ async function writeExactBytes(
 ): Promise<void> {
   let offset = 0;
   while (offset < bytes.byteLength) {
-    assertDurableAtomicFileNotAborted(signal);
+    throwIfAborted(signal);
     let bytesWritten: number;
     try {
       ({ bytesWritten } = await handle.write(bytes, offset, bytes.byteLength - offset, offset));
     } catch (cause: unknown) {
-      assertDurableAtomicFileNotAborted(signal);
+      throwIfAborted(signal);
       fail("stage-write-failure", "$stage", cause);
     }
     if (bytesWritten <= 0 || bytesWritten > bytes.byteLength - offset) {
@@ -166,7 +165,7 @@ export async function prepareDurableAtomicFileStage(
   syncContent: boolean,
 ): Promise<Readonly<PreparedDurableAtomicFileStage>> {
   await writeExactBytes(exclusive.handle, input.bytes, signal);
-  assertDurableAtomicFileNotAborted(signal);
+  throwIfAborted(signal);
   try {
     await exclusive.handle.chmod(mode);
   } catch (cause: unknown) {

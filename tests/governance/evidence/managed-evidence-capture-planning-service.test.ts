@@ -1,10 +1,11 @@
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
@@ -464,12 +465,12 @@ test("捕获规划拒绝未配置的根、资源类型漂移和预取消请求",
     );
     const controller = new AbortController();
     controller.abort();
-    await expectPlanningError(
+    await rejects(
       () =>
         service(fixture).preview(fixture.demandId, treeSelection(), {
           signal: controller.signal,
         }),
-      "aborted",
+      OperationAbortedError,
     );
   } finally {
     await cleanupManagedEvidenceCapturePlanningWorkspaceFixture(fixture);

@@ -319,9 +319,6 @@ export async function inspectWorkClaim(
     });
     text = read.text;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     if (
       error instanceof StableFileReadError ||
       error instanceof DeterministicJsonDocumentError ||
@@ -416,7 +413,6 @@ export async function releaseWorkClaim(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `claim-release-${error.reason}`, "$claim", { cause: error });
     }
     throw error;

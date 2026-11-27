@@ -23,7 +23,7 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "./stable-file-read.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界资源树内容观察。
@@ -93,8 +93,7 @@ export type StableResourceTreeReadErrorReason =
   | "total-bytes"
   | "entry-path"
   | "io-failure"
-  | "source-changed"
-  | "aborted";
+  | "source-changed";
 
 const ERROR_MESSAGES = {
   input: "Stable resource tree read input is invalid.",
@@ -110,7 +109,6 @@ const ERROR_MESSAGES = {
   "entry-path": "Stable resource tree contains a non-portable resource path.",
   "io-failure": "Stable resource tree facts could not be observed safely.",
   "source-changed": "Stable resource tree changed while it was being read.",
-  aborted: "Stable resource tree read was aborted.",
 } as const satisfies Readonly<Record<StableResourceTreeReadErrorReason, string>>;
 
 /**
@@ -204,14 +202,9 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function mapTreeScanError(error: BoundedDirectoryTreeScanError, phase: "before" | "after"): never {
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "root-scope") fail("root-scope", "$root");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") fail("source-changed", "$tree");
   if (phase === "after") {
     if (
@@ -241,7 +234,6 @@ function mapStableFileReadError(error: StableFileReadError): never {
     fail("root-scope", "$root");
   }
   if (error.reason === "too-large") fail("io-failure", "$tree.files");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (
     error.reason === "not-found" ||
     error.reason === "symlink" ||
@@ -401,7 +393,7 @@ async function readTree<TreeRoot extends TreeRootResourcePath>(
   const files = await readFiles(root, planned.entries, options);
   const after = await scanTree(root, treeRootResourcePath, options, before.treeRootNode, "after");
   if (!sameTree(before, after)) fail("source-changed", "$tree");
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   return Object.freeze({
     treeRootResourcePath,
     treeRootNode: before.treeRootNode,
@@ -418,7 +410,7 @@ export async function readStableRootResourceTree(
 ): Promise<Readonly<StableResourceTreeReadResult<null>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return readTree(root, null, parsed);
 }
 
@@ -430,6 +422,6 @@ export async function readStableResourceTree(
 ): Promise<Readonly<StableResourceTreeReadResult<PortableResourcePath>>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return readTree(root, resourcePath, parsed);
 }

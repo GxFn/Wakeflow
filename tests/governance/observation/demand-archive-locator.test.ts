@@ -7,7 +7,7 @@ import { type TestContext, test } from "node:test";
 import { renderDeterministicJsonDocument } from "../../../src/foundation/data/deterministic-json-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory } from "../../../src/foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   describeDemandArchive,
   locateLatestDemandArchive,
@@ -150,11 +150,9 @@ test("取消落在清单读取上时仍是 io-failure/aborted，不会收敛成 
   await rejects(
     locateLatestDemandArchive(ledgerRoot, DEMAND_ID, observedSignal(listingReads).signal),
     (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "io-failure" &&
-      error.reason === "aborted" &&
-      // 取消确实发生在清单读取阶段（列举阶段取消会是 StableDirectoryReadError）。
-      error.cause instanceof StableFileReadError,
+      error instanceof OperationAbortedError &&
+      // 取消确实发生在清单读取阶段（列举阶段取消会出自 stable-directory-read）。
+      /stable-file-read/u.test(error.stack ?? ""),
   );
 });
 

@@ -28,7 +28,7 @@ import {
   ByteCountError,
   parseByteCount,
 } from "../numeric/byte-count.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
@@ -113,8 +113,7 @@ export type LoadedArtifactTreeIdentityErrorReason =
   | "inspection-failure"
   | "manifest-shape"
   | "manifest-order"
-  | "manifest-totals"
-  | "aborted";
+  | "manifest-totals";
 
 const ERROR_MESSAGES = {
   input: "Loaded artifact tree identity input is invalid.",
@@ -134,7 +133,6 @@ const ERROR_MESSAGES = {
   "manifest-shape": "Loaded artifact tree manifest shape is invalid.",
   "manifest-order": "Loaded artifact tree manifest refs are not canonical.",
   "manifest-totals": "Loaded artifact tree manifest totals are inconsistent.",
-  aborted: "Loaded artifact tree inspection was aborted.",
 } as const satisfies Readonly<Record<LoadedArtifactTreeIdentityErrorReason, string>>;
 
 export class LoadedArtifactTreeIdentityError extends Error {
@@ -475,10 +473,6 @@ export function validateLoadedArtifactTreeManifest(
   return parseManifest(value, parseValidationOptions(options));
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
@@ -491,7 +485,6 @@ function mapStableTreeReadError(error: StableResourceTreeReadError): never {
   if (error.reason === "total-bytes") fail("total-bytes", "$tree.totalBytes");
   if (error.reason === "symlink") fail("symlink", "$tree");
   if (error.reason === "source-changed") fail("source-changed", "$tree");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "input") fail("input", error.path);
   fail("inspection-failure", "$tree");
@@ -521,7 +514,7 @@ async function inspectArtifactManifest(
 ): Promise<LoadedArtifactTreeManifest> {
   const tree = await readArtifactTree(root, options);
   for (const entry of tree.entries) {
-    assertNotAborted(options.signal);
+    throwIfAborted(options.signal);
     if (Buffer.byteLength(entry.resourcePath, "utf8") > options.limits.maxRefBytes) {
       fail("ref-bytes", "$tree.entries");
     }
@@ -566,7 +559,7 @@ export async function inspectLoadedArtifactTree(
 ): Promise<Readonly<LoadedArtifactTreeIdentity>> {
   assertRoot(root);
   const parsed = parseIdentityOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const manifest = await inspectArtifactManifest(root, parsed);
   const value = manifestJsonValue(manifest);
   return Object.freeze({

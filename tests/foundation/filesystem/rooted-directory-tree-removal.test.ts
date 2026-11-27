@@ -7,7 +7,7 @@
  * 是单独的 `parent-open-failure`、同步失败与同步之后的关闭失败是 `durability-failure`；
  * 每条失败路径上句柄恰好关闭一次、调用方收到第一个错误；`none` 根照常跳过 fsync。
  */
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -29,6 +29,7 @@ import {
   removeRootedDirectoryTree,
 } from "../../../src/foundation/filesystem/rooted-directory-tree-removal.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 async function fixture(
@@ -96,12 +97,12 @@ test("删除根内一整棵目录树；缺失按选项报 not-found 或返回 ab
   ok(existsSync(path.join(outside, "keep.txt")));
   const controller = new AbortController();
   controller.abort();
-  await expectError(
+  await rejects(
     () =>
       removeRootedDirectoryTree(root, parsePortableResourcePath("file.txt"), {
         signal: controller.signal,
       }),
-    "aborted",
+    OperationAbortedError,
   );
   await expectError(
     () =>

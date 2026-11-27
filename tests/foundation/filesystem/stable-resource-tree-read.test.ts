@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -16,6 +16,7 @@ import {
   type StableResourceTreeReadErrorReason,
   type StableResourceTreeReadOptions,
 } from "../../../src/foundation/filesystem/stable-resource-tree-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 async function expectStableResourceTreeReadError(
@@ -275,7 +276,7 @@ test("options are closed and passive, and AbortSignal remains cooperative", asyn
 
     const controller = new AbortController();
     controller.abort("private-tree-abort");
-    const aborted = await expectStableResourceTreeReadError(
+    await rejects(
       () =>
         readStableRootResourceTree(
           root,
@@ -283,10 +284,9 @@ test("options are closed and passive, and AbortSignal remains cooperative", asyn
             signal: controller.signal,
           }),
         ),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-tree-abort"),
     );
-    equal(aborted.message.includes("private-tree-abort"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

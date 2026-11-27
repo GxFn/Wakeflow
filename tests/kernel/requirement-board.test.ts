@@ -24,6 +24,7 @@ import {
   releaseDurableAtomicFileStageAddress,
 } from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
 import { WakeflowError } from "../../src/kernel/error.js";
 import { REQUIREMENT_BOARD_INDEX_REF } from "../../src/kernel/layout.js";
@@ -203,17 +204,14 @@ test("看板锁的真实持有进程死亡后刷新直接继续；排在活动�
   equal(index.split("\n").filter((line) => /^\| P[0-3] \|/u.test(line)).length, 2);
 });
 
-test("看板锁被活动持有者占着时，带信号的刷新按中止收敛（io-failure，reason 以 -aborted 结尾），不发布索引（W29）", async (t) => {
+test("看板锁被活动持有者占着时，带信号的刷新按中止收敛（OperationAbortedError），不发布索引（W29）", async (t) => {
   const root = await fixture(t);
   await createRequirementClaimStateFile(root, pending());
   const holder = await holdBoardLock(root);
   try {
     await rejects(
       refreshRequirementBoardIndex(root, AbortSignal.timeout(100)),
-      (error: unknown) =>
-        error instanceof WakeflowError &&
-        error.code === "io-failure" &&
-        error.reason.endsWith("-aborted"),
+      OperationAbortedError,
     );
   } finally {
     await holder.release();

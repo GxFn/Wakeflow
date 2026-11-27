@@ -25,7 +25,6 @@ import type { DemandEventSourcingPublicationTransaction } from "./demand-event-s
 
 function mapBoardError(error: unknown, path: string): never {
   if (error instanceof WakeflowError) {
-    if (error.reason.endsWith("-aborted")) fail("aborted", "$signal");
     if (error.code === "concurrency-conflict") fail("cas-mismatch", path);
     if (error.code === "not-found") fail("package-not-found", path);
     fail("conflict", path);

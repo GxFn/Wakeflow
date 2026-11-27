@@ -13,6 +13,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { OperationAbortedError, throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
 import {
   computeDemandEventSourcingCommandDigest,
@@ -80,8 +81,7 @@ export type DemandEventSourcingCommandHandlerErrorReason =
   | "idempotency-conflict"
   | "concurrency-conflict"
   | "decision-rejected"
-  | "stream"
-  | "aborted";
+  | "stream";
 
 const ERROR_MESSAGES = {
   input: "Demand Event Sourcing Command Handler input is invalid.",
@@ -89,7 +89,6 @@ const ERROR_MESSAGES = {
   "concurrency-conflict": "Demand Event Sourcing command expected a stale stream revision.",
   "decision-rejected": "Demand Event Sourcing command is not admitted from current state.",
   stream: "Demand Event Sourcing command cannot load or append its stream.",
-  aborted: "Demand Event Sourcing command was aborted before its next commit point.",
 } as const satisfies Readonly<Record<DemandEventSourcingCommandHandlerErrorReason, string>>;
 
 export class DemandEventSourcingCommandHandlerError extends Error {
@@ -214,11 +213,9 @@ function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingComman
 
 function mapRepositoryError(error: unknown): never {
   if (error instanceof DemandEventSourcingRepositoryError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("stream", "$repository");
   }
   if (error instanceof DemandFileEventStoreError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "concurrency-conflict") {
       fail("concurrency-conflict", "$commit");
     }
@@ -299,7 +296,7 @@ export async function executeDemandEventSourcingCommand(
     throw error;
   }
   const commandDigest = computeDemandEventSourcingCommandDigest(command);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
 
   if (options.idempotency !== undefined) {
     // 客户端键先于任何领域转换解析：同键同摘要即首次结果，同键异摘要即冲突。
@@ -399,7 +396,11 @@ export async function executeDemandEventSourcingCommand(
       );
       checkpoint = "refreshed";
     } catch (error: unknown) {
-      if (!(error instanceof DemandEventSourcingRepositoryError)) throw error;
+      if (
+        !(error instanceof DemandEventSourcingRepositoryError) &&
+        !(error instanceof OperationAbortedError)
+      )
+        throw error;
       checkpoint = "stale";
     }
   }

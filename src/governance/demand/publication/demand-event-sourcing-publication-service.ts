@@ -18,6 +18,7 @@ import {
 } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
+import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import { withWorkspaceLock } from "../../../kernel/workspace-locks.js";
 import {
   LedgerAuthorityStore,
@@ -115,10 +116,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
   return record.signal as AbortSignal | undefined;
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 /** 幂等创建 Workspace 级发布流程目录。 */
 export async function initializeDemandEventSourcingPublication(
   root: RootedDirectory,
@@ -149,7 +146,6 @@ async function settleReusedDemandRoot(
     });
   } catch (error: unknown) {
     if (!(error instanceof DurableResourceEntrySettlementError)) throw error;
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "observation-changed") fail("cas-mismatch", "$demandRoot");
     fail("recovery-required", "$demandRoot");
   }
@@ -219,7 +215,6 @@ async function applyPublication(
 
 function mapLockError(error: KernelFileLockError): never {
   if (error.reason === "timeout") fail("lock-timeout", "$lock");
-  if (error.reason === "aborted") fail("aborted", "$signal");
   fail("lock-unsafe", "$lock");
 }
 
@@ -361,12 +356,6 @@ export async function publishDemandFromPackage(
       );
     } catch (error: unknown) {
       if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
-        if (
-          (error instanceof DemandAuthorityError && error.reason === "aborted") ||
-          (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
-        ) {
-          fail("aborted", "$signal");
-        }
         fail("authority", "$authority");
       }
       throw error;
@@ -472,7 +461,7 @@ export async function readPendingDemandPublication(
   try {
     signal = parseSignal(options);
     const demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     return (await readPendingPublication(root, demandId, signal, false))?.transaction ?? null;
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
@@ -496,7 +485,7 @@ export async function recoverDemandPublication(
   try {
     signal = parseSignal(options);
     demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
-    assertNotAborted(signal);
+    throwIfAborted(signal);
   } catch (error: unknown) {
     if (error instanceof WakeflowDurableIdError) {
       fail("input", "$demandId", "unchanged");

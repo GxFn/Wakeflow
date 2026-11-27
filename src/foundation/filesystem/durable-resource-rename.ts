@@ -1,7 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -73,7 +73,6 @@ export type DurableResourceRenameErrorReason =
   | "rename-failure"
   | "commit-uncertain"
   | "durability-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -95,7 +94,6 @@ const ERROR_MESSAGES = {
   "rename-failure": "Resource rename commit could not be executed safely.",
   "commit-uncertain": "Resource rename commit result could not be proven exact.",
   "durability-failure": "Resource rename parent entries could not be synchronized.",
-  aborted: "Resource rename was aborted before commit.",
   "close-failure": "A resource rename handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableResourceRenameErrorReason, string>>;
 
@@ -136,10 +134,6 @@ function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableRes
     if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -480,7 +474,7 @@ export async function renameResourceDurably(
   ) {
     fail("input", "$destinationResourcePath");
   }
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const sourceParent = await openResourceParent(root, sourcePath, "$sourceResourcePath");
   let destinationParent: RootedResourceParentHandle | undefined;
@@ -520,7 +514,7 @@ export async function renameResourceDurably(
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
 
     try {
       await filesystemMutation.rename(

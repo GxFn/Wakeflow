@@ -41,7 +41,7 @@ import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
 } from "./wakeflow-managed-text-history.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
@@ -90,8 +90,7 @@ export type WakeflowExternalInstructionInspectionErrorReason =
   | "source-policy"
   | "envelope"
   | "unknown-managed-body"
-  | "target-capacity"
-  | "aborted";
+  | "target-capacity";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow external instruction inspection input is invalid.",
@@ -104,7 +103,6 @@ const ERROR_MESSAGES = {
   envelope: "Wakeflow external instruction managed envelope is invalid.",
   "unknown-managed-body": "Wakeflow external instruction managed body is not an admitted render.",
   "target-capacity": "Wakeflow external instruction candidate exceeds its byte budget.",
-  aborted: "Wakeflow external instruction inspection was aborted.",
 } as const satisfies Readonly<Record<WakeflowExternalInstructionInspectionErrorReason, string>>;
 
 /** 外部指令只读检查失败的稳定、脱敏错误。 */
@@ -374,7 +372,6 @@ function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
     case "envelope":
     case "unknown-managed-body":
     case "target-capacity":
-    case "aborted":
       return fail(error.reason, error.path);
     default:
       return fail("source", "$source");
@@ -388,7 +385,7 @@ export async function inspectWakeflowExternalInstruction(
 ): Promise<Readonly<WakeflowExternalInstructionInspection>> {
   assertRoot(rootValue);
   const request = parseWakeflowExternalInstructionInspectionRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const authorities = deriveWakeflowExternalInstructionAuthorities(request);
   let inspection: Readonly<WakeflowManagedBlockFileInspection>;
   try {

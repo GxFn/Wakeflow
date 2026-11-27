@@ -87,8 +87,7 @@ export type DemandEventSourcingRootAuthorityErrorReason =
   | "authority"
   | "ledger"
   | "stream"
-  | "closure"
-  | "aborted";
+  | "closure";
 
 const ERROR_MESSAGES = {
   input: "Demand Event Sourcing root authority input is invalid.",
@@ -98,7 +97,6 @@ const ERROR_MESSAGES = {
   ledger: "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
   stream: "Demand Event Sourcing root event stream is invalid.",
   closure: "Demand Event Sourcing root records do not form one aggregate.",
-  aborted: "Demand Event Sourcing root authority load was aborted.",
 } as const satisfies Readonly<Record<DemandEventSourcingRootAuthorityErrorReason, string>>;
 
 export class DemandEventSourcingRootAuthorityError extends Error {
@@ -331,7 +329,6 @@ async function readRecord(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (
         error.reason === "root-scope" ||
         error.reason === "source-changed" ||
@@ -408,7 +405,6 @@ async function loadRootAuthority(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("inventory", "$root", error);
     }
     throw error;
@@ -454,12 +450,6 @@ async function loadRootAuthority(
     );
   } catch (error: unknown) {
     if (error instanceof DemandAuthorityError || error instanceof LedgerAuthorityStoreError) {
-      if (
-        (error instanceof DemandAuthorityError && error.reason === "aborted") ||
-        (error instanceof LedgerAuthorityStoreError && error.reason === "aborted")
-      ) {
-        fail("aborted", "$signal", error);
-      }
       fail("ledger", "$authority", error);
     }
     throw error;
@@ -489,7 +479,6 @@ async function loadRootAuthority(
       error instanceof DemandEventSourcingRepositoryError ||
       error instanceof DemandFileEventStoreError
     ) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("stream", "$commits", error);
     }
     throw error;
@@ -499,7 +488,6 @@ async function loadRootAuthority(
     firstCommit = await eventStore.readCommitAt(1, signal === undefined ? undefined : { signal });
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("stream", "$commits/0", error);
     }
     throw error;
@@ -543,7 +531,6 @@ async function loadRootAuthority(
     });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingRootInventoryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("inventory", "$root", error);
     }
     throw error;

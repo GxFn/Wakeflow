@@ -140,7 +140,6 @@ export async function readDemandFileEventDirectory(
     if (error instanceof StableDirectoryReadError) {
       if (error.reason === "not-found") fail("not-initialized", `$${ref}`, error);
       if (error.reason === "too-many-entries") fail("capacity", `$${ref}`, error);
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("stream-changed", `$${ref}`, error);
     }
@@ -168,7 +167,6 @@ export async function readDemandFileEventCommit(
   } catch (error: unknown) {
     if (error instanceof DemandFileEventStoreError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
         fail("root-scope", "$root", error);
       }

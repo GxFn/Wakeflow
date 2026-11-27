@@ -6,6 +6,7 @@ import {
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   assertWakeflowHostMaintenanceCapability,
   assertWakeflowHostMaintenanceContributionCapability,
@@ -41,8 +42,7 @@ export type WakeflowMaintenanceExecutionPreviewErrorReason =
   | "shared-preview"
   | "source-config"
   | "capability"
-  | "contribution"
-  | "aborted";
+  | "contribution";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow maintenance execution preview input is invalid.",
@@ -50,7 +50,6 @@ const ERROR_MESSAGES = {
   "source-config": "Wakeflow maintenance execution preview source Config is unavailable.",
   capability: "Wakeflow maintenance execution preview host capability is invalid.",
   contribution: "Wakeflow maintenance execution preview host contribution is invalid.",
-  aborted: "Wakeflow maintenance execution preview was aborted.",
 } as const satisfies Readonly<Record<WakeflowMaintenanceExecutionPreviewErrorReason, string>>;
 
 /** 聚合维护 preview 失败的稳定、脱敏错误。 */
@@ -83,10 +82,6 @@ function fail(
   );
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 /**
  * 宿主贡献拿到的 Config：退出路径一律是当前 Config——要清理的就是它声明的托管面（ADR-0024），
  * detach-repository 的宿主也看去掉仓库之前的配置；其余动作是期望 Config（reconcile 从快照读当前）。
@@ -112,7 +107,7 @@ async function resolveSnapshotConfig(
   request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
   expectedDigest: Sha256Digest | null,
 ): Promise<WakeflowConfigModel | null> {
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   let snapshot: Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
   try {
     snapshot = await readWakeflowConfigAuthoritySnapshot(
@@ -121,13 +116,12 @@ async function resolveSnapshotConfig(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (expectedDigest !== null) fail("source-config", "$config", error);
       return null;
     }
     throw error;
   }
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   if (snapshot.configDigest !== expectedDigest) {
     fail("source-config", "$config");
   }
@@ -158,7 +152,7 @@ export async function previewWakeflowMaintenanceExecution(
     }
     throw error;
   }
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   let capability: Readonly<WakeflowHostMaintenanceCapability> | undefined;
   if (capabilityValue !== undefined) {
     try {
@@ -180,7 +174,6 @@ export async function previewWakeflowMaintenanceExecution(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("shared-preview", error.path, error);
     }
     throw error;
@@ -204,7 +197,7 @@ export async function previewWakeflowMaintenanceExecution(
       );
       assertWakeflowHostMaintenanceContributionCapability(capability, contribution);
     } catch (error: unknown) {
-      assertNotAborted(request.signal);
+      throwIfAborted(request.signal);
       if (
         error instanceof WakeflowHostMaintenanceContributionError ||
         error instanceof WakeflowHostMaintenanceCapabilityError
@@ -214,7 +207,7 @@ export async function previewWakeflowMaintenanceExecution(
       throw error;
     }
   }
-  assertNotAborted(request.signal);
+  throwIfAborted(request.signal);
   return createWakeflowMaintenanceExecutionPlan(
     sharedPreview,
     request.currentHostProfile,

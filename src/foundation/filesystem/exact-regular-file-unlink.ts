@@ -1,7 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   type FileNodeSnapshot,
@@ -71,7 +71,6 @@ export type ExactRegularFileUnlinkErrorReason =
   | "unlink-failure"
   | "commit-uncertain"
   | "durability-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -90,7 +89,6 @@ const ERROR_MESSAGES = {
   "unlink-failure": "Exact unlink commit could not be executed safely.",
   "commit-uncertain": "Exact unlink commit result could not be proven safely.",
   "durability-failure": "Exact unlink parent directory could not be synchronized.",
-  aborted: "Exact unlink was aborted before commit.",
   "close-failure": "An exact unlink handle could not be closed safely.",
 } as const satisfies Readonly<Record<ExactRegularFileUnlinkErrorReason, string>>;
 
@@ -122,10 +120,6 @@ interface ParsedOptions {
 
 function fail(reason: ExactRegularFileUnlinkErrorReason, path: string, cause?: unknown): never {
   throw new ExactRegularFileUnlinkError(reason, path, cause === undefined ? undefined : { cause });
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -418,7 +412,7 @@ export async function unlinkRegularFileExactly(
 ): Promise<Readonly<ExactRegularFileUnlinkReceipt>> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const parent = await openResourceParent(root, resourcePath);
   let source: RootedExactResourceHandle | undefined;
@@ -432,7 +426,7 @@ export async function unlinkRegularFileExactly(
     }
     await assertParentCurrent(parent);
     await assertSourceCurrent(source);
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
 
     try {
       await filesystemMutation.unlink(parent.resourceAbsolutePath);

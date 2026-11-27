@@ -16,6 +16,7 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
@@ -32,10 +33,7 @@ import {
   prepareDemandEventStreamCommit,
   renderDemandEventStreamCommit,
 } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import {
-  DemandFileEventSnapshotStore,
-  DemandFileEventSnapshotStoreError,
-} from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
+import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 import {
   DemandFileEventStore,
   DemandFileEventStoreError,
@@ -429,10 +427,14 @@ test("Demand File Event Snapshot Store 退休快照时照常上抛中止", async
     );
     const controller = new AbortController();
     controller.abort();
-    const isAborted = (error: unknown) =>
-      error instanceof DemandFileEventSnapshotStoreError && error.reason === "aborted";
-    await rejects(snapshotStore.retireSnapshotsBefore(5, { signal: controller.signal }), isAborted);
-    await rejects(snapshotStore.retireSnapshotAt(1, { signal: controller.signal }), isAborted);
+    await rejects(
+      snapshotStore.retireSnapshotsBefore(5, { signal: controller.signal }),
+      OperationAbortedError,
+    );
+    await rejects(
+      snapshotStore.retireSnapshotAt(1, { signal: controller.signal }),
+      OperationAbortedError,
+    );
     equal(await snapshotStore.retireSnapshotAt(1), true);
   } finally {
     await root.close();
@@ -460,10 +462,7 @@ test("Demand File Event Store 把 link 前的中止报告为 aborted 而非 comm
   try {
     const store = new DemandFileEventStore(root);
     await store.initialize();
-    await rejects(
-      store.append(first, { signal: controller.signal }),
-      (error: unknown) => error instanceof DemandFileEventStoreError && error.reason === "aborted",
-    );
+    await rejects(store.append(first, { signal: controller.signal }), OperationAbortedError);
     equal(controller.signal.aborted, true);
     equal((await store.readCommits()).commits.length, 0);
     deepEqual(readdirSync(path.join(fixtureRoot, "event-sourcing", "append-candidates")), []);

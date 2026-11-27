@@ -15,6 +15,7 @@ import {
   PrivateModeConvergenceError,
 } from "../../foundation/filesystem/private-mode-convergence.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Maintenance：私有树的模式普查与安全收敛（gate-log §13.130 D8）。
@@ -61,11 +62,10 @@ export interface WakeflowPrivateModeConvergenceReceipt {
   readonly changed: number;
 }
 
-export type WakeflowPrivateModeCensusErrorReason = "input" | "aborted" | "convergence";
+export type WakeflowPrivateModeCensusErrorReason = "input" | "convergence";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow private mode census input is invalid.",
-  aborted: "Wakeflow private mode census was aborted.",
   convergence: "Wakeflow private mode convergence failed.",
 } as const satisfies Readonly<Record<WakeflowPrivateModeCensusErrorReason, string>>;
 
@@ -103,10 +103,6 @@ function parseSignal(options: unknown): AbortSignal | undefined {
   if (signal === undefined) return undefined;
   if (!(signal instanceof AbortSignal)) fail("input", "$options.signal");
   return signal;
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function censusDigestOf(
@@ -184,11 +180,11 @@ export async function inspectWakeflowPrivateModes(
 ): Promise<Readonly<WakeflowPrivateModeCensus>> {
   if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const signal = parseSignal(options);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const drifted: Readonly<WakeflowPrivateModeNode>[] = [];
   const unsafe: PortableResourcePath[] = [];
   for (const treeRef of WAKEFLOW_PRIVATE_TREE_REFS) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     try {
       const scan = await scanBoundedResourceDirectoryTree(root, treeRef, {
         maximumEntries: MAXIMUM_ENTRIES,
@@ -204,7 +200,6 @@ export async function inspectWakeflowPrivateModes(
         unsafe.push(treeRef);
         continue;
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       return freezeCensus("unavailable", [], [], error.reason);
     }
   }
@@ -232,7 +227,7 @@ export async function convergeWakeflowPrivateModes(
   let current = 0;
   let changed = 0;
   for (const entry of census.drifted) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     try {
       const outcome = await convergePrivateNodeMode(
         root,
@@ -248,7 +243,6 @@ export async function convergeWakeflowPrivateModes(
         changed += 1;
         continue;
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("convergence", `$${entry.resourcePath}`, error);
     }
   }

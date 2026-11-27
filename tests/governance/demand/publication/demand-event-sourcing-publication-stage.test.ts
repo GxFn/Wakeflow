@@ -19,6 +19,7 @@ import {
 } from "../../../../src/foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../../src/foundation/time/utc-instant.js";
 import { parseDemandEventStreamCommitDocument } from "../../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 import {
@@ -232,7 +233,7 @@ test("materializeDemandPublicationStage 拒绝不私有、与计划不一致或�
   );
   await rejects(
     materializeDemandPublicationStage(workspaceRoot, transaction, abortedSignal()),
-    isServiceError("aborted", "$signal"),
+    OperationAbortedError,
   );
   equal(existsSync(stagePath), false);
 
@@ -281,7 +282,7 @@ test("publishDemandStage 把私有暂存整体重命名为最终 Demand 根", as
   await materializeDemandPublicationStage(workspaceRoot, transaction, undefined);
   await rejects(
     publishDemandStage(workspaceRoot, transaction, abortedSignal()),
-    isServiceError("aborted", "$signal"),
+    OperationAbortedError,
   );
   chmodSync(stagePath, 0o755);
   await rejects(publishDemandStage(workspaceRoot, transaction, undefined), conflict);
@@ -336,7 +337,7 @@ test("loadFinalDemandPublication 只接受标记已退休且摘要与计划闭�
   equal(existsSync(path.join(finalPath, "transactions", "publication.json")), false);
   await rejects(
     loadFinalDemandPublication(workspaceRoot, ledgerStore, transaction, abortedSignal()),
-    isServiceError("aborted", "$signal"),
+    OperationAbortedError,
   );
 
   const loaded = await loadFinalDemandPublication(

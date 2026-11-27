@@ -1,10 +1,11 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { chmodSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { materializeLedgerAuthorityLayout } from "../../../src/governance/ledger/ledger-authority-layout.js";
 import {
@@ -300,10 +301,9 @@ test("member resolution requires an exact match with the loaded record and the b
       "$reference",
     );
   }
-  await expectStoreError(
+  await rejects(
     () => resolveLoadedLedgerAuthorityMemberReference(root, loaded, reference, AbortSignal.abort()),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
 
   // Identical bytes in a new node: the loaded snapshot no longer proves the file it read.
@@ -344,7 +344,7 @@ test("strict tree loading fails closed on every physical drift", async (t) => {
     "not-found",
     "$record",
   );
-  await expectStoreError(() => load(AbortSignal.abort()), "aborted", "$signal");
+  await rejects(() => load(AbortSignal.abort()), OperationAbortedError);
 
   writeFileSync(path.join(finalPath, "extra.md"), "# extra\n", { mode: LEDGER_DURABLE_FILE_MODE });
   await expectStoreError(() => load(), "conflict", "$recordRoot");

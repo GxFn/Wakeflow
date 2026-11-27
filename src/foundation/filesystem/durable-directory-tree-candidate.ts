@@ -1,13 +1,13 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import { types } from "node:util";
+import { throwIfAborted } from "../node/abort-signal.js";
 import {
   inspectCreatedDirectoryTreeCandidate,
   inspectDirectoryTreeCandidate,
   inspectPartialDirectoryTreeCandidate,
 } from "./directory-tree-candidate-inspection.js";
 import {
-  assertDirectoryTreeCandidateNotAborted,
   type DirectoryTreeCandidateFileInput,
   type DirectoryTreeCandidateOptions,
   type DirectoryTreeCandidatePlan,
@@ -60,7 +60,6 @@ function mapDirectoryError(
   error: DurableDirectoryMaterializationError,
   target: "candidate-root" | "candidate-member",
 ): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") {
     fail(target === "candidate-root" ? "target-exists" : "tree-conflict", "$candidateRootPath");
   }
@@ -76,7 +75,6 @@ function mapDirectoryError(
 }
 
 function mapFileError(error: DurableFileCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "target-exists") {
     fail("tree-conflict", "$candidateRootPath");
   }
@@ -129,7 +127,7 @@ async function syncCandidateDirectories(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   for (const [directory, member] of directoriesWithMember(plan)) {
-    assertDirectoryTreeCandidateNotAborted(signal);
+    throwIfAborted(signal);
     let parent: RootedResourceParentHandle | undefined;
     let primaryError: unknown;
     try {
@@ -333,7 +331,7 @@ export async function settleDirectoryTreeCandidateDurably(
     for (const file of prepared.files) {
       const memberPath = joinDirectoryTreeCandidatePath(candidateRootPath, file.path);
       if (partial.existingFiles.has(file.path)) {
-        assertDirectoryTreeCandidateNotAborted(signal);
+        throwIfAborted(signal);
         await syncExistingMemberFile(root, memberPath);
         continue;
       }

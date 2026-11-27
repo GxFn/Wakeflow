@@ -10,6 +10,7 @@ import {
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import { readStableFile, StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { decodeUtf8 } from "../foundation/text/utf8.js";
 import { fail } from "./error.js";
@@ -69,7 +70,6 @@ export async function readHelperObservationFile(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", `observation-file-${error.reason}`, `${path}.file`, {
         cause: error,
       });
@@ -131,7 +131,6 @@ async function nudgeFileNames(
       .slice(0, NUDGE_RECORDS_MAXIMUM);
   } catch (error: unknown) {
     if (!(error instanceof StableDirectoryReadError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     return Object.freeze([]);
   }
 }
@@ -149,9 +148,7 @@ async function readNudgeRecord(
     });
     return nudgeRecordOf(JSON.parse(decodeUtf8(read.bytes, "$nudgeFile")));
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
+    if (error instanceof OperationAbortedError) throw error;
     return null;
   }
 }

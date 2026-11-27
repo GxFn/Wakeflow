@@ -23,6 +23,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -66,7 +67,6 @@ export type WakeflowHostCapabilityLayoutMaterializationErrorReason =
   | "strict-absent"
   | "prefix-conflict"
   | "root-scope"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -76,7 +76,6 @@ const ERROR_MESSAGES = {
   "strict-absent": "Fresh host capability layout target already exists.",
   "prefix-conflict": "Host capability layout prefix is not exact.",
   "root-scope": "Host capability layout lost workspace scope.",
-  aborted: "Host capability layout materialization was aborted.",
   "operation-failure": "Host capability layout materialization failed.",
 } as const satisfies Readonly<
   Record<WakeflowHostCapabilityLayoutMaterializationErrorReason, string>
@@ -227,7 +226,6 @@ async function readDirectory(
       throw error;
     }
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("prefix-conflict", `$layout/${resourcePath}`, error);
     }
@@ -306,7 +304,6 @@ async function ensureDirectory(
       throw error;
     }
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("operation-failure", `$layout/${resourcePath}`, error);
     }
     throw error;
@@ -400,7 +397,7 @@ export async function inspectWakeflowHostCapabilityLayout(
   ) {
     fail("input", "$root");
   }
-  if (optionsValue.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(optionsValue.signal);
   const { profile, authority } = parseProfileAndAuthority(profileValue);
   let status: WakeflowHostCapabilityLayoutInspection["status"] = "current";
   let missingDirectoryCount = 0;
@@ -455,7 +452,7 @@ export async function ensureWakeflowHostCapabilityLayout(
     fail("input", "$root");
   }
   const signal = optionsValue.signal;
-  if (signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(signal);
   const { profile, authority } = parseProfileAndAuthority(profileValue);
   if (!(await prerequisitesPresent(rootValue, profile))) {
     fail("prerequisite", "$hostLayout");
@@ -478,7 +475,6 @@ export async function ensureWakeflowHostCapabilityLayout(
       });
     } catch (error: unknown) {
       if (error instanceof DurableDirectoryMaterializationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("operation-failure", `$layout/${resourcePath}`, error);
       }
       throw error;
@@ -512,7 +508,7 @@ export async function materializeWakeflowHostCapabilityLayout(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const { profile, authority } = parseProfileAndAuthority(profileValue);
   const hostRoot = wakeflowHostRuntimeRootRef(profile);
   if ((await optionalDirectory(rootValue, hostRoot)) === null) {

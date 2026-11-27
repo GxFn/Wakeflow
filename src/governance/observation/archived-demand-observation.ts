@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import {
   type DemandResultReviewSnapshot,
   readArchivedDemandResultReviewSnapshot,
@@ -100,14 +100,9 @@ const DEFAULT_SCAN_LIMITS: Readonly<ArchivedDemandScanLimits> = Object.freeze({
   snapshots: ARCHIVED_DEMAND_SCAN_MAXIMUM,
 });
 
-/** 带原因的错误计为读不出；中止上抛为 `io-failure/aborted`；没有原因的错误原样上抛。 */
+/** 带原因的错误计为读不出；中止与没有原因的错误原样上抛。 */
 function countUnreadable(error: unknown): void {
-  const reason = reasonOf(error);
-  if (reason === null) throw error;
-  if (reason === "aborted") {
-    if (error instanceof WakeflowError) throw error;
-    fail("io-failure", "aborted", "$signal", { cause: error });
-  }
+  if (reasonOf(error) === null || error instanceof OperationAbortedError) throw error;
 }
 
 /**

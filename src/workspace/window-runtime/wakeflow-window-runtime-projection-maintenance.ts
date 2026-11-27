@@ -24,6 +24,7 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { isWakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
@@ -148,7 +149,7 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(
   rootValue: RootedDirectory,
   request: PlanWakeflowWindowRuntimeProjectionMaintenanceRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionMaintenancePlan>> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   const inputs = admitWakeflowWindowRuntimeProjectionInputs(
     rootValue,
     request.config,
@@ -280,7 +281,6 @@ async function withCurrentProjectionEntries<Result>(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") failWindowRuntimeProjection("aborted", "$signal", error);
       return operation({ kind: "inventory-unavailable" });
     }
     throw error;
@@ -296,7 +296,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
   rootValue: RootedDirectory,
   request: RefreshWakeflowWindowRuntimeProjectionsRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionRefreshReceipt>> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   const loadInputs = async () => {
     let snapshot: Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
     try {
@@ -306,11 +306,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
       );
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "input",
-          "$config",
-          error,
-        );
+        failWindowRuntimeProjection("input", "$config", error);
       }
       throw error;
     }
@@ -351,11 +347,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
               );
             } catch (error: unknown) {
               if (isWakeflowError(error)) {
-                failWindowRuntimeProjection(
-                  error.reason === "aborted" ? "aborted" : "effect",
-                  "$projection",
-                  error,
-                );
+                failWindowRuntimeProjection("effect", "$projection", error);
               }
               throw error;
             }
@@ -368,11 +360,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
   } catch (error: unknown) {
     if (isWakeflowError(error))
       failWindowRuntimeProjection(
-        error.reason === "aborted"
-          ? "aborted"
-          : error.reason === "config-authority"
-            ? "input"
-            : "effect",
+        error.reason === "config-authority" ? "input" : "effect",
         "$projection",
         error,
       );
@@ -401,7 +389,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
   rootValue: RootedDirectory,
   request: EnsureWakeflowWindowRuntimeSkeletonRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeSkeletonReceipt>> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   let config: WakeflowConfigModel;
   try {
     config = parseWakeflowConfig(request.config);
@@ -455,11 +443,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
       });
     } catch (error: unknown) {
       if (error instanceof DurableDirectoryMaterializationError) {
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "effect",
-          `$skeleton/${resourceRef}`,
-          error,
-        );
+        failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`, error);
       }
       throw error;
     }
@@ -489,18 +473,10 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     } catch (error: unknown) {
       if (error instanceof DurableAtomicFileWriteError) {
         if (error.reason === "target-exists") continue;
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "effect",
-          "$projection",
-          error,
-        );
+        failWindowRuntimeProjection("effect", "$projection", error);
       }
       if (isWakeflowError(error)) {
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "effect",
-          "$projection",
-          error,
-        );
+        failWindowRuntimeProjection("effect", "$projection", error);
       }
       throw error;
     }
@@ -534,7 +510,7 @@ export async function retireWakeflowWindowRuntimeProjections(
   rootValue: RootedDirectory,
   request: RetireWakeflowWindowRuntimeProjectionsRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionRetirementReceipt>> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
   try {
     resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
@@ -565,11 +541,7 @@ export async function retireWakeflowWindowRuntimeProjections(
       });
     } catch (error: unknown) {
       if (error instanceof ExactRegularFileUnlinkError) {
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "effect",
-          "$projection",
-          error,
-        );
+        failWindowRuntimeProjection("effect", "$projection", error);
       }
       throw error;
     }
@@ -583,7 +555,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
   rootValue: RootedDirectory,
   request: ExecuteWakeflowWindowRuntimeProjectionOperationRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionOperationReceipt>> {
-  if (request.signal?.aborted === true) failWindowRuntimeProjection("aborted", "$signal");
+  throwIfAborted(request.signal);
   const inputs = admitWakeflowWindowRuntimeProjectionInputs(
     rootValue,
     request.config,
@@ -609,11 +581,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
       );
     } catch (error: unknown) {
       if (isWakeflowError(error)) {
-        failWindowRuntimeProjection(
-          error.reason === "aborted" ? "aborted" : "effect",
-          "$projection",
-          error,
-        );
+        failWindowRuntimeProjection("effect", "$projection", error);
       }
       throw error;
     }

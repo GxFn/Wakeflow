@@ -202,7 +202,6 @@ const MEDIA_TYPES: Readonly<Record<string, string>> = Object.freeze({
 function mapStoreError(error: unknown): never {
   // 账本记录锁（ADR-0033）：等到超时是另一条记录正在发布，重试即可；其余是锁文件或卷的问题。
   if (error instanceof KernelFileLockError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "timeout") {
       fail("concurrency-conflict", "ledger-lock", "$ledger", { cause: error, retryable: true });
     }
@@ -218,9 +217,6 @@ function mapStoreError(error: unknown): never {
         break;
       case "recovery-required":
         fail("recovery-required", "ledger-publication", "$ledger", { cause: error });
-        break;
-      case "aborted":
-        fail("io-failure", "aborted", "$signal", { cause: error });
         break;
       default:
         fail("io-failure", `ledger-${error.reason}`, "$ledger", { cause: error });
@@ -238,7 +234,6 @@ async function openContext(
     snapshot = await readWakeflowConfigAuthoritySnapshot(root, signalOptions(options.signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       failWakeflowConfigAuthority(error);
     }
     throw error;
@@ -305,9 +300,6 @@ async function readSurfaceDocument(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError && error.reason === "not-found") {
       fail("not-found", "package-document", requestPath, { cause: error });
-    }
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
     }
     if (
       error instanceof StableFileReadError &&

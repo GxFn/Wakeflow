@@ -12,6 +12,7 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -78,7 +79,6 @@ export type WakeflowSharedCoordinationLayoutErrorReason =
   | "strict-absent"
   | "layout"
   | "root-scope"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -87,7 +87,6 @@ const ERROR_MESSAGES = {
   "strict-absent": "Fresh Shared Coordination Layout target already exists.",
   layout: "Shared Coordination Layout contains an unsafe directory.",
   "root-scope": "Shared Coordination Layout lost workspace scope.",
-  aborted: "Shared Coordination Layout operation was aborted.",
   "operation-failure": "Shared Coordination Layout materialization failed.",
 } as const satisfies Readonly<Record<WakeflowSharedCoordinationLayoutErrorReason, string>>;
 
@@ -157,9 +156,7 @@ function parseOptions(
   ) {
     fail("input", "$options");
   }
-  if ((record.signal as AbortSignal | undefined)?.aborted === true) {
-    fail("aborted", "$signal");
-  }
+  throwIfAborted(record.signal as AbortSignal | undefined);
   return Object.freeze({
     mode: record.mode as "fresh" | "recover" | "ensure",
     ...(record.signal === undefined ? {} : { signal: record.signal as AbortSignal }),
@@ -236,7 +233,6 @@ async function materializeDeclaredDirectory(
       fail("authority", "$declarations", error);
     }
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("operation-failure", `$layout/${ref}`, error);
     }

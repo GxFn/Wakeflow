@@ -10,6 +10,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { fail } from "../../kernel/error.js";
 import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import {
@@ -98,28 +99,11 @@ async function observeDemandRuntimeResidue(
     }
     throw error;
   }
-  try {
-    const residue = await inspectDemandStageResidue(
-      root,
-      DEMAND_FILE_EVENT_STORE_FILE_MODE,
-      options,
-    );
-    return { candidates, residue };
-  } catch (error: unknown) {
-    if (error instanceof DemandStageResidueError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
-    throw error;
-  }
+  const residue = await inspectDemandStageResidue(root, DEMAND_FILE_EVENT_STORE_FILE_MODE, options);
+  return { candidates, residue };
 }
 
 type RecoveryConfig = Awaited<ReturnType<typeof readWakeflowConfigAuthoritySnapshot>>;
-
-function isAborted(error: unknown): boolean {
-  return (
-    typeof error === "object" && error !== null && "reason" in error && error.reason === "aborted"
-  );
-}
 
 /**
  * 读这个根的身份并核对它就是这个 Demand、属于这个程序。只有暂存残留、没有候选的根读不出身份或对不上时
@@ -143,7 +127,7 @@ async function readRecoveryIdentity(
     }
     return { digest: identity.digest };
   } catch (error: unknown) {
-    if (!residueOnly || isAborted(error)) throw error;
+    if (!residueOnly || error instanceof OperationAbortedError) throw error;
     return null;
   }
 }
@@ -259,7 +243,6 @@ async function retireStageResidue(
     return await retireDemandStageResidue(root, DEMAND_FILE_EVENT_STORE_FILE_MODE, options);
   } catch (error: unknown) {
     if (!(error instanceof DemandStageResidueError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("precondition-failed", "recovery-plan-drift", "$planDigest", { cause: error });
   }
 }

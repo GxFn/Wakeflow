@@ -63,7 +63,6 @@ export type WakeflowProgramInstructionRecompositionErrorReason =
   | "lock-timeout"
   | "lock-unsafe"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -80,7 +79,6 @@ const ERROR_MESSAGES = {
   "lock-timeout": "Wakeflow Program Instruction recomposition lock acquisition timed out.",
   "lock-unsafe": "Wakeflow Program Instruction recomposition lock is unsafe.",
   "recovery-required": "Wakeflow Program Instruction recomposition requires explicit recovery.",
-  aborted: "Wakeflow Program Instruction recomposition was aborted before commit.",
   "effect-failure": "Wakeflow Program Instruction candidate could not be published safely.",
   "commit-uncertain": "Published Wakeflow Program Instruction could not be proven exact.",
 } as const satisfies Readonly<Record<WakeflowProgramInstructionRecompositionErrorReason, string>>;
@@ -196,14 +194,6 @@ export function parseWakeflowProgramInstructionRecompositionOptions(
   });
 }
 
-export function assertWakeflowProgramInstructionRecompositionNotAborted(
-  signal: AbortSignal | undefined,
-): void {
-  if (signal?.aborted === true) {
-    failWakeflowProgramInstructionRecomposition("aborted", "$signal");
-  }
-}
-
 export function currentWakeflowProgramInstructionRecompositionUserId(): bigint {
   return requireCurrentUserId(() =>
     failWakeflowProgramInstructionRecomposition("unsupported-platform", "$root"),
@@ -274,9 +264,6 @@ export function mapWakeflowProgramInstructionLockError(
   }
   if (error.reason === "input") {
     failWakeflowProgramInstructionRecomposition("input", error.path);
-  }
-  if (error.reason === "aborted") {
-    failWakeflowProgramInstructionRecomposition("aborted", "$signal");
   }
   if (error.reason === "timeout") {
     failWakeflowProgramInstructionRecomposition("lock-timeout", "$lock");

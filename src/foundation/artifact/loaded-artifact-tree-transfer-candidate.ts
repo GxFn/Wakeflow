@@ -28,7 +28,7 @@ import {
   LoadedArtifactTreeTransferPlanError,
   parseLoadedArtifactTreeTransferPlan,
 } from "./loaded-artifact-tree-transfer-plan.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：Loaded Artifact Tree 的目标根内候选物化。
@@ -61,8 +61,7 @@ export type LoadedArtifactTreeTransferCandidateErrorReason =
   | "destination-root-scope"
   | "candidate-conflict"
   | "copy-failure"
-  | "operation-failure"
-  | "aborted";
+  | "operation-failure";
 
 const ERROR_MESSAGES = {
   input: "Loaded artifact tree transfer candidate input is invalid.",
@@ -73,7 +72,6 @@ const ERROR_MESSAGES = {
   "candidate-conflict": "Loaded artifact tree candidate conflicts with its closed plan.",
   "copy-failure": "Loaded artifact tree file could not be copied safely.",
   "operation-failure": "Loaded artifact tree candidate could not be materialized safely.",
-  aborted: "Loaded artifact tree transfer candidate was aborted.",
 } as const satisfies Readonly<Record<LoadedArtifactTreeTransferCandidateErrorReason, string>>;
 
 /** Loaded Artifact Tree candidate 物化失败的稳定、脱敏错误。 */
@@ -141,10 +139,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function parsePlan(value: unknown): Readonly<LoadedArtifactTreeTransferPlan> {
   try {
     return parseLoadedArtifactTreeTransferPlan(value);
@@ -158,7 +152,6 @@ function parsePlan(value: unknown): Readonly<LoadedArtifactTreeTransferPlan> {
 }
 
 function mapSourceError(error: LoadedArtifactTreeIdentityError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("source-root-scope", "$sourceRoot");
   if (
     error.reason === "entry-limit" ||
@@ -196,7 +189,6 @@ function mapDirectoryError(
   error: DurableDirectoryMaterializationError,
   allowExistingRoot: boolean,
 ): "existing" | never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (allowExistingRoot && error.reason === "target-exists") return "existing";
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("destination-root-scope", "$destinationRoot");
@@ -232,7 +224,6 @@ async function ensureCandidateRoot(
 }
 
 function mapCandidateInspectionError(error: DurableDirectoryTreeCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "capacity") fail("capacity", "$candidate");
   if (error.reason === "tree-conflict" || error.reason === "source-changed") {
@@ -268,7 +259,7 @@ async function materializeMissingDirectories(
   signal: AbortSignal | undefined,
 ): Promise<void> {
   for (const directory of missingDirectories) {
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     try {
       await createDirectoryAtomically(
         root,
@@ -288,7 +279,6 @@ async function materializeMissingDirectories(
 }
 
 function mapCopyError(error: DurableFileCopyCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "capacity") fail("capacity", "$source");
   if (error.reason === "source-root-scope") {
@@ -387,7 +377,7 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
   assertRoot(sourceRootValue, "$sourceRoot");
   assertRoot(destinationRootValue, "$destinationRoot");
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const plan = parsePlan(planValue);
   await inspectSource(sourceRootValue, plan, options.signal);
   await ensureCandidateRoot(destinationRootValue, plan, options.signal);
@@ -408,7 +398,7 @@ export async function materializeLoadedArtifactTreeTransferCandidate(
   );
   const candidate = await inspectCompleteCandidate(destinationRootValue, plan, options.signal);
   const sourceIdentity = await inspectSource(sourceRootValue, plan, options.signal);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   return Object.freeze({
     plan,
     sourceIdentity,

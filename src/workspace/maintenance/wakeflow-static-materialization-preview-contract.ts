@@ -130,8 +130,7 @@ export type WakeflowStaticMaterializationPreviewErrorReason =
   | "config"
   | "profile"
   | "root-scope"
-  | "inspection"
-  | "aborted";
+  | "inspection";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow static materialization preview input is invalid.",
@@ -139,7 +138,6 @@ const ERROR_MESSAGES = {
   profile: "Wakeflow static materialization preview host profiles are invalid.",
   "root-scope": "Wakeflow static materialization preview lost workspace scope.",
   inspection: "Wakeflow static materialization preview could not inspect workspace facts.",
-  aborted: "Wakeflow static materialization preview was aborted.",
 } as const satisfies Readonly<Record<WakeflowStaticMaterializationPreviewErrorReason, string>>;
 
 /** 静态物化 preview 构建失败的稳定、脱敏错误。 */

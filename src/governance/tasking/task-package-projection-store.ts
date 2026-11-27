@@ -31,6 +31,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -111,7 +112,6 @@ export type TaskPackageProjectionStoreErrorReason =
   | "recovery-required"
   | "commit-uncertain"
   | "root-scope"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -125,7 +125,6 @@ const ERROR_MESSAGES = {
   "recovery-required": "TaskPackage projection publication requires recovery.",
   "commit-uncertain": "TaskPackage projection publication cannot prove its commit.",
   "root-scope": "TaskPackage projection store lost its rooted scope.",
-  aborted: "TaskPackage projection operation was aborted.",
   "operation-failure": "TaskPackage projection operation failed.",
 } as const satisfies Readonly<Record<TaskPackageProjectionStoreErrorReason, string>>;
 
@@ -311,7 +310,6 @@ async function projectionNodeOrNull(
 
 function mapProjectionReadError(error: unknown): never {
   if (error instanceof StableFileReadError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "not-found") {
       fail("projection-not-found", "$projection");
     }
@@ -374,7 +372,6 @@ async function loadProjection(
 }
 
 function mapRepositoryError(error: DemandEventSourcingRepositoryError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", "$taskPackageId");
   fail("authority", "$events");
 }
@@ -404,7 +401,6 @@ function admitProjectionOperations(taskPackage: Readonly<TaskPackage>): void {
 }
 
 function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (
     error.reason === "root-scope" ||
     error.reason === "parent-changed" ||
@@ -426,7 +422,6 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
 }
 
 function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
   }
@@ -550,7 +545,10 @@ export class TaskPackageProjectionStore {
         signal,
       );
     } catch (error: unknown) {
-      if (disposition === "created" && error instanceof TaskPackageProjectionStoreError) {
+      if (
+        disposition === "created" &&
+        (error instanceof TaskPackageProjectionStoreError || error instanceof OperationAbortedError)
+      ) {
         fail("commit-uncertain", "$projection", error);
       }
       throw error;

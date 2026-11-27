@@ -199,7 +199,6 @@ export type DemandEventSourcingRepositoryErrorReason =
   | "not-found"
   | "stream"
   | "snapshot"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -207,7 +206,6 @@ const ERROR_MESSAGES = {
   "not-found": "Demand Event Sourcing stream does not exist.",
   stream: "Demand Event Sourcing stream cannot be rehydrated.",
   snapshot: "Demand Event Sourcing snapshot cannot be published.",
-  aborted: "Demand Event Sourcing Repository operation was aborted.",
   "operation-failure": "Demand Event Sourcing Repository operation failed.",
 } as const satisfies Readonly<Record<DemandEventSourcingRepositoryErrorReason, string>>;
 
@@ -292,7 +290,6 @@ function targetResultSourceEvent(
 
 function mapStoreError(error: unknown): never {
   if (error instanceof DemandFileEventStoreError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (
       error.reason === "stream-invalid" ||
       error.reason === "stream-changed" ||
@@ -304,7 +301,6 @@ function mapStoreError(error: unknown): never {
     fail("operation-failure", "$eventStore", error);
   }
   if (error instanceof DemandFileEventSnapshotStoreError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("operation-failure", "$snapshotStore", error);
   }
   throw error;
@@ -348,9 +344,7 @@ export class DemandEventSourcingRepository {
         snapshotStoreFailed = false;
         break;
       } catch (error: unknown) {
-        if (!(error instanceof DemandFileEventSnapshotStoreError) || error.reason === "aborted") {
-          mapStoreError(error);
-        }
+        if (!(error instanceof DemandFileEventSnapshotStoreError)) mapStoreError(error);
         snapshotStoreFailed = true;
       }
     }
@@ -1390,7 +1384,6 @@ export class DemandEventSourcingRepository {
       );
     } catch (error: unknown) {
       if (error instanceof DemandFileEventSnapshotStoreError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("snapshot", "$snapshot", error);
       }
       throw error;
@@ -1434,9 +1427,8 @@ export class DemandEventSourcingRepository {
         retiredSnapshots += sweep.retired;
       }
     } catch (error: unknown) {
-      if (!(error instanceof DemandFileEventSnapshotStoreError)) throw error;
       // 退休失败只计数，但中止不是失败：照常上抛。
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
+      if (!(error instanceof DemandFileEventSnapshotStoreError)) throw error;
     }
     return Object.freeze({ snapshot: receipt.disposition, retiredSnapshots });
   }

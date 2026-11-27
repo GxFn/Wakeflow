@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +16,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectSettlementError(
@@ -184,14 +185,13 @@ test("settlement options、path 与 AbortSignal 使用被动关闭准入", async
 
     const controller = new AbortController();
     controller.abort();
-    await expectSettlementError(
+    await rejects(
       () =>
         settleRegularFileDurability(root, ref, {
           expectedNode: expected.node,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      OperationAbortedError,
     );
   } finally {
     await root.close();

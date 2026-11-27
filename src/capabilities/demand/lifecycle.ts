@@ -398,7 +398,6 @@ function commitIdOf(value: string): WakeflowDurableId<"demand-event-commit"> {
 
 function mapCommandError(error: unknown): never {
   if (error instanceof DemandEventSourcingCommandHandlerError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "concurrency-conflict") {
       fail("concurrency-conflict", "stream-revision", "$demandRoot", {
         cause: error,
@@ -408,7 +407,6 @@ function mapCommandError(error: unknown): never {
     fail("precondition-failed", `command-${error.reason}`, "$demandRoot", { cause: error });
   }
   if (error instanceof DemandEventSourcingRepositoryError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("io-failure", `repository-${error.reason}`, "$demandRoot", { cause: error });
   }
   throw error;

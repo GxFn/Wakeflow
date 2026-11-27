@@ -18,6 +18,7 @@ import {
 } from "../../../src/configuration/wakeflow-config-authority-snapshot.js";
 import { renderWakeflowConfig } from "../../../src/configuration/wakeflow-config-document.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { buildActiveProjectionFacts } from "../../../src/governance/observation/active-projection-facts.js";
 import {
@@ -311,7 +312,7 @@ test("刷新是派生物：非 io 的 Wakeflow 失败被静默吞下，已经提
   // 中止仍然上抛：调用方自己要求停下，不是派生物的失败。
   await rejects(
     afterMutationRefresh(workspace.workspaceRoot, AbortSignal.abort(), async () => "committed"),
-    (error: unknown) => error instanceof WakeflowError && error.reason === "aborted",
+    OperationAbortedError,
   );
   const cancellation = new AbortController();
   const committed = await afterMutationRefresh(

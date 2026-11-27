@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -25,6 +25,7 @@ import {
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { sameFileNodeSnapshot } from "../../src/foundation/filesystem/file-node-snapshot.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import { createMinimalWakeflowConfig } from "./wakeflow-config.fixture.js";
 
@@ -191,12 +192,12 @@ test("Config authority publication 在非法、超限或取消输入下保持零
   try {
     const controller = new AbortController();
     controller.abort("private-abort-reason");
-    await expectPublicationError(
+    await rejects(
       () =>
         publishWakeflowConfigAuthority(abortedRoot, createMinimalWakeflowConfig(), {
           signal: controller.signal,
         }),
-      "aborted",
+      OperationAbortedError,
     );
     equal(existsSync(abortedFixture.configPath), false);
 

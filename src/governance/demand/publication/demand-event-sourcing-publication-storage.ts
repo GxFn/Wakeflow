@@ -106,7 +106,6 @@ export function admitDemandPublicationResourceOperation(
 
 function mapPublicationReadError(error: unknown, path: string): never {
   if (error instanceof StableFileReadError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "root-scope" || error.reason === "unsupported-platform") {
       fail("root-scope", "$root");
     }
@@ -223,9 +222,6 @@ async function markerPairedWithDeadStage(
       );
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "aborted") {
-      fail("aborted", "$signal");
-    }
     if (error instanceof StableDirectoryReadError || error instanceof DemandStageDirectoryError) {
       return false;
     }
@@ -286,7 +282,6 @@ export async function ensureExactPublicationTextFile(
       if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
         node = await publicationNodeOrNull(root, ref);
       } else if (error instanceof DurableAtomicFileWriteError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
         if (error.reason === "capacity") fail("capacity", "$write");
         if (error.reason === "root-scope") fail("root-scope", "$root");
         if (
@@ -358,7 +353,6 @@ export async function retirePublicationFile(
     });
   } catch (error: unknown) {
     if (error instanceof ExactRegularFileUnlinkError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("recovery-required", "$transaction");
     }
     throw error;
@@ -397,12 +391,10 @@ export async function initializePublicationStorage(
     }
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "active-layout-root-scope") fail("root-scope", "$root");
       fail("conflict", "$activeLayout");
     }
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("operation-failure", "$initialize", "unknown", error);
     }
     throw error;
@@ -432,7 +424,6 @@ export async function recoverPublicationTransactionStages(
     }
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("recovery-required", "$transaction/stage");
     }
     throw error;

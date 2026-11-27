@@ -74,7 +74,6 @@ function mapStageError(error: unknown): never {
     error instanceof DurableAtomicFileStageRecoveryError ||
     error instanceof DemandStageResidueError
   ) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("recovery-required", "$stage");
   }
   if (
@@ -84,11 +83,9 @@ function mapStageError(error: unknown): never {
     error instanceof DemandEventSourcingCommandHandlerError ||
     error instanceof DemandEventSourcingRootInventoryError
   ) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("conflict", "$stage");
   }
   if (error instanceof DurableDirectoryMaterializationError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("operation-failure", "$stage/directories", "unknown", error);
   }
   throw error;
@@ -242,7 +239,6 @@ export async function publishDemandStage(
     });
   } catch (error: unknown) {
     if (error instanceof DurableResourceRenameError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "commit-uncertain" ||
         error.reason === "durability-failure" ||
@@ -256,13 +252,12 @@ export async function publishDemandStage(
   }
 }
 
-/** 读回 final 失败：本模块自己的错误原样抛；根权威读不出按中止与冲突归类；其余原样抛。 */
+/** 读回 final 失败：本模块自己的错误原样抛；根权威读不出归为冲突；其余原样抛。 */
 function rethrowFinalLoadError(error: unknown): never {
   if (error instanceof DemandEventSourcingPublicationServiceError) {
     throw error;
   }
   if (error instanceof DemandEventSourcingRootAuthorityError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail("conflict", "$demandRoot");
   }
   throw error;

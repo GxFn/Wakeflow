@@ -39,6 +39,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { LEDGER_AUTHORITY_LAYOUT_DIGEST } from "../../governance/ledger/ledger-authority-layout.js";
 import { LEDGER_DURABLE_DIRECTORY_MODE } from "../../governance/ledger/ledger-authority-storage-policy.js";
 import {
@@ -188,8 +189,7 @@ export type WakeflowStaticMaterializationStepExecutionErrorReason =
   | "target-authority"
   | "strict-absent"
   | "owner"
-  | "root-scope"
-  | "aborted";
+  | "root-scope";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow static materialization step input is invalid.",
@@ -200,7 +200,6 @@ const ERROR_MESSAGES = {
   "strict-absent": "Wakeflow fresh whole-owned target was not created exclusively.",
   owner: "Wakeflow static materialization domain owner failed.",
   "root-scope": "Wakeflow static materialization lost its root scope.",
-  aborted: "Wakeflow static materialization step was aborted.",
 } as const satisfies Readonly<
   Record<WakeflowStaticMaterializationStepExecutionErrorReason, string>
 >;
@@ -278,7 +277,7 @@ function parseExecutionOptions(value: unknown): Readonly<ParsedStepExecutionOpti
     }
   }
   const signal = record.signal as AbortSignal | undefined;
-  if (signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(signal);
   return Object.freeze({
     sourceConfig,
     recoveringAffectedStep: record.recoveringAffectedStep,
@@ -337,7 +336,6 @@ async function optionalConfigSnapshot(
       return null;
     }
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("owner", "$config", error);
     }
     throw error;
@@ -355,7 +353,6 @@ async function executeLocalProtocol(
     core = await inspectWakeflowWorkspaceCoreLayout(root, signal === undefined ? {} : { signal });
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceCoreLayoutInspectionError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$coreLayout.local", error);
     }
@@ -396,7 +393,6 @@ async function executeActiveLayout(
       if (error.reason === "active-layout-exists") {
         fail("strict-absent", "$activeLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "active-layout-root-scope") fail("root-scope", "$root", error);
       fail("owner", "$activeLayout", error);
     }
@@ -427,7 +423,6 @@ async function executeSharedCoordinationLayout(
       if (error.reason === "strict-absent") {
         fail("strict-absent", "$sharedCoordinationLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$sharedCoordinationLayout", error);
     }
@@ -481,7 +476,6 @@ async function executeRequirementBoardInitialization(
       throw error;
     }
     if (isWakeflowError(error)) {
-      if (error.reason.endsWith("-aborted")) fail("aborted", "$signal", error);
       if (error.reason.endsWith("-root-scope")) fail("root-scope", "$root", error);
       fail("owner", "$board", error);
     }
@@ -515,7 +509,6 @@ async function executeActiveWorkspaceProjection(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "projection-root-scope") fail("root-scope", "$root", error);
       fail("owner", "$projection", error);
     }
@@ -555,7 +548,6 @@ async function executeLedgerLayout(
     });
   } catch (error: unknown) {
     if (error instanceof AbsoluteDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("owner", "$ledgerRoot", error);
     }
     throw error;
@@ -599,7 +591,7 @@ async function executeLedgerLayout(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof LedgerAuthorityStoreError) {
-      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$ledgerLayout");
+      fail("owner", "$ledgerLayout");
     }
     throw primaryError;
   }
@@ -641,7 +633,6 @@ async function executeUnregisteredWindowRuntime(
       });
     } catch (error: unknown) {
       if (error instanceof WakeflowWindowRuntimeProjectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("owner", "$windowRuntime", error);
       }
       throw error;
@@ -667,7 +658,6 @@ async function executeUnregisteredWindowRuntime(
       if (error.reason === "strict-absent") {
         fail("strict-absent", "$windowRuntime", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$windowRuntime", error);
     }
@@ -711,7 +701,6 @@ async function executeHostCapabilityLayout(
       if (error.reason === "strict-absent") {
         fail("strict-absent", "$hostCapabilityLayout", error);
       }
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$hostCapabilityLayout", error);
     }
@@ -760,7 +749,6 @@ async function executeSupportRoot(
       throw error;
     }
     if (error instanceof WakeflowManagedSupportRootMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("owner", "$supportRoot", error);
     }
     throw error;
@@ -792,7 +780,7 @@ async function executeGitignore(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreRecompositionError) {
-      fail(error.reason === "aborted" ? "aborted" : "owner", "$gitignore", error);
+      fail("owner", "$gitignore", error);
     }
     throw error;
   }
@@ -841,7 +829,7 @@ async function executeProgramInstruction(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionRecompositionError) {
-      fail(error.reason === "aborted" ? "aborted" : "owner", "$program", error);
+      fail("owner", "$program", error);
     }
     throw error;
   }
@@ -936,7 +924,7 @@ async function executeExternalInstruction(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowExternalInstructionRecompositionError) {
-      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$externalInstruction");
+      fail("owner", "$externalInstruction");
     }
     throw primaryError;
   }
@@ -1018,7 +1006,7 @@ async function executeSupportGitignore(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowManagedBlockFileError) {
-      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$supportGitignore");
+      fail("owner", "$supportGitignore");
     }
     throw primaryError;
   }
@@ -1097,7 +1085,7 @@ async function executeSupportMemory(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowSupportMemoryPublicationError) {
-      fail(primaryError.reason === "aborted" ? "aborted" : "owner", "$supportMemory");
+      fail("owner", "$supportMemory");
     }
     throw primaryError;
   }
@@ -1160,7 +1148,6 @@ async function executeConfig(
       error instanceof WakeflowConfigAuthorityPublicationError ||
       error instanceof WakeflowConfigAuthorityReplacementError
     ) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$config", error);
     }
@@ -1497,7 +1484,6 @@ async function executeRemoveManagedBlock(
   }
   if (primaryError !== undefined) {
     if (primaryError instanceof WakeflowManagedBlockFileError) {
-      if (primaryError.reason === "aborted") fail("aborted", "$signal");
       if (primaryError.reason === "root-scope") fail("root-scope", "$managedBlockRoot");
       fail("owner", "$managedBlock");
     }
@@ -1541,7 +1527,6 @@ async function executeRetireWindowProjections(
       absent += result.absent;
     } catch (error: unknown) {
       if (error instanceof WakeflowWindowRuntimeProjectionError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("owner", "$windowProjections", error);
       }
       throw error;
@@ -1576,7 +1561,6 @@ async function executeRetireConfig(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityRetirementError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("owner", "$config", error);
     }

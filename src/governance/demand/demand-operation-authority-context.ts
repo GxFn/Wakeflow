@@ -47,15 +47,13 @@ export type DemandOperationAuthorityContextErrorReason =
   | "root"
   | "config"
   | "demand-authority"
-  | "stale-config"
-  | "aborted";
+  | "stale-config";
 
 const ERROR_MESSAGES = {
   root: "Demand operation root could not be held safely.",
   config: "Demand operation Config authority is invalid.",
   "demand-authority": "Demand operation authority is invalid.",
   "stale-config": "Demand operation Config authority changed.",
-  aborted: "Demand operation authority loading was aborted.",
 } as const satisfies Readonly<Record<DemandOperationAuthorityContextErrorReason, string>>;
 
 /** 通用Demand操作上下文无法安全打开、保持或关闭时的稳定错误。 */
@@ -155,7 +153,6 @@ async function openDemandAuthorityContext(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("config", error);
     }
     throw error;
@@ -195,7 +192,6 @@ async function openDemandAuthorityContext(
       error instanceof DemandEventSourcingRootAuthorityError ||
       error instanceof LedgerAuthorityStoreError
     ) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("demand-authority", error);
     }
     throw error;
@@ -258,7 +254,6 @@ export async function assertDemandOperationConfigCurrent(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", error);
       fail("config", error);
     }
     throw error;
@@ -286,9 +281,6 @@ export async function assertDemandOperationConfigCurrentOrFail(
     await assertDemandOperationConfigCurrent(workspaceRoot, expected, signal);
   } catch (error: unknown) {
     if (error instanceof DemandOperationAuthorityContextError) {
-      if (error.reason === "aborted") {
-        failWakeflow("io-failure", "aborted", "$signal", { cause: error });
-      }
       failWakeflow(
         "precondition-failed",
         error.reason === "stale-config" ? "config-stale" : "config-authority",

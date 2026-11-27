@@ -614,9 +614,6 @@ async function readReceiptSource(root: RootedDirectory, ref: PortableResourcePat
   } catch (error: unknown) {
     if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
-    if (error instanceof StableFileReadError && error.reason === "aborted") {
-      fail("io-failure", "aborted", "$signal", { cause: error });
-    }
     if (
       error instanceof StableFileReadError ||
       error instanceof DeterministicJsonDocumentError ||

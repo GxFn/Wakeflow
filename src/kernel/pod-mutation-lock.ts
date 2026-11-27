@@ -1,13 +1,13 @@
 import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-durable-id.js";
 import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../foundation/node/abort-signal.js";
 import { fail } from "./error.js";
 import { withWorkspaceLock } from "./workspace-locks.js";
 
 /** 只有等到超时值得重试；锁文件不安全、卷不支持或重入，重试也不会变好（§13.161 F6）。 */
 function mapLockError(error: unknown): never {
   if (!(error instanceof KernelFileLockError)) throw error;
-  if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
   fail("concurrency-conflict", `pod-lock-${error.reason}`, "$pod", {
     cause: error,
     retryable: error.reason === "timeout",
@@ -25,7 +25,7 @@ export async function withPodMutation<Result>(
   signal?: AbortSignal,
 ): Promise<Result> {
   parseWakeflowDurableIdOfKind(podIdValue, "pod");
-  if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(signal);
   try {
     return await withWorkspaceLock(root, "pod-mutation", operation, {
       acquireTimeoutMilliseconds: 10_000,

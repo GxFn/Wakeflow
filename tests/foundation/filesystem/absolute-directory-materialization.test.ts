@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -19,6 +19,7 @@ import {
   type AbsoluteDirectoryMaterializationErrorReason,
   materializeAbsoluteDirectoryPlacement,
 } from "../../../src/foundation/filesystem/absolute-directory-materialization.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 function fixture(t: TestContext): string {
   const root = realpathSync(
@@ -112,14 +113,13 @@ test("absolute directory materialization rejects unsafe paths without mutation",
 
   const controller = new AbortController();
   controller.abort();
-  await expectMaterializationError(
+  await rejects(
     () =>
       materializeAbsoluteDirectoryPlacement(path.join(root, "aborted"), {
         mode: 0o755,
         signal: controller.signal,
       }),
-    "aborted",
-    "$signal",
+    OperationAbortedError,
   );
   equal(existsSync(path.join(root, "aborted")), false);
 });

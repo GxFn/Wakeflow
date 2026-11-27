@@ -24,6 +24,7 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
@@ -112,7 +113,6 @@ export type ManagedEvidenceRecordSetInventoryErrorReason =
   | "record"
   | "capacity"
   | "source-changed"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -124,7 +124,6 @@ const ERROR_MESSAGES = {
   record: "Managed evidence final record is incomplete or inconsistent.",
   capacity: "Managed evidence record-set inventory exceeds its capacity.",
   "source-changed": "Managed evidence record set changed during inventory.",
-  aborted: "Managed evidence record-set inventory was aborted.",
   "operation-failure": "Managed evidence record-set inventory failed.",
 } as const satisfies Readonly<Record<ManagedEvidenceRecordSetInventoryErrorReason, string>>;
 
@@ -226,7 +225,6 @@ function assertDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
 }
 
 function mapDirectoryError(error: StableDirectoryReadError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "too-many-entries") {
     fail("capacity", "$managedEvidence");
@@ -248,7 +246,6 @@ function mapCandidateError(
   error: DurableDirectoryTreeCandidateError,
   owner: "record" | "transaction",
 ): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
     fail("source-changed", owner === "record" ? "$record" : "$stage");
   }
@@ -273,7 +270,6 @@ async function readContainer(
 }
 
 function mapTransactionStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$transaction");
   if (error.reason === "conflict") fail("transaction", "$transaction");
@@ -352,7 +348,6 @@ async function inspectRecord(
     });
   } catch (error: unknown) {
     if (error instanceof ManagedEvidenceRecordReaderError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (error.reason === "capacity") fail("capacity", "$record", error);
       if (error.reason === "source-changed") {
@@ -486,7 +481,7 @@ export async function inspectManagedEvidenceRecordSetInventory(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const readTransactionResult =
     options.expectedTransactionNode === undefined
       ? null

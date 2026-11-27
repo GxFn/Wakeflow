@@ -149,7 +149,6 @@ const REQUIREMENT_MEMBER_MAXIMUM_BYTES = parseByteCount(4 * 1024 * 1024, "$membe
 
 function mapContextError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     if (error.reason === "root") {
       fail("root-invalid", "demand-root", "$request.demandId", { cause: error });
     }
@@ -179,7 +178,6 @@ const HANDLER_ERROR_TABLE: Readonly<Record<string, readonly [WakeflowErrorCode, 
     ],
     "idempotency-conflict": ["idempotency-mismatch", "request-digest", "$request.idempotencyKey"],
     "decision-rejected": ["precondition-failed", "decision-rejected", "$request.taskPackage"],
-    aborted: ["io-failure", "aborted", "$signal"],
     input: ["invalid-request", "command", "$request"],
   });
 
@@ -214,7 +212,6 @@ async function loadRequirementPackage(
     );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("precondition-failed", `requirement-record-${error.reason}`, "$ledger", {
         cause: error,
       });

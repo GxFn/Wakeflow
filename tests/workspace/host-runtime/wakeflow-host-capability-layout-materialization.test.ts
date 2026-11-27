@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   mkdirSync,
@@ -15,6 +15,7 @@ import { type TestContext, test } from "node:test";
 import { materializeDirectoryPath } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
@@ -210,30 +211,30 @@ test("Host capability inspection and ensure ignore live contents and only repair
   );
 });
 
-test("Host capability layout maps an already-aborted signal to aborted", async (t) => {
+test("Host capability layout lets an already-aborted signal through as OperationAbortedError", async (t) => {
   const value = await fixture(t, codexWorkspaceHostResourceProfile);
   const controller = new AbortController();
   controller.abort();
   const { signal } = controller;
-  await expectLayoutError(
+  await rejects(
     () =>
       materializeWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
         recoveringFreshLayout: false,
         signal,
       }),
-    "aborted",
+    OperationAbortedError,
   );
-  await expectLayoutError(
+  await rejects(
     () =>
       ensureWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, { signal }),
-    "aborted",
+    OperationAbortedError,
   );
-  await expectLayoutError(
+  await rejects(
     () =>
       inspectWakeflowHostCapabilityLayout(value.root, codexWorkspaceHostResourceProfile, {
         signal,
       }),
-    "aborted",
+    OperationAbortedError,
   );
   const codexHost = path.join(value.absolutePath, ".wakeflow-local/runtime/hosts/codex");
   equal(

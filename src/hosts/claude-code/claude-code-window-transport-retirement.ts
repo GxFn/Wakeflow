@@ -19,6 +19,7 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { isWakeflowError } from "../../kernel/error.js";
 import { configuredWakeflowWorkspaceHostTransport } from "../../workspace/host-runtime/wakeflow-host-window-transport.js";
 import type {
@@ -92,15 +93,13 @@ export type ClaudeCodeWindowTransportRetirementErrorReason =
   | "operation"
   | "plan"
   | "source-stale"
-  | "effect"
-  | "aborted";
+  | "effect";
 
 const ERROR_MESSAGES = {
   operation: "Claude Code window transport retirement operation is invalid.",
   plan: "Claude Code window transport retirement no longer matches its plan.",
   "source-stale": "Claude Code window transport retirement source changed since the plan.",
   effect: "Claude Code window transport retirement could not complete safely.",
-  aborted: "Claude Code window transport retirement was aborted.",
 } as const satisfies Readonly<Record<ClaudeCodeWindowTransportRetirementErrorReason, string>>;
 
 /** 退役计划或执行失败的稳定、脱敏错误；维护 capability 把它映射成 owner 失败。 */
@@ -248,10 +247,7 @@ async function transportSwitching(
       )
     ).model;
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      return false;
-    }
+    if (error instanceof WakeflowConfigAuthoritySnapshotError) return false;
     throw error;
   }
   return (
@@ -278,10 +274,7 @@ async function inspectBindings(
       )
     ).bindings;
   } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
-      return null;
-    }
+    if (error instanceof WakeflowWindowHostBindingStoreError) return null;
     throw error;
   }
 }
@@ -307,7 +300,7 @@ export async function planClaudeCodeWindowTransportRetirement(
   const targets = unregisteredTargets(root, request.config, request.profile);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
   for (const window of request.config.topology.windows) {
-    if (request.signal?.aborted === true) fail("aborted", "$signal");
+    throwIfAborted(request.signal);
     const windowId = String(window.windowId);
     const bindingId = bindings.find((binding) => binding.windowId === windowId)?.bindingId ?? null;
     const locatorPresent =
@@ -364,9 +357,7 @@ async function unlinkExactly(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail(error.reason === "aborted" ? "aborted" : "effect", path, error);
-    }
+    if (error instanceof ExactRegularFileUnlinkError) fail("effect", path, error);
     throw error;
   }
 }
@@ -394,12 +385,8 @@ function admitOperation(
 }
 
 function mapExecutionError(error: unknown): never {
-  if (error instanceof WakeflowWindowHostBindingStoreError) {
-    fail(error.reason === "aborted" ? "aborted" : "effect", "$bindings");
-  }
-  if (isWakeflowError(error)) {
-    fail(error.reason === "aborted" ? "aborted" : "effect", "$projection");
-  }
+  if (error instanceof WakeflowWindowHostBindingStoreError) fail("effect", "$bindings");
+  if (isWakeflowError(error)) fail("effect", "$projection");
   throw error;
 }
 

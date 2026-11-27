@@ -3,7 +3,7 @@ import { types } from "node:util";
 import { parseSha256Digest, SHA256_DIGEST_PREFIX, type Sha256Digest } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
   GitReadOnlyProcessError,
@@ -68,8 +68,7 @@ export type GitCommitObservationErrorReason =
   | "query-failure"
   | "timeout"
   | "output-limit"
-  | "protocol"
-  | "aborted";
+  | "protocol";
 
 const ERROR_MESSAGES = {
   input: "Git commit observation input is invalid.",
@@ -79,7 +78,6 @@ const ERROR_MESSAGES = {
   timeout: "Git commit observation exceeded its execution deadline.",
   "output-limit": "Git commit observation exceeded its output budget.",
   protocol: "Git commit observation returned an invalid machine record.",
-  aborted: "Git commit observation was aborted.",
 } as const satisfies Readonly<Record<GitCommitObservationErrorReason, string>>;
 
 /** 提交观察失败的稳定、脱敏错误。 */
@@ -141,10 +139,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
 function parseObjectId(value: unknown, path: string): string {
   if (typeof value !== "string" || !OBJECT_ID_PATTERN.test(value)) fail("input", path);
   return value;
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$options.signal");
 }
 
 async function assertRootCurrent(root: RootedDirectory): Promise<void> {
@@ -277,7 +271,7 @@ export async function observeGitCommit(
   assertRoot(rootValue, "$root");
   const signal = parseSignal(optionsValue);
   const commitOid = parseObjectId(commitOidValue, "$commitOid");
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   await assertRootCurrent(rootValue);
   const repositoryRoot = rootValue.absolutePath;
   const answer = parseBatchAnswer(
@@ -293,7 +287,7 @@ export async function observeGitCommit(
   );
   const patch = patchOf(await query({ kind: "patch", repositoryRoot, baseOid, commitOid }, signal));
   await assertRootCurrent(rootValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   return Object.freeze({
     status: "observed",
     commitOid,
@@ -318,7 +312,7 @@ export async function observeGitCommitKind(
   assertRoot(rootValue, "$root");
   const signal = parseSignal(optionsValue);
   const commitOid = parseObjectId(commitOidValue, "$commitOid");
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   await assertRootCurrent(rootValue);
   const answer = parseBatchAnswer(
     retainedOutput(
@@ -330,7 +324,7 @@ export async function observeGitCommitKind(
     commitOid,
   );
   await assertRootCurrent(rootValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   return "status" in answer ? answer.status : "observed";
 }
 
@@ -345,13 +339,13 @@ export async function observeGitAncestry(
   const signal = parseSignal(optionsValue);
   const ancestorOid = parseObjectId(ancestorOidValue, "$ancestorOid");
   const descendantOid = parseObjectId(descendantOidValue, "$descendantOid");
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   await assertRootCurrent(rootValue);
   const result = await query(
     { kind: "is-ancestor", repositoryRoot: rootValue.absolutePath, ancestorOid, descendantOid },
     signal,
   );
   await assertRootCurrent(rootValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   return result.exitCode === 0 ? "ancestor" : "not-ancestor";
 }

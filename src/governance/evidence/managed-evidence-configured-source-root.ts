@@ -4,7 +4,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { WakeflowError } from "../../kernel/error.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
 import type { ManagedEvidenceManagedPathSource } from "./managed-evidence-source-selection.js";
 
@@ -84,7 +84,7 @@ async function listReceipts(
       signal === undefined ? {} : { signal },
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowError && error.reason === "aborted") throw error;
+    if (error instanceof OperationAbortedError) throw error;
     if (signal?.aborted === true) throw error;
     fail("placement");
   }

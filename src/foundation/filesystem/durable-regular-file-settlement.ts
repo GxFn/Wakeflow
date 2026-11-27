@@ -16,7 +16,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "./rooted-resource-parent-handle.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：指定已有普通文件的持久性结算。
@@ -50,7 +50,6 @@ export type DurableRegularFileSettlementErrorReason =
   | "resource-changed"
   | "durability-failure"
   | "commit-uncertain"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -68,7 +67,6 @@ const ERROR_MESSAGES = {
   "resource-changed": "Regular file settlement target no longer matches its expectation.",
   "durability-failure": "Regular file and parent could not be synchronized safely.",
   "commit-uncertain": "Regular file settlement result could not be proven exact.",
-  aborted: "Regular file settlement was aborted before synchronization.",
   "close-failure": "A regular file settlement handle could not be closed safely.",
 } as const satisfies Readonly<Record<DurableRegularFileSettlementErrorReason, string>>;
 
@@ -109,10 +107,6 @@ function fail(
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
@@ -342,7 +336,7 @@ export async function settleRegularFileDurability(
 ): Promise<void> {
   assertRoot(root);
   const parsed = parseOptions(options);
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
 
   const parent = await openParent(root, resourcePath);
   let resource: RootedExactResourceHandle | undefined;
@@ -356,7 +350,7 @@ export async function settleRegularFileDurability(
     }
     await assertParentCurrent(parent);
     await assertResourceCurrent(resource, "current");
-    assertNotAborted(parsed.signal);
+    throwIfAborted(parsed.signal);
 
     const syncedNode = await syncResource(resource);
     if (!sameFileNodeSnapshot(parsed.expectedNode, syncedNode)) {

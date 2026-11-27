@@ -16,6 +16,7 @@ import {
   readStableRootDirectoryPage,
   type StableDirectoryEntry,
 } from "../foundation/filesystem/stable-directory-read.js";
+import { throwIfAborted } from "../foundation/node/abort-signal.js";
 import { fail } from "./error.js";
 import { hostHookObservationsRootRef } from "./layout.js";
 
@@ -119,7 +120,7 @@ export async function visitHostHookDirectory(
   visit: (entry: Readonly<StableDirectoryEntry>) => Promise<void>,
   options: VisitHostHookDirectoryOptions = {},
 ): Promise<void> {
-  if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(options.signal);
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   const order = options.order ?? "ascending";
   const rootRef = hostHookObservationsRootRef(hostId);

@@ -47,7 +47,7 @@ import {
   claudeCodePortableSettingsRulesFor,
   planClaudeCodePortableSettingsTransition,
 } from "./claude-code-portable-settings-transition.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { signalOptions, throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Host / Claude Code：portable settings 的多根只读 composition。
@@ -134,8 +134,7 @@ export type ClaudeCodePortableSettingsCompositionErrorReason =
   | "placement"
   | "root-open"
   | "inspection"
-  | "close-failure"
-  | "aborted";
+  | "close-failure";
 
 const ERROR_MESSAGES = {
   input: "Claude portable settings composition input is invalid.",
@@ -145,7 +144,6 @@ const ERROR_MESSAGES = {
   "root-open": "Claude portable settings composition root could not be opened.",
   inspection: "Claude portable settings composition source inspection failed.",
   "close-failure": "Claude portable settings composition root could not be closed.",
-  aborted: "Claude portable settings composition was aborted.",
 } as const satisfies Readonly<Record<ClaudeCodePortableSettingsCompositionErrorReason, string>>;
 
 /** Claude portable settings composition 失败的稳定、脱敏错误。 */
@@ -364,7 +362,6 @@ async function inspectRootSettings(
     if (!(error instanceof ClaudeCodePortableSettingsPublicationError)) {
       throw error;
     }
-    if (error.reason === "aborted") fail("aborted", "$signal", error);
     if (BLOCKING_PUBLICATION_REASONS.has(error.reason)) {
       return { blockedReason: error.reason };
     }
@@ -609,7 +606,7 @@ export async function planClaudeCodePortableSettingsComposition(
     fail("input", "$workspaceRoot");
   }
   const request = parseRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
   const plan: PlanCollector = { rootEntries: [], operations: [], blockerCodes: new Set() };
   if (request.action === "detach-repository") {

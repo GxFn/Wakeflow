@@ -8,7 +8,7 @@
  * "不在"的目标连父目录都不在时，同步的是最近一个还在的上级目录（门里证据切片的一条 recover 测试查出来的：
  * 过期的证据事务从没物化过暂存目录，原来这里报父目录打不开，那条 recover 从此一直被拒）。
  */
-import { deepEqual, equal, ok } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -24,6 +24,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 const PRESENT = parsePortableResourcePath("records/present.json");
@@ -195,11 +196,9 @@ test("父目录打不开、已中止与非法输入各有自己的原因，都�
   );
   const aborted = new AbortController();
   aborted.abort();
-  equal(
-    await reasonOf(() =>
-      settleObservedResourceEntry(f.root, PRESENT, "present", { signal: aborted.signal }),
-    ),
-    "aborted",
+  await rejects(
+    () => settleObservedResourceEntry(f.root, PRESENT, "present", { signal: aborted.signal }),
+    OperationAbortedError,
   );
   equal(
     await reasonOf(() => settleObservedResourceEntry(f.root, PRESENT, "gone" as "absent")),

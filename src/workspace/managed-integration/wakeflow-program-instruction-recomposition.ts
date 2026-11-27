@@ -7,6 +7,7 @@ import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snap
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import {
   inspectWakeflowProgramInstruction,
@@ -16,7 +17,6 @@ import {
 } from "./wakeflow-program-instruction-inspection.js";
 import {
   assertCurrentUserWakeflowProgramInstructionRoot,
-  assertWakeflowProgramInstructionRecompositionNotAborted,
   assertWakeflowProgramInstructionRecompositionRoot,
   currentWakeflowProgramInstructionRecompositionUserId,
   failWakeflowProgramInstructionRecomposition as fail,
@@ -47,8 +47,8 @@ import {
 
 /** 提交之前的检查失败：按检查错误的原因归类；认不出的一律是来源无效。 */
 function failInspectionBeforeCommit(error: unknown): never {
+  if (error instanceof OperationAbortedError) throw error;
   if (error instanceof WakeflowProgramInstructionInspectionError) {
-    if (error.reason === "aborted") fail("aborted", "$signal", error);
     if (error.reason === "unsupported-platform") {
       fail("unsupported-platform", "$root", error);
     }
@@ -80,7 +80,6 @@ async function inspectCurrent(
 
 function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "input") fail("input", error.path);
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
     error.reason === "target-exists" ||
@@ -130,6 +129,7 @@ async function publishTarget(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableAtomicFileWriteError) mapAtomicError(error);
     fail("effect-failure", "$resourcePath", error);
   }
@@ -193,7 +193,7 @@ async function recomposeUnderLock(
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionReceipt>> {
-  assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   await assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId);
   const before = await inspectCurrent(root, request, options.signal, false);
   if (before.status !== "recompose-required") {
@@ -204,7 +204,7 @@ async function recomposeUnderLock(
     });
   }
   await assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId);
-  assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const effect = await publishTarget(root, request, before, options.signal);
   markCommitted();
   const after = await inspectCurrent(root, request, options.signal, true);
@@ -226,7 +226,7 @@ export async function recomposeWakeflowProgramInstruction(
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionReceipt>> {
   assertWakeflowProgramInstructionRecompositionRoot(rootValue);
   const options = parseWakeflowProgramInstructionRecompositionOptions(optionsValue);
-  assertWakeflowProgramInstructionRecompositionNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const request = parseWakeflowProgramInstructionRecompositionRequest(requestValue);
   const expectedUserId = currentWakeflowProgramInstructionRecompositionUserId();
   await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
@@ -250,7 +250,10 @@ export async function recomposeWakeflowProgramInstruction(
       wakeflowProgramInstructionLockOptions(options),
     );
   } catch (error: unknown) {
-    if (error instanceof WakeflowProgramInstructionRecompositionError) {
+    if (
+      error instanceof WakeflowProgramInstructionRecompositionError ||
+      error instanceof OperationAbortedError
+    ) {
       throw error;
     }
     if (error instanceof KernelFileLockError) {

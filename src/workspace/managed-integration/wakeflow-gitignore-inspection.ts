@@ -25,6 +25,7 @@ import {
   type GitIgnorePathObservation,
   observeGitIgnorePaths,
 } from "../../foundation/git/git-ignore-observation.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
@@ -102,8 +103,7 @@ export type WakeflowGitignoreInspectionErrorReason =
   | "target-capacity"
   | "candidate-semantics"
   | "git-repository"
-  | "git"
-  | "aborted";
+  | "git";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow Gitignore inspection input is invalid.",
@@ -120,7 +120,6 @@ const ERROR_MESSAGES = {
   "git-repository":
     "Wakeflow workspace root is not a Git repository; the managed .gitignore block is verified through Git, so run `git init` there first.",
   git: "Wakeflow Gitignore semantics could not be verified by Git.",
-  aborted: "Wakeflow Gitignore inspection was aborted.",
 } as const satisfies Readonly<Record<WakeflowGitignoreInspectionErrorReason, string>>;
 
 /** Gitignore 只读检查失败的稳定、脱敏错误。 */
@@ -230,7 +229,6 @@ async function readSource(
     if (error instanceof WakeflowGitignoreInspectionError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);
       }
@@ -261,7 +259,6 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
       fail("source", "$source", error);
     }
@@ -347,7 +344,6 @@ async function observeRules(
     );
   } catch (error: unknown) {
     if (error instanceof GitIgnoreObservationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("git", "$git", error);
     }
     throw error;
@@ -413,7 +409,6 @@ async function observeTargetRules(
     );
   } catch (error: unknown) {
     if (error instanceof GitIgnoreCandidateObservationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "capacity") fail("target-capacity", "$target", error);
       fail("git", "$git", error);
     }
@@ -469,7 +464,7 @@ export async function inspectWakeflowWorkspaceGitignore(
 ): Promise<Readonly<WakeflowGitignoreInspection>> {
   assertRoot(rootValue);
   const request = parseRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const expectedUserId = currentUserId();
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {

@@ -4,6 +4,7 @@ import {
   isWakeflowErrorCode,
   WAKEFLOW_ERROR_CODES,
 } from "../../src/contracts/vocabulary/wakeflow-error-code.js";
+import { OperationAbortedError, throwIfAborted } from "../../src/foundation/node/abort-signal.js";
 import {
   fail,
   failWithBlockers,
@@ -113,6 +114,27 @@ test("fail 抛出内核错误，toWakeflowError 把陌生异常包成 unexpected
   equal((wrapped.cause as Error).message.includes("leaked"), true);
   const original = new WakeflowError("not-found", "demand");
   equal(toWakeflowError(original), original);
+});
+
+test("中止只在边界翻一次：OperationAbortedError 成为 io-failure/aborted/$signal，不可重试、没有 details 与 cause（1.4.5 批 1）", () => {
+  const abort = new OperationAbortedError({ cause: new Error("/Users/private abort reason") });
+  const failure = toWakeflowError(abort, "$request");
+  equal(failure.code, "io-failure");
+  equal(failure.reason, "aborted");
+  equal(failure.path, "$signal");
+  equal(failure.retryable, false);
+  equal(failure.details, null);
+  equal(failure.cause, undefined);
+  equal(failure.message.includes("/Users"), false);
+  deepEqual(failure.toPublicDetails(), {
+    code: "io-failure",
+    reason: "aborted",
+    path: "$signal",
+    retryable: false,
+  });
+  throws(() => throwIfAborted(AbortSignal.abort()), OperationAbortedError);
+  equal(throwIfAborted(new AbortController().signal), undefined);
+  equal(throwIfAborted(undefined), undefined);
 });
 
 test("公共细节沿 cause 链投影第一个 Node errno 与第一个内层 reason，不复制消息（§13.165 G3）", () => {

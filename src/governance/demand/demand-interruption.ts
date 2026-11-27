@@ -11,8 +11,8 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
 import { demandLifecycleJournalRef } from "../../kernel/layout.js";
 import { DEMAND_RECOVERY_TOOLS } from "../../kernel/next-projection.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../evidence/managed-evidence-resource-paths.js";
@@ -101,17 +101,6 @@ export function demandRecoveryReason(route: Readonly<DemandRecoveryRoute>): Dema
   return "lifecycle-journal-pending";
 }
 
-function isAborted(error: unknown): boolean {
-  if (error instanceof WakeflowError) return error.reason === "aborted";
-  return (
-    typeof error === "object" && error !== null && "reason" in error && error.reason === "aborted"
-  );
-}
-
-function rethrowAborted(error: unknown): void {
-  if (isAborted(error)) fail("io-failure", "aborted", "$signal", { cause: error });
-}
-
 /** 节点种类；不在为 null，看不清为 "unreadable"。 */
 async function nodeKind(
   workspaceRoot: RootedDirectory,
@@ -145,7 +134,7 @@ async function hasAppendCandidates(
     );
     return listing.entries.length > 0;
   } catch (error: unknown) {
-    rethrowAborted(error);
+    if (error instanceof OperationAbortedError) throw error;
     return error instanceof StableDirectoryReadError && error.reason === "too-many-entries";
   }
 }
@@ -179,7 +168,7 @@ async function readPendingJournal(
     );
     value = read.value;
   } catch (error: unknown) {
-    rethrowAborted(error);
+    if (error instanceof OperationAbortedError) throw error;
     return null;
   }
   const journal = record(value);
@@ -207,7 +196,7 @@ async function latestArchiveBound(
       located.terminalEvent.eventId === journal.eventId
     );
   } catch (error: unknown) {
-    rethrowAborted(error);
+    if (error instanceof OperationAbortedError) throw error;
     return false;
   }
 }
@@ -278,7 +267,7 @@ export async function inspectDemandRecoveryRoute(
   reading: Readonly<DemandRootReading>,
   options: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<DemandRecoveryRoute> | null> {
-  if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(options.signal);
   if (reading.root !== "absent") {
     if (
       (await nodeKind(workspaceRoot, inDemandRoot(demandId, DEMAND_PUBLICATION_MARKER_REF))) ===

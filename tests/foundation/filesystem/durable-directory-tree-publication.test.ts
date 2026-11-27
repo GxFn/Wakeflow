@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   chmodSync,
   existsSync,
@@ -19,6 +19,7 @@ import {
   publishDirectoryTreeCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 
 const OPTIONS = {
@@ -143,12 +144,12 @@ test("publication cancellation before commit preserves the complete candidate", 
     const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
     const controller = new AbortController();
     controller.abort();
-    await expectPublicationError(
+    await rejects(
       () =>
         publishDirectoryTreeCandidateDurably(root, candidate, finalRef, {
           signal: controller.signal,
         }),
-      "aborted",
+      OperationAbortedError,
     );
     equal(existsSync(path.join(rootPath, ...sourceRef.split("/"))), true);
     equal(existsSync(path.join(rootPath, ...finalRef.split("/"))), false);

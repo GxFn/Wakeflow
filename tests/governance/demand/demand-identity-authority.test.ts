@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   admitDemandAuthority,
@@ -161,7 +162,7 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
       admitDemandAuthority(identity, authority, store, {
         signal: controller.signal,
       }),
-      (error: unknown) => error instanceof DemandAuthorityError && error.reason === "aborted",
+      OperationAbortedError,
     );
 
     throws(

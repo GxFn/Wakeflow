@@ -28,6 +28,7 @@ import {
 import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile } from "../../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import {
   readStableResourceTree,
   readStableRootResourceTree,
@@ -112,8 +113,7 @@ function reasonOf(error: unknown): string | null {
 export function mapFoundationError(error: unknown, label: string, path: string): never {
   if (error instanceof WakeflowError) throw error;
   const reason = reasonOf(error);
-  if (reason === null) throw error;
-  if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+  if (reason === null || error instanceof OperationAbortedError) throw error;
   if (
     reason === "source-changed" ||
     reason === "stream-changed" ||
@@ -782,7 +782,7 @@ async function listCurrentDirectory(
     } catch (error: unknown) {
       const reason = reasonOf(error);
       if (reason === "source-changed" && attempt < CURRENT_DIRECTORY_READ_ATTEMPTS) continue;
-      if (reason === "source-changed" || reason === "aborted") {
+      if (reason === "source-changed" || error instanceof OperationAbortedError) {
         mapFoundationError(error, "demand-root-remove", "$demandRoot");
       }
       fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });
@@ -816,7 +816,7 @@ async function removeRetiredDemandRoots(
       if (outcome === "removed") removed += 1;
     }
   } catch (error: unknown) {
-    if (reasonOf(error) === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error instanceof OperationAbortedError) throw error;
     fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });
   }
   return removed;
@@ -840,7 +840,7 @@ async function settleRetiredDemandRoot(
     });
   } catch (error: unknown) {
     const reason = reasonOf(error);
-    if (reason === "observation-changed" || reason === "aborted") {
+    if (reason === "observation-changed" || error instanceof OperationAbortedError) {
       mapFoundationError(error, "demand-root-remove", "$demandRoot");
     }
     fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });
@@ -871,7 +871,7 @@ async function renameToRetiredDemandRoot(
         retryable: true,
       });
     }
-    if (reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+    if (error instanceof OperationAbortedError) throw error;
     fail("io-failure", "demand-root-remove", "$demandRoot", { cause: error });
   }
   return retired;

@@ -16,6 +16,7 @@ import {
   StableDirectoryReadError,
   type StableDirectoryReadResult,
 } from "../../foundation/filesystem/stable-directory-read.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { ownedByAnotherUser, requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { inspectActiveLayout } from "../../kernel/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
@@ -92,8 +93,7 @@ export type WakeflowWorkspaceCoreLayoutInspectionErrorReason =
   | "root-scope"
   | "capacity"
   | "source-changed"
-  | "inspection"
-  | "aborted";
+  | "inspection";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow workspace core layout inspection input is invalid.",
@@ -101,7 +101,6 @@ const ERROR_MESSAGES = {
   capacity: "Wakeflow workspace core layout exceeds its inspection budget.",
   "source-changed": "Wakeflow workspace core layout changed during inspection.",
   inspection: "Wakeflow workspace core layout could not be inspected safely.",
-  aborted: "Wakeflow workspace core layout inspection was aborted.",
 } as const satisfies Readonly<Record<WakeflowWorkspaceCoreLayoutInspectionErrorReason, string>>;
 
 /** 核心私有布局检查失败的稳定、脱敏错误。 */
@@ -147,10 +146,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
     fail("input", "$options.signal");
   }
   return value;
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -221,7 +216,6 @@ async function readDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "too-many-entries") fail("capacity", "$entries", error);
       if (error.reason === "source-changed") {
         fail("source-changed", "$resourcePath", error);
@@ -259,7 +253,6 @@ async function inspectActive(
     });
   } catch (error: unknown) {
     if (error instanceof WakeflowError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "active-layout-root-scope") fail("root-scope", "$root", error);
       fail("inspection", "$activeLayout", error);
     }
@@ -528,13 +521,13 @@ export async function inspectWakeflowWorkspaceCoreLayout(
     fail("input", "$options");
   }
   const signal = parseSignal(optionsValue.signal);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const issueCodes: string[] = [];
   const active = await inspectActive(rootValue, signal);
   // `incomplete` 是维护可补齐的状态，不是 issue：gate 要求 issueCodes 为空才放行修复。
   if (active.status === "conflict") issueCodes.push("active-layout-node-policy");
   const local = await inspectLocal(rootValue, signal, issueCodes);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const sortedIssues = Object.freeze([...new Set(issueCodes)].sort());
   const inspectionDigest = computeCanonicalJsonSha256Digest({
     kind: "WakeflowWorkspaceCoreLayoutInspectionDigestBasis",

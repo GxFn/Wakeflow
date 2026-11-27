@@ -30,6 +30,7 @@ import {
   StableFileReadError,
   type StableFileReadResult,
 } from "../../foundation/filesystem/stable-file-read.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { currentUserIdOrNull } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
@@ -97,7 +98,6 @@ export type ClaudeCodePortableSettingsPublicationErrorReason =
   | "transition-blocked"
   | "source-changed"
   | "root-scope"
-  | "aborted"
   | "recovery-required"
   | "operation-failure";
 
@@ -108,7 +108,6 @@ const ERROR_MESSAGES = {
   "transition-blocked": "Claude Code portable settings transition is blocked.",
   "source-changed": "Claude Code portable settings source changed before publication.",
   "root-scope": "Claude Code portable settings publication lost root scope.",
-  aborted: "Claude Code portable settings publication was aborted.",
   "recovery-required": "Claude Code portable settings publication requires recovery.",
   "operation-failure": "Claude Code portable settings publication failed.",
 } as const satisfies Readonly<Record<ClaudeCodePortableSettingsPublicationErrorReason, string>>;
@@ -287,7 +286,6 @@ async function sourceOrNull(
     });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "root-scope") fail("root-scope", "$root");
       if (
         error.reason === "expectation-changed" ||
@@ -345,7 +343,7 @@ export async function inspectClaudeCodePortableSettings(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const inspection = await inspectSource(rootValue, options);
   return Object.freeze({
     kind: "ClaudeCodePortableSettingsInspection",
@@ -370,7 +368,6 @@ async function ensureSettingsDirectory(
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       fail("operation-failure", "$settingsDirectory", null, error);
     }
     throw error;
@@ -435,7 +432,6 @@ async function publishTransition(
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (
         error.reason === "target-exists" ||
         error.reason === "expectation-changed" ||
@@ -470,7 +466,7 @@ export async function publishClaudeCodePortableSettings(
     fail("input", "$root");
   }
   const options = parseOptions(optionsValue, PUBLISH_OPTION_KEYS);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const before = await inspectSource(rootValue, options);
   assertExpectedSource(before, options.expectedSourceDigest);
   if (before.transition.status === "blocked") {
@@ -539,7 +535,6 @@ export async function settleClaudeCodePortableSettingsPublicationStages(
     } catch (error: unknown) {
       if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
       if (error instanceof DurableAtomicFileStageRecoveryError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
         if (error.reason === "root-scope") fail("root-scope", "$root");
         fail("recovery-required", "$settingsStage");
       }

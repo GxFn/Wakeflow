@@ -21,7 +21,11 @@ import {
   refreshLedgerReadingPagesQuietly,
 } from "./ledger-reading-pages.js";
 import { observeWorkspace } from "./workspace-observation.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import {
+  OperationAbortedError,
+  signalOptions,
+  throwIfAborted,
+} from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Governance / Observation：变更之后重算并重写活动投影（gate-log §13.94 D5）。
@@ -69,7 +73,6 @@ async function readSnapshot(
     return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       fail("io-failure", `config-${error.reason}`, "$request.root", { cause: error });
     }
     throw error;
@@ -144,13 +147,7 @@ async function refreshActiveProjectionQuietly(
   try {
     await refreshActiveProjection(root, signalOptions(signal));
   } catch (error: unknown) {
-    if (
-      !(error instanceof WakeflowError) ||
-      error.reason === "aborted" ||
-      error.code === "unexpected"
-    ) {
-      throw error;
-    }
+    if (!(error instanceof WakeflowError) || error.code === "unexpected") throw error;
   }
 }
 
@@ -164,13 +161,13 @@ export async function afterMutationRefresh<Result>(
   signal: AbortSignal | undefined,
   mutate: () => Promise<Result>,
 ): Promise<Result> {
-  if (signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(signal);
   const result = await mutate();
   // mutate 已经返回提交结果；取消只跳过可重建投影，不能否定该结果。
   try {
     await refreshActiveProjectionQuietly(root, signal);
   } catch (error: unknown) {
-    if (!(error instanceof WakeflowError) || error.reason !== "aborted") throw error;
+    if (!(error instanceof OperationAbortedError)) throw error;
   }
   return result;
 }
@@ -197,6 +194,7 @@ export async function refreshLedgerReadingPagesAfterMaintenance(
       await ledgerRoot.close();
     }
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) return;
     if (!(error instanceof WakeflowError) || error.code === "unexpected") throw error;
   }
 }

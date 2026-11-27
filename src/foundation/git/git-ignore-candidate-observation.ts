@@ -22,7 +22,7 @@ import {
   type GitIgnorePathObservation,
   observeGitIgnorePathsInWorkTree,
 } from "./git-ignore-observation.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Git：尚未发布的 Gitignore 文件候选语义观察。
@@ -53,8 +53,7 @@ export type GitIgnoreCandidateObservationErrorReason =
   | "root-scope"
   | "isolation-failure"
   | "observation-failure"
-  | "cleanup-failure"
-  | "aborted";
+  | "cleanup-failure";
 
 const ERROR_MESSAGES = {
   input: "Git ignore candidate observation input is invalid.",
@@ -64,7 +63,6 @@ const ERROR_MESSAGES = {
   "isolation-failure": "Git ignore candidate worktree could not be isolated.",
   "observation-failure": "Git ignore candidate semantics could not be observed.",
   "cleanup-failure": "Git ignore candidate worktree could not be removed exactly.",
-  aborted: "Git ignore candidate observation was aborted.",
 } as const satisfies Readonly<Record<GitIgnoreCandidateObservationErrorReason, string>>;
 
 /** Gitignore 候选隔离观察失败的稳定、脱敏错误。 */
@@ -172,10 +170,6 @@ function snapshotCandidate(value: unknown): Readonly<CandidateInput> {
   });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$options.signal");
-}
-
 async function assertRepositoryRootCurrent(root: RootedDirectory): Promise<void> {
   try {
     await root.assertCurrent("$repositoryRoot");
@@ -226,7 +220,6 @@ async function materializeCandidate(
     });
   } catch (error: unknown) {
     if (error instanceof DurableFileCandidateError) {
-      if (error.reason === "aborted") fail("aborted", "$options.signal", error);
       fail("isolation-failure", "$candidateWorkTree", error);
     }
     throw error;
@@ -248,7 +241,6 @@ async function observeCandidate(
     );
   } catch (error: unknown) {
     if (error instanceof GitIgnoreObservationError) {
-      if (error.reason === "aborted") fail("aborted", "$options.signal", error);
       if (error.reason === "input") fail("input", error.path, error);
       if (error.reason === "root-scope" && error.path === "$repositoryRoot") {
         fail("root-scope", "$repositoryRoot", error);
@@ -270,10 +262,10 @@ export async function observeGitIgnoreCandidate(
 ): Promise<Readonly<GitIgnoreCandidateObservation>> {
   assertRoot(repositoryRootValue);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const candidate = snapshotCandidate(candidateBytesValue);
   await assertRepositoryRootCurrent(repositoryRootValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
 
   const temporary = await createTemporaryWorkTree();
   let operationError: unknown;

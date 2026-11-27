@@ -5,7 +5,7 @@ import { join as joinPath } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, OperationAbortedError, throwIfAborted } from "../node/abort-signal.js";
 import { advisoryLockFlagsOrNull } from "../node/advisory-lock-flags.js";
 import { ownedByAnotherUser } from "../node/current-user.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
@@ -59,7 +59,6 @@ export interface KernelFileLockOptions {
 
 export type KernelFileLockErrorReason =
   | "input"
-  | "aborted"
   | "timeout"
   | "unsupported"
   | "unsafe-lock"
@@ -69,7 +68,6 @@ export type KernelFileLockErrorReason =
 
 const ERROR_MESSAGES = {
   input: "Kernel file lock input is invalid.",
-  aborted: "Kernel file lock acquisition was aborted.",
   timeout: "Kernel file lock is held by another owner.",
   unsupported: "This volume or platform does not provide kernel advisory locks.",
   "unsafe-lock": "Kernel file lock path is not a regular file owned by the current user.",
@@ -242,7 +240,7 @@ async function waitBeforeRetry(
       options.signal === undefined ? {} : { signal: options.signal },
     );
   } catch (error: unknown) {
-    fail("aborted", "$signal", error);
+    throw new OperationAbortedError({ cause: error });
   }
 }
 
@@ -256,7 +254,7 @@ async function acquire(
     monotonicDurationFromMilliseconds(options.acquireTimeoutMilliseconds),
   );
   for (;;) {
-    if (options.signal?.aborted === true) fail("aborted", "$signal");
+    throwIfAborted(options.signal);
     const handle = await tryOpenLocked(lockPath, mode, true);
     if (handle !== null) {
       let admitted = false;

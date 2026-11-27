@@ -18,7 +18,7 @@ import {
   observeRepositoryPointers,
   repositoryBranchesComplete,
 } from "../../../src/governance/observation/repository-pointer-observation.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
 
@@ -282,9 +282,5 @@ test("观察从不 spawn git：模块不引用子进程，中止信号照常上�
   equal(source.includes("child_process"), false);
   equal(/\bspawn(?:Sync)?\(/u.test(source), false);
   equal(/\bexecFile(?:Sync)?\(/u.test(source), false);
-  await rejects(
-    observe(repository, AbortSignal.abort()),
-    (error: unknown) =>
-      error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
-  );
+  await rejects(observe(repository, AbortSignal.abort()), OperationAbortedError);
 });

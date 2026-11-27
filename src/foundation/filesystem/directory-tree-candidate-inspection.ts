@@ -2,9 +2,9 @@ import { Buffer } from "node:buffer";
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import {
-  assertDirectoryTreeCandidateNotAborted,
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateProgress,
   type DirectoryTreeCandidateResult,
@@ -132,7 +132,6 @@ async function readCandidateTree(
     });
   } catch (error: unknown) {
     if (error instanceof StableResourceTreeReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "source-changed") {
         fail("source-changed", "$candidate");
       }
@@ -158,7 +157,7 @@ export async function inspectDirectoryTreeCandidateProgress(
   );
   const plan = parseDirectoryTreeCandidatePlan(planValue);
   const { expectedRootNode, signal } = parseInspectionOptions(optionsValue);
-  assertDirectoryTreeCandidateNotAborted(signal);
+  throwIfAborted(signal);
   const tree = await readCandidateTree(root, candidateRootPath, plan, expectedRootNode, signal);
   if (
     tree.treeRootNode.kind !== "directory" ||
@@ -218,7 +217,7 @@ export async function inspectDirectoryTreeCandidateProgress(
   ) {
     fail("tree-conflict", "$candidate");
   }
-  assertDirectoryTreeCandidateNotAborted(signal);
+  throwIfAborted(signal);
   return Object.freeze({
     candidateRootPath,
     plan,
@@ -273,7 +272,6 @@ export async function inspectCreatedDirectoryTreeCandidate(
     });
   } catch (error: unknown) {
     if (error instanceof BoundedDirectoryTreeScanError) {
-      if (error.reason === "aborted") fail("aborted", "$signal");
       if (error.reason === "source-changed") fail("source-changed", "$candidate");
       fail("tree-conflict", "$candidate");
     }
@@ -314,7 +312,7 @@ export async function inspectCreatedDirectoryTreeCandidate(
       fail("tree-conflict", "$candidate");
     }
   }
-  assertDirectoryTreeCandidateNotAborted(signal);
+  throwIfAborted(signal);
   return Object.freeze({ candidateRootPath, plan, rootNode: tree.treeRootNode });
 }
 
@@ -359,7 +357,6 @@ export async function inspectPartialDirectoryTreeCandidate(
       );
     } catch (error: unknown) {
       if (error instanceof StableFileReadError) {
-        if (error.reason === "aborted") fail("aborted", "$signal");
         if (error.reason === "source-changed") {
           fail("source-changed", "$candidate");
         }

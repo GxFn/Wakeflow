@@ -2,6 +2,7 @@ import {
   isWakeflowErrorCode,
   type WakeflowErrorCode,
 } from "../contracts/vocabulary/wakeflow-error-code.js";
+import { OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../foundation/node/node-system-error.js";
 import { LEGACY_ERROR_CODE_FAMILIES } from "./legacy-error-families.js";
 
@@ -272,11 +273,15 @@ export function translateLegacyError(error: unknown, path = "$"): WakeflowError 
 }
 
 /**
- * 把任意异常收敛为 `WakeflowError`：已是内核错误则原样返回，旧错误类按边界翻译，其余包成
- * `unexpected`，原始异常只作为 `cause` 保留，消息不复制。
+ * 把任意异常收敛为 `WakeflowError`：已是内核错误则原样返回，中止翻成 `io-failure` / `aborted` /
+ * `$signal`，旧错误类按边界翻译，其余包成 `unexpected`，原始异常只作为 `cause` 保留，消息不复制。
  */
 export function toWakeflowError(error: unknown, path = "$"): WakeflowError {
   if (isWakeflowError(error)) return error;
+  // 不带 cause：中止没有更深的原因可报，公开细节与此前内核预检抛出的字节相同（没有 causeReason）。
+  if (error instanceof OperationAbortedError) {
+    return new WakeflowError("io-failure", "aborted", "$signal");
+  }
   return (
     translateLegacyError(error, path) ??
     new WakeflowError("unexpected", "unhandled", path, { cause: error })

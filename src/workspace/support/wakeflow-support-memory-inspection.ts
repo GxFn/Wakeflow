@@ -35,7 +35,7 @@ import {
   type WholeFileContentTransition,
   WholeFileContentTransitionError,
 } from "../../foundation/filesystem/whole-file-content-transition.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -118,8 +118,7 @@ export type WakeflowSupportMemoryInspectionErrorReason =
   | "source"
   | "source-policy"
   | "unadmitted-source"
-  | "capacity"
-  | "aborted";
+  | "capacity";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow support memory inspection input is invalid.",
@@ -134,7 +133,6 @@ const ERROR_MESSAGES = {
   "source-policy": "Wakeflow support memory source violates its node policy.",
   "unadmitted-source": "Wakeflow support memory source is not an admitted whole-file render.",
   capacity: "Wakeflow support memory exceeds its byte budget.",
-  aborted: "Wakeflow support memory inspection was aborted.",
 } as const satisfies Readonly<Record<WakeflowSupportMemoryInspectionErrorReason, string>>;
 
 /** Support memory 只读检查失败的稳定、脱敏错误。 */
@@ -415,7 +413,6 @@ async function readSource(
     if (error instanceof WakeflowSupportMemoryInspectionError) throw error;
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "too-large") fail("capacity", "$source", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);
@@ -447,7 +444,6 @@ async function revalidateSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (initial === null && error.reason === "not-found") return;
       fail("source", "$source", error);
     }
@@ -464,7 +460,7 @@ export async function inspectWakeflowSupportMemory(
   assertRoot(workspaceRootValue, "$workspaceRoot");
   assertRoot(supportRootValue, "$supportRoot");
   const request = parseWakeflowSupportMemoryInspectionRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   await admitRoots(workspaceRootValue, supportRootValue, request);
   const declaration = request.catalog.declarations.find(
     (entry) =>

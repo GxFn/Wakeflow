@@ -1,5 +1,6 @@
 import { lstat } from "node:fs/promises";
 
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   assertDurableAtomicFileStageCurrent,
@@ -22,7 +23,6 @@ import {
   syncDurableAtomicFileTargetParent,
 } from "./durable-atomic-file-target-io.js";
 import {
-  assertDurableAtomicFileNotAborted,
   assertDurableAtomicFileRoot,
   type DurableAtomicFileCreateOptions,
   type DurableAtomicFileDurability,
@@ -169,7 +169,7 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
 
   try {
     await recoverDurableAtomicFileStagesBeforeWrite(root, resourcePath, signal);
-    assertDurableAtomicFileNotAborted(signal);
+    throwIfAborted(signal);
     if (publication === "created") {
       await assertCreateTargetAbsent(parent, syncParent);
     } else if (expected !== null) {
@@ -187,7 +187,7 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
     stage = await prepareDurableAtomicFileStage(openStage, input, mode, signal, syncParent);
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
-    assertDurableAtomicFileNotAborted(signal);
+    throwIfAborted(signal);
 
     if (publication === "created") {
       await assertCreateTargetAbsent(parent, syncParent);
@@ -197,7 +197,7 @@ async function performWrite<Publication extends DurableAtomicFilePublication>(
     }
     await assertDurableAtomicFileTargetParentCurrent(parent);
     await assertDurableAtomicFileStageCurrent(stage);
-    assertDurableAtomicFileNotAborted(signal);
+    throwIfAborted(signal);
 
     let finalNode: Readonly<FileNodeSnapshot>;
     if (publication === "created") {
@@ -319,7 +319,7 @@ export async function createFileAtomically(
   assertDurableAtomicFileRoot(root);
   const parsed = parseDurableAtomicFileCreateOptions(options);
   const input = snapshotDurableAtomicFileInputBytes(bytes);
-  assertDurableAtomicFileNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   return performWrite(
     root,
     resourcePath,
@@ -345,7 +345,7 @@ export async function replaceFileAtomically(
     fail("input", "$options.expected.resourcePath");
   }
   const input = snapshotDurableAtomicFileInputBytes(bytes);
-  assertDurableAtomicFileNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   const result = await performWrite(
     root,
     resourcePath,

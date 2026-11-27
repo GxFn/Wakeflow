@@ -1,4 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
+import { deepEqual, equal, notEqual, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -14,6 +14,7 @@ import {
   validateLoadedArtifactTreeManifest,
 } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
 const FIXTURE_FILES = Object.freeze([
   ["package.json", '{"name":"fixture","version":"1.0.0"}\n'],
@@ -197,9 +198,9 @@ test("empty trees, aborted work, and decorated options are rejected", async () =
 
     const controller = new AbortController();
     controller.abort();
-    await expectIdentityError(
+    await rejects(
       () => inspectLoadedArtifactTree(root, { signal: controller.signal }),
-      "aborted",
+      OperationAbortedError,
     );
     await expectIdentityError(() => inspectLoadedArtifactTree(root, null as never), "input");
     await expectIdentityError(

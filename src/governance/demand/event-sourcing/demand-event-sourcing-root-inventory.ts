@@ -99,7 +99,6 @@ export type DemandEventSourcingRootInventoryErrorReason =
   | "node-policy"
   | "capacity"
   | "source-changed"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -109,7 +108,6 @@ const ERROR_MESSAGES = {
   "node-policy": "Demand Event Sourcing root resource violates private node policy.",
   capacity: "Demand Event Sourcing root inventory exceeds its capacity.",
   "source-changed": "Demand Event Sourcing root inventory changed during observation.",
-  aborted: "Demand Event Sourcing root inventory was aborted.",
   "operation-failure": "Demand Event Sourcing root inventory failed.",
 } as const satisfies Readonly<Record<DemandEventSourcingRootInventoryErrorReason, string>>;
 
@@ -203,7 +201,6 @@ function assertFile(node: Readonly<FileNodeSnapshot>, path: string): void {
 }
 
 function mapReadError(error: StableDirectoryReadError, path: string): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "too-many-entries") fail("capacity", path);
   if (error.reason === "source-changed") fail("source-changed", path);
   if (error.reason === "root-scope") fail("root-scope", "$root");
@@ -218,7 +215,6 @@ function mapReadError(error: StableDirectoryReadError, path: string): never {
 }
 
 function mapManagedEvidenceError(error: ManagedEvidenceRecordSetInventoryError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "capacity") fail("capacity", "$managed-evidence");
   if (error.reason === "source-changed") {

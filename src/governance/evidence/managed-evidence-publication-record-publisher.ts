@@ -21,6 +21,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "../../foundation/filesystem/rooted-resource-parent-handle.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { ownedByAnotherUser } from "../../foundation/node/current-user.js";
 import {
   admitWakeflowResourceOperation,
@@ -79,7 +80,6 @@ export type ManagedEvidencePublicationRecordPublisherErrorReason =
   | "final-conflict"
   | "destination-exists"
   | "cross-device"
-  | "aborted"
   | "durability-failure"
   | "commit-uncertain"
   | "operation-failure";
@@ -93,7 +93,6 @@ const ERROR_MESSAGES = {
   "final-conflict": "Managed evidence publication final record conflicts with its plan.",
   "destination-exists": "Managed evidence publication final destination appeared before commit.",
   "cross-device": "Managed evidence publication record requires one filesystem device.",
-  aborted: "Managed evidence publication record publish was aborted before commit.",
   "durability-failure": "Managed evidence publication final directory entries are not durable.",
   "commit-uncertain": "Managed evidence publication final commit could not be proven exact.",
   "operation-failure": "Managed evidence publication record could not be published safely.",
@@ -169,10 +168,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
   try {
     return parseManagedEvidencePublicationTransaction(value);
@@ -185,7 +180,6 @@ function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTr
 }
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$demandRoot");
   fail("journal", "$journal");
 }
@@ -246,14 +240,6 @@ function assertPrivateRootNode(node: Readonly<FileNodeSnapshot>, owner: "stage" 
   }
 }
 
-function mapInspectionError(
-  error: DurableDirectoryTreeCandidateError,
-  owner: "stage" | "final",
-): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
-  fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
-}
-
 async function inspectTree(
   root: RootedDirectory,
   path: PortableResourcePath,
@@ -270,7 +256,7 @@ async function inspectTree(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreeCandidateError) {
-      mapInspectionError(error, owner);
+      fail(owner === "stage" ? "stage-conflict" : "final-conflict", `$${owner}`);
     }
     throw error;
   }
@@ -321,7 +307,6 @@ function admitFinalPublish(transaction: Readonly<ManagedEvidencePublicationTrans
 }
 
 function mapPublicationError(error: DurableDirectoryTreePublicationError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "input") fail("input", error.path);
   if (error.reason === "destination-exists") {
     fail("destination-exists", "$final");
@@ -427,7 +412,7 @@ export async function publishManagedEvidencePublicationRecord(
 ): Promise<Readonly<ManagedEvidencePublicationRecordResult>> {
   assertRoot(demandRootValue);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const transaction = parseTransaction(transactionValue);
   const stored = await requireJournal(demandRootValue, transaction, options.signal);
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);

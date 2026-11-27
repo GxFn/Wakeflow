@@ -24,6 +24,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
@@ -89,8 +90,7 @@ export type ClaudeCodePortableSettingsOperationExecutionErrorReason =
   | "source-stale"
   | "transition-blocked"
   | "owner"
-  | "close-failure"
-  | "aborted";
+  | "close-failure";
 
 const ERROR_MESSAGES = {
   input: "Claude portable settings operation execution input is invalid.",
@@ -104,7 +104,6 @@ const ERROR_MESSAGES = {
   "transition-blocked": "Claude portable settings operation transition is blocked.",
   owner: "Claude portable settings single-root owner failed.",
   "close-failure": "Claude portable settings operation root could not be closed.",
-  aborted: "Claude portable settings operation was aborted.",
 } as const satisfies Readonly<
   Record<ClaudeCodePortableSettingsOperationExecutionErrorReason, string>
 >;
@@ -385,7 +384,6 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
       );
     } catch (error: unknown) {
       if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         fail("owner", "$stageRecovery", error);
       }
       throw error;
@@ -400,7 +398,6 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
     });
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("owner", "$inspection", error);
     }
     throw error;
@@ -445,7 +442,6 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
     });
   } catch (error: unknown) {
     if (error instanceof ClaudeCodePortableSettingsPublicationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "transition-blocked") {
         fail("transition-blocked", "$transition", error);
       }
@@ -479,7 +475,7 @@ export async function executeClaudeCodePortableSettingsOperation(
     fail("input", "$workspaceRoot");
   }
   const request = parseRequest(requestValue);
-  if (request.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(request.signal);
   const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
   if (authority.authorityDigest !== request.operation.authorityDigest) {
     fail("authority-changed", "$operation.authorityDigest");

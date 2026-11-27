@@ -35,6 +35,7 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
+import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   type LedgerAuthorityMemberReference,
@@ -106,7 +107,6 @@ export type DemandAuthorityErrorReason =
   | "role"
   | "testing"
   | "resolution"
-  | "aborted"
   | "representation";
 
 const ERROR_MESSAGES = {
@@ -122,7 +122,6 @@ const ERROR_MESSAGES = {
   role: "Demand authority does not contain its required role closure.",
   testing: "Demand authority testing decision is inconsistent.",
   resolution: "Demand authority reference cannot be resolved exactly.",
-  aborted: "Demand authority admission was aborted.",
   representation: "Demand authority bytes are not its deterministic domain representation.",
 } as const satisfies Readonly<Record<DemandAuthorityErrorReason, string>>;
 
@@ -410,7 +409,7 @@ function parseAdmissionSignal(options: unknown): AbortSignal | undefined {
   return optionRecord.signal as AbortSignal | undefined;
 }
 
-/** 向账本解析权威引用；账本自己的失败归成中止或解析失败。 */
+/** 向账本解析权威引用；账本自己的失败归成解析失败，中止原样上抛。 */
 async function resolveAuthorityReferences(
   ledgerStore: LedgerAuthorityStore,
   references: Parameters<LedgerAuthorityStore["resolveMemberReferences"]>[0],
@@ -423,7 +422,6 @@ async function resolveAuthorityReferences(
     );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("resolution", "$/authorityRefs", error);
     }
     throw error;
@@ -451,7 +449,7 @@ export async function admitDemandAuthority(
     fail("input", "$ledgerStore");
   }
   const signal = parseAdmissionSignal(options);
-  if (signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(signal);
   const resolved: ResolvedDemandAuthorityReference[] = [];
   const ledgerResolutions = await resolveAuthorityReferences(
     ledgerStore,

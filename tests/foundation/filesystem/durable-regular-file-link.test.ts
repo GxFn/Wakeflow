@@ -1,4 +1,4 @@
-import { equal } from "node:assert/strict";
+import { equal, rejects } from "node:assert/strict";
 import {
   linkSync,
   mkdirSync,
@@ -24,6 +24,7 @@ import {
   parsePortableResourcePath,
 } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { countFsyncs } from "./fsync-count-probe.js";
 
 async function expectLinkError(
@@ -355,16 +356,15 @@ test("options, paths, and AbortSignal are passively admitted", async () => {
 
     const controller = new AbortController();
     controller.abort("private-link-reason");
-    const error = await expectLinkError(
+    await rejects(
       () =>
         linkRegularFileWithoutReplacement(root, source, parsePortableResourcePath("destination"), {
           expectedSourceNode: expected.node,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-link-reason"),
     );
-    equal(error.message.includes("private-link-reason"), false);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -21,6 +21,7 @@ import {
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { acquireKernelFileLock } from "../../../src/foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
@@ -221,11 +222,10 @@ test("Gitignore recomposition rejects unsafe sources and bounded lock contention
     const current = await fixture(subtest);
     const controller = new AbortController();
     controller.abort();
-    await expectRecompositionError(
+    await rejects(
       () =>
         recomposeWakeflowWorkspaceGitignore(current.root, request(), { signal: controller.signal }),
-      "aborted",
-      "$signal",
+      OperationAbortedError,
     );
   });
 

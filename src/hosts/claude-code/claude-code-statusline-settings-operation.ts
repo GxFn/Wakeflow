@@ -66,7 +66,7 @@ import {
   claudeCodeStatuslineCommand,
 } from "./claude-code-statusline-asset.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "./wakeflow-workspace-host-resource-profile.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { signalOptions, throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Host / Claude Code：状态栏命令写进本地设置的维护操作（gate-log §13.94 D6）。
@@ -202,8 +202,7 @@ export type ClaudeCodeStatuslineSettingsOperationErrorReason =
   | "write"
   | "placement"
   | "root-open"
-  | "close-failure"
-  | "aborted";
+  | "close-failure";
 
 const ERROR_MESSAGES = {
   input: "Claude statusline settings operation input is invalid.",
@@ -214,7 +213,6 @@ const ERROR_MESSAGES = {
   placement: "Claude support surface root could not be resolved.",
   "root-open": "Claude support surface root could not be opened.",
   "close-failure": "Claude support surface root could not be closed.",
-  aborted: "Claude statusline settings operation was aborted.",
 } as const satisfies Readonly<Record<ClaudeCodeStatuslineSettingsOperationErrorReason, string>>;
 
 /** 状态栏设置操作失败的稳定、脱敏错误。 */
@@ -307,7 +305,6 @@ async function currentSettings(
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
       if (error.reason === "not-found") return null;
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("settings-unreadable", "$settings", error);
     }
     throw error;
@@ -555,7 +552,7 @@ export async function planClaudeCodeStatuslineSettingsSurfaceOperations(
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsSurfacePlan>> {
   assertRoot(workspaceRoot);
   const model = parseModel(options.config);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const entry = claudeCodeStatuslineSettingsEntry(workspaceRoot.absolutePath);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
   const blockerCodes: string[] = [];
@@ -658,7 +655,7 @@ export async function planClaudeCodeStatuslineSettingsRemoval(
   assertRoot(workspaceRoot);
   if (!isWakeflowDetachAction(options.action)) fail("input", "$action");
   const model = parseModel(options.config);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
   const blockerCodes: string[] = [];
   const collect = (planned: SurfacePlanOutcome): void => {
@@ -792,7 +789,6 @@ async function ensureSettingsDirectory(
     });
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryMaterializationError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       fail("write", "$settings.directory", error);
     }
     throw error;
@@ -822,7 +818,6 @@ async function writeTarget(
     return "updated";
   } catch (error: unknown) {
     if (error instanceof DurableAtomicFileWriteError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "expectation-changed" || error.reason === "target-exists") {
         fail("source-stale", "$settings", error);
       }

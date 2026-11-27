@@ -17,7 +17,7 @@ import {
 } from "../foundation/filesystem/stable-directory-read.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { fail, isWakeflowError } from "./error.js";
-import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
   WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
@@ -60,9 +60,7 @@ async function assertWriterProtocol(root: RootedDirectory, signal?: AbortSignal)
       fail("precondition-failed", "writer-protocol-unsupported", "$config.schemaVersion");
     }
   } catch (error: unknown) {
-    if (isWakeflowError(error)) throw error;
-    if (error instanceof StableFileReadError && error.reason === "aborted")
-      fail("io-failure", "aborted", "$signal");
+    if (isWakeflowError(error) || error instanceof OperationAbortedError) throw error;
     fail("precondition-failed", "config-authority", "$config", { cause: error });
   }
 }
@@ -131,7 +129,6 @@ function assertBorrowable(
 
 function mapScopeError(error: unknown): never {
   if (error instanceof RootedReadWriteScopeError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("concurrency-conflict", `operation-scope-${error.reason}`, "$workspace", {
       cause: error,
       retryable: error.reason === "timeout",
@@ -147,7 +144,7 @@ export async function withWorkspaceOperationScope<Result>(
   operation: () => Promise<Result>,
   options: WorkspaceOperationScopeOptions = {},
 ): Promise<Result> {
-  if (options.signal?.aborted === true) fail("io-failure", "aborted", "$signal");
+  throwIfAborted(options.signal);
   const current = scopes.getStore();
   if (current !== undefined) {
     // 维护 gate 只能由最外层作用域持有：借用的作用域没有执行过 guard（§13.161 F8）。

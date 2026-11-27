@@ -19,6 +19,7 @@ import {
   RootedReadWriteScopeError,
   withRootedReadWriteScope,
 } from "../../../src/foundation/filesystem/rooted-read-write-scope.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
 
 const LOCKS = Object.freeze({
@@ -173,7 +174,7 @@ test("操作抛错与中止：持有照样放开；已经中止的信号不进�
     withRootedReadWriteScope(root, LOCKS, "exclusive", async () => undefined, {
       signal: aborted.signal,
     }),
-    scopeError("aborted"),
+    OperationAbortedError,
   );
   // 等待途中被中止：写者在里面，共享者等着，信号一到就以 aborted 收场。
   const writer = parked(root, "exclusive");
@@ -184,7 +185,7 @@ test("操作抛错与中止：持有照样放开；已经中止的信号不进�
   });
   await delay(40);
   waiting.abort();
-  await rejects(reader, scopeError("aborted"));
+  await rejects(reader, OperationAbortedError);
   writer.release();
   await writer.done;
   equal(

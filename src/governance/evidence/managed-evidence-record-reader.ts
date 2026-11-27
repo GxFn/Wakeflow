@@ -34,6 +34,7 @@ import {
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   type ByteCount,
   ByteCountError,
@@ -113,7 +114,6 @@ export type ManagedEvidenceRecordReaderErrorReason =
   | "capacity"
   | "content-mismatch"
   | "source-changed"
-  | "aborted"
   | "operation-failure";
 
 const ERROR_MESSAGES = {
@@ -127,7 +127,6 @@ const ERROR_MESSAGES = {
   capacity: "Managed evidence payload member exceeds the admitted read capacity.",
   "content-mismatch": "Managed evidence payload bytes differ from their Manifest descriptor.",
   "source-changed": "Managed evidence final record changed during reading.",
-  aborted: "Managed evidence record reading was aborted.",
   "operation-failure": "Managed evidence final record could not be read safely.",
 } as const satisfies Readonly<Record<ManagedEvidenceRecordReaderErrorReason, string>>;
 
@@ -308,7 +307,6 @@ function assertPrivateFile(node: Readonly<FileNodeSnapshot>, mode: number, path:
 }
 
 function mapDirectoryError(error: StableDirectoryReadError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "not-found") fail("not-found", "$record");
   if (error.reason === "source-changed" || error.reason === "expectation-changed") {
@@ -386,7 +384,6 @@ function sameDirectoryRead(
 
 function mapManifestReadError(error: unknown): never {
   if (error instanceof StableFileReadError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     if (error.reason === "root-scope") fail("root-scope", "$root");
     if (error.reason === "source-changed" || error.reason === "expectation-changed") {
       fail("source-changed", "$record/manifest");
@@ -441,7 +438,7 @@ export async function loadManagedEvidenceRecord(
   assertRoot(rootValue);
   const evidenceId = parseEvidenceId(evidenceIdValue);
   const options = parseLoadOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   let address: ReturnType<typeof managedEvidenceRecordAddress>;
   try {
     address = managedEvidenceRecordAddress(evidenceId);
@@ -536,7 +533,6 @@ function memberDescriptor(
 }
 
 function mapMemberReadError(error: StableFileReadError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "too-large") fail("capacity", "$member");
   if (error.reason === "source-changed" || error.reason === "expectation-changed") {
@@ -559,7 +555,7 @@ export async function readManagedEvidencePayloadMember(
   assertRecordCapability(recordValue);
   const memberRef = parseMemberRef(memberRefValue);
   const options = parseMemberOptions(optionsValue);
-  if (options.signal?.aborted === true) fail("aborted", "$signal");
+  throwIfAborted(options.signal);
   const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
   const member = memberDescriptor(before, memberRef);
   if (member.bytes > options.maximumBytes) fail("capacity", "$member");

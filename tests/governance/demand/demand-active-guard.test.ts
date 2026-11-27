@@ -32,7 +32,7 @@ import {
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
-import { WakeflowError } from "../../../src/kernel/error.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   createMinimalWakeflowConfig,
   serializeWakeflowConfigFixture,
@@ -176,8 +176,7 @@ test("活动守卫在读取身份记录时被中止报告io-failure/aborted而�
     const scripted = scriptedSignal(identityCheck);
     await rejects(
       assertNoActiveDemand(workspace.workspaceRoot, scripted.signal, null, OTHER_POD_ID),
-      (error: unknown) =>
-        error instanceof WakeflowError && error.code === "io-failure" && error.reason === "aborted",
+      OperationAbortedError,
     );
     equal(scripted.stacks[identityCheck]?.includes("identityPodId"), true);
   } finally {

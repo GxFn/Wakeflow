@@ -1,4 +1,4 @@
-import { deepEqual, equal } from "node:assert/strict";
+import { deepEqual, equal, rejects } from "node:assert/strict";
 import {
   existsSync,
   linkSync,
@@ -39,6 +39,7 @@ import {
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import { readStableFileDigest } from "../../../src/foundation/filesystem/stable-file-read.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 import { fail as failWakeflow, isWakeflowError } from "../../../src/kernel/error.js";
 import { describeIncidentChain } from "../../../src/kernel/incident.js";
@@ -1506,16 +1507,15 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
 
     const controller = new AbortController();
     controller.abort("private-abort");
-    const aborted = await expectAtomicWriteError(
+    await rejects(
       () =>
         createFileAtomically(root, resourcePath, Buffer.from("value"), {
           mode: 0o600,
           signal: controller.signal,
         }),
-      "aborted",
-      "$signal",
+      (error: unknown) =>
+        error instanceof OperationAbortedError && !error.message.includes("private-abort"),
     );
-    equal(aborted.message.includes("private-abort"), false);
 
     const stable = await readStableFileDigest(root, parsePortableResourcePath("state"), {
       maximumBytes: parseByteCount(1024),

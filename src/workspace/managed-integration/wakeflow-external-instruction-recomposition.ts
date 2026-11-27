@@ -5,6 +5,7 @@ import {
   type RootedDirectory,
   isRootedDirectory,
 } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   deriveWakeflowExternalInstructionAuthorities,
   type ParsedWakeflowExternalInstructionInspectionRequest,
@@ -60,7 +61,6 @@ export type WakeflowExternalInstructionRecompositionErrorReason =
   | "capacity"
   | "conflict"
   | "recovery-required"
-  | "aborted"
   | "effect-failure"
   | "commit-uncertain";
 
@@ -75,7 +75,6 @@ const ERROR_MESSAGES = {
   conflict: "Wakeflow external instruction source changed before atomic publication.",
   "recovery-required":
     "Wakeflow external instruction target has stage residue that requires explicit recovery.",
-  aborted: "Wakeflow external instruction recomposition was aborted.",
   "effect-failure": "Wakeflow external instruction recomposition effect failed.",
   "commit-uncertain": "Wakeflow external instruction recomposition commit outcome is uncertain.",
 } as const satisfies Readonly<Record<WakeflowExternalInstructionRecompositionErrorReason, string>>;
@@ -138,10 +137,6 @@ function parseOptions(value: unknown): AbortSignal | undefined {
   return record.signal;
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 function parseRequest(
   value: WakeflowExternalInstructionRecompositionRequest,
   signal: AbortSignal | undefined,
@@ -190,7 +185,6 @@ function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
     case "root-policy":
     case "conflict":
     case "recovery-required":
-    case "aborted":
     case "effect-failure":
     case "commit-uncertain":
       return fail(error.reason, error.path);
@@ -213,7 +207,7 @@ export async function recomposeWakeflowExternalInstruction(
 ): Promise<Readonly<WakeflowExternalInstructionRecompositionReceipt>> {
   assertRoot(rootValue);
   const signal = parseOptions(optionsValue);
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   const request = parseRequest(requestValue, signal);
   const authorities = deriveAuthorities(request);
   let receipt: Readonly<WakeflowManagedBlockFileReceipt>;

@@ -144,7 +144,6 @@ export async function openSliceContext(
     snapshot = await readWakeflowConfigAuthoritySnapshot(root, signalOptions(options.signal));
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
       failWakeflowConfigAuthority(error);
     }
     throw error;
@@ -226,14 +225,12 @@ export async function demandRootExists(root: RootedDirectory, demandId: string):
 
 function mapDemandOpenError(error: unknown): never {
   if (error instanceof DemandOperationAuthorityContextError) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("precondition-failed", `demand-root-${error.reason}`, "$demandRoot", { cause: error });
   }
   if (
     error instanceof DemandEventSourcingRootAuthorityError ||
     error instanceof LedgerAuthorityStoreError
   ) {
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     fail("precondition-failed", `demand-authority-${error.reason}`, "$demandRoot", {
       cause: error,
     });

@@ -7,6 +7,7 @@ import { type TestContext, test } from "node:test";
 
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
@@ -235,10 +236,7 @@ test("step executor observes cancellation before decoding plan payloads", async 
       } catch (error: unknown) {
         caught = error;
       }
-      equal(caught instanceof WakeflowStaticMaterializationStepExecutionError, true);
-      if (caught instanceof WakeflowStaticMaterializationStepExecutionError) {
-        equal(caught.reason, "aborted");
-      }
+      equal(caught instanceof OperationAbortedError, true);
     },
   );
 });

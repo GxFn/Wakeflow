@@ -1,7 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal } from "../node/abort-signal.js";
+import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   directoryTreeCandidateMaximumPathDepth,
@@ -88,7 +88,6 @@ export type DurableDirectoryTreeCandidateRetirementErrorReason =
   | "retirement-failure"
   | "commit-uncertain"
   | "durability-failure"
-  | "aborted"
   | "close-failure";
 
 const ERROR_MESSAGES = {
@@ -101,7 +100,6 @@ const ERROR_MESSAGES = {
   "commit-uncertain": "Directory tree candidate retirement result could not be proven exact.",
   "durability-failure":
     "Directory tree candidate retirement could not synchronize its directory entries.",
-  aborted: "Directory tree candidate retirement was aborted before a commit point.",
   "close-failure": "Directory tree candidate retirement could not close an exact handle.",
 } as const satisfies Readonly<Record<DurableDirectoryTreeCandidateRetirementErrorReason, string>>;
 
@@ -172,10 +170,6 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
     fail("input", "$options");
   }
   return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
 }
 
 function parsePath(value: unknown): PortableResourcePath {
@@ -264,7 +258,6 @@ function parseRecoveryInput(
 }
 
 function mapCandidateError(error: DurableDirectoryTreeCandidateError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "source-changed") {
     fail("source-changed", "$candidate");
   }
@@ -382,7 +375,6 @@ async function captureMembers(
       });
     } catch (error: unknown) {
       if (error instanceof StableFileReadError) {
-        if (error.reason === "aborted") fail("aborted", "$signal", error);
         if (error.reason === "source-changed") {
           fail("source-changed", "$candidate/file", error);
         }
@@ -412,7 +404,7 @@ async function captureMembers(
   ) {
     fail("source-changed", "$candidate");
   }
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   return Object.freeze({
     rootNode: confirmed.rootNode,
     directories,
@@ -423,7 +415,6 @@ async function captureMembers(
 }
 
 function mapFileUnlinkError(error: ExactRegularFileUnlinkError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "durability-failure") {
     fail("durability-failure", "$candidate/file");
   }
@@ -450,7 +441,7 @@ async function retireFiles(
   for (const file of [...plan.files].reverse()) {
     const captured = files.get(file.path);
     if (captured === undefined) continue;
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     try {
       await unlinkRegularFileExactly(root, memberPath(candidateRootPath, file.path), {
         expectedNode: captured.node,
@@ -551,7 +542,7 @@ export async function removeEmptyDirectoryExactly(
     }
     await parent.assertCurrent();
     await source.assertPathCurrent();
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     try {
       await filesystemMutation.rmdir(parent.resourceAbsolutePath);
     } catch (error: unknown) {
@@ -643,7 +634,7 @@ async function retireDirectories(
   for (const directory of deepestFirst(plan.directories)) {
     const expected = captured.directories.get(directory);
     if (expected === undefined) continue;
-    assertNotAborted(signal);
+    throwIfAborted(signal);
     await removeEmptyDirectoryExactly(
       root,
       memberPath(candidateRootPath, directory),
@@ -653,7 +644,7 @@ async function retireDirectories(
     );
     retired += 1;
   }
-  assertNotAborted(signal);
+  throwIfAborted(signal);
   await removeEmptyDirectoryExactly(
     root,
     candidateRootPath,
@@ -677,7 +668,6 @@ async function settleAbsentCandidate(
     });
   } catch (error: unknown) {
     if (!(error instanceof DurableResourceEntrySettlementError)) throw error;
-    if (error.reason === "aborted") fail("aborted", "$signal", error);
     if (error.reason === "observation-changed") fail("source-changed", "$candidate", error);
     fail("durability-failure", "$candidate", error);
   }
@@ -732,7 +722,7 @@ export async function retireDirectoryTreeCandidateDurably(
 ): Promise<Readonly<DirectoryTreeCandidateRetirementReceipt>> {
   assertRoot(rootValue);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const candidate = parseCandidate(candidateValue);
   await inspectComplete(rootValue, candidate, options.signal);
   const receipt = await settleRetirement(
@@ -758,7 +748,7 @@ export async function settleDirectoryTreeCandidateRetirement(
 ): Promise<Readonly<DirectoryTreeCandidateRetirementReceipt>> {
   assertRoot(rootValue);
   const options = parseOptions(optionsValue);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const input = parseRecoveryInput(candidateRootPathValue, planValue);
   return settleRetirement(rootValue, input.candidateRootPath, input.plan, options.signal);
 }

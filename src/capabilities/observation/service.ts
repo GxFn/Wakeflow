@@ -22,7 +22,7 @@ import {
   readStableResourceDirectory,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
-import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { OperationAbortedError, signalOptions } from "../../foundation/node/abort-signal.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import {
@@ -251,18 +251,9 @@ const DIRECTORY_MAXIMUM_ENTRIES = 4096;
 const JOURNAL_FILE_PATTERN =
   /^(demand_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.json$/u;
 
-function reasonOf(error: unknown): string | null {
-  if (typeof error !== "object" || error === null) return null;
-  const reason = (error as { readonly reason?: unknown }).reason;
-  return typeof reason === "string" ? reason : null;
-}
-
-/**
- * verify 的加读把"域读不出"降级成 unavailable，但中止不是域故障：和 openContext 一样收敛成
- * `io-failure/aborted`，否则基础层的原始异常会在 MCP 信封里变成 `unexpected/unhandled`。
- */
+/** verify 的加读把"域读不出"降级成 unavailable，但中止不是域故障：原样上抛，由命令边界翻译。 */
 function failIfAborted(error: unknown): void {
-  if (reasonOf(error) === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
+  if (error instanceof OperationAbortedError) throw error;
 }
 
 // ---- 上下文 ----------------------------------------------------------------------
@@ -293,7 +284,6 @@ async function detachedSnapshotOrNull(
     return await readWakeflowDetachedConfigSnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
     if (!(error instanceof WakeflowConfigAuthoritySnapshotError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     return null;
   }
 }
@@ -309,7 +299,6 @@ async function readSnapshot(
     };
   } catch (error: unknown) {
     if (!(error instanceof WakeflowConfigAuthoritySnapshotError)) throw error;
-    if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", { cause: error });
     const detached = error.reason === "source" ? await detachedSnapshotOrNull(root, signal) : null;
     if (detached !== null) return { snapshot: detached, detached: true };
     failWakeflowConfigAuthority(error);
@@ -350,7 +339,6 @@ async function observeMaintenance(
     });
   } catch (error: unknown) {
     if (!(error instanceof WakeflowWorkspaceCoreLayoutInspectionError)) throw error;
-    failIfAborted(error);
     return Object.freeze({
       status: "unavailable" as const,
       protocol: "unknown" as const,

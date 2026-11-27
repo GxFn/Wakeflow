@@ -33,6 +33,7 @@ import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 
 const STAGE_REF = parsePortableResourcePath("transactions/.managed-evidence.wakeflow-stage");
@@ -222,12 +223,12 @@ test("取消与行为输入在首个删除提交点之前失败", async () => {
   try {
     const controller = new AbortController();
     controller.abort();
-    await expectRetirementError(
+    await rejects(
       () =>
         retireDirectoryTreeCandidateDurably(fixture.root, fixture.candidate, {
           signal: controller.signal,
         }),
-      "aborted",
+      OperationAbortedError,
     );
     equal(existsSync(stagePath(fixture.rootPath)), true);
 

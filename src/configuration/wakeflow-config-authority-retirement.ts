@@ -8,6 +8,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
@@ -47,8 +48,7 @@ export type WakeflowConfigAuthorityRetirementErrorReason =
   | "destination-exists"
   | "lock"
   | "commit-uncertain"
-  | "retirement-failure"
-  | "aborted";
+  | "retirement-failure";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow config authority retirement input is invalid.",
@@ -61,7 +61,6 @@ const ERROR_MESSAGES = {
   lock: "Wakeflow config authority retirement could not take the config lock.",
   "commit-uncertain": "Wakeflow config authority retirement commit outcome is uncertain.",
   "retirement-failure": "Wakeflow config authority retirement failed.",
-  aborted: "Wakeflow config authority retirement was aborted.",
 } as const satisfies Readonly<Record<WakeflowConfigAuthorityRetirementErrorReason, string>>;
 
 /** Config 退役失败的稳定、脱敏错误。 */
@@ -110,10 +109,6 @@ function mapReplacementContractError(error: WakeflowConfigAuthorityReplacementEr
   fail("retirement-failure", error.path);
 }
 
-function assertNotAborted(signal: AbortSignal | undefined): void {
-  if (signal?.aborted === true) fail("aborted", "$signal");
-}
-
 async function configResourceExists(root: RootedDirectory): Promise<boolean> {
   try {
     await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
@@ -138,7 +133,6 @@ async function readCurrentOrNull(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (error.reason === "source" && !(await configResourceExists(root))) return null;
       fail("source", "$config", error);
@@ -158,7 +152,6 @@ async function readDetached(
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      if (error.reason === "aborted") fail("aborted", "$signal", error);
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       fail("source", "$detached", error);
     }
@@ -167,7 +160,6 @@ async function readDetached(
 }
 
 function mapRenameError(error: DurableResourceRenameError): never {
-  if (error.reason === "aborted") fail("aborted", "$signal");
   if (error.reason === "destination-exists") fail("destination-exists", "$detached");
   if (error.reason === "root-scope") fail("root-scope", "$root");
   if (error.reason === "commit-uncertain") fail("commit-uncertain", "$detached");
@@ -190,6 +182,7 @@ async function renameConfigToDetached(
       },
     );
   } catch (error: unknown) {
+    if (error instanceof OperationAbortedError) throw error;
     if (error instanceof DurableResourceRenameError) mapRenameError(error);
     fail("retirement-failure", "$config", error);
   }
@@ -238,7 +231,7 @@ async function retireUnderLock(
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowConfigAuthorityRetirementReceipt>> {
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const detached = await readDetached(root, options.signal);
   const current = await readCurrentOrNull(root, options.signal);
   if (current === null) {
@@ -249,7 +242,7 @@ async function retireUnderLock(
   if (current.configDigest !== expected) fail("conflict", "$config");
   if (detached !== null) fail("destination-exists", "$detached");
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
-  assertNotAborted(options.signal);
+  throwIfAborted(options.signal);
   const renamed = await renameConfigToDetached(root, current, options.signal);
   markCommitted();
   const after = await assertRetirementReadback(root, expected, current, renamed);
@@ -267,12 +260,15 @@ function parseExpectedDigest(value: unknown): Sha256Digest {
 
 /** 锁内外的失败归类：自己的错误原样抛，合同错误过桥，锁错误按是否已提交归为 lock 或 commit-uncertain。 */
 function mapRetirementFailure(error: unknown, committed: boolean): never {
-  if (error instanceof WakeflowConfigAuthorityRetirementError) throw error;
+  if (
+    error instanceof WakeflowConfigAuthorityRetirementError ||
+    error instanceof OperationAbortedError
+  )
+    throw error;
   if (error instanceof WakeflowConfigAuthorityReplacementError) {
     mapReplacementContractError(error);
   }
   if (error instanceof KernelFileLockError) {
-    if (error.reason === "aborted") fail("aborted", "$signal");
     fail(committed ? "commit-uncertain" : "lock", "$lock");
   }
   fail(committed ? "commit-uncertain" : "retirement-failure", "$config");
@@ -295,7 +291,7 @@ export async function retireWakeflowConfigAuthority(
   } catch (error: unknown) {
     mapRetirementFailure(error, false);
   }
-  assertNotAborted(parsed.signal);
+  throwIfAborted(parsed.signal);
   let committed = false;
   try {
     return await withWorkspaceLock(

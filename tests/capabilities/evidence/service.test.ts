@@ -18,7 +18,6 @@ import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/e
 import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
 import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
 import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
-import { DemandResultReviewSnapshotError } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
@@ -510,7 +509,7 @@ test("证据提交之后才中止：apply 以 io-failure/aborted 于 $signal 失
         error.code === "io-failure" &&
         error.reason === "aborted" &&
         error.path === "$signal" &&
-        error.cause instanceof DemandResultReviewSnapshotError,
+        error.cause === undefined,
     );
     equal(signal.aborted, true);
     const after = await preview(fixture, selection);

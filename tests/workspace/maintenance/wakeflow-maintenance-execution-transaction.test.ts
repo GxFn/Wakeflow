@@ -18,6 +18,7 @@ import { type TestContext, test } from "node:test";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
@@ -281,11 +282,7 @@ test("maintenance transaction preserves cancellation before durable work", async
   } catch (error: unknown) {
     caught = error;
   }
-  equal(caught instanceof WakeflowMaintenanceExecutionTransactionError, true);
-  if (caught instanceof WakeflowMaintenanceExecutionTransactionError) {
-    equal(caught.reason, "aborted");
-    equal(caught.operationId, null);
-  }
+  equal(caught instanceof OperationAbortedError, true);
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
 
   caught = undefined;

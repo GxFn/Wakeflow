@@ -10,6 +10,7 @@ import {
   parsePortableResourcePath,
 } from "../../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../../src/foundation/time/utc-instant.js";
 import { decideDemandEventSourcingCommand } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
@@ -175,7 +176,7 @@ function isStoreError(reason: DemandFileEventStoreError["reason"], errorPath?: s
     (errorPath === undefined || error.path === errorPath);
 }
 
-const aborted = isStoreError("aborted", "$signal");
+const aborted = OperationAbortedError;
 
 test("readDemandFileEventDirectory 读取稳定清单并按政策判定目录节点", async (t) => {
   const { root, store, commitsPath } = await openStore(t, "wakeflow-reader-directory-");

@@ -21,7 +21,7 @@ import type { WakeflowWindowRuntimeLogicalRoot } from "./wakeflow-window-runtime
 import {
   wakeflowWindowHostBindingRef,
   wakeflowWindowRuntimeProjectionRef,
-} from "./wakeflow-window-runtime-paths.js";
+} from "../wakeflow-window-runtime-paths.js";
 import {
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION,

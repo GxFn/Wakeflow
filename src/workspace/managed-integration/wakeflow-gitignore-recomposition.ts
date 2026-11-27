@@ -28,7 +28,7 @@ import {
   wakeflowGitignoreInspectionRequest,
   wakeflowGitignoreRecompositionLockOptions,
 } from "./wakeflow-gitignore-recomposition-contract.js";
-import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../wakeflow-managed-integration-resource-catalog.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：根 `.gitignore` 的锁内精确重组 owner。

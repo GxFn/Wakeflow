@@ -36,7 +36,7 @@ import {
 } from "../../../src/kernel/prompt-digest.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {
   createPreparedWorkspaceStore,

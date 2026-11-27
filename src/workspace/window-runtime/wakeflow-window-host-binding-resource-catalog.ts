@@ -5,7 +5,7 @@ import {
   type WakeflowWorkspaceResourceDeclaration,
 } from "../../kernel/workspace-resource-declaration.js";
 import { compileWakeflowWindowRuntimeDesiredTopology } from "./wakeflow-window-runtime-desired-topology.js";
-import { wakeflowWindowHostBindingRef } from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRef } from "../wakeflow-window-runtime-paths.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：Config 静态窗口对应的私有 Binding 资源目录。

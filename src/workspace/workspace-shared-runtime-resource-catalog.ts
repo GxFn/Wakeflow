@@ -2,7 +2,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
-import { WAKEFLOW_RUNTIME_ROOT_REF } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
 import {
   privateWorkspaceDirectoryDeclaration,
   type WakeflowWorkspaceResourceDeclaration,

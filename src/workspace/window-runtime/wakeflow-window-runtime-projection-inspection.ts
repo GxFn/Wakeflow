@@ -20,7 +20,7 @@ import {
   WakeflowWindowHostBindingStoreAuthorityError,
 } from "./wakeflow-window-host-binding-store-authority.js";
 import type { WakeflowWindowHostIdentityProfile } from "./wakeflow-window-host-identity-profile.js";
-import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowRuntimeProjectionRootRef } from "../wakeflow-window-runtime-paths.js";
 import {
   inspectWakeflowWindowRuntimeProjectionDocument,
   type WakeflowWindowRuntimeProjectionDocumentTarget,

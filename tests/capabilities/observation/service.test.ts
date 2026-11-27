@@ -92,9 +92,9 @@ import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
 } from "../../../src/governance/delivery/work-claims.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/wakeflow-maintenance-resource-catalog.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {

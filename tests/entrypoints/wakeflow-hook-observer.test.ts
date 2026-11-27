@@ -46,7 +46,7 @@ import {
   readHostHookObservations,
 } from "../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
-import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/wakeflow-window-runtime-paths.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";

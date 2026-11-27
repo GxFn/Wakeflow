@@ -20,7 +20,7 @@ import {
 import { CLAUDE_CODE_MANAGED_WRITE_DENY } from "../../src/hosts/claude-code/claude-code-helper-asset-template.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/wakeflow-window-runtime-paths.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 import { disposableRoot } from "../support/temp-root.js";

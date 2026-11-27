@@ -1,7 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/wakeflow-maintenance-resource-catalog.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

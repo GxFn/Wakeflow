@@ -67,7 +67,7 @@ import { WakeflowWindowRuntimeProjectionError } from "../../workspace/window-run
 import {
   refreshWakeflowWindowRuntimeProjections,
   retireWakeflowWindowRuntimeProjections,
-} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+} from "../../workspace/maintenance/wakeflow-window-runtime-projection-maintenance.js";
 import {
   selectWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostTransportTable,

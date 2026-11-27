@@ -31,7 +31,7 @@ import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
-import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 

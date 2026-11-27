@@ -25,8 +25,8 @@ import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { isWakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
-import type { WakeflowHostMaintenanceOperationInput } from "../maintenance/wakeflow-host-maintenance-contribution.js";
-import type { WakeflowStaticMaterializationAction } from "../maintenance/wakeflow-static-materialization-preview-contract.js";
+import type { WakeflowHostMaintenanceOperationInput } from "./wakeflow-host-maintenance-contribution.js";
+import type { WakeflowStaticMaterializationAction } from "./wakeflow-static-materialization-preview-contract.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
@@ -37,22 +37,22 @@ import {
 import {
   WakeflowWindowHostBindingStoreError,
   withWakeflowWindowHostBindingStore,
-} from "./wakeflow-window-host-binding-store.js";
+} from "../window-runtime/wakeflow-window-host-binding-store.js";
 import {
   compileWakeflowWindowHostBindingStoreAuthority,
   WakeflowWindowHostBindingStoreAuthorityError,
-} from "./wakeflow-window-host-binding-store-authority.js";
-import type { WakeflowWindowHostIdentityProfile } from "./wakeflow-window-host-identity-profile.js";
+} from "../window-runtime/wakeflow-window-host-binding-store-authority.js";
+import type { WakeflowWindowHostIdentityProfile } from "../window-runtime/wakeflow-window-host-identity-profile.js";
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRef,
   wakeflowWindowRuntimeProjectionRootRef,
-} from "./wakeflow-window-runtime-paths.js";
+} from "../wakeflow-window-runtime-paths.js";
 import {
   inspectWakeflowWindowRuntimeProjectionDocument,
   publishWakeflowWindowRuntimeProjectionDocument,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_FILE_MODE,
-} from "./wakeflow-window-runtime-projection-document.js";
+} from "../window-runtime/wakeflow-window-runtime-projection-document.js";
 import {
   compileWakeflowWindowRuntimeProjectionExpectedEntries,
   failWindowRuntimeProjection,
@@ -61,14 +61,14 @@ import {
   type WakeflowWindowRuntimeProjectionExpectedEntries,
   type WakeflowWindowRuntimeProjectionExpectedEntry,
   type WakeflowWindowRuntimeProjectionInputs,
-} from "./wakeflow-window-runtime-projection-inspection.js";
+} from "../window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,
   WakeflowWindowRuntimeUnregisteredProjectionError,
-} from "./wakeflow-window-runtime-unregistered-projection.js";
+} from "../window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 
 /**
- * Wakeflow Workspace / Window Runtime：对账时窗口运行投影的重建（能力卡 1 §1.4 自动修复）。
+ * Wakeflow Workspace / Maintenance：对账时窗口运行投影的重建（能力卡 1 §1.4 自动修复）。
  *
  * 每个窗口的目标文档由当前 Config 与当前 Binding inventory 重算（观察缝
  * `wakeflow-window-runtime-projection-inspection.ts`，与 `wakeflow_status` / `wakeflow_verify`

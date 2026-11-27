@@ -18,7 +18,7 @@ import {
   planWakeflowWindowRuntimeProjectionMaintenance,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
-} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+} from "../../workspace/maintenance/wakeflow-window-runtime-projection-maintenance.js";
 import { codexWindowHostIdentityProfile } from "./codex-window-host-identity-profile.js";
 
 /**

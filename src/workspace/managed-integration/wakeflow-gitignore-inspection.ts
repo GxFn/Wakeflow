@@ -42,7 +42,7 @@ import {
   type WakeflowGitignoreExactOutsideClassification,
   type WakeflowGitignoreRule,
 } from "./wakeflow-gitignore-body-authority.js";
-import { WAKEFLOW_GITIGNORE_REF } from "./wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../wakeflow-managed-integration-resource-catalog.js";
 import {
   inspectWakeflowManagedTextEnvelope,
   recomposeWakeflowManagedTextEnvelope,

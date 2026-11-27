@@ -4,12 +4,12 @@ import { test } from "node:test";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
-} from "../../../src/foundation/resource/resource-processing-contract.js";
+} from "../../src/foundation/resource/resource-processing-contract.js";
 import {
   WAKEFLOW_GITIGNORE_REF,
   WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_WORKSPACE_IGNORE_RESOURCE_DECLARATION,
-} from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
+} from "../../src/workspace/wakeflow-managed-integration-resource-catalog.js";
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;

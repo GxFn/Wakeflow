@@ -9,8 +9,8 @@ import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../../src/governance/de
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../../src/governance/ledger/ledger-resource-catalog.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
-import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../../src/workspace/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MANAGED_INTEGRATION_STATIC_RESOURCE_CATALOG } from "../../src/workspace/wakeflow-managed-integration-resource-catalog.js";
 import {
   WAKEFLOW_ACTIVE_STATIC_RESOURCE_CATALOG,
   WAKEFLOW_REQUIREMENT_BOARD_STATIC_RESOURCE_CATALOG,

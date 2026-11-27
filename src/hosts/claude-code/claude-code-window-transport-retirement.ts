@@ -40,7 +40,7 @@ import {
   compileWakeflowWindowHostBindingStoreAuthority,
   WakeflowWindowHostBindingStoreAuthorityError,
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store-authority.js";
-import { wakeflowWindowHostBindingRef } from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRef } from "../../workspace/wakeflow-window-runtime-paths.js";
 import {
   inspectWakeflowWindowRuntimeProjectionDocument,
   publishWakeflowWindowRuntimeProjectionDocument,

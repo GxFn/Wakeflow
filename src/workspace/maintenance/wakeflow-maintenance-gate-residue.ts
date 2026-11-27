@@ -6,7 +6,7 @@ import {
   recoverDurableAtomicFileStagesInDirectory,
 } from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
   WakeflowWorkspaceCoreLayoutInspectionError,

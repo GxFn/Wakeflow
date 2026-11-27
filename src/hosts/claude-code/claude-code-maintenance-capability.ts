@@ -23,7 +23,7 @@ import {
   planWakeflowWindowRuntimeProjectionMaintenance,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OPERATION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_OWNER_ID,
-} from "../../workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+} from "../../workspace/maintenance/wakeflow-window-runtime-projection-maintenance.js";
 import { CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME } from "./claude-code-desktop-asset.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_BLOCKER,

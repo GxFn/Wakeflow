@@ -6,7 +6,7 @@ import { hostPodReceiptsRootRef } from "../kernel/layout.js";
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
-} from "./window-runtime/wakeflow-window-runtime-paths.js";
+} from "./wakeflow-window-runtime-paths.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 import {
   wakeflowHostIdentityRootRef,

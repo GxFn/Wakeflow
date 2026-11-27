@@ -28,7 +28,7 @@ import {
   WAKEFLOW_MAINTENANCE_ROOT_REF,
   WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF,
   WAKEFLOW_RUNTIME_ROOT_REF,
-} from "./wakeflow-maintenance-resource-catalog.js";
+} from "../wakeflow-maintenance-resource-catalog.js";
 
 /**
  * Wakeflow Workspace / Maintenance：Workspace 核心私有布局的只读稳定检查。

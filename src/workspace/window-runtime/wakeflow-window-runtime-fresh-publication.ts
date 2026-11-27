@@ -43,7 +43,7 @@ import {
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
-import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_RUNTIME_ROOT_REF } from "../wakeflow-maintenance-resource-catalog.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
@@ -60,7 +60,7 @@ import {
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
-} from "./wakeflow-window-runtime-paths.js";
+} from "../wakeflow-window-runtime-paths.js";
 import { WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES } from "./wakeflow-window-runtime-projection-document.js";
 import {
   parseWakeflowWindowRuntimeUnregisteredProjectionDocument,

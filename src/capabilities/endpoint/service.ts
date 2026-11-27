@@ -116,7 +116,7 @@ import {
 import {
   wakeflowWindowHostBindingRef,
   wakeflowWindowHostBindingRootRef,
-} from "../../workspace/window-runtime/wakeflow-window-runtime-paths.js";
+} from "../../workspace/wakeflow-window-runtime-paths.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,

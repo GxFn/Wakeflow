@@ -15,7 +15,7 @@ import {
   createWakeflowMaintenanceOperationId,
   type WakeflowMaintenanceOperationId,
 } from "./wakeflow-maintenance-operation-id.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../wakeflow-maintenance-resource-catalog.js";
 import {
   inspectWakeflowWorkspaceCoreLayout,
   type WakeflowWorkspaceCoreLayoutInspection,

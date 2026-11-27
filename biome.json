@@ -128,6 +128,7 @@
         "src/workspace/maintenance/wakeflow-static-materialization-preview-contract.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-preview.ts",
         "src/workspace/maintenance/wakeflow-static-materialization-step-executor.ts",
+        "src/workspace/maintenance/wakeflow-window-runtime-projection-maintenance.ts",
         "src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.ts",
         "src/workspace/managed-integration/wakeflow-gitignore-body-authority.ts",
         "src/workspace/managed-integration/wakeflow-gitignore-inspection.ts",
@@ -138,8 +139,7 @@
         "src/workspace/wakeflow-workspace-static-resource-matrix.ts",
         "src/workspace/window-runtime/wakeflow-window-host-binding-store.ts",
         "src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.ts",
-        "src/workspace/window-runtime/wakeflow-window-runtime-projection-document.ts",
-        "src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.ts"
+        "src/workspace/window-runtime/wakeflow-window-runtime-projection-document.ts"
       ],
       "linter": {
         "rules": {

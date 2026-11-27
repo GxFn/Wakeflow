@@ -1,11 +1,11 @@
-import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../../kernel/workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 
 /**
- * Wakeflow Workspace / Managed Integration：宿主无关的混合所有权资源目录。
+ * Wakeflow Workspace：宿主无关的混合所有权资源目录。
  *
  * 本目录只声明 Workspace 根 `.gitignore` 的资源政策。具体忽略规则、现有用户规则
  * 分类、文件读取、Git 语义检查和重组 effect 由后续职责所有者完成。

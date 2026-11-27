@@ -7,7 +7,7 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
-import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createDetachFixture, type DetachFixture } from "./detach-workspace.fixture.js";

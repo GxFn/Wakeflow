@@ -10,7 +10,7 @@ import {
   UuidV4Error,
   type UuidV4Factory,
 } from "../../foundation/identity/uuid-v4.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../wakeflow-maintenance-resource-catalog.js";
 
 /**
  * Wakeflow Workspace / Maintenance：单次 maintenance operation 的短生命周期身份。

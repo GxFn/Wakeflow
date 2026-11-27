@@ -45,7 +45,7 @@ import {
 import {
   wakeflowWindowRuntimeProjectionRef,
   wakeflowWindowRuntimeProjectionRootRef,
-} from "./wakeflow-window-runtime-paths.js";
+} from "../wakeflow-window-runtime-paths.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：Fresh 初始化的未注册窗口投影集合。

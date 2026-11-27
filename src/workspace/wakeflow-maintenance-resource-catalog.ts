@@ -1,15 +1,15 @@
-import { WAKEFLOW_LOCAL_ROOT } from "../../configuration/wakeflow-config.js";
+import { WAKEFLOW_LOCAL_ROOT } from "../configuration/wakeflow-config.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
-import { WORKSPACE_LOCKS_ROOT_REF } from "../../kernel/workspace-locks.js";
+} from "../foundation/filesystem/portable-resource-path.js";
+import { WORKSPACE_LOCKS_ROOT_REF } from "../kernel/workspace-locks.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
-} from "../../kernel/workspace-resource-declaration.js";
+} from "../kernel/workspace-resource-declaration.js";
 /**
- * Wakeflow Workspace / Maintenance：Workspace 核心私有根与维护协议静态资源目录。
+ * Wakeflow Workspace：Workspace 核心私有根与维护协议静态资源目录。
  *
  * 本目录只声明 `.wakeflow-local`、maintenance bootstrap 目录链和锁目录。
  * Active 两级共享容器由相邻 Active Layout Catalog 独立声明；具体 transaction

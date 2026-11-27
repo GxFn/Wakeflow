@@ -1,16 +1,16 @@
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../contracts/identity/wakeflow-durable-id.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
-import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
+} from "../foundation/filesystem/portable-resource-path.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
-} from "../workspace-host-runtime-paths.js";
+} from "./workspace-host-runtime-paths.js";
 
 /**
- * Wakeflow Workspace / Window Runtime：当前宿主的 identity 与 projection 路径词汇。
+ * Wakeflow Workspace：当前宿主的 identity 与 projection 路径词汇。
  *
  * 本模块只从严格 Host Profile 和稳定 windowId 派生可移植引用，不读取 Binding、投影
  * 或文件系统，也不接受 display name、绝对路径或任意文件名。Profile 与 windowId 是类型化的

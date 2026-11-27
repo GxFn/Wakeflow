@@ -24,7 +24,7 @@ import { compileWakeflowWindowHostBindingStoreAuthority } from "../../../src/wor
 import { parseWakeflowWindowHostHandle } from "../../../src/workspace/window-runtime/wakeflow-window-host-identity-profile.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
-import { wakeflowWindowHostBindingRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import { publishWakeflowWindowRuntimeProjectionDocument } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-document.js";
 import { WakeflowWindowRuntimeProjectionError } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import {
@@ -32,7 +32,7 @@ import {
   executeWakeflowWindowRuntimeProjectionOperation,
   planWakeflowWindowRuntimeProjectionMaintenance,
   refreshWakeflowWindowRuntimeProjections,
-} from "../../../src/workspace/window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+} from "../../../src/workspace/maintenance/wakeflow-window-runtime-projection-maintenance.js";
 import { compileWakeflowWindowRuntimeRegisteredProjectionEntry } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-registered-projection.js";
 import {
   compileWakeflowWindowRuntimeUnregisteredProjectionSet,

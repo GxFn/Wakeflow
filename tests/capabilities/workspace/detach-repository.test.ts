@@ -11,7 +11,7 @@ import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wake
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { wakeflowExternalInstructionTargetKey } from "../../../src/workspace/managed-integration/wakeflow-external-instruction-body-authority.js";
 import { recomposeWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
-import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import { wakeflowWindowRuntimeProjectionRef } from "../../../src/workspace/wakeflow-window-runtime-paths.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,

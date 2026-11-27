@@ -10,7 +10,7 @@ import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
-import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/wakeflow-maintenance-resource-catalog.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { CODEX_OBSERVATION_FACADE } from "./observation-facade.fixture.js";

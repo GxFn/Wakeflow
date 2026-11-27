@@ -82,7 +82,7 @@ import {
   removeWakeflowManagedBlockFile,
   WakeflowManagedBlockFileError,
 } from "../managed-integration/wakeflow-managed-block-file.js";
-import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../wakeflow-managed-integration-resource-catalog.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "../managed-integration/wakeflow-managed-text-envelope.js";
 import {
   historicalWakeflowManagedTextTargets,
@@ -127,7 +127,7 @@ import { WakeflowWindowRuntimeProjectionError } from "../window-runtime/wakeflow
 import {
   ensureWakeflowWindowRuntimeSkeleton,
   retireWakeflowWindowRuntimeProjections,
-} from "../window-runtime/wakeflow-window-runtime-projection-maintenance.js";
+} from "./wakeflow-window-runtime-projection-maintenance.js";
 import {
   WAKEFLOW_DETACH_WORKSPACE_TARGET_KEY,
   wakeflowConfigRetirementAuthorityDigest,
@@ -139,7 +139,7 @@ import {
   type WakeflowMaintenanceGateContext,
   WakeflowMaintenanceGateError,
 } from "./wakeflow-maintenance-gate.js";
-import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
+import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "../wakeflow-maintenance-resource-catalog.js";
 import {
   type WakeflowStaticMaterializationAction,
   type WakeflowStaticMaterializationPreview,

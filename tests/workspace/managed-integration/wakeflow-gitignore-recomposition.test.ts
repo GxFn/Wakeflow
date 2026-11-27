@@ -34,7 +34,7 @@ import {
   WakeflowGitignoreRecompositionError,
 } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";
 import type { WakeflowGitignoreRecompositionErrorReason } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition-contract.js";
-import { WAKEFLOW_GITIGNORE_REF } from "../../../src/workspace/managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../../../src/workspace/wakeflow-managed-integration-resource-catalog.js";
 import { inspectWakeflowManagedTextEnvelope } from "../../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";

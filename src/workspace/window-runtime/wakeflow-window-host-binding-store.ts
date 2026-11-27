@@ -52,7 +52,7 @@ import type {
   WakeflowWindowHostHandle,
   WakeflowWindowHostIdentityProfile,
 } from "./wakeflow-window-host-identity-profile.js";
-import { wakeflowWindowHostBindingRef } from "./wakeflow-window-runtime-paths.js";
+import { wakeflowWindowHostBindingRef } from "../wakeflow-window-runtime-paths.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：私有 Binding authority store。

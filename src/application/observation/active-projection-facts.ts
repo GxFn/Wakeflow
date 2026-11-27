@@ -9,7 +9,7 @@ import {
   type ActiveProjectionUnmergedFacts,
   inspectActiveProjectionTargets,
   renderActiveProjectionFiles,
-} from "../../kernel/active-projection.js";
+} from "../../workspace/active-projection/active-projection.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { deriveNextProjection } from "../../kernel/next-projection.js";
 import {

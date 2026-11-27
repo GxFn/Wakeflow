@@ -59,7 +59,7 @@ import {
   type WorkspaceObservation,
   type WorkspaceOverallStatus,
 } from "../../application/observation/workspace-observation.js";
-import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
+import type { ActiveProjectionTargetInspection } from "../../workspace/active-projection/active-projection.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";
 import { DEMAND_LIFECYCLE_JOURNALS_ROOT_REF } from "../../kernel/layout.js";

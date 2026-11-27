@@ -101,7 +101,7 @@ import {
   inspectWakeflowSupportMemory,
   WakeflowSupportMemoryInspectionError,
 } from "../support/wakeflow-support-memory-inspection.js";
-import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
+import { renderWakeflowFreshActiveProjection } from "../active-projection/wakeflow-active-fresh-projection.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
 import { scanWakeflowLegacyResidue } from "../wakeflow-legacy-residue-scan.js";
 import {

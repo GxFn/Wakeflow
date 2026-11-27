@@ -29,10 +29,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
-import {
-  type ActiveLayoutInspection,
-  inspectActiveLayout,
-} from "../../kernel/active-projection.js";
+import { type ActiveLayoutInspection, inspectActiveLayout } from "../../kernel/active-layout.js";
 import { fail } from "../../kernel/error.js";
 import {
   HOST_HOOK_RECORDS_MAXIMUM,

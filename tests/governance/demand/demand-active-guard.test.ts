@@ -32,7 +32,7 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   createMinimalWakeflowConfig,

@@ -215,7 +215,7 @@ const REGISTRY: readonly DowngradeRow[] = [
     "修剪后空分片目录的回收不同步；尽力而为，复活的条目下次再收，观察记录本身仍是权威",
   ),
   unchanged(
-    "src/kernel/active-projection.ts",
+    "src/workspace/active-projection/active-projection.ts",
     "retireDemandProjection",
     "call removeEmptyDirectoryExactly",
     "Demand 结束后清空的投影目录按身份删除、不同步父目录（档表第 7 节的已有例外）；可重建的派生页面目录，复活的空目录下次发布再清",

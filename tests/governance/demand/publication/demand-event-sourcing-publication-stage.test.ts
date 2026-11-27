@@ -53,7 +53,7 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../../src/kernel/active-layout.js";
 import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import { DISPOSABLE_ROOT_OPTIONS } from "../../../support/prepared-workspace.js";
 import { disposableRoot } from "../../../support/temp-root.js";

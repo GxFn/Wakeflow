@@ -51,7 +51,7 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../../foundation/text/utf8.js";
-import { assertActiveLayoutCurrent } from "../../../kernel/active-projection.js";
+import { assertActiveLayoutCurrent } from "../../../kernel/active-layout.js";
 import { WakeflowError } from "../../../kernel/error.js";
 import {
   createDemandEventSourcingResourceCatalog,

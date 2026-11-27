@@ -11,7 +11,7 @@ import type { Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { DISPOSABLE_ROOT_OPTIONS } from "../../support/prepared-workspace.js";
 import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";

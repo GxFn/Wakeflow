@@ -25,7 +25,7 @@ import { OperationAbortedError } from "../../../src/foundation/node/abort-signal
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { publishActiveProjection } from "../../../src/kernel/active-projection.js";
+import { publishActiveProjection } from "../../../src/workspace/active-projection/active-projection.js";
 import {
   materializeRequirementBoardRoot,
   publishRequirementBoardIndex,
@@ -42,7 +42,7 @@ import {
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { materializeWakeflowManagedSupportRoot } from "../../../src/workspace/support/wakeflow-managed-support-root-materialization.js";
 import { publishWakeflowSupportMemory } from "../../../src/workspace/support/wakeflow-support-memory-publication.js";
-import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/wakeflow-active-fresh-projection.js";
+import { renderWakeflowFreshActiveProjection } from "../../../src/workspace/active-projection/wakeflow-active-fresh-projection.js";
 import { materializeWakeflowSharedCoordinationLayout } from "../../../src/workspace/wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";

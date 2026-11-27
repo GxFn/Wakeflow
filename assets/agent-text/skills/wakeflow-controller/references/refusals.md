@@ -71,8 +71,8 @@ Reduce what the request carries, or tell the user which bound was reached; do no
 
 - **delivery**: `prompt-capacity`
 - **governance**: `index-bytes`
-- **kernel**: `projection-bytes`
 - **result-review**: `prompt-capacity`
+- **workspace**: `projection-bytes`
 
 ## `recovery-required` - an earlier write was interrupted
 

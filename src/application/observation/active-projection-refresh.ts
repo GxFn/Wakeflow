@@ -12,7 +12,7 @@ import {
   type ActiveProjectionRendering,
   publishActiveProjection,
   renderActiveProjectionFiles,
-} from "../../kernel/active-projection.js";
+} from "../../workspace/active-projection/active-projection.js";
 import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";

@@ -43,10 +43,8 @@ import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
-import {
-  materializeActiveLayout,
-  publishActiveProjection,
-} from "../../kernel/active-projection.js";
+import { materializeActiveLayout } from "../../kernel/active-layout.js";
+import { publishActiveProjection } from "../active-projection/active-projection.js";
 import { isWakeflowError, WakeflowError } from "../../kernel/error.js";
 import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
 import {
@@ -110,7 +108,7 @@ import {
   publishWakeflowSupportMemory,
   WakeflowSupportMemoryPublicationError,
 } from "../support/wakeflow-support-memory-publication.js";
-import { renderWakeflowFreshActiveProjection } from "../wakeflow-active-fresh-projection.js";
+import { renderWakeflowFreshActiveProjection } from "../active-projection/wakeflow-active-fresh-projection.js";
 import { WAKEFLOW_ACTIVE_LAYOUT_AUTHORITY_DIGEST } from "../wakeflow-active-static-resource-catalog.js";
 import {
   materializeWakeflowSharedCoordinationLayout,

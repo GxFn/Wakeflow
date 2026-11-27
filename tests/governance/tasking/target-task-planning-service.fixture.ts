@@ -29,7 +29,7 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
 import { parseAcceptanceCriteria } from "../../../src/governance/ledger/requirement-acceptance.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {

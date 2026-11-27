@@ -16,7 +16,7 @@ import {
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { ownedByAnotherUser, requireCurrentUserId } from "../../foundation/node/current-user.js";
-import { inspectActiveLayout } from "../../kernel/active-projection.js";
+import { inspectActiveLayout } from "../../kernel/active-layout.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { isWorkspaceLockFileName, isWorkspaceLockHeld } from "../../kernel/workspace-locks.js";
 import {

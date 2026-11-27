@@ -59,7 +59,7 @@ import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import {
   demandFinalRootRef,

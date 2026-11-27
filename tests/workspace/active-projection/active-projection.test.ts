@@ -6,7 +6,6 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
-  rmdirSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -17,46 +16,45 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { computeCanonicalJsonSha256Digest } from "../../src/foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, type Sha256Digest } from "../../src/foundation/crypto/sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
-} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import type { PortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { encodeUtf8 } from "../../src/foundation/text/utf8.js";
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import type { PortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   type ActiveProjectionDemandEvidence,
   type ActiveProjectionDemandFacts,
   type ActiveProjectionFacts,
   type ActiveProjectionFile,
-  inspectActiveLayout,
   inspectActiveProjectionTargets,
-  materializeActiveLayout,
   publishActiveProjection,
   renderActiveProjectionFiles,
-} from "../../src/kernel/active-projection.js";
-import { WakeflowError } from "../../src/kernel/error.js";
+} from "../../../src/workspace/active-projection/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
 import {
   demandProjectionIndexRef,
   demandProjectionProgressRef,
   demandProjectionRootRef,
   WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
-  WAKEFLOW_ACTIVE_ROOT_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_INDEX_REF,
   WAKEFLOW_ACTIVE_WORKSPACE_STATUS_REF,
-} from "../../src/kernel/layout.js";
-import { durableAtomicFileStageRefForTest } from "../foundation/filesystem/durable-atomic-file-test-support.js";
-import { isWorkspaceLockHeld, withWorkspaceLock } from "../../src/kernel/workspace-locks.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+} from "../../../src/kernel/layout.js";
+import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
+import { isWorkspaceLockHeld, withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 
 /**
- * 内核活动投影（gate-log §13.94 D5）：两级容器的检查与物化；事实 → 四份文件的渲染，标记
- * 与指纹只绑定事实；发布在投影锁内逐文件 CAS，任一目标 unsafe（手写、符号链接、模式、硬链接）
- * 整轮零写；不活动 Demand 的页面目录只在每个成员都带标记时退休。
+ * 1 级组件测试，放在缺省 2 级的 workspace 目录里：它测一个模块在一次性根上的读写，不经能力服务。
+ * 工作区活动投影（gate-log §13.94 D5）：事实 → 四份文件的渲染，标记与指纹只绑定事实；发布在投影锁内
+ * 逐文件 CAS，任一目标 unsafe（手写、符号链接、模式、硬链接）整轮零写；不活动 Demand 的页面目录只在
+ * 每个成员都带标记时退休。两级容器的检查与物化在 `tests/kernel/active-layout.test.ts`。
  */
 
 const DEMAND_A = "demand_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -207,60 +205,6 @@ function demandFingerprint(files: readonly Readonly<ActiveProjectionFile>[]): Sh
   if (page === undefined) throw new Error("no demand page");
   return page.fingerprint;
 }
-
-test("两级容器：absent → 独占创建 → current；重复创建被拒而 recovering 幂等；缺 current 为 incomplete；模式不对为 conflict", async (t) => {
-  const root = await fixture(t);
-  const absent = await inspectActiveLayout(root);
-  equal(absent.status, "absent");
-  deepEqual(
-    absent.entries.map((entry) => [entry.resourcePath, entry.status, entry.nodeDigest]),
-    [
-      [WAKEFLOW_ACTIVE_ROOT_REF, "absent", null],
-      [WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, "absent", null],
-    ],
-  );
-
-  const created = await materializeActiveLayout(root, { recovering: false });
-  equal(created.disposition, "created");
-  deepEqual(
-    created.entries.map((entry) => [entry.disposition, entry.node.permissionBits]),
-    [
-      ["created", 0o700],
-      ["created", 0o700],
-    ],
-  );
-  const current = await inspectActiveLayout(root);
-  equal(current.status, "current");
-  equal(
-    current.entries.every((entry) => entry.nodeDigest !== null),
-    true,
-  );
-  notEqual(current.observationDigest, absent.observationDigest);
-
-  await rejects(
-    materializeActiveLayout(root, { recovering: false }),
-    (error: unknown) =>
-      error instanceof WakeflowError &&
-      error.code === "precondition-failed" &&
-      error.reason === "active-layout-exists",
-  );
-  const recovered = await materializeActiveLayout(root, { recovering: true });
-  equal(recovered.disposition, "current");
-  equal((await inspectActiveLayout(root)).status, "current");
-
-  rmdirSync(absolute(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF));
-  equal((await inspectActiveLayout(root)).status, "incomplete");
-  const repaired = await materializeActiveLayout(root, { recovering: true });
-  deepEqual(
-    repaired.entries.map((entry) => entry.disposition),
-    ["current", "created"],
-  );
-
-  chmodSync(absolute(root, WAKEFLOW_ACTIVE_ROOT_REF), 0o755);
-  equal((await inspectActiveLayout(root)).status, "conflict");
-  chmodSync(absolute(root, WAKEFLOW_ACTIVE_ROOT_REF), 0o700);
-  equal((await inspectActiveLayout(root)).status, "current");
-});
 
 test("渲染：一个 Demand 得两份工作区页与两份 Demand 页，标记合法且指纹只随绑定事实变化", () => {
   const files = renderActiveProjectionFiles(facts());

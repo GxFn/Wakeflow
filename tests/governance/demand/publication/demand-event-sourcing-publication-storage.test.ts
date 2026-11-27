@@ -65,7 +65,7 @@ import {
 } from "../../../../src/governance/demand/publication/demand-publication-paths.js";
 import { demandFinalRootRef } from "../../../../src/kernel/layout.js";
 import { parseLedgerAuthorityMemberReference } from "../../../../src/governance/ledger/ledger-authority-store.js";
-import { materializeActiveLayout } from "../../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../../src/kernel/active-layout.js";
 import { durableAtomicFileStageRefForTest } from "../../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { DISPOSABLE_ROOT_OPTIONS } from "../../../support/prepared-workspace.js";
 import { disposableRoot } from "../../../support/temp-root.js";

@@ -1,17 +1,17 @@
 import {
   computeWakeflowConfigDigest,
   type WakeflowConfigModel,
-} from "../configuration/wakeflow-config.js";
-import type { Sha256Digest } from "../foundation/crypto/sha256.js";
+} from "../../configuration/wakeflow-config.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   type ActiveProjectionFile,
   computeActiveProjectionSetDigest,
   freshActiveProjectionFacts,
   renderActiveProjectionFiles,
-} from "../kernel/active-projection.js";
+} from "./active-projection.js";
 
 /**
- * Wakeflow Workspace / Active：Fresh 初始化写入的两份工作区投影。
+ * Wakeflow Workspace / Active Projection：Fresh 初始化写入的两份工作区投影。
  *
  * 事实只来自 desired Config：程序、语言、配置摘要与配置里的 pod；没有 Demand，看板为空。
  * 之后的每次 Demand 或 pod 变更由治理层的投影刷新按观察重算并 CAS 重写。

@@ -33,10 +33,8 @@ import type {
   ObservedPod,
   WorkspaceObservation,
 } from "../../../src/application/observation/workspace-observation.js";
-import {
-  materializeActiveLayout,
-  renderActiveProjectionFiles,
-} from "../../../src/kernel/active-projection.js";
+import { materializeActiveLayout } from "../../../src/kernel/active-layout.js";
+import { renderActiveProjectionFiles } from "../../../src/workspace/active-projection/active-projection.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
 import {

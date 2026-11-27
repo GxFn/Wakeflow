@@ -58,7 +58,7 @@ export interface ChangeImpactReport {
 
 const TIER_TWO_OWNERS: ReadonlySet<string> = new Set(["foundation", "kernel", "contracts"]);
 const TIER_TWO_FILE_PATTERN =
-  /^(?:tests\/scenarios\/|tooling\/testing\/|biome\.json$|knip\.ts$|tsconfig[^/]*\.json$|tests\/tsconfig\.json$|tooling\/tsconfig\.json$)/u;
+  /^(?:tests\/scenarios\/|tooling\/testing\/|tooling\/architecture\/layer-map\.cjs$|biome\.json$|knip\.ts$|tsconfig[^/]*\.json$|tests\/tsconfig\.json$|tooling\/tsconfig\.json$)/u;
 const TIER_ONE_CATEGORIES: readonly ImpactCategory[] = [
   "runtime",
   "hosts",

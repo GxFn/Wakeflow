@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import nodePath from "node:path";
 
 /**
@@ -121,6 +123,66 @@ function admittedProductionRootCount(modules: readonly DependencyCruiseModule[])
   return roots.length;
 }
 
+interface LayerMap {
+  readonly LAYER_IMPORTS: Readonly<Record<string, readonly string[] | null>>;
+  readonly SLICE_LEVELS: Readonly<Record<string, readonly (readonly string[])[]>>;
+}
+
+/**
+ * 层表与层级表必须与 `src/` 的实际目录一一对应（ADR-0013 补记二）：新的层或切片目录先进
+ * `tooling/architecture/layer-map.cjs` 才能通过，表里点名的目录不存在同样失败。否则一个新切片
+ * 不受任何层级规则约束，一条过期的表项也不会被发现（旧的放行清单就有两条指向不存在的文件）。
+ */
+function layerMapCoverage(repositoryRoot: string): number {
+  const require = createRequire(import.meta.url);
+  const map = require(
+    nodePath.join(repositoryRoot, "tooling", "architecture", "layer-map.cjs"),
+  ) as LayerMap;
+  const entriesOf = (relative: string) =>
+    readdirSync(nodePath.join(repositoryRoot, relative), { withFileTypes: true });
+  const holdsSource = (relative: string): boolean =>
+    entriesOf(relative).some((entry) =>
+      entry.isDirectory()
+        ? holdsSource(nodePath.join(relative, entry.name))
+        : /\.(?:ts|mjs)$/u.test(entry.name),
+    );
+  const problems: string[] = [];
+  const layers = entriesOf("src")
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  const declaredLayers = Object.keys(map.LAYER_IMPORTS).sort();
+  if (layers.join(",") !== declaredLayers.join(",")) {
+    problems.push(
+      `layers on disk [${layers.join(", ")}] differ from LAYER_IMPORTS [${declaredLayers.join(", ")}]`,
+    );
+  }
+  let slices = 0;
+  for (const [layer, levels] of Object.entries(map.SLICE_LEVELS)) {
+    const entries = entriesOf(nodePath.join("src", layer));
+    const onDisk = entries
+      .filter(
+        (entry) => entry.isDirectory() && holdsSource(nodePath.join("src", layer, entry.name)),
+      )
+      .map((entry) => entry.name)
+      .concat(
+        entries.some((entry) => entry.isFile() && entry.name.endsWith(".ts")) ? ["(root)"] : [],
+      )
+      .sort();
+    const declared = levels.flat().slice().sort();
+    if (new Set(declared).size !== declared.length)
+      problems.push(`${layer}: a slice is listed twice`);
+    if (onDisk.join(",") !== declared.join(",")) {
+      problems.push(
+        `${layer}: slices on disk [${onDisk.join(", ")}] differ from SLICE_LEVELS [${declared.join(", ")}]`,
+      );
+    }
+    slices += declared.length;
+  }
+  if (problems.length > 0) fail(`layer map out of date: ${problems.join("; ")}`);
+  return slices;
+}
+
 function fail(message: string): never {
   throw new Error(`Wakeflow dependency architecture check failed: ${message}`);
 }
@@ -182,6 +244,7 @@ function run(): void {
     fail("one or more dependency rules were violated");
   }
   const productionRoots = admittedProductionRootCount(report.modules);
+  const levelledSlices = layerMapCoverage(repositoryRoot);
 
   process.stdout.write(
     `${JSON.stringify({
@@ -190,6 +253,7 @@ function run(): void {
       modules: report.summary.totalCruised,
       dependencies: report.summary.totalDependenciesCruised,
       productionRoots,
+      levelledSlices,
     })}\n`,
   );
 }

@@ -5,16 +5,6 @@
     "outDir": "../.build/src",
     "tsBuildInfoFile": "../.build/cache/runtime.tsbuildinfo"
   },
-  "include": [
-    "contracts/generated/**/*.ts",
-    "contracts/identity/**/*.ts",
-    "contracts/vocabulary/**/*.ts",
-    "kernel/**/*.ts",
-    "capabilities/**/*.ts",
-    "foundation/**/*.ts",
-    "configuration/**/*.ts",
-    "workspace/**/*.ts",
-    "governance/**/*.ts",
-    "application/**/*.ts"
-  ]
+  "include": ["**/*.ts"],
+  "exclude": ["hosts/**", "entrypoints/**"]
 }

@@ -46,7 +46,10 @@ const FULL_GATE_PATTERNS: readonly Readonly<{ pattern: RegExp; reason: string }>
     pattern: /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|biome\.json|knip\.ts)$/u,
     reason: "toolchain-input",
   },
-  { pattern: /^\.dependency-cruiser\.cjs$/u, reason: "architecture-rules" },
+  {
+    pattern: /^(?:\.dependency-cruiser\.cjs|tooling\/architecture\/layer-map\.cjs)$/u,
+    reason: "architecture-rules",
+  },
   {
     pattern:
       /^tooling\/testing\/(?:run-typescript-tests|test-event-reporter|test-recording|impacted-tests)\.ts$/u,

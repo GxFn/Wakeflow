@@ -1,17 +1,10 @@
-import { types } from "node:util";
-
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DeterministicJsonFileResult,
@@ -31,7 +24,7 @@ import {
   isPrivateFile,
 } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
@@ -161,69 +154,6 @@ function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
     }
     throw error;
   }
-}
-
-function parseSignal(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-): Readonly<{
-  readonly record: Readonly<Record<string, unknown>>;
-  readonly signal: AbortSignal | undefined;
-}> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => !allowed.has(key)) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    record,
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
-function parseLoadOptions(value: unknown): Readonly<{
-  readonly expectedTaskPackageDigest: Sha256Digest;
-  readonly signal: AbortSignal | undefined;
-}> {
-  const parsed = parseSignal(value, new Set(["expectedTaskPackageDigest", "signal"]));
-  if (!Object.hasOwn(parsed.record, "expectedTaskPackageDigest")) {
-    fail("input", "$options/expectedTaskPackageDigest");
-  }
-  let expectedTaskPackageDigest: Sha256Digest;
-  try {
-    expectedTaskPackageDigest = parseSha256Digest(
-      parsed.record.expectedTaskPackageDigest,
-      "$options/expectedTaskPackageDigest",
-    );
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) {
-      fail("input", "$options/expectedTaskPackageDigest", error);
-    }
-    throw error;
-  }
-  return Object.freeze({
-    expectedTaskPackageDigest,
-    signal: parsed.signal,
-  });
-}
-
-function parseMaterializeOptions(
-  value: unknown,
-): Readonly<{ readonly signal: AbortSignal | undefined }> {
-  const parsed = parseSignal(value, new Set(["signal"]));
-  return Object.freeze({ signal: parsed.signal });
 }
 
 async function projectionNodeOrNull(
@@ -379,14 +309,6 @@ export class TaskPackageProjectionStore {
   readonly #repository: DemandEventSourcingRepository;
 
   constructor(root: RootedDirectory) {
-    if (
-      typeof root !== "object" ||
-      root === null ||
-      types.isProxy(root) ||
-      !(root instanceof RootedDirectory)
-    ) {
-      fail("input", "$root");
-    }
     this.#root = root;
     this.#repository = new DemandEventSourcingRepository(root);
   }
@@ -394,10 +316,9 @@ export class TaskPackageProjectionStore {
   /** 按事件派生摘要预期快速读取一份已有 TaskPackage 投影。 */
   async load(
     taskPackageIdValue: unknown,
-    optionsValue: LoadTaskPackageProjectionOptions,
+    options: LoadTaskPackageProjectionOptions,
   ): Promise<Readonly<LoadedTaskPackageProjection>> {
     const taskPackageId = parseTaskPackageId(taskPackageIdValue);
-    const options = parseLoadOptions(optionsValue);
     return loadProjection(
       this.#root,
       taskPackageId,
@@ -411,10 +332,10 @@ export class TaskPackageProjectionStore {
    */
   async materialize(
     taskPackageIdValue: unknown,
-    optionsValue: MaterializeTaskPackageProjectionOptions = {},
+    options: MaterializeTaskPackageProjectionOptions = {},
   ): Promise<Readonly<TaskPackageProjectionMaterializationReceipt>> {
     const taskPackageId = parseTaskPackageId(taskPackageIdValue);
-    const { signal } = parseMaterializeOptions(optionsValue);
+    const { signal } = options;
     let located: Awaited<ReturnType<DemandEventSourcingRepository["findTargetTaskPlannedEvent"]>>;
     try {
       located = await this.#repository.findTargetTaskPlannedEvent(

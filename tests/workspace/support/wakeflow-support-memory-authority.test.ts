@@ -1,5 +1,7 @@
 import { equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -14,8 +16,14 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
-const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
-const TEST_ID = "surface_44444444-4444-4444-8444-444444444444";
+const DESIGN_ID = parseWakeflowDurableIdOfKind(
+  "surface_33333333-3333-4333-8333-333333333333",
+  "surface",
+);
+const TEST_ID = parseWakeflowDurableIdOfKind(
+  "surface_44444444-4444-4444-8444-444444444444",
+  "surface",
+);
 
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
@@ -33,7 +41,7 @@ test("Design whole-file memory is a thin English identity and role contract", ()
   if (surface === undefined) throw new Error("Expected Design surface.");
   surface.description = "Clarifies product requirements.";
   const authority = createWakeflowSupportMemoryAuthority(
-    config,
+    parseWakeflowConfig(config),
     codexWorkspaceHostResourceProfile,
     DESIGN_ID,
   );
@@ -88,12 +96,12 @@ test("Test whole-file memory uses persisted Simplified Chinese and Test boundari
   const config = createMinimalWakeflowConfig();
   (config.presentation as Record<string, unknown>).language = "zh-Hans";
   const chinese = createWakeflowSupportMemoryAuthority(
-    config,
+    parseWakeflowConfig(config),
     claudeCodeWorkspaceHostResourceProfile,
     TEST_ID,
   );
   const english = createWakeflowSupportMemoryAuthority(
-    createMinimalWakeflowConfig(),
+    parseWakeflowConfig(createMinimalWakeflowConfig()),
     claudeCodeWorkspaceHostResourceProfile,
     TEST_ID,
   );
@@ -121,7 +129,7 @@ test("whole-file memory encodes user text and rejects an external surface", () =
   if (surface === undefined) throw new Error("Expected Design surface.");
   surface.displayName = "Design\n## forged <!-- marker --> `";
   const authority = createWakeflowSupportMemoryAuthority(
-    config,
+    parseWakeflowConfig(config),
     codexWorkspaceHostResourceProfile,
     DESIGN_ID,
   );
@@ -140,7 +148,11 @@ test("whole-file memory encodes user text and rejects an external surface", () =
   externalSurface.instructionManagement = "managed-block";
   let externalError: unknown;
   try {
-    createWakeflowSupportMemoryAuthority(external, codexWorkspaceHostResourceProfile, DESIGN_ID);
+    createWakeflowSupportMemoryAuthority(
+      parseWakeflowConfig(external),
+      codexWorkspaceHostResourceProfile,
+      DESIGN_ID,
+    );
   } catch (error: unknown) {
     externalError = error;
   }

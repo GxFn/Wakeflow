@@ -45,8 +45,6 @@ import { computeDemandEventSourcingVersionCompatibilityDigest } from "./demand-e
 import {
   computeDemandEventStreamCommitDigest,
   type DemandEventStreamCommit,
-  DemandEventStreamCommitError,
-  parseDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import {
   type DemandEventCommitSequence,
@@ -194,17 +192,8 @@ export function parseDemandEventSourcingSnapshot(
 }
 
 export function createDemandEventSourcingSnapshot(
-  aggregateValue: unknown,
+  aggregate: Readonly<DemandEventSourcingAggregate>,
 ): Readonly<DemandEventSourcingSnapshot> {
-  let aggregate: Readonly<DemandEventSourcingAggregate>;
-  try {
-    aggregate = parseDemandEventSourcingAggregate(aggregateValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingAggregateError) {
-      fail("aggregate", "$aggregate", error);
-    }
-    throw error;
-  }
   return parseDemandEventSourcingSnapshot({
     artifactKind: DEMAND_EVENT_SOURCING_SNAPSHOT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA_VERSION,
@@ -222,17 +211,9 @@ export function createDemandEventSourcingSnapshot(
 
 /** 从快照及其指定锚定提交恢复轻量聚合游标和状态。 */
 export function restoreDemandEventSourcingSnapshot(
-  snapshotValue: unknown,
-  anchorCommitValue: unknown,
+  snapshot: Readonly<DemandEventSourcingSnapshot>,
+  anchor: Readonly<DemandEventStreamCommit>,
 ): Readonly<DemandEventSourcingAggregate> {
-  const snapshot = parseDemandEventSourcingSnapshot(snapshotValue);
-  let anchor: Readonly<DemandEventStreamCommit>;
-  try {
-    anchor = parseDemandEventStreamCommit(anchorCommitValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("commit", "$commit", error);
-    throw error;
-  }
   const lastEvent = anchor.events.at(-1);
   if (
     lastEvent === undefined ||
@@ -265,8 +246,10 @@ export function restoreDemandEventSourcingSnapshot(
   }
 }
 
-export function renderDemandEventSourcingSnapshot(value: unknown): string {
-  return renderDeterministicJsonDocument(parseDemandEventSourcingSnapshot(value), "$snapshot");
+export function renderDemandEventSourcingSnapshot(
+  snapshot: Readonly<DemandEventSourcingSnapshot>,
+): string {
+  return renderDeterministicJsonDocument(snapshot, "$snapshot");
 }
 
 export function parseDemandEventSourcingSnapshotDocument(
@@ -289,6 +272,8 @@ export function parseDemandEventSourcingSnapshotDocument(
 }
 
 /** 快照自身的语义摘要；它与快照中的聚合 `stateDigest` 明确不同。 */
-export function computeDemandEventSourcingSnapshotDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingSnapshot(value));
+export function computeDemandEventSourcingSnapshotDigest(
+  snapshot: Readonly<DemandEventSourcingSnapshot>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(snapshot);
 }

@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 import {
   WAKEFLOW_PREPARE_DELIVERY_PUBLIC_TOOL_NAME,
@@ -33,10 +33,6 @@ import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/wo
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
-import {
-  createWakeflowPublicMcpServer,
-  WakeflowPublicMcpServerConfigurationError,
-} from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 import { measureWakeflowToolCatalogBytes } from "../../src/kernel/tool-registry.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
@@ -53,9 +49,6 @@ useDisposableDurability();
  * 真实调用、恢复、错误信封与业务状态转换留在各owner测试；本文件只证明固定executor
  * 配置、工具Schema/annotations和Codex/Claude集合一致，避免新增工具时运行全部生命周期纵切。
  */
-
-type PublicServerOptions = Parameters<typeof createWakeflowPublicMcpServer>[0];
-type ExecutorField = Exclude<keyof PublicServerOptions, "serverName" | "serverVersion">;
 
 interface ExpectedPublicTool {
   readonly name: string;
@@ -211,95 +204,6 @@ const PUBLIC_TOOL_CATALOG = Object.freeze([
 // 压缩说明文字之后目录仍增加约 0.8 KB——换来的是 Agent 不再逐字转抄观察（关一个窗口约一万输出 token）。
 // 预算从 104 KiB 提到 105 KiB（约 0.9 KiB 余量），实测 106,597 B。
 const WAKEFLOW_PUBLIC_TOOL_LIST_BUDGET_BYTES = 105 * 1024;
-
-function unavailableExecutor(): Promise<never> {
-  return Promise.reject(new Error("Catalog test executors must not run."));
-}
-
-function validPublicServerOptions(): PublicServerOptions {
-  return Object.freeze({
-    serverName: "wakeflow-public-catalog-test",
-    serverVersion: "1.0.0-test",
-    cancelDemand: unavailableExecutor,
-    completeDemand: unavailableExecutor,
-    continueDemand: unavailableExecutor,
-    createDemand: unavailableExecutor,
-    recordEvidence: unavailableExecutor,
-    managePod: unavailableExecutor,
-    publishRequirement: unavailableExecutor,
-    quickDemand: unavailableExecutor,
-    executeMaintenance: unavailableExecutor,
-    importTargetResult: unavailableExecutor,
-    inspectStatus: unavailableExecutor,
-    verifyWorkspace: unavailableExecutor,
-    inspectTargetResultReview: unavailableExecutor,
-    inspectBoard: unavailableExecutor,
-    planTargetTask: unavailableExecutor,
-    prepareDelivery: unavailableExecutor,
-    rearmDelivery: unavailableExecutor,
-    recordImplementationReviewDecision: unavailableExecutor,
-    recordTestReviewDecision: unavailableExecutor,
-    recordDeliveryOutcome: unavailableExecutor,
-    registerWindowHostBinding: unavailableExecutor,
-  });
-}
-
-const EXECUTOR_CONFIGURATION_FIELDS = Object.freeze([
-  "executeMaintenance",
-  "cancelDemand",
-  "completeDemand",
-  "continueDemand",
-  "createDemand",
-  "recordEvidence",
-  "managePod",
-  "publishRequirement",
-  "quickDemand",
-  "registerWindowHostBinding",
-  "inspectStatus",
-  "verifyWorkspace",
-  "planTargetTask",
-  "prepareDelivery",
-  "recordDeliveryOutcome",
-  "rearmDelivery",
-  "importTargetResult",
-  "inspectTargetResultReview",
-  "inspectBoard",
-  "recordImplementationReviewDecision",
-  "recordTestReviewDecision",
-] as const satisfies readonly ExecutorField[]);
-
-test("MCP composition拒绝Proxy executor与额外配置字段", () => {
-  const valid = validPublicServerOptions();
-  const configuredExecutorFields = Object.keys(valid)
-    .filter((field) => field !== "serverName" && field !== "serverVersion")
-    .sort();
-  const exercisedExecutorFields = [...EXECUTOR_CONFIGURATION_FIELDS].sort();
-  deepEqual(exercisedExecutorFields, configuredExecutorFields);
-  equal(new Set(exercisedExecutorFields).size, exercisedExecutorFields.length);
-  for (const field of EXECUTOR_CONFIGURATION_FIELDS) {
-    const executor = valid[field];
-    throws(
-      () =>
-        createWakeflowPublicMcpServer({
-          ...valid,
-          [field]: new Proxy(executor, {}),
-        }),
-      (error: unknown) =>
-        error instanceof WakeflowPublicMcpServerConfigurationError &&
-        error.reason === "executor" &&
-        error.field === field,
-    );
-  }
-  throws(
-    () =>
-      createWakeflowPublicMcpServer({
-        ...valid,
-        extra: true,
-      } as never),
-    (error: unknown) =>
-      error instanceof WakeflowPublicMcpServerConfigurationError && error.reason === "options",
-  );
-});
 
 test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
   const client = await connectWakeflowMcpTestClient(t);

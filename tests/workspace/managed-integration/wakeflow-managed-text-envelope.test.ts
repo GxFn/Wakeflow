@@ -240,18 +240,7 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
     "$identity",
   );
 
-  const sharedSource = new Uint8Array(new SharedArrayBuffer(4));
-  sharedSource.set(encodeUtf8("text"));
-  expectEnvelopeError(() => inspectWakeflowManagedTextEnvelope(sharedSource), "input", "$source");
-
   let trapCalls = 0;
-  const byteProxy = new Proxy(Uint8Array.from([0x61]), {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-  });
-  expectEnvelopeError(() => inspectWakeflowManagedTextEnvelope(byteProxy), "input", "$source");
   const targetProxy = new Proxy(
     { ...TARGET },
     {

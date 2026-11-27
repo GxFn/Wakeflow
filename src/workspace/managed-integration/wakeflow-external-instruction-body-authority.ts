@@ -1,9 +1,7 @@
 import {
   buildWakeflowConfigIndexes,
-  parseWakeflowConfig,
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
-  WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowConfigRepository,
   type WakeflowExternalSupportSurface,
@@ -24,12 +22,10 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceComponent,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceComponent,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import {
   WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX,
@@ -99,26 +95,6 @@ const fail: Fail<WakeflowExternalInstructionBodyAuthorityErrorReason> = failWith
   WakeflowExternalInstructionBodyAuthorityError,
 );
 
-function parseConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-}
-
-function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
-
 function parseTargetId<K extends "repository" | "surface">(
   value: unknown,
   kind: K,
@@ -183,9 +159,8 @@ export function wakeflowExternalInstructionPlacementKey(
  * external-owned 且 managed-block 的支撑面在后，各自保持 Config 的呈现顺序。
  */
 export function listWakeflowExternalInstructionTargets(
-  configValue: unknown,
+  config: WakeflowConfigModel,
 ): readonly Readonly<WakeflowExternalInstructionTarget>[] {
-  const config = parseConfig(configValue);
   const targets: Readonly<WakeflowExternalInstructionTarget>[] = [];
   for (const repository of config.topology.repositories) {
     if (repository.instructionManagement !== "managed-block") continue;
@@ -569,13 +544,10 @@ function renderBody(
 
 /** 从 Config、当前 Host Profile 与一个外部 target 生成唯一的托管块正文权威。 */
 export function createWakeflowExternalInstructionBodyAuthority(
-  configValue: unknown,
-  profileValue: unknown,
-  targetValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  target: Readonly<WakeflowExternalInstructionTarget>,
 ): Readonly<WakeflowExternalInstructionBodyAuthority> {
-  const config = parseConfig(configValue);
-  const profile = parseProfile(profileValue);
-  const target = parseWakeflowExternalInstructionTarget(targetValue);
   const resolved = resolveTarget(config, target);
   const windowIds = Object.freeze(
     resolved.kind === "repository"

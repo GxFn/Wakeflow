@@ -4,15 +4,10 @@ import { test } from "node:test";
 import {
   planWholeFileContentTransition,
   WholeFileContentTransitionError,
-  type WholeFileContentTransitionRequest,
 } from "../../../src/foundation/filesystem/whole-file-content-transition.js";
 
 const CURRENT = Buffer.from("current\n");
 const DESIRED = Buffer.from("desired\n");
-
-function asRequest(value: unknown): WholeFileContentTransitionRequest {
-  return value as WholeFileContentTransitionRequest;
-}
 
 test("whole-file transition closes absent, current and admitted replacement", () => {
   const created = planWholeFileContentTransition(null, {
@@ -44,7 +39,7 @@ test("whole-file transition closes absent, current and admitted replacement", ()
   );
 });
 
-test("whole-file transition rejects unknown, duplicated, or malformed input", () => {
+test("whole-file transition rejects unknown or duplicated content", () => {
   for (const [action, reason, path] of [
     [
       () =>
@@ -63,19 +58,6 @@ test("whole-file transition rejects unknown, duplicated, or malformed input", ()
         }),
       "duplicate-current",
       "$request.currentContents/1",
-    ],
-    [
-      () =>
-        planWholeFileContentTransition(
-          null,
-          asRequest({
-            currentContents: [],
-            desiredContent: DESIRED,
-            extra: true,
-          }),
-        ),
-      "input",
-      "$request",
     ],
   ] as const) {
     let caught: unknown;

@@ -1,7 +1,4 @@
-import { types } from "node:util";
-
 import {
-  parseWakeflowConfig,
   parseWakeflowConfigPlacement,
   WakeflowConfigError,
   type WakeflowConfigModel,
@@ -17,12 +14,7 @@ import {
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   type JsonValue,
   JsonValueError,
@@ -214,17 +206,6 @@ const fail: Fail<ClaudeCodeStatuslineSettingsOperationErrorReason> = failWith(
   ClaudeCodeStatuslineSettingsOperationError,
 );
 
-function assertRoot(root: unknown): asserts root is RootedDirectory {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-}
-
 /** Claude Code 期望的 `statusLine` 值：命令行带资产路径、标记与 base64url 的工作区根。 */
 export function claudeCodeStatuslineSettingsEntry(workspaceRoot: string): JsonValue {
   return parseJsonValue(
@@ -332,10 +313,9 @@ export function claudeCodeStatuslineEntryIsWakeflows(entry: JsonValue): boolean 
  */
 export async function planClaudeCodeStatuslineSettingsOperation(
   root: RootedDirectory,
-  options: { readonly signal?: AbortSignal } = {},
+  { signal }: { readonly signal?: AbortSignal } = {},
 ): Promise<WakeflowHostMaintenanceOperationInput | null> {
-  assertRoot(root);
-  const current = await currentSettings(root, options.signal);
+  const current = await currentSettings(root, signal);
   return planFromCurrent(current, claudeCodeStatuslineSettingsEntry(root.absolutePath), null);
 }
 
@@ -385,15 +365,6 @@ function planFromCurrent(
     targetDigest: computeSha256Digest(target),
     payload: payloadFor(surface),
   });
-}
-
-function parseModel(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("input", "$config", error);
-    throw error;
-  }
 }
 
 /** 配置里 wakeflow-managed 的支撑面，按 surfaceId 排序（与 portable settings 的根权威同序）。 */
@@ -517,8 +488,7 @@ export async function planClaudeCodeStatuslineSettingsSurfaceOperations(
   workspaceRoot: RootedDirectory,
   options: PlanClaudeCodeStatuslineSettingsSurfaceOperationsOptions,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsSurfacePlan>> {
-  assertRoot(workspaceRoot);
-  const model = parseModel(options.config);
+  const model = options.config;
   throwIfAborted(options.signal);
   const entry = claudeCodeStatuslineSettingsEntry(workspaceRoot.absolutePath);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
@@ -619,9 +589,8 @@ export async function planClaudeCodeStatuslineSettingsRemoval(
   workspaceRoot: RootedDirectory,
   options: PlanClaudeCodeStatuslineSettingsSurfaceOperationsOptions,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsSurfacePlan>> {
-  assertRoot(workspaceRoot);
   if (!isWakeflowDetachAction(options.action)) fail("input", "$action");
-  const model = parseModel(options.config);
+  const model = options.config;
   throwIfAborted(options.signal);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
   const blockerCodes: string[] = [];
@@ -727,24 +696,6 @@ function authorizedSurface(
   return surface;
 }
 
-function parseDigests(request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>): {
-  readonly sourceDigest: Sha256Digest | null;
-  readonly targetDigest: Sha256Digest;
-} {
-  try {
-    return {
-      sourceDigest:
-        request.sourceDigest === null
-          ? null
-          : parseSha256Digest(request.sourceDigest, "$operation.sourceDigest"),
-      targetDigest: parseSha256Digest(request.targetDigest, "$operation.targetDigest"),
-    };
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("operation", error.path, error);
-    throw error;
-  }
-}
-
 async function ensureSettingsDirectory(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
@@ -802,19 +753,16 @@ export async function executeClaudeCodeStatuslineSettingsOperation(
   workspaceRoot: RootedDirectory,
   request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
-  assertRoot(workspaceRoot);
-  const model = parseModel(request.config);
   const payload = parsePayload(request.operation);
-  const digests = parseDigests(request);
   const entry = claudeCodeStatuslineSettingsEntry(workspaceRoot.absolutePath);
   if (payload.surface === undefined) {
-    return executeAt(workspaceRoot, null, entry, digests, request);
+    return executeAt(workspaceRoot, null, entry, request);
   }
-  const surface = authorizedSurface(model, payload.surface);
-  const placement = await surfacePlacement(workspaceRoot, model, surface);
+  const surface = authorizedSurface(request.config, payload.surface);
+  const placement = await surfacePlacement(workspaceRoot, request.config, surface);
   if (placement.state !== "present") fail("placement", "$supportRoot");
   return withSurfaceRoot(placement.absolutePath, (surfaceRoot) =>
-    executeAt(surfaceRoot, surface, entry, digests, request),
+    executeAt(surfaceRoot, surface, entry, request),
   );
 }
 
@@ -822,32 +770,29 @@ async function executeAt(
   settingsRoot: RootedDirectory,
   surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
   entry: JsonValue,
-  digests: ReturnType<typeof parseDigests>,
   request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
   const operationId = operationIdFor(surface);
+  const { sourceDigest, targetDigest } = request;
   const current = await currentSettings(settingsRoot, request.signal);
   if (
     current !== null &&
-    current.source.digest === digests.targetDigest &&
+    current.source.digest === targetDigest &&
     current.source.node.permissionBits === SETTINGS_MODE
   ) {
     return Object.freeze({
       operationId,
       disposition: "current" as const,
-      targetDigest: digests.targetDigest,
+      targetDigest,
     });
   }
-  if (
-    !request.recoveringAffectedOperation &&
-    (current?.source.digest ?? null) !== digests.sourceDigest
-  ) {
+  if (!request.recoveringAffectedOperation && (current?.source.digest ?? null) !== sourceDigest) {
     fail("source-stale", "$settings");
   }
   const bytes = renderTarget(current?.document ?? {}, entry);
-  if (computeSha256Digest(bytes) !== digests.targetDigest) fail("source-stale", "$settings");
+  if (computeSha256Digest(bytes) !== targetDigest) fail("source-stale", "$settings");
   const disposition = await writeTarget(settingsRoot, current, bytes, request.signal);
-  return Object.freeze({ operationId, disposition, targetDigest: digests.targetDigest });
+  return Object.freeze({ operationId, disposition, targetDigest });
 }
 
 function parseRemovalPayload(value: unknown): Readonly<ClaudeCodeStatuslineSettingsRemovalPayload> {
@@ -875,18 +820,15 @@ export async function executeClaudeCodeStatuslineSettingsRemoval(
   workspaceRoot: RootedDirectory,
   request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
-  assertRoot(workspaceRoot);
-  const model = parseModel(request.config);
   const payload = parseRemovalPayload(request.operation);
-  const digests = parseDigests(request);
   if (payload.surface === undefined) {
-    return executeRemovalAt(workspaceRoot, null, digests, request);
+    return executeRemovalAt(workspaceRoot, null, request);
   }
-  const surface = authorizedSurface(model, payload.surface);
-  const placement = await surfacePlacement(workspaceRoot, model, surface);
+  const surface = authorizedSurface(request.config, payload.surface);
+  const placement = await surfacePlacement(workspaceRoot, request.config, surface);
   if (placement.state !== "present") fail("placement", "$supportRoot");
   return withSurfaceRoot(placement.absolutePath, (surfaceRoot) =>
-    executeRemovalAt(surfaceRoot, surface, digests, request),
+    executeRemovalAt(surfaceRoot, surface, request),
   );
 }
 
@@ -898,22 +840,22 @@ export async function executeClaudeCodeStatuslineSettingsRemoval(
 async function executeRemovalAt(
   settingsRoot: RootedDirectory,
   surface: Readonly<ClaudeCodeStatuslineSettingsSurface> | null,
-  digests: ReturnType<typeof parseDigests>,
   request: Readonly<ExecuteClaudeCodeStatuslineSettingsOperationRequest>,
 ): Promise<Readonly<ClaudeCodeStatuslineSettingsOperationResult>> {
   const operationId = removalOperationIdFor(surface);
+  const { sourceDigest, targetDigest } = request;
   const current = await currentSettings(settingsRoot, request.signal);
   const asCurrent = Object.freeze({
     operationId,
     disposition: "current" as const,
-    targetDigest: digests.targetDigest,
+    targetDigest,
   });
   if (current === null) {
     if (!request.recoveringAffectedOperation) fail("source-stale", "$settings");
     return asCurrent;
   }
-  if (current.source.digest === digests.targetDigest) return asCurrent;
-  if (!request.recoveringAffectedOperation && current.source.digest !== digests.sourceDigest) {
+  if (current.source.digest === targetDigest) return asCurrent;
+  if (!request.recoveringAffectedOperation && current.source.digest !== sourceDigest) {
     fail("source-stale", "$settings");
   }
   const existing = current.document[CLAUDE_CODE_STATUSLINE_SETTINGS_KEY];
@@ -921,7 +863,7 @@ async function executeRemovalAt(
     fail("source-stale", "$settings");
   }
   const bytes = renderWithoutEntry(current.document);
-  if (computeSha256Digest(bytes) !== digests.targetDigest) fail("source-stale", "$settings");
+  if (computeSha256Digest(bytes) !== targetDigest) fail("source-stale", "$settings");
   const disposition = await writeTarget(settingsRoot, current, bytes, request.signal);
-  return Object.freeze({ operationId, disposition, targetDigest: digests.targetDigest });
+  return Object.freeze({ operationId, disposition, targetDigest });
 }

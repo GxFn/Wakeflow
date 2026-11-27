@@ -35,10 +35,6 @@ function expectSha256Error(
   return caught;
 }
 
-function asBytes(value: unknown): Uint8Array {
-  return value as Uint8Array;
-}
-
 test("NIST SHA-256 vectors produce exact lowercase hex and prefixed digests", () => {
   const vectors = [
     {
@@ -96,27 +92,4 @@ test("prefixed digest parsing is exact, lowercase, and non-coercive", () => {
   for (const value of invalidDigest) {
     expectSha256Error(() => parseSha256Digest(value, "$.digest"), "digest-format", "$.digest");
   }
-});
-
-test("hashing rejects non-Uint8Array inputs without invoking proxy traps", () => {
-  const invalid: readonly unknown[] = [
-    "abc",
-    [0x61, 0x62, 0x63],
-    new Uint16Array([0x6162]),
-    new DataView(new ArrayBuffer(3)),
-    new ArrayBuffer(3),
-  ];
-  for (const value of invalid) {
-    expectSha256Error(() => computeSha256Hex(asBytes(value), "$.bytes"), "input-type", "$.bytes");
-  }
-
-  let trapCalls = 0;
-  const proxy = new Proxy(new Uint8Array([0x61]), {
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return Uint8Array.prototype;
-    },
-  });
-  expectSha256Error(() => computeSha256Digest(asBytes(proxy), "$.bytes"), "input-type", "$.bytes");
-  equal(trapCalls, 0);
 });

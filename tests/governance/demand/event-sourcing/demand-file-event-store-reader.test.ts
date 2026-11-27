@@ -24,7 +24,10 @@ import {
   prepareDemandEventStreamCommit,
   renderDemandEventStreamCommit,
 } from "../../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { parseDemandEventCommitSequence } from "../../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import {
+  parseDemandEventCommitSequence,
+  parseDemandEventStreamRevision,
+} from "../../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
   DemandFileEventStore,
   DemandFileEventStoreError,
@@ -354,7 +357,11 @@ test("readDemandFileEventCommitsAfter 从精确锚点逐槽位读取尾部", asy
   const second = preparedCancellation(first.aggregate);
   await store.append(first);
   await store.append(second);
-  const anchor = { commitSequence: 1, streamRevision: 1, lastCommitDigest: digestOf(first.commit) };
+  const anchor = {
+    commitSequence: parseDemandEventCommitSequence(1),
+    streamRevision: parseDemandEventStreamRevision(1),
+    lastCommitDigest: digestOf(first.commit),
+  };
   const tail = await readAfter(root, anchor, undefined);
   deepEqual(tail.anchorCommit, first.commit);
   deepEqual(tail.commits, [second.commit]);
@@ -368,29 +375,25 @@ test("readDemandFileEventCommitsAfter 从精确锚点逐槽位读取尾部", asy
   deepEqual(atTail.commits, []);
   deepEqual(atTail.cursor, tail.cursor);
 
-  const input = (errorPath: string) => isStoreError("input", errorPath);
-  await rejects(readAfter(root, null, undefined), input("$cursor"));
-  await rejects(readAfter(root, { ...anchor, extra: 1 }, undefined), input("$cursor"));
-  await rejects(
-    readAfter(root, { ...anchor, lastCommitDigest: "sha256:zz" }, undefined),
-    input("$/lastCommitDigest"),
-  );
-  await rejects(
-    readAfter(root, { ...anchor, commitSequence: 0 }, undefined),
-    input("$/commitSequence"),
-  );
-  await rejects(
-    readAfter(root, { ...anchor, streamRevision: 0 }, undefined),
-    input("$/streamRevision"),
-  );
   const stale = isStoreError("stream-invalid", "$cursor");
-  await rejects(readAfter(root, { ...anchor, streamRevision: 2 }, undefined), stale);
+  await rejects(
+    readAfter(root, { ...anchor, streamRevision: parseDemandEventStreamRevision(2) }, undefined),
+    stale,
+  );
   await rejects(
     readAfter(root, { ...anchor, lastCommitDigest: AUTHORITY_DIGEST }, undefined),
     stale,
   );
   await rejects(
-    readAfter(root, { ...anchor, commitSequence: 3, streamRevision: 3 }, undefined),
+    readAfter(
+      root,
+      {
+        ...anchor,
+        commitSequence: parseDemandEventCommitSequence(3),
+        streamRevision: parseDemandEventStreamRevision(3),
+      },
+      undefined,
+    ),
     stale,
   );
   await rejects(readAfter(root, anchor, abortedSignal()), aborted);
@@ -422,7 +425,6 @@ test("readDemandFileEventCommitOrNull 与 readDemandFileEventCommitAt 定位单�
   deepEqual(await readAt(root, 1, undefined), first.commit);
   equal(await readAt(root, 2, undefined), null);
   await rejects(readAt(root, 0, undefined), isStoreError("input", "$sequence"));
-  await rejects(readAt(root, "1", undefined), isStoreError("input", "$sequence"));
   await rejects(readAt(root, 1, abortedSignal()), aborted);
   // 槽位 2 里放着提交 1 的内容：文件名与内容序号不一致。
   writeFileSync(commitFile(commitsPath, 2), render(first.commit), { mode: 0o600 });

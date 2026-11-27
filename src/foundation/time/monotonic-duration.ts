@@ -35,28 +35,20 @@ export class MonotonicDurationError extends ModuleError<MonotonicDurationErrorRe
 
 const fail: Fail<MonotonicDurationErrorReason> = failWith(MonotonicDurationError);
 
-function parseMoment(value: unknown, path: string): bigint {
-  if (typeof value !== "bigint" || value < 0n) {
-    fail("moment-type", path);
-  }
-  return value;
-}
-
 /**
  * 计算同一时钟来源中 `start` 到 `end` 的精确纳秒差值。
  *
- * 零时长合法；反向顺序会被稳定拒绝，避免负数被误当成剩余等待或已经过时长。
+ * 零时长合法；反向顺序会被稳定拒绝，避免负数被误当成剩余等待或已经过时长。两个时刻的品牌
+ * 就是准入的证明（时钟读数检查过非负），这里只判断顺序。
  */
 export function monotonicDurationBetween(
   start: MonotonicMoment,
   end: MonotonicMoment,
 ): MonotonicDuration {
-  const startNanoseconds = parseMoment(start, "$start");
-  const endNanoseconds = parseMoment(end, "$end");
-  if (endNanoseconds < startNanoseconds) {
+  if (end < start) {
     fail("moment-order", "$end");
   }
-  return (endNanoseconds - startNanoseconds) as MonotonicDuration;
+  return (end - start) as MonotonicDuration;
 }
 
 /**

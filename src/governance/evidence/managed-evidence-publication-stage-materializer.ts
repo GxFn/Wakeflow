@@ -1,7 +1,4 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import {
@@ -26,7 +23,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
@@ -107,48 +104,7 @@ const fail: Fail<ManagedEvidencePublicationStageMaterializationErrorReason> = fa
   ManagedEvidencePublicationStageMaterializationError,
 );
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME);
-
-function assertRoot(
-  value: unknown,
-  path: "$sourceRoot" | "$demandRoot",
-): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
   try {
@@ -406,11 +362,8 @@ export async function materializeManagedEvidencePublicationStage(
   sourceRootValue: RootedDirectory | null,
   demandRootValue: RootedDirectory,
   transactionValue: unknown,
-  optionsValue: ManagedEvidencePublicationStageMaterializationOptions = {},
+  options: ManagedEvidencePublicationStageMaterializationOptions = {},
 ): Promise<Readonly<ManagedEvidencePublicationStageMaterializationResult>> {
-  if (sourceRootValue !== null) assertRoot(sourceRootValue, "$sourceRoot");
-  assertRoot(demandRootValue, "$demandRoot");
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   const transaction = parseTransaction(transactionValue);
   const stored = await loadExactJournal(demandRootValue, transaction, options.signal);

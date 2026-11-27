@@ -1,17 +1,11 @@
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
   type WakeflowPresentationLanguage,
 } from "../../configuration/wakeflow-config.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
@@ -20,12 +14,10 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceComponent,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceComponent,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 
 /**
@@ -78,26 +70,6 @@ const fail: Fail<WakeflowSupportMemoryAuthorityErrorReason> = failWith(
 );
 
 const MANAGED_MARKER_PREFIX = "<!-- wakeflow:managed-content:";
-
-function parseConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-}
-
-function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
 
 function dataLiteral(value: string, path: string): string {
   try {
@@ -278,24 +250,12 @@ function digestBasis(
   };
 }
 
-function parseSurfaceId(value: unknown): WakeflowDurableId<"surface"> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, "surface", "$surfaceId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$surfaceId", error);
-    throw error;
-  }
-}
-
 /** 为一个严格 wakeflow-managed Design/Test surface 生成 whole-file memory 权威。 */
 export function createWakeflowSupportMemoryAuthority(
-  configValue: unknown,
-  profileValue: unknown,
-  surfaceIdValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  surfaceId: WakeflowDurableId<"surface">,
 ): Readonly<WakeflowSupportMemoryAuthority> {
-  const config = parseConfig(configValue);
-  const profile = parseProfile(profileValue);
-  const surfaceId = parseSurfaceId(surfaceIdValue);
   const indexes = buildWakeflowConfigIndexes(config);
   const surface = indexes.surfaceById[surfaceId];
   if (surface === undefined || surface.ownership !== "wakeflow-managed") {

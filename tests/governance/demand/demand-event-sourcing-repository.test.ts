@@ -1,4 +1,4 @@
-import { deepEqual, equal, ok, rejects, throws } from "node:assert/strict";
+import { deepEqual, equal, ok, rejects } from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -67,11 +67,6 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
   try {
     const eventStore = new DemandFileEventStore(root);
     const repository = new DemandEventSourcingRepository(root);
-    throws(
-      () => new DemandEventSourcingRepository(eventStore as never),
-      (error: unknown) =>
-        error instanceof DemandEventSourcingRepositoryError && error.reason === "input",
-    );
     await eventStore.initialize();
 
     const firstEvents = decideDemandEventSourcingCommand(null, {

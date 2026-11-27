@@ -112,7 +112,7 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandAggregateStateWire>(
 /** 一个测试目标的尝试上限，对应 test-execution-attempt Schema 的序号最大值。 */
 export const TEST_ATTEMPT_LIMIT = 10;
 
-export function parseId<
+function parseId<
   Kind extends
     | "demand"
     | "demand-event"
@@ -1345,14 +1345,14 @@ export function parseDemandAggregateState(value: unknown): Readonly<DemandAggreg
 
 /** `publication.demand-published.v1` 唯一允许创建的初始业务状态。 */
 export function createInitialDemandAggregateState(
-  demandIdValue: unknown,
-  authorityDigestValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
+  authorityDigest: Sha256Digest,
 ): Readonly<DemandAggregateState> {
   return parseDemandAggregateState({
     artifactKind: DEMAND_AGGREGATE_STATE_ARTIFACT_KIND,
     schemaVersion: DEMAND_AGGREGATE_STATE_SCHEMA_VERSION,
-    demandId: parseId(demandIdValue, "demand", "$demandId"),
-    authorityDigest: parseDigest(authorityDigestValue, "$authorityDigest"),
+    demandId,
+    authorityDigest,
     lifecycle: "active",
     targetTasks: [],
   });

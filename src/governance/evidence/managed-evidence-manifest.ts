@@ -1,4 +1,3 @@
-import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
@@ -52,6 +51,7 @@ import {
   type UtcWallClock,
   UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
+import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { MANAGED_EVIDENCE_ROOT_REF } from "./managed-evidence-resource-paths.js";
 import {
   assertManagedEvidenceKindMatchesSource,
@@ -181,7 +181,6 @@ const fail: Fail<ManagedEvidenceManifestErrorReason> = failWith(ManagedEvidenceM
 
 type ManifestBasis = Omit<ManagedEvidenceManifest, "manifestDigest">;
 
-const DRAFT_VALIDATION_INSTANT = parseUtcInstant("1970-01-01T00:00:00.000Z");
 const DRAFT_FIELDS = Object.freeze([
   "contentReview",
   "demandAuthorityDigest",
@@ -473,37 +472,26 @@ function candidateManifest(
 }
 
 function readCaptureTime(options: CreateManagedEvidenceManifestOptions): UtcInstant {
-  let record: Readonly<Record<string, unknown>>;
   try {
-    record = parsePlainRecord(options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "clock")) {
-    fail("input", "$options");
-  }
-  try {
-    return readUtcWallClock(record.clock as UtcWallClock | undefined);
+    return readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
   }
 }
 
-/** 从关闭草稿创建Manifest；草稿关系在读取wall clock之前完成复验。 */
+/** 从关闭草稿创建Manifest；草稿字段集合在读取wall clock之前核对，领域关系随唯一一次解析复验。 */
 export function createManagedEvidenceManifest(
   draft: unknown,
   options: CreateManagedEvidenceManifestOptions = {},
 ): Readonly<ManagedEvidenceManifest> {
   const record = exactDraftRecord(draft);
-  parseManagedEvidenceManifest(candidateManifest(record, DRAFT_VALIDATION_INSTANT));
   return parseManagedEvidenceManifest(candidateManifest(record, readCaptureTime(options)));
 }
 
 /** 渲染managed evidence manifest的唯一确定性JSON文件表示。 */
-export function renderManagedEvidenceManifest(value: unknown): string {
-  return renderDeterministicJsonDocument(parseManagedEvidenceManifest(value), "$manifest");
+export function renderManagedEvidenceManifest(manifest: Readonly<ManagedEvidenceManifest>): string {
+  return renderDeterministicJsonDocument(manifest, "$manifest");
 }
 
 /** 只接受与领域确定性表示逐字节相同的Manifest文档。 */

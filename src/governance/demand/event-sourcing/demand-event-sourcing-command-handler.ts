@@ -1,18 +1,5 @@
-import { types } from "node:util";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
+import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { OperationAbortedError, throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
@@ -24,14 +11,13 @@ import {
   parseDemandEventSourcingCommand,
 } from "./demand-event-sourcing-decider.js";
 import {
-  DemandEventSourcingRepository,
+  type DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
 } from "./demand-event-sourcing-repository.js";
 import {
   type DemandEventStreamCommit,
   DemandEventStreamCommitError,
   type DemandEventStreamCommitWriter,
-  parseDemandEventStreamCommitWriter,
   prepareDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import { DemandFileEventStoreError } from "./demand-file-event-store.js";
@@ -91,97 +77,6 @@ export class DemandEventSourcingCommandHandlerError extends ModuleError<DemandEv
 const fail: Fail<DemandEventSourcingCommandHandlerErrorReason> = failWith(
   DemandEventSourcingCommandHandlerError,
 );
-
-const OPTION_FIELDS = new Set([
-  "commitId",
-  "expectedStreamRevision",
-  "idempotency",
-  "writer",
-  "signal",
-]);
-const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
-
-function assertRepository(value: unknown): asserts value is DemandEventSourcingRepository {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof DemandEventSourcingRepository)
-  ) {
-    fail("input", "$repository");
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ExecuteDemandEventSourcingCommandOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "commitId") ||
-    !Object.hasOwn(record, "expectedStreamRevision") ||
-    Object.keys(record).some((key) => !OPTION_FIELDS.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  let commitId: WakeflowDurableId<"demand-event-commit">;
-  try {
-    commitId = parseWakeflowDurableIdOfKind(record.commitId, "demand-event-commit", "$/commitId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$/commitId", error);
-    throw error;
-  }
-  const expected = record.expectedStreamRevision;
-  if (!Number.isSafeInteger(expected) || (expected as number) < 0) {
-    fail("input", "$/expectedStreamRevision");
-  }
-  const signal = record.signal;
-  if (signal !== undefined && (types.isProxy(signal) || !(signal instanceof AbortSignal))) {
-    fail("input", "$/signal");
-  }
-  let idempotency: ExecuteDemandEventSourcingCommandOptions["idempotency"];
-  if (record.idempotency !== undefined) {
-    let bound: Readonly<Record<string, unknown>>;
-    try {
-      bound = parsePlainRecord(record.idempotency, "$/idempotency");
-    } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", "$/idempotency", error);
-      throw error;
-    }
-    if (
-      Object.keys(bound).sort().join(",") !== "key,requestDigest" ||
-      typeof bound.key !== "string" ||
-      !IDEMPOTENCY_KEY_PATTERN.test(bound.key)
-    ) {
-      fail("input", "$/idempotency");
-    }
-    let requestDigest: Sha256Digest;
-    try {
-      requestDigest = parseSha256Digest(bound.requestDigest, "$/idempotency/requestDigest");
-    } catch (error: unknown) {
-      if (error instanceof Sha256Error) fail("input", "$/idempotency/requestDigest", error);
-      throw error;
-    }
-    idempotency = Object.freeze({ key: bound.key, requestDigest });
-  }
-  let writer: Readonly<DemandEventStreamCommitWriter> | null;
-  try {
-    writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("input", "$/writer", error);
-    throw error;
-  }
-  return Object.freeze({
-    commitId,
-    expectedStreamRevision: expected as number,
-    ...(idempotency === undefined ? {} : { idempotency }),
-    ...(writer === null ? {} : { writer }),
-    ...(signal === undefined ? {} : { signal }),
-  });
-}
 
 function mapRepositoryError(error: unknown): never {
   if (error instanceof DemandEventSourcingRepositoryError) {
@@ -254,10 +149,8 @@ async function findCommitForCommand(
 export async function executeDemandEventSourcingCommand(
   repository: DemandEventSourcingRepository,
   commandValue: unknown,
-  optionsValue: ExecuteDemandEventSourcingCommandOptions,
+  options: ExecuteDemandEventSourcingCommandOptions,
 ): Promise<Readonly<DemandEventSourcingCommandResult>> {
-  assertRepository(repository);
-  const options = parseOptions(optionsValue);
   let command: Readonly<DemandEventSourcingCommand>;
   try {
     command = parseDemandEventSourcingCommand(commandValue);

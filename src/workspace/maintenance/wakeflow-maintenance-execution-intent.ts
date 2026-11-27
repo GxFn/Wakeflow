@@ -49,8 +49,10 @@ import {
   WakeflowMaintenanceWriterError,
 } from "./wakeflow-maintenance-writer.js";
 import {
+  admitWakeflowStaticMaterializationPreviewRequest,
+  type ParsedWakeflowStaticMaterializationPreviewRequest,
+  parseWakeflowStaticMaterializationHostProfiles,
   parseWakeflowStaticMaterializationPreview,
-  parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreview,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
@@ -174,22 +176,16 @@ function normalizeContribution(
   }
 }
 
-function normalizedRequest(
-  preview: Readonly<WakeflowStaticMaterializationPreview>,
-  desiredConfig: WakeflowConfigModel,
+/** 盘上读回的 profile 集合：逐个解析并核对集合关系（A-spec R9a：读盘边界保留的那一半）。 */
+function normalizedHostProfiles(
   currentHostProfileValue: unknown,
   hostProfileValues: readonly unknown[],
 ) {
   try {
-    return parseWakeflowStaticMaterializationPreviewRequest({
-      action: preview.action,
-      // reconcile 与 detach-workspace 的请求不带期望 Config（意图里存的是当前 Config）。
-      desiredConfig: wakeflowStaticMaterializationActionUsesCurrentConfig(preview.action)
-        ? null
-        : desiredConfig,
-      currentHostProfile: currentHostProfileValue,
-      hostProfiles: hostProfileValues,
-    });
+    return parseWakeflowStaticMaterializationHostProfiles(
+      currentHostProfileValue,
+      hostProfileValues,
+    );
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
       fail("request", "$/hostProfiles", error);
@@ -227,14 +223,9 @@ function normalize(
   const desiredConfig = normalizeConfig(wire.desiredConfig);
   const sharedPreview = normalizePreview(wire.sharedPreview);
   const hostContribution = normalizeContribution(wire.hostContribution);
-  const request = normalizedRequest(
-    sharedPreview,
-    desiredConfig,
-    wire.currentHostProfile,
-    wire.hostProfiles,
-  );
-  const hostProfiles = sortedProfiles(request.hostProfiles);
-  const currentHostProfile = request.currentHostProfile;
+  const profiles = normalizedHostProfiles(wire.currentHostProfile, wire.hostProfiles);
+  const hostProfiles = sortedProfiles(profiles.hostProfiles);
+  const currentHostProfile = profiles.currentHostProfile;
   let plan: Readonly<WakeflowMaintenanceExecutionPlan>;
   try {
     plan = createWakeflowMaintenanceExecutionPlan(
@@ -335,9 +326,9 @@ export function createWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
-  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  let request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
   try {
-    request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+    request = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
       fail("request", "$request", error);
@@ -370,30 +361,44 @@ export function createWakeflowMaintenanceExecutionIntent(
   });
 }
 
+/** 已准入意图的计划：由意图里的计划来源重算（意图读入时已核对过它的摘要）。 */
+function planOf(
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
+): Readonly<WakeflowMaintenanceExecutionPlan> {
+  try {
+    return createWakeflowMaintenanceExecutionPlan(
+      intent.sharedPreview,
+      intent.currentHostProfile,
+      intent.hostContribution,
+    );
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceExecutionPlanError) {
+      fail("plan", error.path, error);
+    }
+    throw error;
+  }
+}
+
 /**
  * 做完一步之后的意图：计数加一，其余一字不动。全部做完的意图没有后继。
  */
 export function advanceWakeflowMaintenanceExecutionIntent(
-  value: unknown,
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
 ): Readonly<WakeflowMaintenanceExecutionIntent> {
-  const { intent, plan } = parseWakeflowMaintenanceExecutionIntentWithPlan(value);
-  if (intent.completedSteps >= plan.steps.length) fail("relation", "$/completedSteps");
-  return parseWakeflowMaintenanceExecutionIntent({
-    ...(intentRepresentation(intent) as Record<string, JsonValue>),
-    completedSteps: intent.completedSteps + 1,
-  });
+  if (intent.completedSteps >= planOf(intent).steps.length) fail("relation", "$/completedSteps");
+  return Object.freeze({ ...intent, completedSteps: intent.completedSteps + 1 });
 }
 
-/** 一次准入并重建恢复执行所需的exact plan、无signal request与做到第几步。 */
-export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown): Readonly<{
+/** 从一份已准入的意图重建恢复执行所需的exact plan、无signal request与做到第几步。 */
+export function reconstructWakeflowMaintenanceExecutionFromIntent(
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
+): Readonly<{
   readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
-  readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
+  readonly request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
   readonly completedSteps: number;
 }> {
-  const normalized = parseWakeflowMaintenanceExecutionIntentWithPlan(value);
-  const intent = normalized.intent;
   return Object.freeze({
-    plan: normalized.plan,
+    plan: planOf(intent),
     completedSteps: intent.completedSteps,
     request: Object.freeze({
       action: intent.sharedPreview.action,
@@ -405,31 +410,33 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(value: unknown
         : intent.desiredConfig,
       currentHostProfile: intent.currentHostProfile,
       hostProfiles: intent.hostProfiles,
+      signal: undefined,
     }),
   });
 }
 
 /** 意图里不变部分的语义摘要：计数不进摘要，所以一次维护从头到尾是同一个值。 */
-export function computeWakeflowMaintenanceExecutionIntentDigest(value: unknown): Sha256Digest {
-  const { completedSteps: _completedSteps, ...immutable } = intentRepresentation(
-    parseWakeflowMaintenanceExecutionIntent(value),
-  ) as Record<string, JsonValue>;
+export function computeWakeflowMaintenanceExecutionIntentDigest(
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
+): Sha256Digest {
+  const { completedSteps: _completedSteps, ...immutable } = intentRepresentation(intent) as Record<
+    string,
+    JsonValue
+  >;
   return computeCanonicalJsonSha256Digest(immutable);
 }
 
 /** 渲染唯一确定性格式化JSON表示。 */
-export function renderWakeflowMaintenanceExecutionIntent(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    intentRepresentation(parseWakeflowMaintenanceExecutionIntent(value)),
-    "$intent",
-  );
+export function renderWakeflowMaintenanceExecutionIntent(
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
+): string {
+  return renderDeterministicJsonDocument(intentRepresentation(intent), "$intent");
 }
 
 /** 为一个operation生成exact intent动态资源声明。 */
 export function createWakeflowMaintenanceIntentResourceDeclaration(
-  operationIdValue: unknown,
+  operationId: WakeflowMaintenanceOperationId,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const operationId = parseWakeflowMaintenanceOperationId(operationIdValue);
   return parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",
     declarationId: `maintenance.transaction-intent.${operationId}`,

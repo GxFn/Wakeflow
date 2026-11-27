@@ -85,10 +85,6 @@ export function parseUuidV4(value: unknown, errorPath?: string): UuidV4 {
  * 函数恰好调用一次，异常统一映射，返回值仍须重新满足完整 UUIDv4 合同。
  */
 export function createUuidV4(uuidFactory: UuidV4Factory = randomUUID): UuidV4 {
-  if (typeof uuidFactory !== "function") {
-    fail("factory-type", "$uuidFactory");
-  }
-
   let value: unknown;
   try {
     value = uuidFactory();

@@ -1,16 +1,9 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  type RootedDirectory,
-  isRootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
   deriveWakeflowExternalInstructionAuthorities,
   type ParsedWakeflowExternalInstructionInspectionRequest,
-  parseWakeflowExternalInstructionInspectionRequest,
   WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE,
   type WakeflowExternalInstructionAuthorities,
   type WakeflowExternalInstructionInspection,
@@ -18,6 +11,7 @@ import {
   type WakeflowExternalInstructionInspectionRequest,
   wakeflowExternalInstructionInspectionOf,
   wakeflowExternalInstructionManagedBlockFileRequest,
+  wakeflowExternalInstructionRequestModel,
 } from "./wakeflow-external-instruction-inspection.js";
 import {
   recomposeWakeflowManagedBlockFile,
@@ -74,51 +68,12 @@ const fail: Fail<WakeflowExternalInstructionRecompositionErrorReason> = failWith
   WakeflowExternalInstructionRecompositionError,
 );
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): AbortSignal | undefined {
-  if (value === undefined) return undefined;
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "signal")) {
-    fail("input", "$options");
-  }
-  if (record.signal === undefined) return undefined;
-  if (
-    typeof record.signal !== "object" ||
-    record.signal === null ||
-    types.isProxy(record.signal) ||
-    !(record.signal instanceof AbortSignal)
-  ) {
-    fail("input", "$options.signal");
-  }
-  return record.signal;
-}
-
-function parseRequest(
+function requestModel(
   value: WakeflowExternalInstructionRecompositionRequest,
   signal: AbortSignal | undefined,
 ): Readonly<ParsedWakeflowExternalInstructionInspectionRequest> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    Object.hasOwn(value, "signal")
-  ) {
-    fail("input", "$request");
-  }
   try {
-    return parseWakeflowExternalInstructionInspectionRequest({
-      ...value,
-      ...(signal === undefined ? {} : { signal }),
-    });
+    return wakeflowExternalInstructionRequestModel(value, signal);
   } catch (error: unknown) {
     if (error instanceof WakeflowExternalInstructionInspectionError) {
       fail("input", error.path, error);
@@ -166,19 +121,17 @@ function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
  * 在调用方持有的维护事务内重推导并幂等创建或 CAS 替换外部根里的 Wakeflow 托管块。
  */
 export async function recomposeWakeflowExternalInstruction(
-  rootValue: RootedDirectory,
+  root: RootedDirectory,
   requestValue: WakeflowExternalInstructionRecompositionRequest,
-  optionsValue?: WakeflowExternalInstructionRecompositionOptions,
+  { signal }: WakeflowExternalInstructionRecompositionOptions = {},
 ): Promise<Readonly<WakeflowExternalInstructionRecompositionReceipt>> {
-  assertRoot(rootValue);
-  const signal = parseOptions(optionsValue);
   throwIfAborted(signal);
-  const request = parseRequest(requestValue, signal);
+  const request = requestModel(requestValue, signal);
   const authorities = deriveAuthorities(request);
   let receipt: Readonly<WakeflowManagedBlockFileReceipt>;
   try {
     receipt = await recomposeWakeflowManagedBlockFile(
-      rootValue,
+      root,
       wakeflowExternalInstructionManagedBlockFileRequest(request, authorities, signal),
       { createMode: WAKEFLOW_EXTERNAL_INSTRUCTION_FILE_MODE },
     );

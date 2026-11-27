@@ -133,7 +133,6 @@ import {
 } from "../../workspace/maintenance/wakeflow-private-mode-census.js";
 import {
   isWakeflowDetachAction,
-  parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationAction,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
@@ -342,51 +341,6 @@ function parseWakeflowMaintenancePublicRequest(value: unknown): WakeflowMaintena
     });
   }
   return result.value;
-}
-
-function admitHostFacade(
-  facade: Readonly<WakeflowMaintenancePublicHostFacade>,
-): Readonly<AdmittedHostProfiles> {
-  try {
-    if (
-      typeof facade !== "object" ||
-      facade === null ||
-      !Object.isFrozen(facade) ||
-      !Object.isFrozen(facade.hostProfiles) ||
-      typeof facade.preview !== "function" ||
-      typeof facade.apply !== "function" ||
-      typeof facade.recover !== "function" ||
-      !(
-        facade.privateAssetOperationKinds === undefined ||
-        (Object.isFrozen(facade.privateAssetOperationKinds) &&
-          facade.privateAssetOperationKinds.every((kind) => typeof kind === "string"))
-      ) ||
-      !(
-        facade.artifactRoot === null ||
-        (typeof facade.artifactRoot === "string" && path.isAbsolute(facade.artifactRoot))
-      )
-    ) {
-      fail("unexpected", "host-facade", "$facade");
-    }
-    const parsed = parseWakeflowStaticMaterializationPreviewRequest({
-      action: "reconcile",
-      desiredConfig: null,
-      currentHostProfile: facade.currentHostProfile,
-      hostProfiles: facade.hostProfiles,
-    });
-    if (parsed.currentHostProfile.hostId !== facade.hostId || parsed.signal !== undefined) {
-      fail("unexpected", "host-facade", "$facade");
-    }
-    return Object.freeze({
-      currentHostProfile: parsed.currentHostProfile,
-      hostProfiles: parsed.hostProfiles,
-    });
-  } catch (error: unknown) {
-    if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("unexpected", "host-facade", "$facade", { cause: error });
-    }
-    throw error;
-  }
 }
 
 /** 选择器眼中的本宿主：组合根的缺省 profile 加它的传输表（单传输宿主没有表，选择即缺省）。 */
@@ -1663,7 +1617,10 @@ export async function executeWakeflowMaintenancePublicRequest(
   value: unknown,
   options: Readonly<WakeflowMaintenancePublicRequestOptions> = {},
 ): Promise<WakeflowMaintenancePublicResult> {
-  const profiles = admitHostFacade(facade);
+  const profiles: Readonly<AdmittedHostProfiles> = Object.freeze({
+    currentHostProfile: facade.currentHostProfile,
+    hostProfiles: facade.hostProfiles,
+  });
   const signalOptions = options.signal === undefined ? {} : { signal: options.signal };
   const writer = options.writer ?? null;
   return runPublicationTransaction<

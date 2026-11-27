@@ -1,5 +1,4 @@
 import nodePath from "node:path";
-import { types } from "node:util";
 
 import {
   computeWakeflowConfigDigest,
@@ -7,15 +6,15 @@ import {
   type WakeflowConfigRepository,
 } from "../../configuration/wakeflow-config.js";
 import {
-  deriveWakeflowDetachRepositoryConfig,
-  wakeflowDetachedWindowIds,
-} from "../../configuration/wakeflow-config-detach.js";
-import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_FILE_REF,
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import {
+  deriveWakeflowDetachRepositoryConfig,
+  wakeflowDetachedWindowIds,
+} from "../../configuration/wakeflow-config-detach.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
@@ -24,6 +23,7 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -64,12 +64,13 @@ import {
   inspectWakeflowWorkspaceGitignore,
   WakeflowGitignoreInspectionError,
 } from "../managed-integration/wakeflow-gitignore-inspection.js";
-import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import {
   inspectWakeflowManagedBlockFile,
   inspectWakeflowManagedBlockRemoval,
   WakeflowManagedBlockFileError,
 } from "../managed-integration/wakeflow-managed-block-file.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import type { WakeflowManagedTextEnvelopeTarget } from "../managed-integration/wakeflow-managed-text-envelope.js";
 import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
@@ -127,12 +128,12 @@ import {
 } from "./wakeflow-maintenance-gate.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import {
+  admitWakeflowStaticMaterializationPreviewRequest,
   computeWakeflowStaticMaterializationPreviewDigest,
   failWakeflowStaticMaterializationPreview as fail,
   isWakeflowDetachAction,
   type ParsedWakeflowStaticMaterializationPreviewRequest,
   parseWakeflowStaticMaterializationPreview,
-  parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreview,
   type WakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationStep,
@@ -1065,7 +1066,7 @@ function planFreshActiveWorkspaceProjection(
  */
 interface PreviewWorkingSet {
   readonly rootValue: RootedDirectory;
-  readonly request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  readonly request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
   readonly matrix: ReturnType<typeof createWakeflowWorkspaceStaticResourceMatrix>;
   readonly core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   readonly current: Awaited<ReturnType<typeof currentSnapshot>>;
@@ -1532,23 +1533,19 @@ export async function previewWakeflowStaticMaterialization(
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   optionsValue: WakeflowStaticMaterializationPreviewOptions = {},
 ): Promise<Readonly<WakeflowStaticMaterializationPreview>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
-  if (
-    typeof optionsValue !== "object" ||
-    optionsValue === null ||
-    types.isProxy(optionsValue) ||
-    Object.keys(optionsValue).some((key) => key !== "gateContext")
-  ) {
-    fail("input", "$options");
-  }
+  return previewParsedWakeflowStaticMaterialization(
+    rootValue,
+    admitWakeflowStaticMaterializationPreviewRequest(requestValue),
+    optionsValue,
+  );
+}
+
+/** 同上，请求已经由调用方准入过一次（聚合 preview 不再为共享 preview 再解析一遍）。 */
+export async function previewParsedWakeflowStaticMaterialization(
+  rootValue: RootedDirectory,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  optionsValue: WakeflowStaticMaterializationPreviewOptions = {},
+): Promise<Readonly<WakeflowStaticMaterializationPreview>> {
   throwIfAborted(request.signal);
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
   const core = await previewCoreInspection(rootValue, request, optionsValue);
@@ -1700,8 +1697,8 @@ async function planManagedBlockRemoval(
     readonly stepId: string;
     readonly ownerId: string;
     readonly targetKey: string;
-    readonly resourcePath: string;
-    readonly admittedTargets: readonly unknown[];
+    readonly resourcePath: PortableResourcePath;
+    readonly admittedTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
     readonly blockerPrefix: string;
   }>,
   blockers: Set<string>,

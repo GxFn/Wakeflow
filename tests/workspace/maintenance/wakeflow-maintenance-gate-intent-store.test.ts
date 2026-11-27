@@ -9,9 +9,9 @@ import {
 } from "../../../src/configuration/wakeflow-config.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { isWorkspaceLockHeld } from "../../../src/kernel/workspace-locks.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
+import { isWorkspaceLockHeld } from "../../../src/kernel/workspace-locks.js";
 import { createWakeflowMaintenanceExecutionIntent } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent.js";
 import {
   checkpointWakeflowMaintenanceExecutionIntent,
@@ -27,7 +27,10 @@ import {
   WakeflowMaintenanceGateError,
   withWakeflowMaintenanceGate,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import { wakeflowMaintenanceIntentRef } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import {
+  parseWakeflowMaintenanceOperationId,
+  wakeflowMaintenanceIntentRef,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
@@ -45,7 +48,7 @@ useDisposableDurability();
  */
 
 const UUID = "11111111-1111-4111-8111-111111111111";
-const OPERATION_ID = `maintenance_operation_${UUID}`;
+const OPERATION_ID = parseWakeflowMaintenanceOperationId(`maintenance_operation_${UUID}`);
 const DIGEST = parseSha256Digest(`sha256:${"1".repeat(64)}`);
 const DESIRED_CONFIG = parseWakeflowConfig(createMinimalWakeflowConfig());
 const DESIRED_CONFIG_DIGEST = computeWakeflowConfigDigest(DESIRED_CONFIG);
@@ -306,29 +309,6 @@ test("maintenance gate rejects a stale core-layout preview before bootstrap", as
   equal(caught instanceof WakeflowMaintenanceGateError, true);
   if (caught instanceof WakeflowMaintenanceGateError) {
     equal(caught.reason, "stale-preview");
-  }
-  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
-});
-
-test("maintenance gate validates its operation ID factory before bootstrap", async (t) => {
-  const workspace = await fixture(t);
-  const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
-  let caught: unknown;
-  try {
-    await withWakeflowMaintenanceGate(
-      workspace.root,
-      {
-        expectedCoreLayoutInspectionDigest: core.inspectionDigest,
-        uuidFactory: () => "invalid",
-      },
-      () => undefined,
-    );
-  } catch (error: unknown) {
-    caught = error;
-  }
-  equal(caught instanceof WakeflowMaintenanceGateError, true);
-  if (caught instanceof WakeflowMaintenanceGateError) {
-    equal(caught.reason, "input");
   }
   equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
 });

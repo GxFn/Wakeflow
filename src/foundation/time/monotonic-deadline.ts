@@ -1,4 +1,3 @@
-import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import type { MonotonicMoment } from "./monotonic-clock.js";
 import type { MonotonicDuration } from "./monotonic-duration.js";
 
@@ -20,41 +19,17 @@ export type MonotonicDeadline = bigint & {
   readonly [MONOTONIC_DEADLINE_BRAND]: "MonotonicDeadline";
 };
 
-/** monotonic deadline 失败的稳定分类。 */
-export type MonotonicDeadlineErrorReason = "moment-type" | "duration-type" | "deadline-type";
-
-/**
- * 截止时刻构造或查询输入失败时返回的稳定错误。
- *
- * 错误只暴露能力代码、失败分类和参数路径，不回显原点、时刻、截止时刻或时长数值。
- */
-export class MonotonicDeadlineError extends ModuleError<MonotonicDeadlineErrorReason> {
-  static override readonly code = "wakeflow-monotonic-deadline";
-}
-
-const fail: Fail<MonotonicDeadlineErrorReason> = failWith(MonotonicDeadlineError);
-
-function parseNonNegativeBigint(
-  value: unknown,
-  reason: MonotonicDeadlineErrorReason,
-  path: string,
-): bigint {
-  if (typeof value !== "bigint" || value < 0n) fail(reason, path);
-  return value;
-}
-
 /**
  * 从 `start` 和 `duration` 构造精确截止时刻。
  *
- * 零时长合法并产生立即到期的截止时刻；`bigint` 加法不会产生 `number` 溢出。
+ * 零时长合法并产生立即到期的截止时刻；`bigint` 加法不会产生 `number` 溢出。两个输入的品牌
+ * 就是准入的证明（时钟读数与时长构造器各自检查过），这里不再复验。
  */
 export function monotonicDeadlineAfter(
   start: MonotonicMoment,
   duration: MonotonicDuration,
 ): MonotonicDeadline {
-  const startNanoseconds = parseNonNegativeBigint(start, "moment-type", "$start");
-  const durationNanoseconds = parseNonNegativeBigint(duration, "duration-type", "$duration");
-  return (startNanoseconds + durationNanoseconds) as MonotonicDeadline;
+  return (start + duration) as MonotonicDeadline;
 }
 
 /** `now` 等于或晚于截止时刻时返回 `true`；本函数不读取时钟。 */
@@ -62,9 +37,7 @@ export function isMonotonicDeadlineReached(
   deadline: MonotonicDeadline,
   now: MonotonicMoment,
 ): boolean {
-  const deadlineNanoseconds = parseNonNegativeBigint(deadline, "deadline-type", "$deadline");
-  const nowNanoseconds = parseNonNegativeBigint(now, "moment-type", "$now");
-  return nowNanoseconds >= deadlineNanoseconds;
+  return now >= deadline;
 }
 
 /**
@@ -76,9 +49,5 @@ export function monotonicDeadlineRemaining(
   deadline: MonotonicDeadline,
   now: MonotonicMoment,
 ): MonotonicDuration {
-  const deadlineNanoseconds = parseNonNegativeBigint(deadline, "deadline-type", "$deadline");
-  const nowNanoseconds = parseNonNegativeBigint(now, "moment-type", "$now");
-  return (
-    nowNanoseconds >= deadlineNanoseconds ? 0n : deadlineNanoseconds - nowNanoseconds
-  ) as MonotonicDuration;
+  return (now >= deadline ? 0n : deadline - now) as MonotonicDuration;
 }

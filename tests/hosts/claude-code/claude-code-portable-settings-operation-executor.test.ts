@@ -17,6 +17,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
@@ -70,7 +71,7 @@ function config() {
 function planRequest(configValue: unknown) {
   return Object.freeze({
     action: "fresh-initialize" as const,
-    config: configValue,
+    config: parseWakeflowConfig(configValue),
     profile: claudeCodeWorkspaceHostResourceProfile,
   });
 }
@@ -81,7 +82,7 @@ function executeRequest(
   recoveringAffectedOperation: boolean,
 ) {
   return Object.freeze({
-    config: configValue,
+    config: parseWakeflowConfig(configValue),
     profile: claudeCodeWorkspaceHostResourceProfile,
     operation,
     recoveringAffectedOperation,

@@ -1,10 +1,7 @@
-import { types } from "node:util";
-
 import pLimit from "p-limit";
 
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidateProgress,
@@ -14,12 +11,11 @@ import {
 } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   type StableDirectoryEntry,
@@ -125,62 +121,7 @@ const fail: Fail<ManagedEvidenceRecordSetInventoryErrorReason> = failWith(
   ManagedEvidenceRecordSetInventoryError,
 );
 
-interface ParsedOptions {
-  readonly expectedRootNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly expectedTransactionNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 const RECORD_INSPECTION_CONCURRENCY = 4;
-
-function parseExpectedNode(value: unknown, path: string): Readonly<FileNodeSnapshot> | undefined {
-  if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", path);
-  }
-  try {
-    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) fail("input", path, error);
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some(
-      (key) => key !== "expectedRootNode" && key !== "expectedTransactionNode" && key !== "signal",
-    ) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    expectedRootNode: parseExpectedNode(record.expectedRootNode, "$/expectedRootNode"),
-    expectedTransactionNode: parseExpectedNode(
-      record.expectedTransactionNode,
-      "$/expectedTransactionNode",
-    ),
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 function mapDirectoryError(error: StableDirectoryReadError): never {
   if (error.reason === "root-scope") fail("root-scope", "$root");
@@ -428,17 +369,8 @@ async function inspectCurrentFinal(
 /** 稳定分类Managed Evidence final集合及可选的单槽publication事务。 */
 export async function inspectManagedEvidenceRecordSetInventory(
   root: RootedDirectory,
-  optionsValue: InspectManagedEvidenceRecordSetInventoryOptions = {},
+  options: InspectManagedEvidenceRecordSetInventoryOptions = {},
 ): Promise<Readonly<ManagedEvidenceRecordSetInventory>> {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   const readTransactionResult =
     options.expectedTransactionNode === undefined

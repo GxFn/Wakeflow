@@ -1,7 +1,7 @@
 import { throwIfAborted } from "../node/abort-signal.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import { type RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
 
 /**
@@ -71,28 +71,8 @@ export interface RootedDirectoryTreeRemovalOptions {
   readonly signal?: AbortSignal;
 }
 
-interface ParsedRemovalOptions {
-  readonly missing: "fail" | "ignore";
-  readonly signal: AbortSignal | undefined;
-}
-
 function fail(reason: RootedDirectoryTreeRemovalErrorReason, path: string, cause?: unknown): never {
   throw new RootedDirectoryTreeRemovalError(reason, path, cause);
-}
-
-function parseOptions(
-  value: RootedDirectoryTreeRemovalOptions | undefined,
-  path: string,
-): Readonly<ParsedRemovalOptions> {
-  if (value === undefined) {
-    return Object.freeze({ missing: "fail", signal: undefined });
-  }
-  if (typeof value !== "object" || value === null) fail("input", path);
-  const missing = value.missing ?? "fail";
-  if (missing !== "fail" && missing !== "ignore") fail("input", path);
-  const signal = value.signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) fail("input", path);
-  return Object.freeze({ missing, signal });
 }
 
 async function openRemovalParent(
@@ -136,24 +116,23 @@ async function settleRemovalParent(
 export async function removeRootedDirectoryTree(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
-  optionsValue?: RootedDirectoryTreeRemovalOptions,
+  options: RootedDirectoryTreeRemovalOptions = {},
   errorPath = "$directory",
 ): Promise<"removed" | "absent"> {
-  if (!(root instanceof RootedDirectory)) fail("input", "$root");
-  const options = parseOptions(optionsValue, errorPath);
-  throwIfAborted(options.signal);
+  const { missing = "fail", signal } = options;
+  throwIfAborted(signal);
   let snapshot: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
   try {
     snapshot = await root.inspectExistingResource(resourcePath, errorPath);
   } catch (error: unknown) {
     if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      if (options.missing === "ignore") return "absent";
+      if (missing === "ignore") return "absent";
       fail("not-found", errorPath, error);
     }
     fail("inspection-failure", errorPath, error);
   }
   if (snapshot.node.kind !== "directory") fail("not-directory", errorPath);
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
   // 删除之前绑定父目录句柄，删除之后经它同步一次，同步落在删除发生的那个目录上。
   const parent = await openRemovalParent(root, resourcePath, errorPath);
   let primaryError: RootedDirectoryTreeRemovalError | undefined;

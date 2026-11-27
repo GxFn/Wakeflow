@@ -13,10 +13,9 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfileError,
+  type WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowHostMaintenanceContribution,
@@ -266,24 +265,14 @@ function buildPlan(
  * 依据已确认 Host Profile 组合 shared preview 与当前宿主 contribution。
  */
 export function createWakeflowMaintenanceExecutionPlan(
-  previewValue: unknown,
-  currentHostProfileValue: unknown,
-  contributionValue: unknown | null,
+  preview: Readonly<WakeflowStaticMaterializationPreview>,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  contribution: Readonly<WakeflowHostMaintenanceContribution> | null,
 ): Readonly<WakeflowMaintenanceExecutionPlan> {
-  const preview = parseSharedPreview(previewValue);
-  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(currentHostProfileValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("host", error.path, error);
-    }
-    throw error;
-  }
   if (createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== preview.matrixDigest) {
     fail("matrix", "$profile");
   }
-  return buildPlan(profile.hostId, preview, parseContribution(contributionValue));
+  return buildPlan(profile.hostId, preview, contribution);
 }
 
 function digest(value: unknown, path: string): Sha256Digest {

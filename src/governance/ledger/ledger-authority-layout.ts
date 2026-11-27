@@ -5,7 +5,6 @@ import {
   materializeDirectoryPath,
 } from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -87,10 +86,6 @@ export const LEDGER_AUTHORITY_LAYOUT_DIGEST = computeCanonicalJsonSha256Digest({
   declarations: WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG,
 });
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
 async function inspectEntry(
   root: RootedDirectory,
   policy: Readonly<LedgerAuthorityLayoutEntryPolicy>,
@@ -136,7 +131,6 @@ export async function inspectLedgerAuthorityLayout(
   rootValue: RootedDirectory,
   signal?: AbortSignal,
 ): Promise<Readonly<LedgerAuthorityLayoutInspection>> {
-  assertRoot(rootValue);
   throwIfAborted(signal);
   try {
     await rootValue.assertCurrent("$root");
@@ -178,7 +172,6 @@ export async function materializeLedgerAuthorityLayout(
   rootValue: RootedDirectory,
   signal?: AbortSignal,
 ): Promise<Readonly<LedgerAuthorityLayoutInspection>> {
-  assertRoot(rootValue);
   throwIfAborted(signal);
   try {
     for (const policy of LEDGER_AUTHORITY_LAYOUT_POLICIES) {

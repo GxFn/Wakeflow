@@ -1,11 +1,9 @@
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../workspace-host-resource-catalog.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_RESOURCE_DECLARATION } from "../workspace-host-runtime-resource-catalog.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
 import { createWakeflowWindowRuntimeProjectionResourceCatalog } from "./wakeflow-window-runtime-resource-catalog.js";
@@ -44,18 +42,9 @@ const fail: Fail<WakeflowFreshWindowRuntimeAuthorityErrorReason> = failWith(
 
 /** 为同一 strict Config/Host 编译 Fresh Window Runtime 的完整纯目标。 */
 export function compileWakeflowFreshWindowRuntimeAuthority(
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowFreshWindowRuntimeAuthority> {
-  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
   if (!profile.surfaces.windowIdentity) fail("profile", "$/surfaces/windowIdentity");
   const hostCatalog = createWakeflowWorkspaceHostResourceCatalog(profile);
   const requiredIds = [
@@ -77,11 +66,8 @@ export function compileWakeflowFreshWindowRuntimeAuthority(
   let projectionSet: Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet>;
   let projectionDeclarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
   try {
-    projectionSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(configValue, profile);
-    projectionDeclarations = createWakeflowWindowRuntimeProjectionResourceCatalog(
-      configValue,
-      profile,
-    );
+    projectionSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, profile);
+    projectionDeclarations = createWakeflowWindowRuntimeProjectionResourceCatalog(config, profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeUnregisteredProjectionError) {
       fail("projection", error.path, error);

@@ -15,7 +15,6 @@ import { test } from "node:test";
 import {
   DurableResourceRenameError,
   type DurableResourceRenameErrorReason,
-  type DurableResourceRenameOptions,
   renameResourceDurably,
 } from "../../../src/foundation/filesystem/durable-resource-rename.js";
 import {
@@ -44,10 +43,6 @@ async function expectRenameError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): DurableResourceRenameOptions {
-  return value as DurableResourceRenameOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -250,55 +245,13 @@ test("destination requires an existing real parent", async () => {
   }
 });
 
-test("options, paths, and AbortSignal are closed and passively admitted", async () => {
+test("paths and AbortSignal are checked before any rename", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-rename-input-"));
   writeFileSync(path.join(rootPath, "source"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
     const source = parsePortableResourcePath("source");
     const expected = await root.inspectExistingResource(source);
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ expectedSourceNode: expected.node, extra: true }, "$options"],
-      [{ expectedSourceNode: { ...expected.node } }, "$options.expectedSourceNode"],
-      [{ expectedSourceNode: expected.node, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectRenameError(
-        () =>
-          renameResourceDurably(
-            root,
-            source,
-            parsePortableResourcePath("destination"),
-            asOptions(options),
-          ),
-        "input",
-        expectedPath,
-      );
-    }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "expectedSourceNode", {
-      get: () => {
-        getterCalls += 1;
-        return expected.node;
-      },
-      enumerable: true,
-    });
-    await expectRenameError(
-      () =>
-        renameResourceDurably(
-          root,
-          source,
-          parsePortableResourcePath("destination"),
-          asOptions(accessor),
-        ),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
     await expectRenameError(
       () =>
         renameResourceDurably(

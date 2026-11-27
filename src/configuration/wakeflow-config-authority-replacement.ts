@@ -9,19 +9,21 @@ import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
+  parseWakeflowConfig,
+  WakeflowConfigError,
+  type WakeflowConfigModel,
+} from "./wakeflow-config.js";
+import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthorityDesiredPlacements,
-  assertWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthoritySourcePolicy,
   currentWakeflowConfigAuthorityUserId,
   failWakeflowConfigAuthorityReplacement as fail,
   mapWakeflowConfigAuthorityLockError,
   matchesWakeflowConfigAuthorityExpectation,
   type ParsedWakeflowConfigAuthorityExpectation,
-  type ParsedWakeflowConfigAuthorityReplacementOptions,
   type PreparedWakeflowConfigAuthorityDesired,
   parseWakeflowConfigAuthorityExpectation,
-  parseWakeflowConfigAuthorityReplacementOptions,
   prepareWakeflowConfigAuthorityDesired,
   readCurrentWakeflowConfigAuthority,
   sameWakeflowConfigAuthoritySource,
@@ -110,13 +112,13 @@ async function replaceUnderLock(
   root: RootedDirectory,
   desired: Readonly<PreparedWakeflowConfigAuthorityDesired>,
   expected: Readonly<ParsedWakeflowConfigAuthorityExpectation>,
-  options: Readonly<ParsedWakeflowConfigAuthorityReplacementOptions>,
+  signal: AbortSignal | undefined,
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
-  const current = await readCurrentWakeflowConfigAuthority(root, options.signal, false);
+  const current = await readCurrentWakeflowConfigAuthority(root, signal, false);
   assertWakeflowConfigAuthoritySourcePolicy(current, expectedUserId);
 
   // 当前值已经等于期望值时，按旧请求的幂等回读处理；不再要求旧源资源仍是当前值。
@@ -138,11 +140,11 @@ async function replaceUnderLock(
   // 前置检查到取得锁之间，配置位置可能变化；执行副作用前必须在锁内重新验证。
   await assertWakeflowConfigAuthorityDesiredPlacements(root, desired.model);
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
 
-  const effect = await replaceCurrentBytes(root, current, desired, options.signal);
+  const effect = await replaceCurrentBytes(root, current, desired, signal);
   markCommitted();
-  const authority = await readCurrentWakeflowConfigAuthority(root, options.signal, true);
+  const authority = await readCurrentWakeflowConfigAuthority(root, signal, true);
   assertReplacementReadback(current, effect, authority, desired, expectedUserId);
   return Object.freeze({
     disposition: "replaced" as const,
@@ -152,18 +154,26 @@ async function replaceUnderLock(
   });
 }
 
+function parseDesiredModel(value: unknown): WakeflowConfigModel {
+  try {
+    return parseWakeflowConfig(value);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
+    fail("config", "$config", error);
+  }
+}
+
 /** 在 Config 专属短锁内执行当前值检查、幂等判断和基于精确源预期的替换。 */
 export async function replaceWakeflowConfigAuthority(
   root: RootedDirectory,
   desiredModelValue: unknown,
   expectedSnapshotValue: unknown,
-  options?: WakeflowConfigAuthorityReplacementOptions,
+  options: WakeflowConfigAuthorityReplacementOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
-  assertWakeflowConfigAuthorityRoot(root);
-  const parsed = parseWakeflowConfigAuthorityReplacementOptions(options);
-  throwIfAborted(parsed.signal);
+  const { signal } = options;
+  throwIfAborted(signal);
   const expectedUserId = currentWakeflowConfigAuthorityUserId();
-  const desired = prepareWakeflowConfigAuthorityDesired(desiredModelValue);
+  const desired = prepareWakeflowConfigAuthorityDesired(parseDesiredModel(desiredModelValue));
   const expected = parseWakeflowConfigAuthorityExpectation(expectedSnapshotValue, expectedUserId);
   if (expected.workspaceRoot !== root.absolutePath) {
     fail("conflict", "$expected.workspaceRoot");
@@ -173,7 +183,7 @@ export async function replaceWakeflowConfigAuthority(
   }
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
   await assertWakeflowConfigAuthorityDesiredPlacements(root, desired.model);
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
 
   let committed = false;
   try {
@@ -182,12 +192,12 @@ export async function replaceWakeflowConfigAuthority(
       "config-authority",
       async () => {
         // 上一个替换配置的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
-        await settleStagesOfDeadWriters(root, [WAKEFLOW_CONFIG_FILE_REF], parsed.signal);
-        return replaceUnderLock(root, desired, expected, parsed, expectedUserId, () => {
+        await settleStagesOfDeadWriters(root, [WAKEFLOW_CONFIG_FILE_REF], signal);
+        return replaceUnderLock(root, desired, expected, signal, expectedUserId, () => {
           committed = true;
         });
       },
-      wakeflowConfigAuthorityLockOptions(parsed),
+      wakeflowConfigAuthorityLockOptions(options),
     );
   } catch (error: unknown) {
     if (

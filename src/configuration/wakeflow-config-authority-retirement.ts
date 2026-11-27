@@ -6,7 +6,7 @@ import {
 } from "../foundation/filesystem/durable-resource-rename.js";
 import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
@@ -14,8 +14,6 @@ import { withWorkspaceLock } from "../kernel/workspace-locks.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   currentWakeflowConfigAuthorityUserId,
-  parseWakeflowConfigAuthorityReplacementOptions,
-  type ParsedWakeflowConfigAuthorityReplacementOptions,
   WakeflowConfigAuthorityReplacementError,
   type WakeflowConfigAuthorityReplacementOptions,
   wakeflowConfigAuthorityLockOptions,
@@ -194,13 +192,13 @@ async function assertRetirementReadback(
 async function retireUnderLock(
   root: RootedDirectory,
   expected: Sha256Digest,
-  options: Readonly<ParsedWakeflowConfigAuthorityReplacementOptions>,
+  signal: AbortSignal | undefined,
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowConfigAuthorityRetirementReceipt>> {
-  throwIfAborted(options.signal);
-  const detached = await readDetached(root, options.signal);
-  const current = await readCurrentOrNull(root, options.signal);
+  throwIfAborted(signal);
+  const detached = await readDetached(root, signal);
+  const current = await readCurrentOrNull(root, signal);
   if (current === null) {
     // 已经退役：只有带着期望摘要的退役文件在，才是"当前"；否则这里不是同一个工作区的终态。
     if (detached === null || detached.configDigest !== expected) fail("source", "$config");
@@ -209,8 +207,8 @@ async function retireUnderLock(
   if (current.configDigest !== expected) fail("conflict", "$config");
   if (detached !== null) fail("destination-exists", "$detached");
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
-  throwIfAborted(options.signal);
-  const renamed = await renameConfigToDetached(root, current, options.signal);
+  throwIfAborted(signal);
+  const renamed = await renameConfigToDetached(root, current, signal);
   markCommitted();
   const after = await assertRetirementReadback(root, expected, current, renamed);
   return Object.freeze({ disposition: "retired", configDigest: expected, detached: after });
@@ -245,30 +243,28 @@ function mapRetirementFailure(error: unknown, committed: boolean): never {
 export async function retireWakeflowConfigAuthority(
   root: RootedDirectory,
   expectedConfigDigestValue: unknown,
-  options?: WakeflowConfigAuthorityReplacementOptions,
+  options: WakeflowConfigAuthorityReplacementOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityRetirementReceipt>> {
-  if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const expected = parseExpectedDigest(expectedConfigDigestValue);
-  let parsed: Readonly<ParsedWakeflowConfigAuthorityReplacementOptions>;
+  const { signal } = options;
   let expectedUserId: bigint;
   try {
-    parsed = parseWakeflowConfigAuthorityReplacementOptions(options);
     expectedUserId = currentWakeflowConfigAuthorityUserId();
     await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);
   } catch (error: unknown) {
     mapRetirementFailure(error, false);
   }
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
   let committed = false;
   try {
     return await withWorkspaceLock(
       root,
       "config-authority",
       () =>
-        retireUnderLock(root, expected, parsed, expectedUserId, () => {
+        retireUnderLock(root, expected, signal, expectedUserId, () => {
           committed = true;
         }),
-      wakeflowConfigAuthorityLockOptions(parsed),
+      wakeflowConfigAuthorityLockOptions(options),
     );
   } catch (error: unknown) {
     mapRetirementFailure(error, committed);

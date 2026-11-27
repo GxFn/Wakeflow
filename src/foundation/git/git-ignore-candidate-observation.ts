@@ -2,10 +2,8 @@ import { Buffer } from "node:buffer";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import nodePath from "node:path";
-import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   createFileCandidateDurably,
@@ -23,7 +21,7 @@ import {
   type GitIgnorePathObservation,
   observeGitIgnorePathsInWorkTree,
 } from "./git-ignore-observation.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Git：尚未发布的 Gitignore 文件候选语义观察。
@@ -67,55 +65,15 @@ interface CandidateInput {
   readonly digest: Sha256Digest;
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<GitIgnoreCandidateObservationErrorReason> = failWith(
   GitIgnoreCandidateObservationError,
 );
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$repositoryRoot");
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
-function snapshotCandidate(value: unknown): Readonly<CandidateInput> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !ArrayBuffer.isView(value) ||
-    !(value instanceof Uint8Array) ||
-    value.buffer instanceof SharedArrayBuffer
-  ) {
-    fail("input", "$candidateBytes");
-  }
+/**
+ * 候选字节的私有副本、容量与摘要：先复制再算摘要，调用方之后改它自己的数组不影响观察的内容。
+ * 字节类型由签名保证，不再复验。
+ */
+function snapshotCandidate(value: Uint8Array): Readonly<CandidateInput> {
   const byteCount = parseByteCount(value.byteLength, "$candidateBytes");
   if (byteCount > GIT_IGNORE_CANDIDATE_MAXIMUM_BYTES) {
     fail("capacity", "$candidateBytes");
@@ -228,10 +186,8 @@ export async function observeGitIgnoreCandidate(
   repositoryRootValue: RootedDirectory,
   candidateBytesValue: Uint8Array,
   probePathValues: readonly PortableResourcePath[],
-  optionsValue?: GitIgnoreObservationOptions,
+  options: GitIgnoreObservationOptions = {},
 ): Promise<Readonly<GitIgnoreCandidateObservation>> {
-  assertRoot(repositoryRootValue);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   const candidate = snapshotCandidate(candidateBytesValue);
   await assertRepositoryRootCurrent(repositoryRootValue);

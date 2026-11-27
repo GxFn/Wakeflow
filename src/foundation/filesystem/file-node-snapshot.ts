@@ -25,8 +25,9 @@ import {
  * 访问时间会因读取而变化，创建时间的跨平台语义也不适合作为 Wakeflow 稳定性边界，
  * 因此二者不进入快照；`mtimeNs` 与 `ctimeNs` 继续保留精确的 `bigint` 值。
  *
- * 各耐久原语共用的两件事也写在这里（写一次，1.4.5）：调用方给出的节点预期的准入，与跨一次
- * 硬链接变化的比较。要哪个链接数、预期不合格时报哪个错误，仍由调用方说。
+ * 快照只在进程内存在、从不持久化，比较直接读字段：调用方给的预期是本模块签发的类型化快照，
+ * 不再复验（1.4.5 层次计划 A：运行时校验只留在信任边界）。跨一次硬链接变化的比较也写在这里，
+ * 要哪个链接数仍由调用方说。
  */
 
 /** Wakeflow 需要显式观察的本地文件系统节点类型。 */
@@ -302,37 +303,33 @@ function parseFileNodeSnapshot(value: unknown, path: string): FileNodeSnapshot {
  * 相同结果不证明内容、权限位或时间未变化，也无法排除节点删除后的 inode 复用。
  */
 export function sameFileNodeIdentity(left: FileNodeSnapshot, right: FileNodeSnapshot): boolean {
-  const admittedLeft = parseFileNodeSnapshot(left, "$left");
-  const admittedRight = parseFileNodeSnapshot(right, "$right");
-  return (
-    admittedLeft.deviceId === admittedRight.deviceId &&
-    admittedLeft.inodeId === admittedRight.inodeId
-  );
+  return left.deviceId === right.deviceId && left.inodeId === right.inodeId;
 }
 
 /** 判断两个节点快照的全部稳定物理事实是否逐项相同。 */
 export function sameFileNodeSnapshot(left: FileNodeSnapshot, right: FileNodeSnapshot): boolean {
-  const admittedLeft = parseFileNodeSnapshot(left, "$left");
-  const admittedRight = parseFileNodeSnapshot(right, "$right");
   return (
-    admittedLeft.kind === admittedRight.kind &&
-    admittedLeft.deviceId === admittedRight.deviceId &&
-    admittedLeft.inodeId === admittedRight.inodeId &&
-    admittedLeft.rawMode === admittedRight.rawMode &&
-    admittedLeft.permissionBits === admittedRight.permissionBits &&
-    admittedLeft.linkCount === admittedRight.linkCount &&
-    admittedLeft.userId === admittedRight.userId &&
-    admittedLeft.groupId === admittedRight.groupId &&
-    admittedLeft.specialDeviceId === admittedRight.specialDeviceId &&
-    admittedLeft.byteCount === admittedRight.byteCount &&
-    admittedLeft.modifiedAtNanoseconds === admittedRight.modifiedAtNanoseconds &&
-    admittedLeft.changedAtNanoseconds === admittedRight.changedAtNanoseconds
+    left.kind === right.kind &&
+    left.deviceId === right.deviceId &&
+    left.inodeId === right.inodeId &&
+    left.rawMode === right.rawMode &&
+    left.permissionBits === right.permissionBits &&
+    left.linkCount === right.linkCount &&
+    left.userId === right.userId &&
+    left.groupId === right.groupId &&
+    left.specialDeviceId === right.specialDeviceId &&
+    left.byteCount === right.byteCount &&
+    left.modifiedAtNanoseconds === right.modifiedAtNanoseconds &&
+    left.changedAtNanoseconds === right.changedAtNanoseconds
   );
 }
 
 /**
  * 准入调用方给的节点预期：冻结、不是 Proxy、与自身逐项相同的完整快照。不满足时调用 `reject`
- * 抛调用方自己的输入错误；快照比较本身拒绝它时，比较的错误作为 `reject` 的 `cause`。
+ * 抛调用方自己的输入错误；快照复验本身拒绝它时，复验的错误作为 `reject` 的 `cause`。
+ *
+ * 1.4.5 层次计划 A 第一步之后只剩一个调用方：`parseDurableAtomicFileReplaceOptions`，配置层用它
+ * 解析一份尚未类型化的替换预期（附录 B）；第二步把那里类型化以后，两者与这里的复验一起删掉。
  */
 export function admitFrozenFileNodeSnapshot(
   value: unknown,
@@ -347,7 +344,7 @@ export function admitFrozenFileNodeSnapshot(
     reject();
   }
   try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) reject();
+    parseFileNodeSnapshot(value, "$left");
   } catch (error: unknown) {
     if (error instanceof FileNodeSnapshotError) reject(error);
     throw error;

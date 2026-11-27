@@ -3,6 +3,7 @@ import { chmodSync, existsSync, readFileSync, statSync, writeFileSync } from "no
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   inspectWakeflowManagedBlockRemoval,
@@ -30,6 +31,8 @@ const CURRENT = Object.freeze({ ...IDENTITY, body: "Current render.\n" });
 const HISTORICAL = Object.freeze({ ...IDENTITY, body: "Older render.\n" });
 const FOREIGN = Object.freeze({ ...IDENTITY, body: "Another workspace's render.\n" });
 
+const ref = (name: string) => parsePortableResourcePath(name);
+
 async function fixture(t: TestContext) {
   const absolutePath = disposableRoot(t, "wakeflow-managed-block-removal-");
   const root = await RootedDirectory.open(absolutePath);
@@ -55,7 +58,7 @@ test("block that is the whole file is removed and the empty file is deleted", as
   const { absolutePath, root } = await fixture(t);
   const file = write(absolutePath, "AGENTS.md", block(CURRENT));
   const inspected = await inspectWakeflowManagedBlockRemoval(root, {
-    resourcePath: "AGENTS.md",
+    resourcePath: ref("AGENTS.md"),
     admittedTargets: [CURRENT],
   });
   equal(inspected.status, "removal-required");
@@ -63,14 +66,14 @@ test("block that is the whole file is removed and the empty file is deleted", as
   equal(existsSync(file), true, "inspection must not write");
 
   const removed = await removeWakeflowManagedBlockFile(root, {
-    resourcePath: "AGENTS.md",
+    resourcePath: ref("AGENTS.md"),
     admittedTargets: [CURRENT],
   });
   equal(removed.disposition, "deleted");
   equal(existsSync(file), false);
 
   const again = await removeWakeflowManagedBlockFile(root, {
-    resourcePath: "AGENTS.md",
+    resourcePath: ref("AGENTS.md"),
     admittedTargets: [CURRENT],
   });
   equal(again.disposition, "current");
@@ -82,7 +85,7 @@ test("block inside user content is removed byte for byte and the owner mode is k
   const outside = "# Product A\n\nUser text stays.\n";
   const file = write(absolutePath, "AGENTS.md", block(CURRENT, outside), 0o664);
   const removed = await removeWakeflowManagedBlockFile(root, {
-    resourcePath: "AGENTS.md",
+    resourcePath: ref("AGENTS.md"),
     admittedTargets: [CURRENT],
   });
   equal(removed.disposition, "replaced");
@@ -97,14 +100,14 @@ test("historical render is admitted when registered, unknown body and foreign ow
   write(absolutePath, "AGENTS.md", block(HISTORICAL));
   await rejects(
     inspectWakeflowManagedBlockRemoval(root, {
-      resourcePath: "AGENTS.md",
+      resourcePath: ref("AGENTS.md"),
       admittedTargets: [CURRENT],
     }),
     (error: unknown) =>
       error instanceof WakeflowManagedBlockFileError && error.reason === "unknown-managed-body",
   );
   const admitted = await removeWakeflowManagedBlockFile(root, {
-    resourcePath: "AGENTS.md",
+    resourcePath: ref("AGENTS.md"),
     admittedTargets: [CURRENT, HISTORICAL],
   });
   equal(admitted.disposition, "deleted");
@@ -112,7 +115,7 @@ test("historical render is admitted when registered, unknown body and foreign ow
   write(absolutePath, "FOREIGN.md", block(FOREIGN));
   await rejects(
     removeWakeflowManagedBlockFile(root, {
-      resourcePath: "FOREIGN.md",
+      resourcePath: ref("FOREIGN.md"),
       admittedTargets: [CURRENT, HISTORICAL],
     }),
     (error: unknown) =>
@@ -131,7 +134,7 @@ test("historical render is admitted when registered, unknown body and foreign ow
   );
   await rejects(
     inspectWakeflowManagedBlockRemoval(root, {
-      resourcePath: "OTHER.md",
+      resourcePath: ref("OTHER.md"),
       admittedTargets: [CURRENT],
     }),
     (error: unknown) =>
@@ -139,23 +142,15 @@ test("historical render is admitted when registered, unknown body and foreign ow
   );
 });
 
-test("files without a block and admitted-target shape are closed at the boundary", async (t) => {
+test("files without a block are absent", async (t) => {
   const { absolutePath, root } = await fixture(t);
   write(absolutePath, "PLAIN.md", Buffer.from("no block here\n", "utf8"));
   const plain = await inspectWakeflowManagedBlockRemoval(root, {
-    resourcePath: "PLAIN.md",
+    resourcePath: ref("PLAIN.md"),
     admittedTargets: [CURRENT],
   });
   equal(plain.status, "absent");
   equal(plain.source !== null, true);
   equal(plain.target, null);
   deepEqual({ ...plain.identity }, { ...IDENTITY });
-
-  for (const admittedTargets of [[], [CURRENT, CURRENT], [CURRENT, { ...CURRENT, owner: "x" }]]) {
-    await rejects(
-      inspectWakeflowManagedBlockRemoval(root, { resourcePath: "PLAIN.md", admittedTargets }),
-      (error: unknown) =>
-        error instanceof WakeflowManagedBlockFileError && error.reason === "input",
-    );
-  }
 });

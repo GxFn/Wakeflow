@@ -1,6 +1,3 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type {
   DurableAtomicFileReplaceResult,
@@ -8,10 +5,10 @@ import type {
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   type ParsedWakeflowSupportMemoryInspectionRequest,
-  parseWakeflowSupportMemoryInspectionRequest,
   type WakeflowSupportMemoryInspection,
   WakeflowSupportMemoryInspectionError,
   type WakeflowSupportMemoryInspectionRequest,
+  wakeflowSupportMemoryRequestModel,
 } from "./wakeflow-support-memory-inspection.js";
 
 /** Support memory 发布与恢复共享的请求、选项、回执和错误合同。 */
@@ -52,46 +49,18 @@ export class WakeflowSupportMemoryPublicationError extends ModuleError<WakeflowS
 export const failWakeflowSupportMemoryPublication: Fail<WakeflowSupportMemoryPublicationErrorReason> =
   failWith(WakeflowSupportMemoryPublicationError);
 
-export function parseWakeflowSupportMemoryPublicationRequest(
-  value: unknown,
+/** 已类型化的发布请求换成执行用的形状；program 一致性与 surface 检查失败归为本模块的 `input`。 */
+export function wakeflowSupportMemoryPublicationRequestModel(
+  value: WakeflowSupportMemoryPublicationRequest,
 ): Readonly<ParsedWakeflowSupportMemoryInspectionRequest> {
   try {
-    const parsed = parseWakeflowSupportMemoryInspectionRequest(value);
-    if (parsed.signal !== undefined) {
-      failWakeflowSupportMemoryPublication("input", "$request.signal");
-    }
-    return parsed;
+    return wakeflowSupportMemoryRequestModel(value, undefined);
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryInspectionError) {
       failWakeflowSupportMemoryPublication("input", error.path, error);
     }
     throw error;
   }
-}
-
-export function parseWakeflowSupportMemoryPublicationOptions(
-  value: unknown,
-): Readonly<{ readonly signal: AbortSignal | undefined }> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failWakeflowSupportMemoryPublication("input", "$options", error);
-    }
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    failWakeflowSupportMemoryPublication("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
 }
 
 export function wakeflowSupportMemoryInspectionRequest(

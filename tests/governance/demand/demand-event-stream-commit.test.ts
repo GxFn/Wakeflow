@@ -285,27 +285,6 @@ test("提交记录的可选写者戳随提交持久化并进提交摘要链，�
     computeDemandEventStreamCommitDigest(second.commit),
   );
 
-  // 戳必须恰好是 {version: semver, manifestDigest}。
-  for (const writer of [
-    { version: "v1.2.0", manifestDigest: WRITER.manifestDigest },
-    { version: "1.2", manifestDigest: WRITER.manifestDigest },
-    { version: "1.2.0" },
-    { version: "1.2.0", manifestDigest: WRITER.manifestDigest, extra: true },
-    "1.2.0",
-  ]) {
-    throws(
-      () => planDemandEventStreamCommit(null, { ...input, writer }),
-      (error: unknown) => error instanceof DemandEventStreamCommitError && error.reason === "input",
-    );
-  }
-  throws(
-    () =>
-      planDemandEventStreamCommit(null, {
-        ...input,
-        writer: { version: "1.2.0", manifestDigest: "sha256:zz" },
-      }),
-    (error: unknown) => error instanceof DemandEventStreamCommitError && error.reason === "digest",
-  );
   // wire 上 null 不是缺席，缺子字段不过 Schema。
   for (const writer of [null, { version: "1.2.0" }]) {
     throws(

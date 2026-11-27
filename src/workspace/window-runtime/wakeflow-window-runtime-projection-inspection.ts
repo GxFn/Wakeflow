@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   parseWakeflowConfig,
   WakeflowConfigError,
@@ -9,7 +7,7 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
@@ -120,25 +118,15 @@ export type WakeflowWindowRuntimeProjectionSetInspection =
   | Readonly<{ readonly status: "runtime-missing" }>
   | Readonly<{ readonly status: "inventory-unavailable" }>;
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    failWindowRuntimeProjection("input", "$root");
-  }
-}
-
-/** 准入根与三份输入：Config 与两份宿主 profile 都重新解析，且两份 profile 必须是同一宿主。 */
-export function admitWakeflowWindowRuntimeProjectionInputs(
-  rootValue: unknown,
+/**
+ * 三份输入在这几个入口的请求里仍声明为 `unknown`（宿主与 pod 能力直接调用，签名留到 A-spec 第 2 步）：
+ * 解析一次，并核对两份 profile 是同一宿主。根已经是 `RootedDirectory`，不再检查。
+ */
+export function parseWakeflowWindowRuntimeProjectionInputs(
   configValue: unknown,
   resourceProfileValue: unknown,
   identityProfileValue: unknown,
 ): WakeflowWindowRuntimeProjectionInputs {
-  assertRoot(rootValue);
   let config: WakeflowConfigModel;
   try {
     config = parseWakeflowConfig(configValue);
@@ -308,8 +296,7 @@ export async function inspectWakeflowWindowRuntimeProjectionSet(
   request: InspectWakeflowWindowRuntimeProjectionSetRequest,
 ): Promise<WakeflowWindowRuntimeProjectionSetInspection> {
   throwIfAborted(request.signal);
-  const inputs = admitWakeflowWindowRuntimeProjectionInputs(
-    rootValue,
+  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
     request.config,
     request.resourceProfile,
     request.identityProfile,

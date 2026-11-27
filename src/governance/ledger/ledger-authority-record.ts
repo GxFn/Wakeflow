@@ -180,22 +180,6 @@ const validateRequirementWire = createRuntimeJsonSchemaValidator<RequirementReco
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const REQUIREMENT_DRAFT_FIELDS = Object.freeze([
-  "confirmation",
-  "demandType",
-  "documents",
-  "originWindowId",
-  "parked",
-  "priority",
-  "programId",
-  "requirementId",
-  "sections",
-  "supersedes",
-  "taskPlanReview",
-  "testingDecision",
-  "title",
-] as const);
-const OPTIONAL_DRAFT_FIELD = "supplements";
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
@@ -468,40 +452,9 @@ export function parseLedgerAuthorityRecord(value: unknown): Readonly<LedgerAutho
   return normalizeRequirement(result.value);
 }
 
-function exactDraft(value: unknown): Readonly<Record<string, unknown>> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$draft");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
-    throw error;
-  }
-  // `supplements` 是唯一可缺省的草稿字段：只有 supplement 包带它。
-  const keys = Object.keys(record)
-    .filter((key) => key !== OPTIONAL_DRAFT_FIELD)
-    .sort();
-  if (
-    keys.length !== REQUIREMENT_DRAFT_FIELDS.length ||
-    keys.some((key, index) => key !== REQUIREMENT_DRAFT_FIELDS[index])
-  ) {
-    fail("input", "$draft");
-  }
-  return record;
-}
-
 function recordTime(options: CreateLedgerAuthorityRecordOptions): UtcInstant {
-  let record: Readonly<Record<string, unknown>>;
   try {
-    record = parsePlainRecord(options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "clock")) {
-    fail("input", "$options");
-  }
-  try {
-    return readUtcWallClock(record.clock as UtcWallClock | undefined);
+    return readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
@@ -517,7 +470,7 @@ export function createRequirementRecord(
   input: CreateRequirementRecordInput,
   options: CreateLedgerAuthorityRecordOptions = {},
 ): Readonly<RequirementRecord> {
-  const draft = exactDraft(input);
+  const draft = input;
   const admitted = parseLedgerAuthorityRecord({
     artifactKind: REQUIREMENT_RECORD_ARTIFACT_KIND,
     schemaVersion: LEDGER_AUTHORITY_RECORD_SCHEMA_VERSION,
@@ -541,8 +494,8 @@ export function createRequirementRecord(
 }
 
 /** 按唯一字段顺序渲染确定性格式化 JSON 文档。 */
-export function renderLedgerAuthorityRecord(value: unknown): string {
-  return renderDeterministicJsonDocument(parseLedgerAuthorityRecord(value), "$record");
+export function renderLedgerAuthorityRecord(record: Readonly<LedgerAuthorityRecord>): string {
+  return renderDeterministicJsonDocument(record, "$record");
 }
 
 /** 解析磁盘文档，并拒绝格式化方式或领域字段顺序发生漂移。 */
@@ -564,6 +517,8 @@ export function parseLedgerAuthorityRecordDocument(text: unknown): Readonly<Ledg
 }
 
 /** 计算与 JSON 字段顺序无关的 Ledger 权威记录语义摘要。 */
-export function computeLedgerAuthorityRecordDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseLedgerAuthorityRecord(value));
+export function computeLedgerAuthorityRecordDigest(
+  record: Readonly<LedgerAuthorityRecord>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(record);
 }

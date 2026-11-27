@@ -72,13 +72,7 @@ test("monotonic readings are uncached and preserve exact bigint values", () => {
   equal(calls, 4);
 });
 
-test("clock type, execution, and result failures are distinct and sanitized", () => {
-  expectMonotonicClockError(
-    () => readMonotonicClock(asMonotonicClock(null)),
-    "clock-type",
-    "$clock",
-  );
-
+test("clock execution and result failures are distinct and sanitized", () => {
   const privateFailure = new Error("private monotonic failure");
   const executionError = expectMonotonicClockError(
     () =>

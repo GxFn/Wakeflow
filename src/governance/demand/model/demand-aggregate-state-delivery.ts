@@ -6,24 +6,9 @@ import {
 } from "../../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import type { WakeflowWindowHostBindingId } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
-import {
-  type DeliveryEnvelope,
-  DeliveryEnvelopeError,
-  deliveryPurpose,
-  parseDeliveryEnvelope,
-} from "../../delivery/delivery-envelope.js";
-import {
-  type DeliveryDisposition,
-  type DeliveryOutcome,
-  DeliveryOutcomeError,
-  parseDeliveryOutcome,
-} from "../../delivery/delivery-outcome.js";
-import {
-  DELIVERY_REARM_LIMIT,
-  type DeliveryRearm,
-  DeliveryRearmError,
-  parseDeliveryRearm,
-} from "../../delivery/delivery-rearm.js";
+import { type DeliveryEnvelope, deliveryPurpose } from "../../delivery/delivery-envelope.js";
+import type { DeliveryDisposition, DeliveryOutcome } from "../../delivery/delivery-outcome.js";
+import { DELIVERY_REARM_LIMIT, type DeliveryRearm } from "../../delivery/delivery-rearm.js";
 import {
   assertRerunTestExecutionAttemptFollows,
   type TestExecutionAttempt,
@@ -348,19 +333,9 @@ function assertImplementationDeliveryAdmitted(
 }
 
 export function prepareDeliveryInDemandAggregateState(
-  currentValue: unknown,
-  envelopeValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  envelope: Readonly<DeliveryEnvelope>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let envelope: Readonly<DeliveryEnvelope>;
-  try {
-    envelope = parseDeliveryEnvelope(envelopeValue);
-  } catch (error: unknown) {
-    if (error instanceof DeliveryEnvelopeError) {
-      fail("delivery-envelope", "$envelope", error);
-    }
-    throw error;
-  }
   const target = current.targetTasks.find(
     (entry) => entry.targetTaskId === envelope.target.targetTaskId,
   );
@@ -441,19 +416,9 @@ function phaseForDisposition(
  * delivery-prepared；indeterminate 之后允许再记一次（hook 记录到达或 Controller 显式解决）。
  */
 export function recordDeliveryOutcomeInDemandAggregateState(
-  currentValue: unknown,
-  outcomeValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  outcome: Readonly<DeliveryOutcome>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let outcome: Readonly<DeliveryOutcome>;
-  try {
-    outcome = parseDeliveryOutcome(outcomeValue);
-  } catch (error: unknown) {
-    if (error instanceof DeliveryOutcomeError) {
-      fail("delivery-outcome", "$outcome", error);
-    }
-    throw error;
-  }
   const candidates = deliveryBearingTargets(current).filter(
     (entry) => entry.currentDelivery.deliveryId === outcome.deliveryId,
   );
@@ -504,17 +469,9 @@ export function recordDeliveryOutcomeInDemandAggregateState(
 
 /** `delivery.delivery-rearmed.v1` 使用的纯状态转换：同一信封、新声明与围栏、代际加一。 */
 export function rearmDeliveryInDemandAggregateState(
-  currentValue: unknown,
-  rearmValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  rearm: Readonly<DeliveryRearm>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let rearm: Readonly<DeliveryRearm>;
-  try {
-    rearm = parseDeliveryRearm(rearmValue);
-  } catch (error: unknown) {
-    if (error instanceof DeliveryRearmError) fail("delivery-rearm", "$rearm", error);
-    throw error;
-  }
   const candidates = deliveryBearingTargets(current).filter(
     (entry) => entry.currentDelivery.deliveryId === rearm.deliveryId,
   );

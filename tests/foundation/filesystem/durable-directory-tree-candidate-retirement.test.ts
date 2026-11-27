@@ -218,7 +218,7 @@ test("恢复入口拒绝内容漂移与符号链接，不删除其他计划成�
   }
 });
 
-test("取消与行为输入在首个删除提交点之前失败", async () => {
+test("取消在首个删除提交点之前失败", async () => {
   const fixture = await createFixture();
   try {
     const controller = new AbortController();
@@ -229,58 +229,6 @@ test("取消与行为输入在首个删除提交点之前失败", async () => {
           signal: controller.signal,
         }),
       OperationAbortedError,
-    );
-    equal(existsSync(stagePath(fixture.rootPath)), true);
-
-    let trapCalls = 0;
-    const candidate = new Proxy(fixture.candidate, {
-      getPrototypeOf() {
-        trapCalls += 1;
-        return Object.prototype;
-      },
-    });
-    await expectRetirementError(
-      () =>
-        retireDirectoryTreeCandidateDurably(
-          fixture.root,
-          candidate as DirectoryTreeCandidateResult,
-        ),
-      "input",
-    );
-    equal(trapCalls, 0);
-    equal(existsSync(stagePath(fixture.rootPath)), true);
-
-    const forged = {
-      ...fixture.candidate,
-      future: true,
-    } as unknown as DirectoryTreeCandidateResult;
-    await expectRetirementError(
-      () => retireDirectoryTreeCandidateDurably(fixture.root, forged),
-      "input",
-    );
-    equal(existsSync(stagePath(fixture.rootPath)), true);
-  } finally {
-    await cleanupFixture(fixture);
-  }
-});
-
-test("恢复入口拒绝伪造计划且不接收recursive删除选项", async () => {
-  const fixture = await createFixture();
-  try {
-    const forgedPlan = {
-      ...fixture.plan,
-      files: fixture.plan.files.slice(1),
-    } as DirectoryTreeCandidatePlan;
-    await expectRetirementError(
-      () => settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, forgedPlan),
-      "input",
-    );
-    await expectRetirementError(
-      () =>
-        settleDirectoryTreeCandidateRetirement(fixture.root, STAGE_REF, fixture.plan, {
-          recursive: true,
-        } as never),
-      "input",
     );
     equal(existsSync(stagePath(fixture.rootPath)), true);
   } finally {

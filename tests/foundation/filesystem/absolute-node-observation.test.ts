@@ -67,10 +67,6 @@ test("输入必须是规范的绝对路径；无法观察的节点带 errno 的 
   await expectError(() => observeAbsoluteNode("relative/path"), "input");
   await expectError(() => observeAbsoluteNode(`${root}/`), "input");
   await expectError(() => observeAbsoluteNode(" "), "input");
-  await expectError(
-    () => observeAbsoluteNode(path.join(root, "f.txt"), { follow: "yes" as never }),
-    "input",
-  );
   if (typeof process.getuid === "function" && process.getuid() === 0) return;
   const sealed = path.join(root, "sealed");
   mkdirSync(sealed);

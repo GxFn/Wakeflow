@@ -1,6 +1,3 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import {
@@ -18,18 +15,14 @@ import {
   DurableFileCopyCandidateError,
 } from "../filesystem/durable-file-copy-candidate.js";
 import type { PortableResourcePath } from "../filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../filesystem/rooted-directory.js";
 import {
   inspectLoadedArtifactTree,
   type LoadedArtifactTreeIdentity,
   LoadedArtifactTreeIdentityError,
 } from "./loaded-artifact-tree-identity.js";
-import {
-  type LoadedArtifactTreeTransferPlan,
-  LoadedArtifactTreeTransferPlanError,
-  parseLoadedArtifactTreeTransferPlan,
-} from "./loaded-artifact-tree-transfer-plan.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import type { LoadedArtifactTreeTransferPlan } from "./loaded-artifact-tree-transfer-plan.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：Loaded Artifact Tree 的目标根内候选物化。
@@ -69,56 +62,9 @@ export class LoadedArtifactTreeTransferCandidateError extends ModuleError<Loaded
   static override readonly code = "wakeflow-loaded-artifact-tree-transfer-candidate";
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<LoadedArtifactTreeTransferCandidateErrorReason> = failWith(
   LoadedArtifactTreeTransferCandidateError,
 );
-
-function assertRoot(
-  value: unknown,
-  path: "$sourceRoot" | "$destinationRoot",
-): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-function parsePlan(value: unknown): Readonly<LoadedArtifactTreeTransferPlan> {
-  try {
-    return parseLoadedArtifactTreeTransferPlan(value);
-  } catch (error: unknown) {
-    if (error instanceof LoadedArtifactTreeTransferPlanError) {
-      if (error.reason === "capacity") fail("capacity", "$plan", error);
-      fail("input", "$plan", error);
-    }
-    throw error;
-  }
-}
 
 function mapSourceError(error: LoadedArtifactTreeIdentityError): never {
   if (error.reason === "root-scope") fail("source-root-scope", "$sourceRoot");
@@ -338,36 +284,29 @@ async function inspectCompleteCandidate(
 
 /** 创建或精确补齐一棵 Loaded Artifact Tree candidate，并证明来源和候选均闭合。 */
 export async function materializeLoadedArtifactTreeTransferCandidate(
-  sourceRootValue: RootedDirectory,
-  destinationRootValue: RootedDirectory,
-  planValue: LoadedArtifactTreeTransferPlan,
-  optionsValue?: LoadedArtifactTreeTransferCandidateOptions,
+  sourceRoot: RootedDirectory,
+  destinationRoot: RootedDirectory,
+  plan: Readonly<LoadedArtifactTreeTransferPlan>,
+  options: LoadedArtifactTreeTransferCandidateOptions = {},
 ): Promise<Readonly<LoadedArtifactTreeTransferCandidateResult>> {
-  assertRoot(sourceRootValue, "$sourceRoot");
-  assertRoot(destinationRootValue, "$destinationRoot");
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const plan = parsePlan(planValue);
-  await inspectSource(sourceRootValue, plan, options.signal);
-  await ensureCandidateRoot(destinationRootValue, plan, options.signal);
-  let progress = await inspectProgress(destinationRootValue, plan, options.signal);
-  await materializeMissingDirectories(
-    destinationRootValue,
-    plan,
-    progress.missingDirectories,
-    options.signal,
-  );
-  progress = await inspectProgress(destinationRootValue, plan, options.signal);
+  // 计划由计划器编译（它在签发前自验一次），不再复验；来源树按计划的制品摘要重新观察。
+  const { signal } = options;
+  throwIfAborted(signal);
+  await inspectSource(sourceRoot, plan, signal);
+  await ensureCandidateRoot(destinationRoot, plan, signal);
+  let progress = await inspectProgress(destinationRoot, plan, signal);
+  await materializeMissingDirectories(destinationRoot, plan, progress.missingDirectories, signal);
+  progress = await inspectProgress(destinationRoot, plan, signal);
   const copiedFiles = await copyMissingFiles(
-    sourceRootValue,
-    destinationRootValue,
+    sourceRoot,
+    destinationRoot,
     plan,
     progress.missingFiles,
-    options.signal,
+    signal,
   );
-  const candidate = await inspectCompleteCandidate(destinationRootValue, plan, options.signal);
-  const sourceIdentity = await inspectSource(sourceRootValue, plan, options.signal);
-  throwIfAborted(options.signal);
+  const candidate = await inspectCompleteCandidate(destinationRoot, plan, signal);
+  const sourceIdentity = await inspectSource(sourceRoot, plan, signal);
+  throwIfAborted(signal);
   return Object.freeze({
     plan,
     sourceIdentity,

@@ -1,9 +1,7 @@
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
-  admitFrozenFileNodeSnapshot,
   type FileNodeSnapshot,
   sameFileAfterLinkChange,
   sameFileNodeIdentity,
@@ -11,7 +9,7 @@ import {
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   closeExactResourceHandle,
   RootedExactResourceHandle,
@@ -98,58 +96,7 @@ export class ExactRegularFileUnlinkError extends ModuleError<ExactRegularFileUnl
   }
 }
 
-interface ParsedOptions {
-  readonly expectedNode: Readonly<FileNodeSnapshot>;
-  readonly settlement: "absent" | "replacement-allowed";
-  readonly durability: "fsync" | "none";
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<ExactRegularFileUnlinkErrorReason> = failWith(ExactRegularFileUnlinkError);
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  return admitFrozenFileNodeSnapshot(value, (cause) =>
-    fail("input", "$options.expectedNode", cause),
-  );
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const allowed = new Set(["expectedNode", "settlement", "durability", "signal"]);
-  if (
-    !Object.hasOwn(record, "expectedNode") ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  const expectedNode = parseExpectedNode(record.expectedNode);
-  if (expectedNode.kind === "file" && expectedNode.linkCount < 1n) {
-    fail("input", "$options.expectedNode");
-  }
-  const signal = record.signal;
-  if (signal !== undefined && !isAbortSignal(signal)) {
-    fail("input", "$options.signal");
-  }
-  const settlement = record.settlement === undefined ? "absent" : record.settlement;
-  if (settlement !== "absent" && settlement !== "replacement-allowed") {
-    fail("input", "$options.settlement");
-  }
-  const durability = record.durability === undefined ? "fsync" : record.durability;
-  if (durability !== "fsync" && durability !== "none") {
-    fail("input", "$options.durability");
-  }
-  return Object.freeze({ expectedNode, settlement, durability, signal });
-}
 
 function mapParentHandleError(
   error: RootedResourceParentHandleError,
@@ -308,9 +255,8 @@ export async function unlinkRegularFileExactly(
   resourcePath: PortableResourcePath,
   options: ExactRegularFileUnlinkOptions,
 ): Promise<Readonly<ExactRegularFileUnlinkReceipt>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
+  const { expectedNode, settlement = "absent", durability = "fsync", signal } = options;
+  throwIfAborted(signal);
 
   const parent = await openResourceParent(root, resourcePath);
   let source: RootedExactResourceHandle | undefined;
@@ -318,13 +264,13 @@ export async function unlinkRegularFileExactly(
   let result: Readonly<ExactRegularFileUnlinkReceipt> | undefined;
 
   try {
-    source = await openExactSource(root, resourcePath, parsed.expectedNode);
+    source = await openExactSource(root, resourcePath, expectedNode);
     if (source.resourceAbsolutePath !== parent.resourceAbsolutePath) {
       fail("root-scope", "$resourcePath");
     }
     await assertParentCurrent(parent);
     await assertSourceCurrent(source);
-    throwIfAborted(parsed.signal);
+    throwIfAborted(signal);
 
     try {
       await filesystemMutation.unlink(parent.resourceAbsolutePath);
@@ -337,14 +283,14 @@ export async function unlinkRegularFileExactly(
 
     const nodeBefore = source.initialNodeSnapshot;
     const remainingLinkCount = nodeBefore.linkCount - 1n;
-    let replacementObserved = await observeSettlement(parent, nodeBefore, parsed.settlement);
+    let replacementObserved = await observeSettlement(parent, nodeBefore, settlement);
     const afterUnlink = await inspectCommittedSource(source);
     if (!sameFileAfterLinkChange(nodeBefore, afterUnlink, remainingLinkCount)) {
       fail("commit-uncertain", "$resourcePath");
     }
-    if (parsed.durability === "fsync") await syncParent(parent);
+    if (durability === "fsync") await syncParent(parent);
     replacementObserved =
-      (await observeSettlement(parent, nodeBefore, parsed.settlement)) || replacementObserved;
+      (await observeSettlement(parent, nodeBefore, settlement)) || replacementObserved;
     const settled = await inspectCommittedSource(source);
     if (!sameFileNodeSnapshot(afterUnlink, settled)) {
       fail("commit-uncertain", "$resourcePath");

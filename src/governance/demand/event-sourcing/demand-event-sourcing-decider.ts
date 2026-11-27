@@ -1183,8 +1183,10 @@ export function parseDemandEventSourcingCommand(
 }
 
 /** 计算已准入命令的稳定幂等摘要；事件存储不接受调用方自行声明的摘要。 */
-export function computeDemandEventSourcingCommandDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandEventSourcingCommand(value));
+export function computeDemandEventSourcingCommandDigest(
+  command: Readonly<DemandEventSourcingCommand>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(command);
 }
 
 type DecidedEvents = readonly [

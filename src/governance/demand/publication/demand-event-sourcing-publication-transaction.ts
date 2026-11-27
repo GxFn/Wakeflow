@@ -402,11 +402,10 @@ export function createDemandEventSourcingPublicationTransaction(
   });
 }
 
-export function renderDemandEventSourcingPublicationTransaction(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandEventSourcingPublicationTransaction(value),
-    "$transaction",
-  );
+export function renderDemandEventSourcingPublicationTransaction(
+  transaction: Readonly<DemandEventSourcingPublicationTransaction>,
+): string {
+  return renderDeterministicJsonDocument(transaction, "$transaction");
 }
 
 export function parseDemandEventSourcingPublicationTransactionDocument(

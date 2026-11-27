@@ -1,10 +1,7 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-} from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   admitWakeflowResourceOperation,
   type WakeflowResourceProcessingContract,
@@ -30,10 +27,7 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
-import {
-  DemandEventStreamPositionError,
-  parseDemandEventCommitSequence,
-} from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
+import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import {
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
@@ -271,14 +265,6 @@ test("Demand concrete catalog binds one Event Sourcing aggregate without stages"
     directMarkerCreation = error;
   }
   equal(directMarkerCreation instanceof WakeflowResourceProcessingContractError, true);
-
-  let caught: unknown;
-  try {
-    createDemandEventSourcingResourceCatalog("invalid-demand-id");
-  } catch (error: unknown) {
-    caught = error;
-  }
-  equal(caught instanceof WakeflowDurableIdError, true);
 });
 
 test("TaskPackage projection declaration remains derived and create-only", () => {
@@ -381,18 +367,6 @@ test("Demand commit and snapshot declarations keep authority and checkpoint dist
     rejectedOperation = error;
   }
   equal(rejectedOperation instanceof WakeflowResourceProcessingContractError, true);
-
-  let invalidSequence: unknown;
-  try {
-    createDemandEventStreamCommitResourceDeclaration(DEMAND_ID, 0);
-  } catch (error: unknown) {
-    invalidSequence = error;
-  }
-  equal(invalidSequence instanceof DemandEventStreamPositionError, true);
-  if (invalidSequence instanceof DemandEventStreamPositionError) {
-    equal(invalidSequence.reason, "commit-sequence");
-    equal(invalidSequence.path, "$commitSequence");
-  }
   deepEqual(
     createDemandEventSourcingSnapshotResourceDeclaration(DEMAND_ID, COMMIT_SEQUENCE),
     snapshot,

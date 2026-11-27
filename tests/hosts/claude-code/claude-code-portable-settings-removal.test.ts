@@ -20,6 +20,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -85,7 +86,7 @@ function surfaceIds(configValue: ReturnType<typeof config>): readonly [string, s
 function detachRequest(action: "detach-workspace" | "detach-repository", configValue: unknown) {
   return Object.freeze({
     action,
-    config: configValue,
+    config: parseWakeflowConfig(configValue),
     profile: claudeCodeWorkspaceHostResourceProfile,
   });
 }
@@ -96,7 +97,7 @@ function executeRequest(
   recoveringAffectedOperation: boolean,
 ) {
   return Object.freeze({
-    config: configValue,
+    config: parseWakeflowConfig(configValue),
     profile: claudeCodeWorkspaceHostResourceProfile,
     operation,
     recoveringAffectedOperation,
@@ -423,22 +424,10 @@ test("source drift between the executor's inspection and the publisher's read fa
   }
 });
 
-test("the publisher's removedRules option is exclusive with the rule tables, inspects an absent root as current, and removes with the caller's confirmed source as the CAS basis", async (t) => {
+test("the publisher's removedRules option inspects an absent root as current and removes with the caller's confirmed source as the CAS basis", async (t) => {
   const value = await fixture(t);
   const removedRules = claudeCodePortableSettingsRemovedRulesFor({ rootKind: "program" });
   let caught: unknown;
-  try {
-    await inspectClaudeCodePortableSettings(value.root, {
-      removedRules,
-      rules: [WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE],
-    });
-  } catch (error: unknown) {
-    caught = error;
-  }
-  equal(
-    caught instanceof ClaudeCodePortableSettingsPublicationError && caught.reason === "input",
-    true,
-  );
   const absent = await inspectClaudeCodePortableSettings(value.root, { removedRules });
   equal(absent.directoryStatus, "absent");
   equal(absent.transition.status, "current");

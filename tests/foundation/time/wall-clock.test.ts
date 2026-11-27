@@ -72,9 +72,7 @@ test("wall clock readings are uncached and may move backwards", () => {
   equal(calls, 2);
 });
 
-test("clock type, execution, and result failures are distinct and sanitized", () => {
-  expectUtcWallClockError(() => readUtcWallClock(asUtcWallClock(null)), "clock-type", "$clock");
-
+test("clock execution and result failures are distinct and sanitized", () => {
   const privateFailure = new Error("private clock failure");
   const executionError = expectUtcWallClockError(
     () =>

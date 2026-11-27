@@ -1,6 +1,5 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
-import { types } from "node:util";
 import { throwIfAborted } from "../node/abort-signal.js";
 import {
   inspectCreatedDirectoryTreeCandidate,
@@ -32,7 +31,7 @@ import {
   sameFileNodeIdentity,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
@@ -236,17 +235,14 @@ async function syncExistingMemberFile(
 export async function createDirectoryTreeCandidateDurably(
   root: RootedDirectory,
   candidateRootPathValue: unknown,
-  filesValue: readonly DirectoryTreeCandidateFileInput[],
-  optionsValue: DirectoryTreeCandidateOptions,
+  files: readonly DirectoryTreeCandidateFileInput[],
+  options: DirectoryTreeCandidateOptions,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
-  if (!(root instanceof RootedDirectory) || types.isProxy(root)) {
-    fail("input", "$root");
-  }
   const candidateRootPath = parseDirectoryTreeCandidatePath(
     candidateRootPathValue,
     "$candidateRootPath",
   );
-  const prepared = prepareDirectoryTreeCandidate(filesValue, optionsValue);
+  const prepared = prepareDirectoryTreeCandidate(files, options);
   const signal = prepared.options.signal;
   const signalOption = signal === undefined ? {} : { signal };
   const directoryNodes = new Map<CandidateDirectoryKey, Readonly<FileNodeSnapshot>>();
@@ -305,17 +301,14 @@ export async function createDirectoryTreeCandidateDurably(
 export async function settleDirectoryTreeCandidateDurably(
   root: RootedDirectory,
   candidateRootPathValue: unknown,
-  filesValue: readonly DirectoryTreeCandidateFileInput[],
-  optionsValue: DirectoryTreeCandidateOptions,
+  files: readonly DirectoryTreeCandidateFileInput[],
+  options: DirectoryTreeCandidateOptions,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
-  if (!(root instanceof RootedDirectory) || types.isProxy(root)) {
-    fail("input", "$root");
-  }
   const candidateRootPath = parseDirectoryTreeCandidatePath(
     candidateRootPathValue,
     "$candidateRootPath",
   );
-  const prepared = prepareDirectoryTreeCandidate(filesValue, optionsValue);
+  const prepared = prepareDirectoryTreeCandidate(files, options);
   const signal = prepared.options.signal;
   const signalOption = signal === undefined ? {} : { signal };
   const partial = await inspectPartialDirectoryTreeCandidate(root, candidateRootPath, prepared);

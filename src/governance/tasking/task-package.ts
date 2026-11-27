@@ -701,18 +701,8 @@ export function parseTaskPackage(value: unknown): Readonly<TaskPackage> {
 }
 
 function readCreationTime(options: CreateTaskPackageOptions): UtcInstant {
-  let record: Readonly<Record<string, unknown>>;
   try {
-    record = parsePlainRecord(options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "clock")) {
-    fail("input", "$options");
-  }
-  try {
-    return readUtcWallClock(record.clock as UtcWallClock | undefined);
+    return readUtcWallClock(options.clock);
   } catch (error: unknown) {
     // 时钟是注入的回调：它抛出的东西不留作 cause（测试钉住的净化约定），只说读时间失败。
     if (error instanceof UtcWallClockError) fail("time", "$options/clock");
@@ -786,8 +776,8 @@ export function createTaskPackage(
 }
 
 /** 渲染 TaskPackage 的唯一确定性 JSON 文档表示。 */
-export function renderTaskPackage(value: unknown): string {
-  return renderDeterministicJsonDocument(parseTaskPackage(value), "$taskPackage");
+export function renderTaskPackage(taskPackage: Readonly<TaskPackage>): string {
+  return renderDeterministicJsonDocument(taskPackage, "$taskPackage");
 }
 
 /** 只接受与领域确定性表示逐字节相同的 TaskPackage 文档。 */

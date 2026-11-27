@@ -73,45 +73,15 @@ export class LoadedArtifactTreeTransferPlanError extends ModuleError<LoadedArtif
   static override readonly code = "wakeflow-loaded-artifact-tree-transfer-plan";
 }
 
-interface ParsedModes {
-  readonly directoryMode: number;
-  readonly executableFileMode: number;
-  readonly regularFileMode: number;
-}
-
 const fail: Fail<LoadedArtifactTreeTransferPlanErrorReason> = failWith(
   LoadedArtifactTreeTransferPlanError,
 );
 
-function parseMode(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
-    fail("input", path);
-  }
-  return value;
-}
-
-function parseModes(value: unknown): Readonly<ParsedModes> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3 ||
-    keys[0] !== "directoryMode" ||
-    keys[1] !== "executableFileMode" ||
-    keys[2] !== "regularFileMode"
-  ) {
-    fail("input", "$options");
-  }
-  const modes = Object.freeze({
-    directoryMode: parseMode(record.directoryMode, "$options.directoryMode"),
-    executableFileMode: parseMode(record.executableFileMode, "$options.executableFileMode"),
-    regularFileMode: parseMode(record.regularFileMode, "$options.regularFileMode"),
-  });
+/**
+ * 三个权限位之间的语义关系：可执行文件必须仍可执行、普通文件不得变成可执行、目录与文件对属主可用。
+ * 这是类型表达不了的规则，留着；选项的形状由类型保证，不再被动准入。
+ */
+function assertModes(modes: LoadedArtifactTreeTransferPlanOptions): void {
   if (
     (modes.directoryMode & 0o700) !== 0o700 ||
     (modes.regularFileMode & 0o400) !== 0o400 ||
@@ -119,18 +89,6 @@ function parseModes(value: unknown): Readonly<ParsedModes> {
     (modes.regularFileMode & 0o111) !== 0
   ) {
     fail("mode", "$options");
-  }
-  return modes;
-}
-
-function parseCandidateRootPath(value: unknown): PortableResourcePath {
-  try {
-    return parsePortableResourcePath(value, "$candidateRootPath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$candidateRootPath", error);
-    }
-    throw error;
   }
 }
 
@@ -157,7 +115,7 @@ function parseManifest(value: unknown): Readonly<LoadedArtifactTreeManifest> {
 
 function planFiles(
   manifest: Readonly<LoadedArtifactTreeManifest>,
-  modes: Readonly<ParsedModes>,
+  modes: LoadedArtifactTreeTransferPlanOptions,
 ): readonly Readonly<DirectoryTreeCandidatePlanFile>[] {
   return Object.freeze(
     manifest.files.map((file) =>
@@ -173,7 +131,7 @@ function planFiles(
 
 function createDirectoryPlan(
   files: readonly Readonly<DirectoryTreeCandidatePlanFile>[],
-  modes: Readonly<ParsedModes>,
+  modes: LoadedArtifactTreeTransferPlanOptions,
 ): Readonly<DirectoryTreeCandidatePlan> {
   try {
     return planDirectoryTreeCandidateFromFileDescriptors(files, {
@@ -231,6 +189,18 @@ function parseDirectoryPlan(value: unknown): Readonly<DirectoryTreeCandidatePlan
     if (error instanceof DurableDirectoryTreeCandidateError) {
       if (error.reason === "capacity") fail("capacity", "$plan.directoryPlan", error);
       fail("plan", "$plan.directoryPlan", error);
+    }
+    throw error;
+  }
+}
+
+/** 只给计划文档的严格重验用；编译计划时调用方给的根路径是类型化的，不再复验。 */
+function parseCandidateRootPath(value: unknown): PortableResourcePath {
+  try {
+    return parsePortableResourcePath(value, "$candidateRootPath");
+  } catch (error: unknown) {
+    if (error instanceof PortableResourcePathError) {
+      fail("input", "$candidateRootPath", error);
     }
     throw error;
   }
@@ -318,7 +288,7 @@ function assertCopiesFollowManifest(
 }
 
 /** 严格重验 transfer plan 的 manifest、目录计划、copy 映射和完整摘要。 */
-export function parseLoadedArtifactTreeTransferPlan(
+function parseLoadedArtifactTreeTransferPlan(
   value: unknown,
 ): Readonly<LoadedArtifactTreeTransferPlan> {
   let record: Readonly<Record<string, unknown>>;
@@ -375,12 +345,11 @@ export function parseLoadedArtifactTreeTransferPlan(
  */
 export function planLoadedArtifactTreeTransfer(
   manifestValue: LoadedArtifactTreeManifest,
-  candidateRootPathValue: PortableResourcePath,
-  optionsValue: LoadedArtifactTreeTransferPlanOptions,
+  candidateRootPath: PortableResourcePath,
+  modes: LoadedArtifactTreeTransferPlanOptions,
 ): Readonly<LoadedArtifactTreeTransferPlan> {
   const manifest = parseManifest(manifestValue);
-  const candidateRootPath = parseCandidateRootPath(candidateRootPathValue);
-  const modes = parseModes(optionsValue);
+  assertModes(modes);
   const files = planFiles(manifest, modes);
   const directoryPlan = createDirectoryPlan(files, modes);
   const copies = Object.freeze(

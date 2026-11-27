@@ -189,7 +189,7 @@ test("every physical and logical budget is enforced", async () => {
   }
 });
 
-test("empty trees, aborted work, and decorated options are rejected", async () => {
+test("empty trees and aborted work are rejected", async () => {
   const emptyPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-empty-artifact-"));
   const fixturePath = createFixture();
   const root = await RootedDirectory.open(fixturePath);
@@ -201,11 +201,6 @@ test("empty trees, aborted work, and decorated options are rejected", async () =
     await rejects(
       () => inspectLoadedArtifactTree(root, { signal: controller.signal }),
       OperationAbortedError,
-    );
-    await expectIdentityError(() => inspectLoadedArtifactTree(root, null as never), "input");
-    await expectIdentityError(
-      () => inspectLoadedArtifactTree(root, { unknown: true } as never),
-      "input",
     );
   } finally {
     await root.close();
@@ -309,7 +304,7 @@ test("manifest validator rejects collisions, reordering, and inconsistent totals
   }
 });
 
-test("manifest validation is passive and applies caller limits", async () => {
+test("manifest validation is passive and applies range-checked caller limits", async () => {
   const rootPath = createFixture();
   try {
     const { manifest } = await inspectFixture(rootPath);
@@ -330,7 +325,10 @@ test("manifest validation is passive and applies caller limits", async () => {
       "file-count",
     );
     await expectIdentityError(
-      () => validateLoadedArtifactTreeManifest(manifest, null as never),
+      () =>
+        validateLoadedArtifactTreeManifest(manifest, {
+          limits: { ...LOADED_ARTIFACT_TREE_IDENTITY_LIMITS, maxFiles: Number.NaN },
+        }),
       "input",
     );
   } finally {

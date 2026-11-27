@@ -1,10 +1,4 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import {
@@ -90,35 +84,6 @@ export class DemandFileEventStoreError extends ModuleError<DemandFileEventStoreE
 
 export const failDemandFileEventStore: Fail<DemandFileEventStoreErrorReason> =
   failWith(DemandFileEventStoreError);
-
-interface DemandFileEventStoreOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
-export function parseDemandFileEventStoreOptions(
-  value: unknown,
-): Readonly<DemandFileEventStoreOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failDemandFileEventStore("input", "$options", error);
-    }
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    failDemandFileEventStore("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
 
 export function assertDemandFileEventStoreDirectory(
   node: Readonly<FileNodeSnapshot>,

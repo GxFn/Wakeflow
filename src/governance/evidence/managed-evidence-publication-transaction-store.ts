@@ -1,8 +1,5 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DeterministicJsonFileResult,
@@ -23,7 +20,6 @@ import {
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import { isPrivateFile } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -95,59 +91,10 @@ const fail: Fail<ManagedEvidencePublicationTransactionStoreErrorReason> = failWi
   ManagedEvidencePublicationTransactionStoreError,
 );
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const ISSUED_STORED_TRANSACTIONS = new WeakSet<object>();
 const TRANSACTION_MAXIMUM_BYTES = parseByteCount(
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
 );
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
-  if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$expectedNode");
-  }
-  try {
-    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
-  } catch (cause: unknown) {
-    fail("input", "$expectedNode", cause);
-  }
-  return value as Readonly<FileNodeSnapshot>;
-}
 
 function admitMutation(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
@@ -242,10 +189,8 @@ function sameTransaction(
 /** 读取当前固定journal；严格absent返回null，非法或漂移资源失败关闭。 */
 export async function loadManagedEvidencePublicationTransaction(
   root: RootedDirectory,
-  optionsValue: ManagedEvidencePublicationTransactionStoreOptions = {},
+  options: ManagedEvidencePublicationTransactionStoreOptions = {},
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction> | null> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   const node = await journalNodeOrNull(root);
   return node === null ? null : readStoredAtNode(root, node, options.signal);
@@ -254,23 +199,11 @@ export async function loadManagedEvidencePublicationTransaction(
 /** 读取并证明固定journal仍绑定exact Transaction与可选原始node。 */
 export async function requireCurrentManagedEvidencePublicationTransaction(
   root: RootedDirectory,
-  transactionValue: unknown,
-  expectedNodeValue?: Readonly<FileNodeSnapshot>,
-  optionsValue: ManagedEvidencePublicationTransactionStoreOptions = {},
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+  expectedNode?: Readonly<FileNodeSnapshot>,
+  options: ManagedEvidencePublicationTransactionStoreOptions = {},
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
-  let transaction: Readonly<ManagedEvidencePublicationTransaction>;
-  try {
-    transaction = parseManagedEvidencePublicationTransaction(transactionValue);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction", error);
-    }
-    throw error;
-  }
-  const expectedNode = parseExpectedNode(expectedNodeValue);
   const stored = await loadManagedEvidencePublicationTransaction(
     root,
     options.signal === undefined ? undefined : { signal: options.signal },
@@ -302,10 +235,8 @@ function mapCreateError(error: DurableAtomicFileWriteError): never {
 export async function createManagedEvidencePublicationTransactionJournal(
   root: RootedDirectory,
   transactionValue: unknown,
-  optionsValue: ManagedEvidencePublicationTransactionStoreOptions = {},
+  options: ManagedEvidencePublicationTransactionStoreOptions = {},
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   let transaction: Readonly<ManagedEvidencePublicationTransaction>;
   try {
@@ -353,18 +284,11 @@ export async function createManagedEvidencePublicationTransactionJournal(
   return stored;
 }
 
+/** 只有本Store读证后签发、尚未退休的记录才持有退休能力；副本与已退休的记录不算。 */
 function assertStoredCapability(
-  value: unknown,
-): asserts value is Readonly<StoredManagedEvidencePublicationTransaction> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value) ||
-    !ISSUED_STORED_TRANSACTIONS.has(value)
-  ) {
-    fail("input", "$stored");
-  }
+  stored: Readonly<StoredManagedEvidencePublicationTransaction>,
+): void {
+  if (!ISSUED_STORED_TRANSACTIONS.has(stored)) fail("input", "$stored");
 }
 
 /** 退役之前按原节点重读日志：根作用域原样抛，其余读不出都是与当前状态冲突；中止原样上抛。 */
@@ -407,11 +331,9 @@ async function unlinkJournalExactly(
 /** 只退休Store重新读证后的exact journal；缺失、替换或提交不确定均不伪造成功。 */
 export async function retireManagedEvidencePublicationTransactionJournal(
   root: RootedDirectory,
-  storedValue: unknown,
-  optionsValue: ManagedEvidencePublicationTransactionStoreOptions = {},
+  storedValue: Readonly<StoredManagedEvidencePublicationTransaction>,
+  options: ManagedEvidencePublicationTransactionStoreOptions = {},
 ): Promise<Readonly<ManagedEvidencePublicationTransactionRetirementReceipt>> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
   assertStoredCapability(storedValue);
   throwIfAborted(options.signal);
   admitMutation(storedValue.transaction, "exact-retire");

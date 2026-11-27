@@ -1,4 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -65,7 +65,6 @@ test("Static Resource Operation Context binds one real Host Instruction recipe",
         recipe: "exact-source-recompose",
       },
     });
-    notEqual(context.declaration, declaration);
     assertDeepFrozen(context);
     deepEqual(
       createWakeflowWorkspaceStaticResourceOperationContext(matrix, {
@@ -114,20 +113,15 @@ test("Static Resource Operation Context rejects stale, forged, or illegal admiss
     "declaration-not-found",
     "$request.declarationId",
   );
-  for (const recipe of [
-    "exact-source-replace",
-    ["exact-source-recompose", "exact-source-replace"],
-  ]) {
-    expectContextError(
-      () =>
-        createWakeflowWorkspaceStaticResourceOperationContext(codex, {
-          ...instructionRequest,
-          recipe,
-        }),
-      "operation",
-      "$request.recipe",
-    );
-  }
+  expectContextError(
+    () =>
+      createWakeflowWorkspaceStaticResourceOperationContext(codex, {
+        ...instructionRequest,
+        recipe: "exact-source-replace",
+      }),
+    "operation",
+    "$request.recipe",
+  );
   expectContextError(
     () =>
       createWakeflowWorkspaceStaticResourceOperationContext(claude, {
@@ -138,46 +132,6 @@ test("Static Resource Operation Context rejects stale, forged, or illegal admiss
     "operation",
     "$request.recipe",
   );
-
-  const forgedMatrix = Object.freeze({
-    ...codex,
-    declarations: Object.freeze(
-      codex.declarations.filter((entry) => entry.declarationId !== "workspace.config-authority"),
-    ),
-  });
-  expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(forgedMatrix, instructionRequest),
-    "matrix",
-    "$matrix",
-  );
-
-  let trapCalls = 0;
-  const matrixProxy = new Proxy(codex, {
-    get: () => {
-      trapCalls += 1;
-      return undefined;
-    },
-  });
-  expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(matrixProxy, instructionRequest),
-    "matrix",
-    "$matrix",
-  );
-  const requestProxy = new Proxy(
-    { ...instructionRequest },
-    {
-      ownKeys: () => {
-        trapCalls += 1;
-        return [];
-      },
-    },
-  );
-  expectContextError(
-    () => createWakeflowWorkspaceStaticResourceOperationContext(codex, requestProxy),
-    "input",
-    "$request",
-  );
-  equal(trapCalls, 0);
 });
 
 test("Static Resource Operation Context binds the shared .gitignore consumer", () => {

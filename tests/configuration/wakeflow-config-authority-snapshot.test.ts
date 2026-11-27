@@ -217,7 +217,7 @@ test("overlapping and symlinked configured roots fail before snapshot publicatio
   }
 });
 
-test("snapshot options are passive and support cancellation", async () => {
+test("snapshot reads support cancellation", async () => {
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
@@ -229,10 +229,6 @@ test("snapshot options are passive and support cancellation", async () => {
           signal: controller.signal,
         }),
       OperationAbortedError,
-    );
-    await expectSnapshotError(
-      () => readWakeflowConfigAuthoritySnapshot(root, null as never),
-      "input",
     );
   } finally {
     await root.close();

@@ -20,9 +20,9 @@ import {
 import { WORK_CLAIMS_ROOT_RESOURCE_DECLARATION } from "./wakeflow-shared-coordination-layout.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "./workspace-host-resource-catalog.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
+  type WakeflowWorkspaceHostResourceProfile,
 } from "./workspace-host-resource-profile.js";
 import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
 import {
@@ -248,9 +248,8 @@ function matrixDigest(
 
 /** 为一个严格 Host Profile 编译纯只读的静态 Workspace 资源矩阵。 */
 export function createWakeflowWorkspaceStaticResourceMatrix(
-  profileValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowWorkspaceStaticResourceMatrix> {
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   const admitted = admitDeclarations(
     SHARED_STATIC_RESOURCE_CATALOG,
     createWakeflowWorkspaceHostResourceCatalog(profile),

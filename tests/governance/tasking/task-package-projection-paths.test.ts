@@ -36,9 +36,4 @@ test("TaskPackage projection path rejects aliases and unrelated identities", () 
   ]) {
     throws(() => parseTaskPackageProjectionFileName(value), TaskPackageProjectionPathError);
   }
-  throws(
-    () => taskPackageProjectionRef("target-task_44444444-4444-4444-8444-444444444444"),
-    (error: unknown) =>
-      error instanceof TaskPackageProjectionPathError && error.reason === "identifier",
-  );
 });

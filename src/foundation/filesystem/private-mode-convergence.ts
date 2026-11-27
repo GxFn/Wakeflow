@@ -11,7 +11,7 @@ import {
   sameFileNodeIdentity,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
+import { type RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 
 /**
  * Wakeflow Foundation / Filesystem：私有节点的模式漂移分类与安全收敛（gate-log §13.124 D8，§13.130）。
@@ -192,7 +192,6 @@ export async function convergePrivateNodeMode(
   expected: Readonly<FileNodeSnapshot>,
   options: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<"converged" | "current"> {
-  if (!(root instanceof RootedDirectory)) fail("input", "$root");
   const errorPath = `$${resourcePath}`;
   throwIfAborted(options.signal);
   const observed = await inspectPath(root, resourcePath, errorPath);

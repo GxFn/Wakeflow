@@ -1,7 +1,5 @@
 import { Buffer } from "node:buffer";
-import { types } from "node:util";
 
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { parseByteCount } from "../numeric/byte-count.js";
 import {
@@ -11,23 +9,16 @@ import {
   directoryTreeCandidateMaximumPathDepth,
   throwDirectoryTreeCandidateError as fail,
   type InspectDirectoryTreeCandidateOptions,
-  isDirectoryTreeCandidateAbortSignal,
   type PreparedDirectoryTreeCandidate,
   parseDirectoryTreeCandidatePath,
-  parseDirectoryTreeCandidatePlan,
 } from "./directory-tree-candidate-plan.js";
 import {
   BoundedDirectoryTreeScanError,
   scanBoundedResourceDirectoryTree,
 } from "./bounded-directory-tree-scan.js";
-import {
-  type FileNodeSnapshot,
-  FileNodeSnapshotError,
-  sameFileNodeIdentity,
-  sameFileNodeSnapshot,
-} from "./file-node-snapshot.js";
+import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import { readStableFile, StableFileReadError } from "./stable-file-read.js";
 import {
   readStableResourceTree,
@@ -76,47 +67,6 @@ function relativeFromCandidate(
   );
 }
 
-function parseInspectionOptions(value: unknown): Readonly<{
-  readonly expectedRootNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  const unexpected = Object.keys(record).find(
-    (key) => key !== "expectedRootNode" && key !== "signal",
-  );
-  if (unexpected !== undefined) fail("input", `$options/${unexpected}`);
-  const signal = record.signal;
-  if (signal !== undefined && !isDirectoryTreeCandidateAbortSignal(signal)) {
-    fail("input", "$options/signal");
-  }
-  const expectedRootNode = record.expectedRootNode as Readonly<FileNodeSnapshot> | undefined;
-  if (expectedRootNode !== undefined) {
-    if (
-      typeof expectedRootNode !== "object" ||
-      expectedRootNode === null ||
-      types.isProxy(expectedRootNode) ||
-      !Object.isFrozen(expectedRootNode)
-    ) {
-      fail("input", "$options/expectedRootNode");
-    }
-    try {
-      sameFileNodeSnapshot(expectedRootNode, expectedRootNode);
-    } catch (error: unknown) {
-      if (error instanceof FileNodeSnapshotError) {
-        fail("input", "$options/expectedRootNode");
-      }
-      throw error;
-    }
-  }
-  return Object.freeze({ expectedRootNode, signal });
-}
-
 async function readCandidateTree(
   root: RootedDirectory,
   candidateRootPath: PortableResourcePath,
@@ -141,22 +91,23 @@ async function readCandidateTree(
   }
 }
 
-/** 稳定判断候选目录是计划的安全子集，还是已经达到清单闭合状态。 */
+/**
+ * 稳定判断候选目录是计划的安全子集，还是已经达到清单闭合状态。
+ *
+ * 计划是类型化的（由计划器生成，或由日志读取方从磁盘解析），不再复验；候选根路径仍按本层的路径
+ * 规则解析一次（参数还是 `unknown`，别的层调用它）。
+ */
 export async function inspectDirectoryTreeCandidateProgress(
   root: RootedDirectory,
   candidateRootPathValue: unknown,
-  planValue: DirectoryTreeCandidatePlan,
-  optionsValue: InspectDirectoryTreeCandidateOptions = {},
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  options: InspectDirectoryTreeCandidateOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateProgress>> {
-  if (!(root instanceof RootedDirectory) || types.isProxy(root)) {
-    fail("input", "$root");
-  }
   const candidateRootPath = parseDirectoryTreeCandidatePath(
     candidateRootPathValue,
     "$candidateRootPath",
   );
-  const plan = parseDirectoryTreeCandidatePlan(planValue);
-  const { expectedRootNode, signal } = parseInspectionOptions(optionsValue);
+  const { expectedRootNode, signal } = options;
   throwIfAborted(signal);
   const tree = await readCandidateTree(root, candidateRootPath, plan, expectedRootNode, signal);
   if (
@@ -232,14 +183,14 @@ export async function inspectDirectoryTreeCandidateProgress(
 export async function inspectDirectoryTreeCandidate(
   root: RootedDirectory,
   candidateRootPathValue: unknown,
-  planValue: DirectoryTreeCandidatePlan,
-  optionsValue: InspectDirectoryTreeCandidateOptions = {},
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  options: InspectDirectoryTreeCandidateOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
   const progress = await inspectDirectoryTreeCandidateProgress(
     root,
     candidateRootPathValue,
-    planValue,
-    optionsValue,
+    plan,
+    options,
   );
   if (progress.status !== "complete") fail("tree-conflict", "$candidate");
   return Object.freeze({

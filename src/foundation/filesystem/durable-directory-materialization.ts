@@ -1,9 +1,8 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -18,7 +17,6 @@ import {
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
@@ -145,44 +143,9 @@ export class DurableDirectoryMaterializationError extends ModuleError<DurableDir
   }
 }
 
-interface ParsedOptions {
-  readonly mode: number;
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<DurableDirectoryMaterializationErrorReason> = failWith(
   DurableDirectoryMaterializationError,
 );
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseMode(value: unknown): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
-    fail("input", "$options.mode");
-  }
-  return value;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const allowed = new Set(["mode", "signal"]);
-  if (!Object.hasOwn(record, "mode") || Object.keys(record).some((key) => !allowed.has(key))) {
-    fail("input", "$options");
-  }
-  const signal = record.signal;
-  if (signal !== undefined && !isAbortSignal(signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({ mode: parseMode(record.mode), signal });
-}
 
 function requiredDirectoryOpenFlags(): number {
   const directory: unknown = fileSystemConstants.O_DIRECTORY;
@@ -299,7 +262,7 @@ function sameDirectoryFacts(
 async function performAtomicCreate(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
-  options: Readonly<ParsedOptions>,
+  options: DurableDirectoryOptions,
   parentEntry: "sync" | "deferred",
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
   const parent = await openResourceParent(root, resourcePath);
@@ -487,10 +450,8 @@ export async function createDirectoryAtomically(
   resourcePath: PortableResourcePath,
   options: DurableDirectoryOptions,
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return performAtomicCreate(root, resourcePath, parsed, "sync");
+  throwIfAborted(options.signal);
+  return performAtomicCreate(root, resourcePath, options, "sync");
 }
 
 /**
@@ -504,10 +465,8 @@ export async function createTreeCandidateDirectoryAtomically(
   resourcePath: PortableResourcePath,
   options: DurableDirectoryOptions,
 ): Promise<Readonly<DurableDirectoryCreateResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return performAtomicCreate(root, resourcePath, parsed, "deferred");
+  throwIfAborted(options.signal);
+  return performAtomicCreate(root, resourcePath, options, "deferred");
 }
 
 /**
@@ -521,14 +480,12 @@ export async function materializeDirectoryPath(
   resourcePath: PortableResourcePath,
   options: DurableDirectoryOptions,
 ): Promise<Readonly<DirectoryMaterializationResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
   const prefixes = prefixPaths(resourcePath);
-  throwIfAborted(parsed.signal);
+  throwIfAborted(options.signal);
 
   const observations: DirectoryMaterializationEntry[] = [];
   for (const prefix of prefixes) {
-    throwIfAborted(parsed.signal);
+    throwIfAborted(options.signal);
     const existing = await inspectExistingDirectoryOrNull(root, prefix);
     if (existing !== null) {
       observations.push(
@@ -542,7 +499,7 @@ export async function materializeDirectoryPath(
     }
 
     try {
-      const created = await performAtomicCreate(root, prefix, parsed, "sync");
+      const created = await performAtomicCreate(root, prefix, options, "sync");
       observations.push(
         Object.freeze({
           resourcePath: prefix,

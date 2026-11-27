@@ -1,12 +1,10 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import {
-  createWakeflowManagedSupportResourceCatalog,
-  WakeflowManagedSupportResourceCatalogError,
-} from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
+import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
@@ -33,7 +31,7 @@ function summary(catalog: ReturnType<typeof createWakeflowManagedSupportResource
 }
 
 test("managed Support catalog binds two topology surfaces to the current host", () => {
-  const config = createMinimalWakeflowConfig();
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const codex = createWakeflowManagedSupportResourceCatalog(
     config,
     codexWorkspaceHostResourceProfile,
@@ -171,25 +169,9 @@ test("managed Support catalog excludes every external-owned surface", () => {
     surface.instructionManagement = index === 0 ? "managed-block" : "owner-managed";
   }
   const catalog = createWakeflowManagedSupportResourceCatalog(
-    config,
+    parseWakeflowConfig(config),
     codexWorkspaceHostResourceProfile,
   );
   deepEqual(catalog.declarations, []);
   assertDeepFrozen(catalog);
-
-  let trapCalls = 0;
-  const proxy = new Proxy(createMinimalWakeflowConfig(), {
-    ownKeys: () => {
-      trapCalls += 1;
-      return [];
-    },
-  });
-  let caught: unknown;
-  try {
-    createWakeflowManagedSupportResourceCatalog(proxy, codexWorkspaceHostResourceProfile);
-  } catch (error: unknown) {
-    caught = error;
-  }
-  equal(caught instanceof WakeflowManagedSupportResourceCatalogError, true);
-  equal(trapCalls, 0);
 });

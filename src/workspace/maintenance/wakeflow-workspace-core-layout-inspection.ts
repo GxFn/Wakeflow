@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
@@ -7,7 +5,6 @@ import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-sna
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
@@ -106,23 +103,6 @@ const fail: Fail<WakeflowWorkspaceCoreLayoutInspectionErrorReason> = failWith(
 );
 
 const MAXIMUM_PROTOCOL_ENTRIES = 4_096;
-
-function parseSignal(value: unknown): AbortSignal | undefined {
-  if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof AbortSignal)
-  ) {
-    fail("input", "$options.signal");
-  }
-  return value;
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
 
 function nodeDigest(node: Readonly<FileNodeSnapshot>): Sha256Digest {
   return computeCanonicalJsonSha256Digest({
@@ -475,25 +455,15 @@ async function inspectLocal(
 
 /** 稳定分类 Workspace 核心私有布局；不执行任何写入或恢复。 */
 export async function inspectWakeflowWorkspaceCoreLayout(
-  rootValue: RootedDirectory,
-  optionsValue: WakeflowWorkspaceCoreLayoutInspectionOptions = {},
+  root: RootedDirectory,
+  { signal }: WakeflowWorkspaceCoreLayoutInspectionOptions = {},
 ): Promise<Readonly<WakeflowWorkspaceCoreLayoutInspection>> {
-  assertRoot(rootValue);
-  if (
-    typeof optionsValue !== "object" ||
-    optionsValue === null ||
-    types.isProxy(optionsValue) ||
-    Object.keys(optionsValue).some((key) => key !== "signal")
-  ) {
-    fail("input", "$options");
-  }
-  const signal = parseSignal(optionsValue.signal);
   throwIfAborted(signal);
   const issueCodes: string[] = [];
-  const active = await inspectActive(rootValue, signal);
+  const active = await inspectActive(root, signal);
   // `incomplete` 是维护可补齐的状态，不是 issue：gate 要求 issueCodes 为空才放行修复。
   if (active.status === "conflict") issueCodes.push("active-layout-node-policy");
-  const local = await inspectLocal(rootValue, signal, issueCodes);
+  const local = await inspectLocal(root, signal, issueCodes);
   throwIfAborted(signal);
   const sortedIssues = Object.freeze([...new Set(issueCodes)].sort());
   const inspectionDigest = computeCanonicalJsonSha256Digest({

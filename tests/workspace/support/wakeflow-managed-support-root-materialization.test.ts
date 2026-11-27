@@ -17,6 +17,7 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowManagedSupportResourceCatalog } from "../../../src/workspace/support/wakeflow-managed-support-resource-catalog.js";
@@ -31,7 +32,14 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
-const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
+const DESIGN_ID = parseWakeflowDurableIdOfKind(
+  "surface_33333333-3333-4333-8333-333333333333",
+  "surface",
+);
+const TEST_ID = parseWakeflowDurableIdOfKind(
+  "surface_44444444-4444-4444-8444-444444444444",
+  "surface",
+);
 
 async function fixture(t: TestContext) {
   const container = realpathSync(
@@ -151,7 +159,7 @@ test("managed Support root materializes child and sibling Config placements", as
   const testFixture = await fixture(t);
   const testRoot = await materializeWakeflowManagedSupportRoot(testFixture.root, {
     ...request(testConfig),
-    surfaceId: "surface_44444444-4444-4444-8444-444444444444",
+    surfaceId: TEST_ID,
   });
   deepEqual(testRoot.scaffold, [
     { relativePath: "fixtures", disposition: "created" },

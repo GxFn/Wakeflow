@@ -13,18 +13,11 @@ import {
 } from "../../../src/foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import {
-  StableFileReadError,
-  type StableFileReadOptions,
-} from "../../../src/foundation/filesystem/stable-file-read.js";
+import { StableFileReadError } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../src/foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 const OPTIONS = Object.freeze({ maximumBytes: parseByteCount(4096) });
-
-function asOptions(value: unknown): StableFileReadOptions {
-  return value as StableFileReadOptions;
-}
 
 test("pretty JSON returns a frozen value with stable physical source facts", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-file-"));
@@ -180,7 +173,7 @@ test("readDeterministicJsonFileOrNull returns null only for an absent file; JSON
   }
 });
 
-test("expectedNode and options remain lower-layer file contracts", async () => {
+test("expectedNode remains a lower-layer file contract", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-options-"));
   const physicalPath = path.join(rootPath, "record.json");
   writeFileSync(physicalPath, "null\n");
@@ -190,34 +183,20 @@ test("expectedNode and options remain lower-layer file contracts", async () => {
     const observed = await readDeterministicJsonFile(root, resourcePath, OPTIONS);
     writeFileSync(physicalPath, "true\n");
 
-    for (const [options, reason, expectedPath] of [
-      [{ ...OPTIONS, expectedNode: observed.node }, "expectation-changed", "$options.expectedNode"],
-      [{ maximumBytes: -1 }, "input", "$options.maximumBytes"],
-    ] as const) {
-      let caught: unknown;
-      try {
-        await readDeterministicJsonFile(root, resourcePath, asOptions(options));
-      } catch (error: unknown) {
-        caught = error;
-      }
-      if (!(caught instanceof StableFileReadError)) {
-        throw new Error("Expected StableFileReadError.");
-      }
-      equal(caught.reason, reason);
-      equal(caught.path, expectedPath);
-    }
-
     let caught: unknown;
     try {
-      await readDeterministicJsonFile(root, resourcePath, asOptions({ ...OPTIONS, extra: true }));
+      await readDeterministicJsonFile(root, resourcePath, {
+        ...OPTIONS,
+        expectedNode: observed.node,
+      });
     } catch (error: unknown) {
       caught = error;
     }
     if (!(caught instanceof StableFileReadError)) {
       throw new Error("Expected StableFileReadError.");
     }
-    equal(caught.reason, "input");
-    equal(caught.path, "$options");
+    equal(caught.reason, "expectation-changed");
+    equal(caught.path, "$options.expectedNode");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

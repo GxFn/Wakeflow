@@ -8,15 +8,11 @@ import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import type { ByteCount } from "../numeric/byte-count.js";
 import {
-  assertDurableFileCopyRoot,
   DurableFileCopyCandidateError,
   type DurableFileCopyCandidateOptions,
   type DurableFileCopyCandidateResult,
   type DurableFileCopyContentExpectation,
   failDurableFileCopyCandidate as fail,
-  type ParsedDurableFileCopyExpectation,
-  parseDurableFileCopyExpectation,
-  parseDurableFileCopyOptions,
   parseDurableFileCopyPath,
   snapshotDurableFileCopyNode,
 } from "./durable-file-copy-candidate-contract.js";
@@ -90,7 +86,7 @@ async function snapshotHandle(
 async function inspectInitialSource(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
-  expectation: Readonly<ParsedDurableFileCopyExpectation>,
+  expectation: DurableFileCopyContentExpectation,
   maximumBytes: ByteCount,
 ): Promise<Readonly<RootedResourceSnapshot>> {
   let source: Readonly<RootedResourceSnapshot>;
@@ -237,7 +233,7 @@ async function writeChunk(
 async function copySourceBytes(
   sourceHandle: FileHandle,
   candidateHandle: FileHandle,
-  expectation: Readonly<ParsedDurableFileCopyExpectation>,
+  expectation: DurableFileCopyContentExpectation,
   signal: AbortSignal | undefined,
 ): Promise<Sha256Digest> {
   const scratch = allocateScratch(expectation.byteCount, "$source");
@@ -320,7 +316,7 @@ async function inspectFinalSource(
 
 async function verifyCandidate(
   handle: FileHandle,
-  expectation: Readonly<ParsedDurableFileCopyExpectation>,
+  expectation: DurableFileCopyContentExpectation,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<FileNodeSnapshot>> {
   throwIfAborted(signal);
@@ -416,12 +412,9 @@ export async function copyFileToCandidateDurably(
   destinationRootValue: RootedDirectory,
   sourceResourcePathValue: PortableResourcePath,
   candidateResourcePathValue: PortableResourcePath,
-  expectationValue: DurableFileCopyContentExpectation,
-  optionsValue: DurableFileCopyCandidateOptions,
+  expectation: DurableFileCopyContentExpectation,
+  options: DurableFileCopyCandidateOptions,
 ): Promise<Readonly<DurableFileCopyCandidateResult>> {
-  assertDurableFileCopyRoot(sourceRootValue, "$sourceRoot");
-  assertDurableFileCopyRoot(destinationRootValue, "$destinationRoot");
-  const options = parseDurableFileCopyOptions(optionsValue);
   throwIfAborted(options.signal);
   const sourceResourcePath = parseDurableFileCopyPath(
     sourceResourcePathValue,
@@ -431,7 +424,6 @@ export async function copyFileToCandidateDurably(
     candidateResourcePathValue,
     "$candidateResourcePath",
   );
-  const expectation = parseDurableFileCopyExpectation(expectationValue);
   if (expectation.byteCount > options.maximumBytes) {
     fail("capacity", "$source");
   }

@@ -200,27 +200,6 @@ test("Config authority publication 在非法、超限或取消输入下保持零
       OperationAbortedError,
     );
     equal(existsSync(abortedFixture.configPath), false);
-
-    let getterCalls = 0;
-    const decorated = {};
-    Object.defineProperty(decorated, "signal", {
-      enumerable: true,
-      get() {
-        getterCalls += 1;
-        return undefined;
-      },
-    });
-    await expectPublicationError(
-      () =>
-        publishWakeflowConfigAuthority(
-          abortedRoot,
-          createMinimalWakeflowConfig(),
-          decorated as never,
-        ),
-      "input",
-    );
-    equal(getterCalls, 0);
-    equal(existsSync(abortedFixture.configPath), false);
   } finally {
     await abortedRoot.close();
     rmSync(abortedFixture.temporaryRoot, { recursive: true, force: true });

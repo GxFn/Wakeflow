@@ -650,9 +650,8 @@ function uuidFromAuthorizationId(value: string) {
 
 /** 同一Authorization UUID在Demand Event命名空间中的确定性身份。 */
 export function productDefectRemediationAuthorizedEventId(
-  value: unknown,
+  authorization: Readonly<ControllerProductDefectRemediationAuthorization>,
 ): WakeflowDurableId<"demand-event"> {
-  const authorization = parseControllerProductDefectRemediationAuthorization(value);
   return createWakeflowDurableId(
     "demand-event",
     uuidFromAuthorizationId(authorization.productDefectRemediationId),

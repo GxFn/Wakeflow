@@ -50,10 +50,6 @@ function treeOptions(
   };
 }
 
-function asOptions(value: unknown): BoundedDirectoryTreeScanOptions {
-  return value as BoundedDirectoryTreeScanOptions;
-}
-
 function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
@@ -249,44 +245,22 @@ test("starting target errors are mapped into the tree-scan error family", async 
   }
 });
 
-test("options are explicit, passive, and AbortSignal remains cooperative", async () => {
+test("entry and depth limits are range-checked, and AbortSignal remains cooperative", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-tree-options-"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ maximumEntries: 1 }, "$options"],
-      [{ maximumDepth: 1 }, "$options"],
-      [{ maximumEntries: 1, maximumDepth: 1, extra: true }, "$options"],
+    const invalid: readonly [BoundedDirectoryTreeScanOptions, string][] = [
       [{ maximumEntries: -1, maximumDepth: 1 }, "$options.maximumEntries"],
+      [{ maximumEntries: Number.NaN, maximumDepth: 1 }, "$options.maximumEntries"],
       [{ maximumEntries: 1, maximumDepth: 1.5 }, "$options.maximumDepth"],
-      [{ maximumEntries: 1, maximumDepth: 1, signal: {} }, "$options.signal"],
-      [{ maximumEntries: 1, maximumDepth: 1, expectedNode: null }, "$options.expectedNode"],
-      [{ maximumEntries: 1, maximumDepth: 1, expectedNode: {} }, "$options.expectedNode"],
     ];
     for (const [options, expectedPath] of invalid) {
       await expectTreeScanError(
-        () => scanBoundedRootDirectoryTree(root, asOptions(options)),
+        () => scanBoundedRootDirectoryTree(root, options),
         "input",
         expectedPath,
       );
     }
-
-    let getterCalls = 0;
-    const accessor = { maximumDepth: 1 } as Record<string, unknown>;
-    Object.defineProperty(accessor, "maximumEntries", {
-      get: () => {
-        getterCalls += 1;
-        return 1;
-      },
-      enumerable: true,
-    });
-    await expectTreeScanError(
-      () => scanBoundedRootDirectoryTree(root, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
 
     const controller = new AbortController();
     controller.abort("private-tree-reason");

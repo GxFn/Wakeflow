@@ -1,31 +1,14 @@
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  type RootedDirectory,
-  isRootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../../foundation/filesystem/stable-file-read.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowExternalInstructionBodyAuthority,
   listWakeflowExternalInstructionTargets,
-  parseWakeflowExternalInstructionTarget,
   type WakeflowExternalInstructionBodyAuthority,
   WakeflowExternalInstructionBodyAuthorityError,
   type WakeflowExternalInstructionTarget,
@@ -42,7 +25,6 @@ import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
 } from "./wakeflow-managed-text-history.js";
-import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Workspace / Managed Integration：外部根托管块的只读文件检查。
@@ -73,11 +55,11 @@ export interface WakeflowExternalInstructionInspection {
 }
 
 export interface WakeflowExternalInstructionInspectionRequest {
-  readonly profile: unknown;
-  readonly target: unknown;
-  readonly currentConfig: unknown | null;
+  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly target: Readonly<WakeflowExternalInstructionTarget>;
+  readonly currentConfig: WakeflowConfigModel | null;
   readonly expectedCurrentConfigDigest: Sha256Digest | null;
-  readonly desiredConfig: unknown;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly expectedDesiredConfigDigest: Sha256Digest;
   readonly signal?: AbortSignal;
 }
@@ -118,24 +100,6 @@ export interface WakeflowExternalInstructionAuthorities {
   readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
 }
 
-function parseDigest(value: unknown, path: string): Sha256Digest {
-  try {
-    return parseSha256Digest(value, path);
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path, error);
-    throw error;
-  }
-}
-
-function parseConfig(value: unknown, path: string): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("input", path, error);
-    throw error;
-  }
-}
-
 function hasTarget(
   config: WakeflowConfigModel,
   target: Readonly<WakeflowExternalInstructionTarget>,
@@ -146,112 +110,30 @@ function hasTarget(
   );
 }
 
-function parseRequestProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$request.profile", error);
-    }
-    throw error;
-  }
-}
-
-function parseRequestTarget(value: unknown): Readonly<WakeflowExternalInstructionTarget> {
-  try {
-    return parseWakeflowExternalInstructionTarget(value, "$request.target");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowExternalInstructionBodyAuthorityError) {
-      fail("input", error.path, error);
-    }
-    throw error;
-  }
-}
-
 /**
- * 当前配置与它的期望摘要成对出现：没有当前配置时摘要也必须是 null；有的话摘要要对得上，并且与期望配置
- * 是同一个 program。
+ * 把调用方已类型化的请求换成执行用的形状。唯一保留的检查是 current 与 desired 是同一个 program：
+ * reconfigure 的 desired Config 来自公共请求，current 来自盘上，这是两者第一次相遇的地方（A-spec R10）；
+ * 改了 programId 的 reconfigure 由此在预览时被阻塞，而不是在发布配置那一步才失败。
  */
-function parseCurrentConfigPair(
-  record: Readonly<Record<string, unknown>>,
-  desiredConfig: WakeflowConfigModel,
-): Readonly<{
-  currentConfig: WakeflowConfigModel | null;
-  currentConfigDigest: Sha256Digest | null;
-}> {
-  if (record.currentConfig === null) {
-    if (record.expectedCurrentConfigDigest !== null) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    return { currentConfig: null, currentConfigDigest: null };
-  }
-  const currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
-  const currentConfigDigest = parseDigest(
-    record.expectedCurrentConfigDigest,
-    "$request.expectedCurrentConfigDigest",
-  );
-  if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
-    fail("input", "$request.expectedCurrentConfigDigest");
-  }
-  if (currentConfig.program.programId !== desiredConfig.program.programId) {
+export function wakeflowExternalInstructionRequestModel(
+  request: Omit<WakeflowExternalInstructionInspectionRequest, "signal">,
+  signal: AbortSignal | undefined,
+): Readonly<ParsedWakeflowExternalInstructionInspectionRequest> {
+  if (
+    request.currentConfig !== null &&
+    request.currentConfig.program.programId !== request.desiredConfig.program.programId
+  ) {
     fail("input", "$request.desiredConfig.program.programId");
   }
-  return { currentConfig, currentConfigDigest };
-}
-
-/** 快照并绑定 Host Profile、target 与 current/desired Config 摘要。 */
-export function parseWakeflowExternalInstructionInspectionRequest(
-  value: unknown,
-): Readonly<ParsedWakeflowExternalInstructionInspectionRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  const requiredKeys = [
-    "currentConfig",
-    "desiredConfig",
-    "expectedCurrentConfigDigest",
-    "expectedDesiredConfigDigest",
-    "profile",
-    "target",
-  ];
-  const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
-  if (
-    keys.length !== validKeys.length ||
-    keys.some((key, index) => key !== validKeys[index]) ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$request");
-  }
-  const profile = parseRequestProfile(record.profile);
-  const target = parseRequestTarget(record.target);
-  const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
-  const desiredConfigDigest = parseDigest(
-    record.expectedDesiredConfigDigest,
-    "$request.expectedDesiredConfigDigest",
-  );
-  if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
-    fail("input", "$request.expectedDesiredConfigDigest");
-  }
-  if (!hasTarget(desiredConfig, target)) fail("input", "$request.target");
-  const { currentConfig, currentConfigDigest } = parseCurrentConfigPair(record, desiredConfig);
   return Object.freeze({
-    profile,
-    target,
-    currentConfig,
-    currentConfigDigest,
-    desiredConfig,
-    desiredConfigDigest,
-    signal: record.signal as AbortSignal | undefined,
+    profile: request.profile,
+    target: request.target,
+    currentConfig: request.currentConfig,
+    currentConfigDigest: request.expectedCurrentConfigDigest,
+    desiredConfig: request.desiredConfig,
+    desiredConfigDigest: request.expectedDesiredConfigDigest,
+    signal,
   });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function createAuthority(
@@ -347,17 +229,16 @@ function mapManagedBlockFileError(error: WakeflowManagedBlockFileError): never {
 
 /** 稳定检查一个外部根里当前宿主的指令文件并生成零写入的 current 或重组候选。 */
 export async function inspectWakeflowExternalInstruction(
-  rootValue: unknown,
-  requestValue: WakeflowExternalInstructionInspectionRequest,
+  root: RootedDirectory,
+  { signal, ...requestValue }: WakeflowExternalInstructionInspectionRequest,
 ): Promise<Readonly<WakeflowExternalInstructionInspection>> {
-  assertRoot(rootValue);
-  const request = parseWakeflowExternalInstructionInspectionRequest(requestValue);
+  const request = wakeflowExternalInstructionRequestModel(requestValue, signal);
   throwIfAborted(request.signal);
   const authorities = deriveWakeflowExternalInstructionAuthorities(request);
   let inspection: Readonly<WakeflowManagedBlockFileInspection>;
   try {
     inspection = await inspectWakeflowManagedBlockFile(
-      rootValue,
+      root,
       wakeflowExternalInstructionManagedBlockFileRequest(request, authorities, request.signal),
     );
   } catch (error: unknown) {

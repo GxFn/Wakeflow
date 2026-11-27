@@ -47,8 +47,9 @@ function parseTaskPackageId(value: unknown, path: string): WakeflowDurableId<"ta
 }
 
 /** 从 TaskPackage 身份派生唯一投影引用。 */
-export function taskPackageProjectionRef(value: unknown): PortableResourcePath {
-  const taskPackageId = parseTaskPackageId(value, "$taskPackageId");
+export function taskPackageProjectionRef(
+  taskPackageId: WakeflowDurableId<"task-package">,
+): PortableResourcePath {
   return parsePortableResourcePath(`${TASK_PACKAGE_PROJECTIONS_ROOT_REF}/${taskPackageId}.json`);
 }
 

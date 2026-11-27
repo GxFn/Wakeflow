@@ -96,9 +96,7 @@ test("custom factories are called once and their valid result is branded", () =>
   equal(calls, 1);
 });
 
-test("factory boundaries reject invalid sources without coercing results", () => {
-  expectUuidV4Error(() => createUuidV4(asUuidV4Factory(null)), "factory-type", "$uuidFactory");
-
+test("factory boundaries reject failing sources without coercing results", () => {
   const sourceFailure = new Error("private source failure");
   const failure = expectUuidV4Error(
     () =>

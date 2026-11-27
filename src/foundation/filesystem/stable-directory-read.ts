@@ -3,12 +3,10 @@ import { type FileHandle, lstat, opendir, open as openFileHandle } from "node:fs
 import nodePath from "node:path";
 import pLimit from "p-limit";
 
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
-  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
@@ -22,9 +20,8 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
-  isRootedDirectory,
 } from "./rooted-directory.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的一层稳定目录读取。
@@ -91,9 +88,9 @@ export class StableDirectoryReadError extends ModuleError<StableDirectoryReadErr
   static override readonly code = "wakeflow-stable-directory-read";
 }
 
-interface ParsedStableDirectoryReadOptions {
+/** 一次读取的枚举界限：目录项上限、取消信号与（分页时的）名字游标。 */
+interface DirectoryReadBounds {
   readonly maximumEntries: number;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
   readonly signal: AbortSignal | undefined;
   readonly pageAfterName?: string;
 }
@@ -129,48 +126,19 @@ const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
 const fail: Fail<StableDirectoryReadErrorReason> = failWith(StableDirectoryReadError);
 
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
-  if (value === undefined) return undefined;
-  return admitFrozenFileNodeSnapshot(value, (cause) =>
-    fail("input", "$options.expectedNode", cause),
-  );
-}
-
-function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-
-  const allowed = new Set(["expectedNode", "maximumEntries", "signal"]);
+/**
+ * 目录项上限界定一次枚举与它的内存：类型表达不了范围，NaN 或负数会让上限失效，所以在消费它的
+ * 这里断言一次（1.4.5 层次计划 A，R4）。分页多读一项作为“还有”的证明，所以页的上限至少是一，
+ * 加一之后仍是安全整数。
+ */
+function assertMaximumEntries(maximumEntries: number, page: boolean): void {
   if (
-    !Object.hasOwn(record, "maximumEntries") ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  if (
-    typeof record.maximumEntries !== "number" ||
-    !Number.isSafeInteger(record.maximumEntries) ||
-    record.maximumEntries < 0
+    !Number.isSafeInteger(maximumEntries) ||
+    maximumEntries < (page ? 1 : 0) ||
+    (page && maximumEntries >= Number.MAX_SAFE_INTEGER)
   ) {
     fail("input", "$options.maximumEntries");
   }
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({
-    maximumEntries: record.maximumEntries,
-    expectedNode: parseExpectedNode(record.expectedNode),
-    signal: record.signal,
-  });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function compareText(left: string, right: string): number {
@@ -471,7 +439,7 @@ function sameEntries(
 async function readStableDirectory<DirectoryResourcePath extends PortableResourcePath | null>(
   root: RootedDirectory,
   target: Readonly<DirectoryTarget<DirectoryResourcePath>>,
-  options: Readonly<ParsedStableDirectoryReadOptions>,
+  options: Readonly<DirectoryReadBounds>,
 ): Promise<Readonly<StableDirectoryReadResult<DirectoryResourcePath>>> {
   const handle = await openStableDirectory(target);
   let primaryError: unknown;
@@ -537,13 +505,13 @@ export async function readStableRootDirectory(
   root: RootedDirectory,
   options: StableDirectoryReadOptions,
 ): Promise<Readonly<StableDirectoryReadResult<null>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
+  const { maximumEntries, expectedNode, signal } = options;
+  assertMaximumEntries(maximumEntries, false);
+  throwIfAborted(signal);
   const target = await inspectInitialRoot(root);
-  assertExpectedNode(target.node, parsed.expectedNode);
-  throwIfAborted(parsed.signal);
-  return readStableDirectory(root, target, parsed);
+  assertExpectedNode(target.node, expectedNode);
+  throwIfAborted(signal);
+  return readStableDirectory(root, target, { maximumEntries, signal });
 }
 
 /** 稳定读取 `RootedDirectory` 内一个已有资源目录的直属目录项。 */
@@ -552,13 +520,13 @@ export async function readStableResourceDirectory(
   resourcePath: PortableResourcePath,
   options: StableDirectoryReadOptions,
 ): Promise<Readonly<StableDirectoryReadResult<PortableResourcePath>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
+  const { maximumEntries, expectedNode, signal } = options;
+  assertMaximumEntries(maximumEntries, false);
+  throwIfAborted(signal);
   const target = await inspectInitialResource(root, resourcePath);
-  assertExpectedNode(target.node, parsed.expectedNode);
-  throwIfAborted(parsed.signal);
-  return readStableDirectory(root, target, parsed);
+  assertExpectedNode(target.node, expectedNode);
+  throwIfAborted(signal);
+  return readStableDirectory(root, target, { maximumEntries, signal });
 }
 
 /**
@@ -590,34 +558,13 @@ export interface StableDirectoryPage<
   readonly hasMore: boolean;
 }
 
-function parsePageOptions(
-  options: StableDirectoryPageOptions,
-): Readonly<ParsedStableDirectoryReadOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const { afterName, ...readOptions } = record;
-  const parsed = parseOptions(readOptions);
-  if (parsed.maximumEntries < 1 || parsed.maximumEntries >= Number.MAX_SAFE_INTEGER) {
-    fail("input", "$options.maximumEntries");
-  }
-  if (afterName !== undefined) {
-    if (typeof afterName !== "string" || afterName.includes("/"))
-      fail("input", "$options.afterName");
-    try {
-      parsePortableResourcePath(afterName, "$options.afterName");
-    } catch (cause: unknown) {
-      fail("input", "$options.afterName", cause);
-    }
-  }
+/** 页的界限：多读一项作为“还有”的证明；游标是上一页最后一项的名字，第一页从空名之后读起。 */
+function pageBounds(options: StableDirectoryPageOptions): Readonly<DirectoryReadBounds> {
+  assertMaximumEntries(options.maximumEntries, true);
   return {
-    ...parsed,
-    maximumEntries: parsed.maximumEntries + 1,
-    pageAfterName: (afterName as string | undefined) ?? "",
+    maximumEntries: options.maximumEntries + 1,
+    signal: options.signal,
+    pageAfterName: options.afterName ?? "",
   };
 }
 
@@ -644,12 +591,11 @@ export async function readStableResourceDirectoryPage(
   resourcePath: PortableResourcePath,
   options: StableDirectoryPageOptions,
 ): Promise<Readonly<StableDirectoryPage>> {
-  assertRoot(root);
-  const parsed = parsePageOptions(options);
-  throwIfAborted(parsed.signal);
+  const bounds = pageBounds(options);
+  throwIfAborted(bounds.signal);
   const target = await inspectInitialResource(root, resourcePath);
-  assertExpectedNode(target.node, parsed.expectedNode);
-  return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);
+  assertExpectedNode(target.node, options.expectedNode);
+  return directoryPage(await readStableDirectory(root, target, bounds), bounds.maximumEntries);
 }
 
 /** Same paged contract at an already opened root, avoiding repeated ancestor walks. */
@@ -657,10 +603,9 @@ export async function readStableRootDirectoryPage(
   root: RootedDirectory,
   options: StableDirectoryPageOptions,
 ): Promise<Readonly<StableDirectoryPage<null>>> {
-  assertRoot(root);
-  const parsed = parsePageOptions(options);
-  throwIfAborted(parsed.signal);
+  const bounds = pageBounds(options);
+  throwIfAborted(bounds.signal);
   const target = await inspectInitialRoot(root);
-  assertExpectedNode(target.node, parsed.expectedNode);
-  return directoryPage(await readStableDirectory(root, target, parsed), parsed.maximumEntries);
+  assertExpectedNode(target.node, options.expectedNode);
+  return directoryPage(await readStableDirectory(root, target, bounds), bounds.maximumEntries);
 }

@@ -236,11 +236,6 @@ test("拿不到结论时给稳定的分类：输入不合法、不是仓库、�
     equal(await failureReason(observeGitCommit(repo.root, invalid)), "input", invalid);
   }
   equal(await failureReason(observeGitAncestry(repo.root, "HEAD", commit)), "input");
-  equal(
-    await failureReason(observeGitCommit(repo.root, commit, { extra: true } as never)),
-    "input",
-  );
-  equal(await failureReason(observeGitCommit({} as RootedDirectory, commit)), "input");
 
   const plain = await repository(t, false);
   equal(await failureReason(observeGitCommit(plain.root, commit)), "query-failure");

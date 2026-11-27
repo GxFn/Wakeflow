@@ -118,14 +118,6 @@ test("Demand Event Sourcing Command Handler 执行 load-decide-append 并按 com
     const repository = new DemandEventSourcingRepository(root);
     await eventStore.initialize();
 
-    await rejects(
-      executeDemandEventSourcingCommand(repository, COMMAND, {
-        commitId: COMMIT_ID,
-      } as never),
-      (error: unknown) =>
-        error instanceof DemandEventSourcingCommandHandlerError && error.reason === "input",
-    );
-
     const committed = await executeDemandEventSourcingCommand(repository, COMMAND, {
       commitId: COMMIT_ID,
       expectedStreamRevision: 0,
@@ -327,26 +319,13 @@ const OTHER_WRITER = Object.freeze({
   manifestDigest: parseSha256Digest(`sha256:${"f".repeat(64)}`),
 });
 
-test("命令处理程序把注入的写者戳写进提交，重试返回首次的戳，省略或 null 不盖戳，畸形戳按 input 拒绝（C11）", async (t) => {
+test("命令处理程序把注入的写者戳写进提交，重试返回首次的戳，省略或 null 不盖戳（C11）", async (t) => {
   const fixtureRoot = disposableRoot(t, "wakeflow-demand-command-handler-writer-");
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const eventStore = new DemandFileEventStore(root);
     const repository = new DemandEventSourcingRepository(root);
     await eventStore.initialize();
-
-    await rejects(
-      executeDemandEventSourcingCommand(repository, COMMAND, {
-        commitId: COMMIT_ID,
-        expectedStreamRevision: 0,
-        writer: { version: "v1", manifestDigest: WRITER.manifestDigest },
-      }),
-      (error: unknown) =>
-        error instanceof DemandEventSourcingCommandHandlerError &&
-        error.reason === "input" &&
-        error.path === "$/writer",
-    );
-    equal((await eventStore.readCommits()).commits.length, 0);
 
     const committed = await executeDemandEventSourcingCommand(repository, COMMAND, {
       commitId: COMMIT_ID,

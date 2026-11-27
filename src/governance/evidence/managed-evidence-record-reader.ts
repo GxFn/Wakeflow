@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
@@ -7,12 +5,10 @@ import {
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
@@ -21,10 +17,7 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  type RootedDirectory,
-  isRootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -36,11 +29,7 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  type ByteCount,
-  ByteCountError,
-  parseByteCount,
-} from "../../foundation/numeric/byte-count.js";
+import { type ByteCount, parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,
   type ManagedEvidenceManifest,
@@ -126,99 +115,7 @@ const fail: Fail<ManagedEvidenceRecordReaderErrorReason> = failWith(
   ManagedEvidenceRecordReaderError,
 );
 
-interface ParsedLoadOptions {
-  readonly expectedRootNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
-interface ParsedMemberOptions {
-  readonly maximumBytes: ByteCount;
-  readonly signal: AbortSignal | undefined;
-}
-
 const ISSUED_RECORDS = new WeakSet<object>();
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseSignal(value: unknown, path: string): AbortSignal | undefined {
-  if (
-    value !== undefined &&
-    (typeof value !== "object" ||
-      value === null ||
-      types.isProxy(value) ||
-      !(value instanceof AbortSignal))
-  ) {
-    fail("input", path);
-  }
-  return value as AbortSignal | undefined;
-}
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
-  if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$/expectedRootNode");
-  }
-  try {
-    sameFileNodeSnapshot(value as Readonly<FileNodeSnapshot>, value as Readonly<FileNodeSnapshot>);
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$/expectedRootNode", error);
-    }
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
-}
-
-function parseLoadOptions(value: unknown): Readonly<ParsedLoadOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "expectedRootNode" && key !== "signal")) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    expectedRootNode: parseExpectedNode(record.expectedRootNode),
-    signal: parseSignal(record.signal, "$/signal"),
-  });
-}
-
-function parseMemberOptions(value: unknown): Readonly<ParsedMemberOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "maximumBytes") ||
-    Object.keys(record).some((key) => key !== "maximumBytes" && key !== "signal")
-  ) {
-    fail("input", "$options");
-  }
-  let maximumBytes: ByteCount;
-  try {
-    maximumBytes = parseByteCount(record.maximumBytes, "$/maximumBytes");
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("input", "$/maximumBytes", error);
-    throw error;
-  }
-  return Object.freeze({
-    maximumBytes,
-    signal: parseSignal(record.signal, "$/signal"),
-  });
-}
 
 function parseEvidenceId(value: unknown): WakeflowDurableId<"evidence"> {
   try {
@@ -368,18 +265,9 @@ function issueRecord(value: LoadedManagedEvidenceRecord): Readonly<LoadedManaged
   return record;
 }
 
-function assertRecordCapability(
-  value: unknown,
-): asserts value is Readonly<LoadedManagedEvidenceRecord> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value) ||
-    !ISSUED_RECORDS.has(value)
-  ) {
-    fail("input", "$record");
-  }
+/** 只有本Reader加载并签发的record才可读取成员；副本或调用方自建的record不算。 */
+function assertRecordCapability(record: Readonly<LoadedManagedEvidenceRecord>): void {
+  if (!ISSUED_RECORDS.has(record)) fail("input", "$record");
 }
 
 function sameRecord(
@@ -399,11 +287,9 @@ function sameRecord(
 export async function loadManagedEvidenceRecord(
   rootValue: RootedDirectory,
   evidenceIdValue: unknown,
-  optionsValue: LoadManagedEvidenceRecordOptions = {},
+  options: LoadManagedEvidenceRecordOptions = {},
 ): Promise<Readonly<LoadedManagedEvidenceRecord>> {
-  assertRoot(rootValue);
   const evidenceId = parseEvidenceId(evidenceIdValue);
-  const options = parseLoadOptions(optionsValue);
   throwIfAborted(options.signal);
   let address: ReturnType<typeof managedEvidenceRecordAddress>;
   try {
@@ -515,12 +401,10 @@ export async function readManagedEvidencePayloadMember(
   rootValue: RootedDirectory,
   recordValue: Readonly<LoadedManagedEvidenceRecord>,
   memberRefValue: unknown,
-  optionsValue: ReadManagedEvidencePayloadMemberOptions,
+  options: ReadManagedEvidencePayloadMemberOptions,
 ): Promise<Readonly<ManagedEvidencePayloadMemberReadResult>> {
-  assertRoot(rootValue);
   assertRecordCapability(recordValue);
   const memberRef = parseMemberRef(memberRefValue);
-  const options = parseMemberOptions(optionsValue);
   throwIfAborted(options.signal);
   const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
   const member = memberDescriptor(before, memberRef);

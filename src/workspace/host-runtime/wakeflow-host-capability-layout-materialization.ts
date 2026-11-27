@@ -1,9 +1,6 @@
-import { types } from "node:util";
-
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createDirectoryAtomically,
@@ -18,7 +15,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -26,10 +23,7 @@ import {
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
@@ -79,11 +73,6 @@ const fail: Fail<WakeflowHostCapabilityLayoutMaterializationErrorReason> = failW
   WakeflowHostCapabilityLayoutMaterializationError,
 );
 
-interface ParsedOptions {
-  readonly recoveringFreshLayout: boolean;
-  readonly signal: AbortSignal | undefined;
-}
-
 interface DirectoryEffect {
   readonly resourcePath: PortableResourcePath;
   readonly disposition: "created" | "current";
@@ -91,32 +80,6 @@ interface DirectoryEffect {
 }
 
 type ExpectedChildren = ReadonlyMap<PortableResourcePath, ReadonlySet<string>>;
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "recoveringFreshLayout") ||
-    Object.keys(record).some((key) => key !== "recoveringFreshLayout" && key !== "signal") ||
-    typeof record.recoveringFreshLayout !== "boolean" ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    recoveringFreshLayout: record.recoveringFreshLayout,
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 function assertPrivateDirectory(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (!isPrivateDirectory(node)) fail("prefix-conflict", path);
@@ -282,18 +245,13 @@ export interface WakeflowHostCapabilityLayoutInspection {
   readonly observationDigest: Sha256Digest;
 }
 
-function parseProfileAndAuthority(profileValue: unknown) {
+function compileAuthority(
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+): Readonly<WakeflowHostCapabilityLayoutAuthority> {
   try {
-    const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-    return {
-      profile,
-      authority: compileWakeflowHostCapabilityLayoutAuthority(profile),
-    };
+    return compileWakeflowHostCapabilityLayoutAuthority(profile);
   } catch (error: unknown) {
-    if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError ||
-      error instanceof WakeflowHostCapabilityLayoutAuthorityError
-    ) {
+    if (error instanceof WakeflowHostCapabilityLayoutAuthorityError) {
       fail("authority", error.path, error);
     }
     throw error;
@@ -324,7 +282,7 @@ function layoutResult(
 
 async function prerequisitesPresent(
   root: RootedDirectory,
-  profile: Readonly<ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>>,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Promise<boolean> {
   return (
     (await optionalDirectory(root, wakeflowHostRuntimeRootRef(profile))) !== null &&
@@ -343,28 +301,20 @@ function declarationPath(
 
 /** 零写入检查当前 Host Profile 的 capability 目录是否齐全且各自是当前用户的 0700 目录。 */
 export async function inspectWakeflowHostCapabilityLayout(
-  rootValue: RootedDirectory,
-  profileValue: unknown,
-  optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
+  root: RootedDirectory,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  { signal }: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowHostCapabilityLayoutInspection>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  throwIfAborted(optionsValue.signal);
-  const { profile, authority } = parseProfileAndAuthority(profileValue);
+  throwIfAborted(signal);
+  const authority = compileAuthority(profile);
   let status: WakeflowHostCapabilityLayoutInspection["status"] = "current";
   let missingDirectoryCount = 0;
   try {
-    if (!(await prerequisitesPresent(rootValue, profile))) {
+    if (!(await prerequisitesPresent(root, profile))) {
       status = "prerequisite-missing";
     } else {
       for (const declaration of authority.declarations) {
-        if ((await optionalDirectory(rootValue, declarationPath(declaration))) === null) {
+        if ((await optionalDirectory(root, declarationPath(declaration))) === null) {
           missingDirectoryCount += 1;
         }
       }
@@ -397,28 +347,19 @@ export async function inspectWakeflowHostCapabilityLayout(
  * 已有目录只核对节点政策、不枚举内容；缺失的中间段与目标以 0700 创建。
  */
 export async function ensureWakeflowHostCapabilityLayout(
-  rootValue: RootedDirectory,
-  profileValue: unknown,
-  optionsValue: Readonly<{ readonly signal?: AbortSignal }> = {},
+  root: RootedDirectory,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  { signal }: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowHostCapabilityLayoutMaterializationResult>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const signal = optionsValue.signal;
   throwIfAborted(signal);
-  const { profile, authority } = parseProfileAndAuthority(profileValue);
-  if (!(await prerequisitesPresent(rootValue, profile))) {
+  const authority = compileAuthority(profile);
+  if (!(await prerequisitesPresent(root, profile))) {
     fail("prerequisite", "$hostLayout");
   }
   const effects: Readonly<DirectoryEffect>[] = [];
   for (const declaration of authority.declarations) {
     const resourcePath = declarationPath(declaration);
-    const existing = await optionalDirectory(rootValue, resourcePath);
+    const existing = await optionalDirectory(root, resourcePath);
     if (existing !== null) {
       effects.push(
         Object.freeze({ resourcePath, disposition: "current" as const, node: existing }),
@@ -427,7 +368,7 @@ export async function ensureWakeflowHostCapabilityLayout(
     }
     let materialized: Awaited<ReturnType<typeof materializeDirectoryPath>>;
     try {
-      materialized = await materializeDirectoryPath(rootValue, resourcePath, {
+      materialized = await materializeDirectoryPath(root, resourcePath, {
         mode: 0o700,
         ...(signal === undefined ? {} : { signal }),
       });
@@ -453,44 +394,33 @@ export async function ensureWakeflowHostCapabilityLayout(
 
 /** 按当前 Host Profile 物化空 capability 父目录，或恢复同一 exact 前缀。 */
 export async function materializeWakeflowHostCapabilityLayout(
-  rootValue: RootedDirectory,
-  profileValue: unknown,
-  optionsValue: WakeflowHostCapabilityLayoutMaterializationOptions,
+  root: RootedDirectory,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  { recoveringFreshLayout, signal }: WakeflowHostCapabilityLayoutMaterializationOptions,
 ): Promise<Readonly<WakeflowHostCapabilityLayoutMaterializationResult>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const { profile, authority } = parseProfileAndAuthority(profileValue);
+  throwIfAborted(signal);
+  const authority = compileAuthority(profile);
   const hostRoot = wakeflowHostRuntimeRootRef(profile);
-  if ((await optionalDirectory(rootValue, hostRoot)) === null) {
+  if ((await optionalDirectory(root, hostRoot)) === null) {
     fail("prerequisite", "$hostRoot");
   }
   if (
-    (await optionalDirectory(rootValue, wakeflowHostIdentityRootRef(profile))) === null ||
-    (await optionalDirectory(rootValue, wakeflowHostProjectionsRootRef(profile))) === null
+    (await optionalDirectory(root, wakeflowHostIdentityRootRef(profile))) === null ||
+    (await optionalDirectory(root, wakeflowHostProjectionsRootRef(profile))) === null
   ) {
     fail("prerequisite", "$hostLayout");
   }
   const expected = expectedChildren(authority, hostRoot);
-  await inspectPartialTree(rootValue, expected, options.signal, false);
-  if (!options.recoveringFreshLayout) {
-    await assertTargetsAbsent(rootValue, authority);
+  await inspectPartialTree(root, expected, signal, false);
+  if (!recoveringFreshLayout) {
+    await assertTargetsAbsent(root, authority);
   }
   const effects: Readonly<DirectoryEffect>[] = [];
   for (const declaration of authority.declarations) {
     const resourcePath = declaration.placement.relativePath;
     if (resourcePath === null) fail("authority", "$declarations");
-    effects.push(
-      await ensureDirectory(rootValue, resourcePath, options.recoveringFreshLayout, options.signal),
-    );
+    effects.push(await ensureDirectory(root, resourcePath, recoveringFreshLayout, signal));
   }
-  await inspectPartialTree(rootValue, expected, options.signal, true);
+  await inspectPartialTree(root, expected, signal, true);
   return layoutResult(authority, effects);
 }

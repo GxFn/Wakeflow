@@ -245,9 +245,7 @@ export function parseDemandPermitPromptKind(value: unknown): DemandPermitPromptK
 
 /** 某一类许可 prompt 的目录。 */
 export function demandPermitPromptKindRootRef(kind: DemandPermitPromptKind): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${DEMAND_PERMIT_PROMPTS_ROOT_REF}/${parseDemandPermitPromptKind(kind)}`,
-  );
+  return parsePortableResourcePath(`${DEMAND_PERMIT_PROMPTS_ROOT_REF}/${kind}`);
 }
 
 /** 一个许可的 prompt 文件（相对 Demand 私有根）；身份必须是 target-delivery 这一类。 */

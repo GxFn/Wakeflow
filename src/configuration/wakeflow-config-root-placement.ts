@@ -9,7 +9,6 @@ import {
 import {
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
 import {
   WAKEFLOW_ACTIVE_ROOT,
@@ -69,10 +68,6 @@ interface PlannedRoot {
   readonly key: string;
   readonly configuredPath: WakeflowConfigPlacement;
   readonly absolutePath: string;
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function portableComparisonPath(value: string): string {
@@ -180,7 +175,6 @@ export async function validateWakeflowConfigRootPlacements(
   root: RootedDirectory,
   model: WakeflowConfigModel,
 ): Promise<Readonly<WakeflowConfigRootPlacementReport>> {
-  assertRoot(root);
   await assertCurrentRoot(root);
   const planned = planRoots(root.absolutePath, model);
   assertNoOverlap(planned, (entry) => entry.absolutePath, "lexical-overlap");

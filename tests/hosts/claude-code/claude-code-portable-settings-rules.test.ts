@@ -269,13 +269,3 @@ test("program rules create both entries and append only the missing one on updat
     WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE,
   ]);
 });
-
-test("rule sets are validated: empty, duplicated or legacy broad rules are refused", () => {
-  for (const rules of [[], ["a", "a"], ["Bash(tmux *)"], [""], "not-an-array"]) {
-    throws(
-      () => planClaudeCodePortableSettingsTransition(null, rules),
-      (error: unknown) =>
-        error instanceof ClaudeCodePortableSettingsTransitionError && error.path === "$rules",
-    );
-  }
-});

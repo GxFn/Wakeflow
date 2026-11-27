@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import { threadId } from "node:worker_threads";
 
 import {
@@ -100,26 +99,6 @@ function parseOwnerInteger(value: string | undefined, allowZero: boolean, path: 
   return parsed;
 }
 
-function readAddressFileName(value: unknown): string {
-  if (typeof value !== "object" || value === null || types.isProxy(value)) {
-    fail("input", "$address");
-  }
-  let descriptor: PropertyDescriptor | undefined;
-  try {
-    descriptor = Object.getOwnPropertyDescriptor(value, "fileName");
-  } catch (cause: unknown) {
-    fail("input", "$address", cause);
-  }
-  if (
-    descriptor === undefined ||
-    !Object.hasOwn(descriptor, "value") ||
-    typeof descriptor.value !== "string"
-  ) {
-    fail("input", "$address");
-  }
-  return descriptor.value;
-}
-
 /** 计算目标可移植引用的脱敏、稳定暂存路由摘要。 */
 export function computeDurableAtomicFileStageTargetDigest(value: unknown): Sha256Digest {
   let resourcePath: PortableResourcePath;
@@ -210,17 +189,14 @@ export function issueDurableAtomicFileStageAddress(
   return address;
 }
 
-/** 结束本进程签发的暂存地址所有者生命周期；不会操作任何文件。 */
+/**
+ * 结束本进程签发的暂存地址所有者生命周期；不会操作任何文件。只认签发登记里的那个对象：
+ * 形状相同的副本不是签发的地址（签发标记是运行时证明，保留）。
+ */
 export function releaseDurableAtomicFileStageAddress(
   value: Readonly<DurableAtomicFileStageAddress>,
 ): void {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value) ||
-    !ISSUED_STAGE_ADDRESSES.has(value)
-  ) {
+  if (!ISSUED_STAGE_ADDRESSES.has(value)) {
     fail("not-issued", "$address");
   }
   ACTIVE_STAGE_TOKENS.delete(value.token);
@@ -231,12 +207,12 @@ export function releaseDurableAtomicFileStageAddress(
  * 保守判断暂存资源所有者状态；未知或仍在活动时，恢复流程都不得删除资源。别的进程留下的暂存只在名字里
  * 记着 pid：调用方把暂存节点自己的事实（属主、最后修改时刻）交进来时，pid 被重用或属于别的用户也判得出
  * 所有者已经不在（open-items B7，规则见 `observePidOwnerSync`）；不给节点时就是 `kill(pid, 0)`。
+ * 地址是本模块解析或签发的类型化值，不再从文件名复验一遍。
  */
 export function readDurableAtomicFileStageOwnerState(
-  value: Readonly<DurableAtomicFileStageAddress>,
+  address: Readonly<DurableAtomicFileStageAddress>,
   node?: Readonly<PidOwnedNodeEvidence>,
 ): DurableAtomicFileStageOwnerState {
-  const address = parseDurableAtomicFileStageFileName(readAddressFileName(value));
   if (address.pid === process.pid) {
     if (address.threadId !== threadId) return "unknown";
     return ACTIVE_STAGE_TOKENS.has(address.token) ? "active" : "inactive";

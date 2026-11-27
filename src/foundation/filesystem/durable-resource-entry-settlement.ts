@@ -1,7 +1,7 @@
 import { throwIfAborted } from "../node/abort-signal.js";
 import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { type PortableResourcePath, parsePortableResourcePath } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
@@ -83,23 +83,17 @@ function fail(
   throw new DurableResourceEntrySettlementError(reason, path, cause);
 }
 
-function parseOptions(
-  root: unknown,
-  observed: unknown,
-  value: DurableResourceEntrySettlementOptions | undefined,
+/**
+ * 选项缺省值；`expectedNode` 只对 `present` 有意义——两个参数之间的这层关系留在运行时核对
+ * （签名被别的层调用，第一步不收紧它）。
+ */
+function settlementOptions(
+  observed: DurableResourceEntryObservation,
+  options: DurableResourceEntrySettlementOptions,
 ): Readonly<ParsedSettlementOptions> {
-  if (!isRootedDirectory(root)) fail("input", "$root");
-  if (observed !== "present" && observed !== "absent") fail("input", "$observed");
-  if (value !== undefined && (typeof value !== "object" || value === null)) {
-    fail("input", "$options");
-  }
-  const errorPath = value?.errorPath ?? "$resourcePath";
-  if (typeof errorPath !== "string" || errorPath.length === 0) fail("input", "$options.errorPath");
-  const signal = value?.signal;
-  if (signal !== undefined && !(signal instanceof AbortSignal)) fail("input", "$options.signal");
-  const expectedNode = value?.expectedNode;
+  const { expectedNode, signal, errorPath = "$resourcePath" } = options;
   if (expectedNode !== undefined && observed !== "present") fail("input", "$options.expectedNode");
-  return Object.freeze({ expectedNode, signal, errorPath });
+  return { expectedNode, signal, errorPath };
 }
 
 /** 目标此刻是否仍是调用方看到的样子；不是就报 `observation-changed`。 */
@@ -171,9 +165,9 @@ export async function settleObservedResourceEntry(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   observed: DurableResourceEntryObservation,
-  options?: DurableResourceEntrySettlementOptions,
+  options: DurableResourceEntrySettlementOptions = {},
 ): Promise<void> {
-  const parsed = parseOptions(root, observed, options);
+  const parsed = settlementOptions(observed, options);
   throwIfAborted(parsed.signal);
   let parent: RootedResourceParentHandle;
   try {

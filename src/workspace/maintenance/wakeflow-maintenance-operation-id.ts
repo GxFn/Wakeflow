@@ -72,8 +72,9 @@ export function createWakeflowMaintenanceOperationId(
 }
 
 /** 从operation ID派生这次维护唯一的事务文件（intent）的引用。 */
-export function wakeflowMaintenanceIntentRef(value: unknown): PortableResourcePath {
-  const operationId = parseWakeflowMaintenanceOperationId(value);
+export function wakeflowMaintenanceIntentRef(
+  operationId: WakeflowMaintenanceOperationId,
+): PortableResourcePath {
   return parsePortableResourcePath(
     `${WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF}/${operationId}.intent.json`,
   );

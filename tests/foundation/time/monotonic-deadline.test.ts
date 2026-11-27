@@ -1,14 +1,9 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-import {
-  type MonotonicMoment,
-  readMonotonicClock,
-} from "../../../src/foundation/time/monotonic-clock.js";
+import { readMonotonicClock } from "../../../src/foundation/time/monotonic-clock.js";
 import {
   isMonotonicDeadlineReached,
   type MonotonicDeadline,
-  MonotonicDeadlineError,
-  type MonotonicDeadlineErrorReason,
   monotonicDeadlineAfter,
   monotonicDeadlineRemaining,
 } from "../../../src/foundation/time/monotonic-deadline.js";
@@ -17,38 +12,8 @@ import {
   monotonicDurationFromMilliseconds,
 } from "../../../src/foundation/time/monotonic-duration.js";
 
-function expectMonotonicDeadlineError(
-  action: () => unknown,
-  reason: MonotonicDeadlineErrorReason,
-  expectedPath: string,
-): MonotonicDeadlineError {
-  let caught: unknown;
-  try {
-    action();
-  } catch (error: unknown) {
-    caught = error;
-  }
-
-  if (!(caught instanceof MonotonicDeadlineError)) {
-    throw new Error("Expected MonotonicDeadlineError.");
-  }
-  equal(caught.name, "MonotonicDeadlineError");
-  equal(caught.code, "wakeflow-monotonic-deadline");
-  equal(caught.reason, reason);
-  equal(caught.path, expectedPath);
-  return caught;
-}
-
-function asMonotonicMoment(value: unknown): MonotonicMoment {
-  return value as MonotonicMoment;
-}
-
 function asMonotonicDuration(value: unknown): MonotonicDuration {
   return value as MonotonicDuration;
-}
-
-function asMonotonicDeadline(value: unknown): MonotonicDeadline {
-  return value as MonotonicDeadline;
 }
 
 test("deadline construction adds exact moment and duration nanoseconds", () => {
@@ -120,57 +85,6 @@ test("remaining duration is exact before expiry and clamps to zero after", () =>
   equal(before, 25n);
   equal(equalTime, 0n);
   equal(after, 0n);
-});
-
-test("deadline construction revalidates moment and duration brands", () => {
-  expectMonotonicDeadlineError(
-    () => monotonicDeadlineAfter(asMonotonicMoment(-1n), monotonicDurationFromMilliseconds(1)),
-    "moment-type",
-    "$start",
-  );
-  expectMonotonicDeadlineError(
-    () =>
-      monotonicDeadlineAfter(
-        readMonotonicClock(() => 0n),
-        asMonotonicDuration(-1n),
-      ),
-    "duration-type",
-    "$duration",
-  );
-  expectMonotonicDeadlineError(
-    () =>
-      monotonicDeadlineAfter(
-        readMonotonicClock(() => 0n),
-        asMonotonicDuration(1),
-      ),
-    "duration-type",
-    "$duration",
-  );
-});
-
-test("deadline queries revalidate deadline and now inputs", () => {
-  const now = readMonotonicClock(() => 10n);
-  for (const operation of [
-    () => isMonotonicDeadlineReached(asMonotonicDeadline(-1n), now),
-    () => monotonicDeadlineRemaining(asMonotonicDeadline(-1n), now),
-  ]) {
-    expectMonotonicDeadlineError(operation, "deadline-type", "$deadline");
-  }
-
-  const deadline = monotonicDeadlineAfter(
-    readMonotonicClock(() => 0n),
-    monotonicDurationFromMilliseconds(1),
-  );
-  expectMonotonicDeadlineError(
-    () => isMonotonicDeadlineReached(deadline, asMonotonicMoment(-1n)),
-    "moment-type",
-    "$now",
-  );
-  expectMonotonicDeadlineError(
-    () => monotonicDeadlineRemaining(deadline, asMonotonicMoment(1)),
-    "moment-type",
-    "$now",
-  );
 });
 
 test("deadline is a distinct non-serializable bigint brand", () => {

@@ -148,7 +148,7 @@ function inspectProgress(harness: Harness, plan: Plan): Promise<Progress> {
 /** Runs the materializer against a progress snapshot taken now unless one is supplied. */
 async function materialize(
   harness: Harness,
-  transaction: unknown,
+  transaction: Transaction,
   plan: Plan,
   options: MaterializeOptions = {},
 ): Promise<readonly string[]> {
@@ -372,25 +372,12 @@ test("commit reference source materializes its projection without opening a repo
   await expectProjectionPayload(t, "commit", COMMIT_SOURCE);
 });
 
-test("input rejections name the offending argument and leave the stage untouched", async (t) => {
+test("argument relations name the offending argument and leave the stage untouched", async (t) => {
   const harness = await openHarness(t);
   writeFileSource(harness);
   const { transaction } = createManagedEvidencePublicationTransactionFixture();
   const plan = prepareStage(harness, transaction);
   const progress = await inspectProgress(harness, plan);
-  const raw = materializeManagedEvidencePublicationPayload;
-  const { sourceRoot, demandRoot } = harness;
-  await expectFailure(
-    raw(sourceRoot, {} as never, transaction, plan, progress),
-    "input",
-    "$demandRoot",
-  );
-  const unknownOption = raw(sourceRoot, demandRoot, transaction, plan, progress, {
-    extra: true,
-  } as never);
-  await expectFailure(unknownOption, "input", "$options");
-  await expectFailure(materialize(harness, {}, plan, { progress }), "input", "$transaction");
-  await expectFailure(raw(sourceRoot, demandRoot, transaction, {}, progress), "input", "$plan");
   const link = createReferenceTransaction("link", LINK_SOURCE);
   const linkPlan = deriveManagedEvidencePublicationRecordTreePlan(link);
   await expectFailure(materialize(harness, transaction, linkPlan, { progress }), "input", "$plan");

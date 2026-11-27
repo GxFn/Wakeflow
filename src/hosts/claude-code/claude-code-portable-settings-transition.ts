@@ -292,50 +292,6 @@ function desiredCreateText(rules: readonly string[]): string {
   )}\n`;
 }
 
-function parseRules(value: unknown): readonly string[] {
-  if (value === undefined) return DEFAULT_RULES;
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
-    new Set(value).size !== value.length ||
-    value.some((entry) =>
-      WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES.includes(
-        entry as (typeof WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES)[number],
-      ),
-    )
-  ) {
-    failInput("$rules");
-  }
-  return Object.freeze([...(value as readonly string[])]);
-}
-
-/** 退役规则：缺省为空；非空字符串、不重复。 */
-function parseRetiredRules(value: unknown): readonly string[] {
-  if (value === undefined) return Object.freeze([]);
-  if (
-    !Array.isArray(value) ||
-    value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
-    new Set(value).size !== value.length
-  ) {
-    failInput("$retiredRules");
-  }
-  return Object.freeze([...(value as readonly string[])]);
-}
-
-/** 退出路径要删的条目：非空、非空字符串、不重复；没有缺省——删什么必须由调用方说出来。 */
-function parseRemovedRules(value: unknown): readonly string[] {
-  if (
-    !Array.isArray(value) ||
-    value.length === 0 ||
-    value.some((entry) => typeof entry !== "string" || entry.length === 0) ||
-    new Set(value).size !== value.length
-  ) {
-    failInput("$removedRules");
-  }
-  return Object.freeze([...(value as readonly string[])]);
-}
-
 function current(
   sourceDigest: Sha256Digest | null,
 ): Readonly<ClaudeCodePortableSettingsTransition> {
@@ -424,16 +380,11 @@ function allowTransition(
  * `rules` 是这个根拥有的托管规则，缺省只有 MCP 一条；`retiredRules` 是曾拥有、现在要精确删除的条目。
  */
 export function planClaudeCodePortableSettingsTransition(
-  sourceTextValue: unknown,
-  rulesValue?: unknown,
-  retiredRulesValue?: unknown,
+  sourceText: string | null,
+  rules: readonly string[] = DEFAULT_RULES,
+  retiredRules: readonly string[] = [],
 ): Readonly<ClaudeCodePortableSettingsTransition> {
-  if (sourceTextValue !== null && typeof sourceTextValue !== "string") {
-    failInput("$sourceText");
-  }
-  const rules = parseRules(rulesValue);
-  const retiredRules = parseRetiredRules(retiredRulesValue);
-  if (sourceTextValue === null) {
+  if (sourceText === null) {
     const desiredText = desiredCreateText(rules);
     return Object.freeze({
       kind: "ClaudeCodePortableSettingsTransition",
@@ -444,7 +395,6 @@ export function planClaudeCodePortableSettingsTransition(
       desiredText,
     });
   }
-  const sourceText = sourceTextValue;
   const sourceDigest = digestText(sourceText);
   const inspected = inspectAllowSource(sourceText);
   if ("blocked" in inspected) return blocked(inspected.blocked, sourceDigest);
@@ -472,15 +422,11 @@ export function planClaudeCodePortableSettingsTransition(
  * 证明是 Wakeflow 写的，所以既不删也不挡删除。
  */
 export function planClaudeCodePortableSettingsRemovalTransition(
-  sourceTextValue: unknown,
-  removedRulesValue: unknown,
+  sourceText: string | null,
+  removedRules: readonly string[],
 ): Readonly<ClaudeCodePortableSettingsTransition> {
-  if (sourceTextValue !== null && typeof sourceTextValue !== "string") {
-    failInput("$sourceText");
-  }
-  const removed = new Set(parseRemovedRules(removedRulesValue));
-  if (sourceTextValue === null) return current(null);
-  const sourceText = sourceTextValue;
+  const removed = new Set(removedRules);
+  if (sourceText === null) return current(null);
   const sourceDigest = digestText(sourceText);
   const inspected = inspectAllowSource(sourceText);
   if ("blocked" in inspected) return blocked(inspected.blocked, sourceDigest);

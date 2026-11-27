@@ -709,15 +709,4 @@ test("支撑面的状态行设置（复审 M2）：每个 wakeflow-managed 面�
     },
   };
   await rejects(execute(extraKey), isReason("operation"));
-  // 配置本身不合法：input。
-  await rejects(
-    executeClaudeCodeStatuslineSettingsOperation(root, {
-      config: {} as never,
-      operation: testOperation.payload,
-      sourceDigest: testOperation.sourceDigest,
-      targetDigest: testOperation.targetDigest,
-      recoveringAffectedOperation: false,
-    }),
-    isReason("input"),
-  );
 });

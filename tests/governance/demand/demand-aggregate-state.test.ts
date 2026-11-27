@@ -433,7 +433,10 @@ test("replacement 谱系：旧目标进入 superseded，后续规划与 complete
 });
 
 test("续接把此刻的 test 目标记为历史：没有 test 目标时不写该字段，历史标识必须指向已终结的 test 目标", () => {
-  const eventId = "demand-event_16161616-1616-4616-8616-161616161616";
+  const eventId = parseWakeflowDurableIdOfKind(
+    "demand-event_16161616-1616-4616-8616-161616161616",
+    "demand-event",
+  );
   const completed = parseDemandAggregateState({
     ...createInitialDemandAggregateState(TASKING_DEMAND_ID, TASKING_AUTHORITY_DIGEST),
     lifecycle: "completed",
@@ -491,7 +494,10 @@ test("取消等待决定的 Demand 清除活动等待，但保留目标摘要且
       issue: "Synthetic cancellation during escalation",
       source: { kind: "rework-brake", targetTaskId: pkg.targetTaskId, reworkCount: 3 },
     },
-    "demand-event_99999999-9999-4999-8999-999999999999",
+    parseWakeflowDurableIdOfKind(
+      "demand-event_99999999-9999-4999-8999-999999999999",
+      "demand-event",
+    ),
   );
   const cancelled = cancelDemandAggregateState(awaiting);
   equal(cancelled.lifecycle, "cancelled");
@@ -522,7 +528,10 @@ test("等用户决定时聚合拒绝准备投递；已发许可未送出的目�
       issue: "Synthetic escalation before any delivery",
       source: { kind: "rework-brake", targetTaskId: TARGET_TASK_ID, reworkCount: 3 },
     },
-    "demand-event_99999999-9999-4999-8999-999999999998",
+    parseWakeflowDurableIdOfKind(
+      "demand-event_99999999-9999-4999-8999-999999999998",
+      "demand-event",
+    ),
   );
   throws(
     () => prepareDeliveryInDemandAggregateState(awaiting, envelope),

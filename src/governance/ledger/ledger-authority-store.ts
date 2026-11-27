@@ -1,14 +1,8 @@
-import { types } from "node:util";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectLedgerAuthorityLayout,
   materializeLedgerAuthorityLayout,
@@ -23,19 +17,15 @@ import type { RequirementRecord } from "./ledger-authority-record.js";
 import {
   throwLedgerAuthorityStoreError as fail,
   type InitializeLedgerAuthorityStoreOptions,
-  isLedgerAbortSignal,
   type LedgerAuthorityMemberInput,
   type LedgerAuthorityMemberReference,
   type LedgerAuthorityPublicationResult,
-  LedgerAuthorityStoreError,
   type LedgerAuthorityStoreOptions,
   type LoadedLedgerAuthorityRecord,
-  parseLedgerAuthorityStoreOptions,
   type ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";
 import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
 
-const LEDGER_MEMBER_REFERENCE_BATCH_MAXIMUM = 32;
 const LEDGER_MEMBER_READ_CONCURRENCY = 8;
 
 /**
@@ -50,58 +40,28 @@ const LEDGER_MEMBER_READ_CONCURRENCY = 8;
  * `0600` 权限位。
  */
 
-function parseInitializeOptions(
-  value: unknown,
-): Readonly<{ readonly signal: AbortSignal | undefined }> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    record.freshLedger !== true ||
-    Object.keys(record).some((key) => key !== "freshLedger" && key !== "signal") ||
-    (!isLedgerAbortSignal(record.signal) && record.signal !== undefined)
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal });
-}
-
 export class LedgerAuthorityStore {
   readonly #root: RootedDirectory;
 
   constructor(root: RootedDirectory) {
-    if (
-      typeof root !== "object" ||
-      root === null ||
-      types.isProxy(root) ||
-      !(root instanceof RootedDirectory)
-    ) {
-      fail("input", "$root");
-    }
     this.#root = root;
   }
 
   /** 为新 Ledger 幂等创建具有分层权限策略的基础目录。 */
   async initialize(options: InitializeLedgerAuthorityStoreOptions): Promise<void> {
-    const { signal } = parseInitializeOptions(options);
-    await materializeLedgerAuthorityLayout(this.#root, signal);
+    await materializeLedgerAuthorityLayout(this.#root, options.signal);
   }
 
   /** 只读观察 Ledger 固定容器；不会扫描或解释任何权威记录。 */
   async inspectLayout(options?: LedgerAuthorityStoreOptions) {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
-    return inspectLedgerAuthorityLayout(this.#root, signal);
+    return inspectLedgerAuthorityLayout(this.#root, options?.signal);
   }
 
   async loadRequirement(
     requirementIdValue: unknown,
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>> {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
+    const signal = options?.signal;
     let requirementId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
     try {
       requirementId = parseWakeflowDurableIdOfKind(
@@ -122,48 +82,24 @@ export class LedgerAuthorityStore {
     membersValue: readonly LedgerAuthorityMemberInput[],
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LedgerAuthorityPublicationResult<RequirementRecord>>> {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
-    return publishLedgerAuthorityRecord(this.#root, recordValue, membersValue, signal);
+    return publishLedgerAuthorityRecord(this.#root, recordValue, membersValue, options?.signal);
   }
 
   async resolveMemberReference(
-    referenceValue: unknown,
+    reference: Readonly<LedgerAuthorityMemberReference>,
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<ResolvedLedgerAuthorityMember>> {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
-    const reference = parseLedgerAuthorityMemberReference(referenceValue);
+    const signal = options?.signal;
     const loaded = await loadLedgerAuthorityRecord(this.#root, reference.recordId, signal);
     return resolveLoadedLedgerAuthorityMemberReference(this.#root, loaded, reference, signal);
   }
 
   /** 在一次批量解析中，同一不可变记录最多加载一次。 */
   async resolveMemberReferences(
-    referencesValue: readonly unknown[],
+    references: readonly Readonly<LedgerAuthorityMemberReference>[],
     options?: LedgerAuthorityStoreOptions,
   ): Promise<readonly Readonly<ResolvedLedgerAuthorityMember>[]> {
-    const { signal } = parseLedgerAuthorityStoreOptions(options);
-    let values: readonly unknown[];
-    try {
-      values = parseDenseArray(
-        referencesValue,
-        LEDGER_MEMBER_REFERENCE_BATCH_MAXIMUM,
-        "$references",
-      );
-    } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", "$references", error);
-      throw error;
-    }
-    if (values.length === 0) fail("input", "$references");
-    const references = values.map((value, index) => {
-      try {
-        return parseLedgerAuthorityMemberReference(value);
-      } catch (error: unknown) {
-        if (error instanceof LedgerAuthorityStoreError) {
-          fail("input", `$/references/${index}`, error);
-        }
-        throw error;
-      }
-    });
+    const signal = options?.signal;
     const loadedByRecord = new Map<string, Readonly<LoadedLedgerAuthorityRecord>>();
     const prepared: Array<
       Readonly<{

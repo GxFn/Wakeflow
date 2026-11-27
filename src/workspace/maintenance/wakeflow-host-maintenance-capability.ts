@@ -1,8 +1,5 @@
-import { types } from "node:util";
-
 import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
@@ -73,40 +70,6 @@ export class WakeflowHostMaintenanceCapabilityError extends ModuleError<Wakeflow
 const fail: Fail<WakeflowHostMaintenanceCapabilityErrorReason> = failWith(
   WakeflowHostMaintenanceCapabilityError,
 );
-
-const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
-const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
-
-/** 验证一次执行所提供的唯一 capability 与当前宿主精确对应。 */
-export function assertWakeflowHostMaintenanceCapability(
-  value: unknown,
-  expectedHostId: WakeflowWorkspaceHostId,
-): asserts value is Readonly<WakeflowHostMaintenanceCapability> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$capability");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
-  }
-  if (
-    !Object.isFrozen(value) ||
-    Object.keys(record).sort().join("\u0000") !==
-      "capabilityId\u0000executeOperation\u0000hostId\u0000kind\u0000planContribution" ||
-    record.kind !== "WakeflowHostMaintenanceCapability" ||
-    record.hostId !== expectedHostId ||
-    typeof record.capabilityId !== "string" ||
-    record.capabilityId.length > MAXIMUM_CAPABILITY_ID_LENGTH ||
-    !record.capabilityId.isWellFormed() ||
-    !CAPABILITY_ID_PATTERN.test(record.capabilityId) ||
-    typeof record.planContribution !== "function" ||
-    types.isProxy(record.planContribution) ||
-    typeof record.executeOperation !== "function" ||
-    types.isProxy(record.executeOperation)
-  ) {
-    fail(record.hostId === expectedHostId ? "identity" : "host", "$capability");
-  }
-}
 
 /** 验证 contribution 确由当前 capability 的公开身份命名。 */
 export function assertWakeflowHostMaintenanceContributionCapability(

@@ -1,9 +1,7 @@
-import { types } from "node:util";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
@@ -16,11 +14,7 @@ import {
   isPrivateDirectory,
   isPrivateFile,
 } from "../../foundation/filesystem/private-node-policy.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  settleStagesOfDeadWritersStrictly,
-  withWorkspaceLockOrRefuse,
-} from "../../kernel/workspace-locks.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -37,6 +31,10 @@ import {
   type UtcWallClock,
   UtcWallClockError,
 } from "../../foundation/time/wall-clock.js";
+import {
+  settleStagesOfDeadWritersStrictly,
+  withWorkspaceLockOrRefuse,
+} from "../../kernel/workspace-locks.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   createWakeflowWindowHostBinding,
@@ -133,90 +131,12 @@ export class WakeflowWindowHostBindingStoreError extends ModuleError<WakeflowWin
 
 const MAXIMUM_BINDING_BYTES = parseByteCount(64 * 1024);
 
-interface ParsedOptions {
-  readonly uuidFactory: UuidV4Factory | undefined;
-  readonly wallClock: UtcWallClock | undefined;
-  readonly signal: AbortSignal | undefined;
-  readonly acquireTimeoutMilliseconds: number | undefined;
-}
-
 function fail(
   reason: WakeflowWindowHostBindingStoreErrorReason,
   path: string,
   bindingAuthority: "unchanged" | "unknown" = "unchanged",
 ): never {
   throw new WakeflowWindowHostBindingStoreError(reason, path, bindingAuthority);
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value ?? {}, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  const allowed = new Set(["acquireTimeoutMilliseconds", "signal", "uuidFactory", "wallClock"]);
-  if (Object.keys(record).some((key) => !allowed.has(key))) {
-    fail("input", "$options");
-  }
-  for (const key of ["uuidFactory", "wallClock"] as const) {
-    if (
-      record[key] !== undefined &&
-      (typeof record[key] !== "function" || types.isProxy(record[key]))
-    ) {
-      fail("input", `$options.${key}`);
-    }
-  }
-  if (
-    record.signal !== undefined &&
-    (typeof record.signal !== "object" ||
-      record.signal === null ||
-      types.isProxy(record.signal) ||
-      !(record.signal instanceof AbortSignal))
-  ) {
-    fail("input", "$options.signal");
-  }
-  if (
-    record.acquireTimeoutMilliseconds !== undefined &&
-    (typeof record.acquireTimeoutMilliseconds !== "number" ||
-      !Number.isSafeInteger(record.acquireTimeoutMilliseconds) ||
-      record.acquireTimeoutMilliseconds <= 0 ||
-      record.acquireTimeoutMilliseconds > 300_000)
-  ) {
-    fail("input", "$options.acquireTimeoutMilliseconds");
-  }
-  return Object.freeze({
-    uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
-    wallClock: record.wallClock as UtcWallClock | undefined,
-    signal: record.signal as AbortSignal | undefined,
-    acquireTimeoutMilliseconds: record.acquireTimeoutMilliseconds as number | undefined,
-  });
-}
-
-function parseInspectOptions(
-  value: unknown,
-): Readonly<{ readonly signal: AbortSignal | undefined }> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value ?? {}, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
 }
 
 async function readInventory(
@@ -323,17 +243,8 @@ function sameInventory(
 export async function inspectWakeflowWindowHostBindingInventory(
   root: RootedDirectory,
   authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
-  optionsValue: InspectWakeflowWindowHostBindingInventoryOptions = {},
+  { signal }: InspectWakeflowWindowHostBindingInventoryOptions = {},
 ): Promise<Readonly<WakeflowWindowHostBindingInventory>> {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const { signal } = parseInspectOptions(optionsValue);
   throwIfAborted(signal);
   const first = await readInventory(root, authority, signal);
   const second = await readInventory(root, authority, signal);
@@ -347,21 +258,15 @@ export async function withWakeflowWindowHostBindingStore<Result>(
   authoritySource:
     | Readonly<WakeflowWindowHostBindingStoreAuthority>
     | (() => Promise<Readonly<WakeflowWindowHostBindingStoreAuthority>>),
-  optionsValue: WakeflowWindowHostBindingStoreOptions,
+  {
+    uuidFactory,
+    wallClock,
+    signal,
+    acquireTimeoutMilliseconds,
+  }: WakeflowWindowHostBindingStoreOptions,
   operation: (context: Readonly<WakeflowWindowHostBindingStoreContext>) => Promise<Result>,
 ): Promise<Result> {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory) ||
-    typeof operation !== "function" ||
-    types.isProxy(operation)
-  ) {
-    fail("input", "$store");
-  }
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
   const authority =
     typeof authoritySource === "function" ? await authoritySource() : authoritySource;
   // 登记锁（ADR-0033）：两个宿主的登记共用一把；上一次登记留下的暂存在锁内先恢复（见下）。
@@ -377,30 +282,22 @@ export async function withWakeflowWindowHostBindingStore<Result>(
       ) {
         fail("input", "$authority");
       }
-      await settleStagesOfDeadWritersStrictly(
-        root,
-        current.bindingRefs,
-        "closed",
-        options.signal,
-        () => fail("recovery-required", "$stages"),
+      await settleStagesOfDeadWritersStrictly(root, current.bindingRefs, "closed", signal, () =>
+        fail("recovery-required", "$stages"),
       );
       return operation(
         Object.freeze({
-          inventory: await readInventory(root, current, options.signal),
-          uuidFactory: options.uuidFactory,
-          wallClock: options.wallClock,
-          signal: options.signal,
+          inventory: await readInventory(root, current, signal),
+          uuidFactory,
+          wallClock,
+          signal,
         }),
       );
     },
     () => fail("lock", "$lock"),
     {
-      ...(options.acquireTimeoutMilliseconds === undefined
-        ? {}
-        : {
-            acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
-          }),
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(acquireTimeoutMilliseconds === undefined ? {} : { acquireTimeoutMilliseconds }),
+      ...(signal === undefined ? {} : { signal }),
     },
   );
 }

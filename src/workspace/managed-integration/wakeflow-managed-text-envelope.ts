@@ -153,6 +153,16 @@ function concatenate(parts: readonly Uint8Array[], path: string): Buffer {
   }
 }
 
+/** 私有副本：之后的检查与拼接都只看这份字节，调用方之后改动原数组不影响结果。 */
+function copyBytes(value: Uint8Array): Buffer {
+  try {
+    return Buffer.from(value);
+  } catch (cause: unknown) {
+    fail("capacity", "$source", cause);
+  }
+}
+
+/** 源字节仍声明为 `unknown` 的入口（另一分区直接调用，签名留到 A-spec 第 2 步）先收窄再复制。 */
 function snapshotBytes(value: unknown): Buffer {
   if (
     typeof value !== "object" ||
@@ -164,11 +174,7 @@ function snapshotBytes(value: unknown): Buffer {
   ) {
     fail("input", "$source");
   }
-  try {
-    return Buffer.from(value);
-  } catch (cause: unknown) {
-    fail("capacity", "$source", cause);
-  }
+  return copyBytes(value);
 }
 
 function decodeSource(bytes: Uint8Array): void {
@@ -285,7 +291,7 @@ function parseIdentityRecord(
 }
 
 /** 验证并快照一份严格 managed-text 目标；不读取或重组任何源字节。 */
-export function parseWakeflowManagedTextEnvelopeTarget(
+function parseWakeflowManagedTextEnvelopeTarget(
   value: unknown,
 ): Readonly<WakeflowManagedTextEnvelopeTarget> {
   const record = inputRecord(value, "$target", ["body", "component", "owner"]);
@@ -376,9 +382,9 @@ function inspectSnapshot(source: Buffer): Readonly<WakeflowManagedTextEnvelopeIn
 
 /** 复制并检查一份完整 UTF-8 字节快照中的唯一 Wakeflow envelope。 */
 export function inspectWakeflowManagedTextEnvelope(
-  sourceValue: unknown,
+  source: Uint8Array,
 ): Readonly<WakeflowManagedTextEnvelopeInspection> {
-  return inspectSnapshot(snapshotBytes(sourceValue));
+  return inspectSnapshot(copyBytes(source));
 }
 
 function renderOwnedBlock(
@@ -467,10 +473,9 @@ export function recomposeWakeflowManagedTextEnvelope(
  */
 export function removeWakeflowManagedTextEnvelope(
   sourceValue: unknown,
-  identityValue: unknown,
+  identity: Readonly<WakeflowManagedTextEnvelopeIdentity>,
 ): Readonly<WakeflowManagedTextRemovalResult> {
   const source = snapshotBytes(sourceValue);
-  const identity = parseIdentityRecord(identityValue, "$identity");
   const current = inspectSnapshot(source);
   if (
     current.kind !== "managed" ||

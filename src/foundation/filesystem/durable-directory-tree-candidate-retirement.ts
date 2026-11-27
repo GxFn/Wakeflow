@@ -1,6 +1,5 @@
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   directoryTreeCandidateMaximumPathDepth,
@@ -12,7 +11,6 @@ import {
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
-  parseDirectoryTreeCandidatePlan,
 } from "./durable-directory-tree-candidate.js";
 import {
   DurableResourceEntrySettlementError,
@@ -22,22 +20,10 @@ import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
 } from "./exact-regular-file-unlink.js";
-import {
-  admitFrozenFileNodeSnapshot,
-  type FileNodeSnapshot,
-  sameFileNodeIdentity,
-} from "./file-node-snapshot.js";
+import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
-import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-} from "./portable-resource-path.js";
-import {
-  isRootedDirectory,
-  type RootedDirectory,
-  RootedDirectoryError,
-} from "./rooted-directory.js";
+import type { PortableResourcePath } from "./portable-resource-path.js";
+import { type RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   RootedExactResourceHandleError,
@@ -93,16 +79,6 @@ export class DurableDirectoryTreeCandidateRetirementError extends ModuleError<Du
   static override readonly code = "wakeflow-durable-directory-tree-candidate-retirement";
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
-interface ParsedCandidate {
-  readonly candidateRootPath: PortableResourcePath;
-  readonly plan: Readonly<DirectoryTreeCandidatePlan>;
-  readonly rootNode: Readonly<FileNodeSnapshot>;
-}
-
 interface CapturedCandidateMembers {
   readonly rootNode: Readonly<FileNodeSnapshot>;
   readonly directories: ReadonlyMap<PortableResourcePath, FileNodeSnapshot>;
@@ -114,96 +90,6 @@ interface CapturedCandidateMembers {
 const fail: Fail<DurableDirectoryTreeCandidateRetirementErrorReason> = failWith(
   DurableDirectoryTreeCandidateRetirementError,
 );
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-function parsePath(value: unknown): PortableResourcePath {
-  try {
-    return parsePortableResourcePath(value, "$candidateRootPath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$candidateRootPath", error);
-    }
-    throw error;
-  }
-}
-
-function parseRootNode(value: unknown): Readonly<FileNodeSnapshot> {
-  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
-    fail("input", "$candidate/rootNode", cause),
-  );
-  if (node.kind !== "directory") fail("input", "$candidate/rootNode");
-  return node;
-}
-
-function parseCandidate(value: unknown): Readonly<ParsedCandidate> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$candidate");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$candidate", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3 ||
-    keys[0] !== "candidateRootPath" ||
-    keys[1] !== "plan" ||
-    keys[2] !== "rootNode"
-  ) {
-    fail("input", "$candidate");
-  }
-  let plan: Readonly<DirectoryTreeCandidatePlan>;
-  try {
-    plan = parseDirectoryTreeCandidatePlan(record.plan);
-  } catch (error: unknown) {
-    if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$candidate/plan", error);
-    }
-    throw error;
-  }
-  return Object.freeze({
-    candidateRootPath: parsePath(record.candidateRootPath),
-    plan,
-    rootNode: parseRootNode(record.rootNode),
-  });
-}
-
-function parseRecoveryInput(
-  candidateRootPathValue: unknown,
-  planValue: unknown,
-): Readonly<Pick<ParsedCandidate, "candidateRootPath" | "plan">> {
-  const candidateRootPath = parsePath(candidateRootPathValue);
-  let plan: Readonly<DirectoryTreeCandidatePlan>;
-  try {
-    plan = parseDirectoryTreeCandidatePlan(planValue);
-  } catch (error: unknown) {
-    if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$plan", error);
-    }
-    throw error;
-  }
-  return Object.freeze({ candidateRootPath, plan });
-}
 
 function mapCandidateError(error: DurableDirectoryTreeCandidateError): never {
   if (error.reason === "source-changed") {
@@ -255,7 +141,7 @@ async function inspectProgress(
 
 async function inspectComplete(
   root: RootedDirectory,
-  candidate: Readonly<ParsedCandidate>,
+  candidate: Readonly<DirectoryTreeCandidateResult>,
   signal: AbortSignal | undefined,
 ): Promise<void> {
   try {
@@ -661,24 +547,18 @@ async function settleRetirement(
 }
 
 /**
- * 首次退休一棵完整candidate。缺失、部分或冲突candidate在任何删除前拒绝。
+ * 首次退休一棵完整candidate。缺失、部分或冲突candidate在任何删除前拒绝。候选是本层签发的结果，
+ * 不再复验：删除前按它的根节点与计划重新观察整棵树。
  */
 export async function retireDirectoryTreeCandidateDurably(
-  rootValue: RootedDirectory,
-  candidateValue: DirectoryTreeCandidateResult,
-  optionsValue: DirectoryTreeCandidateRetirementOptions = {},
+  root: RootedDirectory,
+  candidate: Readonly<DirectoryTreeCandidateResult>,
+  options: DirectoryTreeCandidateRetirementOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateRetirementReceipt>> {
-  assertRoot(rootValue);
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const candidate = parseCandidate(candidateValue);
-  await inspectComplete(rootValue, candidate, options.signal);
-  const receipt = await settleRetirement(
-    rootValue,
-    candidate.candidateRootPath,
-    candidate.plan,
-    options.signal,
-  );
+  const { signal } = options;
+  throwIfAborted(signal);
+  await inspectComplete(root, candidate, signal);
+  const receipt = await settleRetirement(root, candidate.candidateRootPath, candidate.plan, signal);
   if (receipt.disposition !== "retired") {
     fail("source-changed", "$candidate");
   }
@@ -686,17 +566,16 @@ export async function retireDirectoryTreeCandidateDurably(
 }
 
 /**
- * 在领域journal授权下续接同一计划的部分退休；目标缺失只返回`absent`观察。
+ * 在领域journal授权下续接同一计划的部分退休；目标缺失只返回`absent`观察。计划来自日志读取方
+ * 对磁盘文档的解析，路径与计划都不再复验；候选根的物理检查在续接本身里。
  */
 export async function settleDirectoryTreeCandidateRetirement(
-  rootValue: RootedDirectory,
-  candidateRootPathValue: PortableResourcePath,
-  planValue: DirectoryTreeCandidatePlan,
-  optionsValue: DirectoryTreeCandidateRetirementOptions = {},
+  root: RootedDirectory,
+  candidateRootPath: PortableResourcePath,
+  plan: Readonly<DirectoryTreeCandidatePlan>,
+  options: DirectoryTreeCandidateRetirementOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateRetirementReceipt>> {
-  assertRoot(rootValue);
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const input = parseRecoveryInput(candidateRootPathValue, planValue);
-  return settleRetirement(rootValue, input.candidateRootPath, input.plan, options.signal);
+  const { signal } = options;
+  throwIfAborted(signal);
+  return settleRetirement(root, candidateRootPath, plan, signal);
 }

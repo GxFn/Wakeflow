@@ -1,17 +1,12 @@
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import {
-  type ByteCount,
-  ByteCountError,
-  MAX_SAFE_BYTE_COUNT,
-  parseByteCount,
-} from "../numeric/byte-count.js";
+import { type ByteCount, MAX_SAFE_BYTE_COUNT } from "../numeric/byte-count.js";
 
 /**
  * Wakeflow Foundation / Filesystem：文件字节偏移量与半开字节区间。
  *
  * 本模块把非负安全整数位置与 `ByteCount` 长度组合为 `[offset, endExclusive)`。
  * `FileByteOffset` 使用独立品牌类型，防止 TypeScript 把“字节数量”误当成“文件位置”；
- * 所有公开操作仍会重新执行运行时准入，品牌不能绕过范围或一致性检查。
+ * 品牌由各自的构造器签发，区间运算不再复验它们，只检查结束位置不越界。
  *
  * 本层不打开文件、不分配区间字节、不解释 UTF-8、行或标记，也不把区间绑定到某个
  * 文件版本或判断它是否位于具体文件大小内。
@@ -47,10 +42,6 @@ function normalizeErrorPath(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function fieldPath(basePath: string, field: string): string {
-  return `${basePath}.${field}`;
-}
-
 const fail: Fail<FileByteRangeErrorReason> = failWith(FileByteRangeError);
 
 function parseOffset(value: unknown, path: string): FileByteOffset {
@@ -60,31 +51,11 @@ function parseOffset(value: unknown, path: string): FileByteOffset {
   return value as FileByteOffset;
 }
 
-function parseLength(value: unknown, path: string): ByteCount {
-  try {
-    return parseByteCount(value, path);
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("length-range", path, error);
-    throw error;
-  }
-}
-
 function rangeEnd(offset: FileByteOffset, length: ByteCount, path: string): FileByteOffset {
   if (length > MAX_SAFE_BYTE_COUNT - offset) {
     fail("end-overflow", path);
   }
   return (offset + length) as FileByteOffset;
-}
-
-function createRange(
-  offsetValue: unknown,
-  lengthValue: unknown,
-  path: string,
-): Readonly<FileByteRange> {
-  const offset = parseOffset(offsetValue, fieldPath(path, "offset"));
-  const length = parseLength(lengthValue, fieldPath(path, "length"));
-  const endExclusive = rangeEnd(offset, length, path);
-  return Object.freeze({ offset, length, endExclusive });
 }
 
 /** 严格解析文件绝对字节偏移量。 */
@@ -93,12 +64,14 @@ export function parseFileByteOffset(value: unknown, errorPath?: string): FileByt
 }
 
 /**
- * 从已声明语义的偏移量与长度创建半开区间，并重新验证两个品牌输入。
+ * 从已声明语义的偏移量与长度创建半开区间。两个品牌就是准入的证明（各自的构造器检查过），
+ * 这里只判断结束位置不越过安全整数。
  */
 export function createFileByteRange(
   offset: FileByteOffset,
   length: ByteCount,
   errorPath?: string,
 ): Readonly<FileByteRange> {
-  return createRange(offset, length, normalizeErrorPath(errorPath, "$range"));
+  const endExclusive = rangeEnd(offset, length, normalizeErrorPath(errorPath, "$range"));
+  return Object.freeze({ offset, length, endExclusive });
 }

@@ -238,7 +238,7 @@ test("loaded artifact transfer detects source drift during tree copy", {
   equal(existsSync(candidateRoot), true);
 });
 
-test("loaded artifact transfer rejects cancellation and a tampered plan", async (t) => {
+test("loaded artifact transfer rejects cancellation", async (t) => {
   const current = await fixture(t);
   writeSourceTree(current.sourcePath);
   const plan = await transferPlan(current);
@@ -253,22 +253,5 @@ test("loaded artifact transfer rejects cancellation and a tampered plan", async 
         { signal: controller.signal },
       ),
     OperationAbortedError,
-  );
-
-  const tampered = {
-    ...plan,
-    copies: plan.copies.map((copy, index) =>
-      index === 0 ? { ...copy, candidateResourcePath: "stages/.bundle.stage/other" } : copy,
-    ),
-  } as unknown as LoadedArtifactTreeTransferPlan;
-  await expectCandidateError(
-    () =>
-      materializeLoadedArtifactTreeTransferCandidate(
-        current.sourceRoot,
-        current.destinationRoot,
-        tampered,
-      ),
-    "input",
-    "$plan",
   );
 });

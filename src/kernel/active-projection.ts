@@ -23,7 +23,7 @@ import {
 } from "../foundation/filesystem/portable-resource-path.js";
 import { isPrivateDirectory } from "../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
@@ -93,10 +93,6 @@ function signalOptions(signal: AbortSignal | undefined): Signal {
   return signal === undefined ? {} : { signal };
 }
 
-function assertRoot(root: unknown): asserts root is RootedDirectory {
-  if (!(root instanceof RootedDirectory)) fail("invalid-request", "projection-root", "$root");
-}
-
 // ---- 两级容器 ----------------------------------------------------------------
 
 export interface ActiveLayoutEntryInspection {
@@ -149,7 +145,6 @@ export async function inspectActiveLayout(
   root: RootedDirectory,
   options: Signal = {},
 ): Promise<Readonly<ActiveLayoutInspection>> {
-  assertRoot(root);
   throwIfAborted(options.signal);
   const active = await inspectLayoutEntry(root, WAKEFLOW_ACTIVE_ROOT_REF);
   const current = await inspectLayoutEntry(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF);
@@ -257,7 +252,6 @@ export async function materializeActiveLayout(
   root: RootedDirectory,
   options: Readonly<{ readonly recovering: boolean; readonly signal?: AbortSignal }>,
 ): Promise<Readonly<ActiveLayoutMaterializationResult>> {
-  assertRoot(root);
   throwIfAborted(options.signal);
   const active = await ensureLayoutDirectory(
     root,
@@ -1057,7 +1051,6 @@ export async function inspectActiveProjectionTargets(
   files: readonly Readonly<ActiveProjectionFile>[],
   options: Signal = {},
 ): Promise<readonly Readonly<ActiveProjectionTargetInspection>[]> {
-  assertRoot(root);
   const targets: Readonly<ActiveProjectionTargetInspection>[] = [];
   for (const entry of files) {
     targets.push(await inspectTarget(root, entry.resourcePath, entry.digest, options.signal));
@@ -1399,7 +1392,6 @@ export async function publishActiveProjection(
   render: ActiveProjectionRender,
   options: PublishActiveProjectionOptions = {},
 ): Promise<Readonly<ActiveProjectionPublicationReceipt>> {
-  assertRoot(root);
   const signal = options.signal;
   throwIfAborted(signal);
   return withWorkspaceLockOrRefuse(

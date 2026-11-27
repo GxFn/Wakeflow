@@ -28,7 +28,7 @@ import {
 } from "../foundation/filesystem/exact-regular-file-unlink.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
@@ -270,10 +270,6 @@ function renderWorkClaim(claim: Readonly<WorkClaim>): string {
   return renderDeterministicJsonDocument(claim as unknown as JsonObject, "$claim");
 }
 
-function assertRoot(root: unknown): asserts root is RootedDirectory {
-  if (!(root instanceof RootedDirectory)) fail("invalid-request", "claim-root", "$root");
-}
-
 function assertNode(
   node: Readonly<FileNodeSnapshot>,
   kind: "directory" | "file",
@@ -294,7 +290,6 @@ export async function inspectWorkClaim(
   windowIdValue: string,
   options: Signal = {},
 ): Promise<Readonly<InspectWorkClaimResult>> {
-  assertRoot(root);
   const windowId = parseId(windowIdValue, "window", "$windowId");
   const ref = workClaimRef(windowId);
   let node: Readonly<FileNodeSnapshot> | null;
@@ -342,7 +337,6 @@ export async function takeWorkClaim(
   claimValue: unknown,
   options: Signal = {},
 ): Promise<Readonly<TakeWorkClaimResult>> {
-  assertRoot(root);
   const claim = parseWorkClaim(claimValue);
   const signal = signalOptions(options.signal);
   try {
@@ -385,11 +379,9 @@ export async function takeWorkClaim(
 /** 精确释放同一份声明：缺失为 `not-found/claim-absent`，不同声明为 `precondition-failed/claim-drift`。 */
 export async function releaseWorkClaim(
   root: RootedDirectory,
-  expectedValue: unknown,
+  expected: Readonly<WorkClaim>,
   options: Signal = {},
 ): Promise<Readonly<ReleaseWorkClaimResult>> {
-  assertRoot(root);
-  const expected = parseWorkClaim(expectedValue);
   const signal = signalOptions(options.signal);
   const inspected = await inspectWorkClaim(root, expected.windowId, signal);
   if (inspected.claim === null || inspected.node === null) {

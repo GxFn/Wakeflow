@@ -1,29 +1,13 @@
-import { types } from "node:util";
-
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -37,7 +21,7 @@ import {
   type WholeFileContentTransition,
   WholeFileContentTransitionError,
 } from "../../foundation/filesystem/whole-file-content-transition.js";
-import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
@@ -50,11 +34,7 @@ import {
   historicalWakeflowManagedTextBodies,
   WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
 } from "../managed-integration/wakeflow-managed-text-history.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
 import {
   createWakeflowManagedSupportResourceCatalog,
@@ -84,13 +64,13 @@ const WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES = parseByteCount(
 export const WAKEFLOW_SUPPORT_MEMORY_FILE_MODE = 0o644;
 
 export interface WakeflowSupportMemoryInspectionRequest {
-  readonly currentConfig: unknown | null;
+  readonly currentConfig: WakeflowConfigModel | null;
   readonly expectedCurrentConfigDigest: Sha256Digest | null;
-  readonly desiredConfig: unknown;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly expectedDesiredConfigDigest: Sha256Digest;
-  readonly profile: unknown;
+  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly expectedCatalogDigest: Sha256Digest;
-  readonly surfaceId: unknown;
+  readonly surfaceId: WakeflowDurableId<"surface">;
   readonly signal?: AbortSignal;
 }
 
@@ -142,132 +122,36 @@ export interface ParsedWakeflowSupportMemoryInspectionRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function parseDigest(value: unknown, path: string): Sha256Digest {
-  try {
-    return parseSha256Digest(value, path);
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path, error);
-    throw error;
-  }
-}
-
-function parseConfig(value: unknown, path: string): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", path, error);
-    throw error;
-  }
-}
-
-/** 快照并绑定 current/desired Config、Host Profile、Catalog 与 Surface ID。 */
-export function parseWakeflowSupportMemoryInspectionRequest(
-  value: unknown,
+/**
+ * 把调用方已类型化的请求换成执行用的形状：编出 Support 目录并核对该 surface 在里面。保留的关系检查只有
+ * current 与 desired 是同一个 program——reconfigure 的 desired Config 来自公共请求，current 来自盘上，
+ * 这是两者第一次相遇的地方（A-spec R10）。
+ */
+export function wakeflowSupportMemoryRequestModel(
+  request: Omit<WakeflowSupportMemoryInspectionRequest, "signal">,
+  signal: AbortSignal | undefined,
 ): Readonly<ParsedWakeflowSupportMemoryInspectionRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  const required = [
-    "currentConfig",
-    "desiredConfig",
-    "expectedCatalogDigest",
-    "expectedCurrentConfigDigest",
-    "expectedDesiredConfigDigest",
-    "profile",
-    "surfaceId",
-  ];
-  const expected = record.signal === undefined ? required : [...required, "signal"].sort();
-  const keys = Object.keys(record).sort();
+  const { currentConfig, desiredConfig, profile, surfaceId } = request;
   if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index]) ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
+    currentConfig !== null &&
+    currentConfig.program.programId !== desiredConfig.program.programId
   ) {
-    fail("input", "$request");
-  }
-  const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
-  const desiredConfigDigest = parseDigest(
-    record.expectedDesiredConfigDigest,
-    "$request.expectedDesiredConfigDigest",
-  );
-  if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
-    fail("config", "$request.expectedDesiredConfigDigest");
-  }
-  let currentConfig: WakeflowConfigModel | null;
-  let currentConfigDigest: Sha256Digest | null;
-  if (record.currentConfig === null) {
-    if (record.expectedCurrentConfigDigest !== null) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    currentConfig = null;
-    currentConfigDigest = null;
-  } else {
-    currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
-    currentConfigDigest = parseDigest(
-      record.expectedCurrentConfigDigest,
-      "$request.expectedCurrentConfigDigest",
-    );
-    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
-      fail("config", "$request.expectedCurrentConfigDigest");
-    }
-    if (currentConfig.program.programId !== desiredConfig.program.programId) {
-      fail("config", "$request.desiredConfig.program.programId");
-    }
-  }
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", "$request.profile", error);
-    }
-    throw error;
-  }
-  let surfaceId: WakeflowDurableId<"surface">;
-  try {
-    surfaceId = parseWakeflowDurableIdOfKind(record.surfaceId, "surface", "$request.surfaceId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$request.surfaceId", error);
-    }
-    throw error;
+    fail("config", "$request.desiredConfig.program.programId");
   }
   const catalog = createWakeflowManagedSupportResourceCatalog(desiredConfig, profile);
-  const expectedCatalogDigest = parseDigest(
-    record.expectedCatalogDigest,
-    "$request.expectedCatalogDigest",
-  );
-  if (catalog.catalogDigest !== expectedCatalogDigest) {
-    fail("catalog", "$request.expectedCatalogDigest");
-  }
   if (!catalog.declarations.some((entry) => entry.declarationId === `support.${surfaceId}.root`)) {
     fail("surface", "$request.surfaceId");
   }
   return Object.freeze({
     currentConfig,
-    currentConfigDigest,
+    currentConfigDigest: request.expectedCurrentConfigDigest,
     desiredConfig,
-    desiredConfigDigest,
+    desiredConfigDigest: request.expectedDesiredConfigDigest,
     profile,
     catalog,
     surfaceId,
-    signal: record.signal as AbortSignal | undefined,
+    signal,
   });
-}
-
-function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
-  }
 }
 
 function currentUserId(): bigint {
@@ -421,11 +305,9 @@ async function revalidateSource(
 export async function inspectWakeflowSupportMemory(
   workspaceRootValue: RootedDirectory,
   supportRootValue: RootedDirectory,
-  requestValue: WakeflowSupportMemoryInspectionRequest,
+  { signal, ...requestValue }: WakeflowSupportMemoryInspectionRequest,
 ): Promise<Readonly<WakeflowSupportMemoryInspection>> {
-  assertRoot(workspaceRootValue, "$workspaceRoot");
-  assertRoot(supportRootValue, "$supportRoot");
-  const request = parseWakeflowSupportMemoryInspectionRequest(requestValue);
+  const request = wakeflowSupportMemoryRequestModel(requestValue, signal);
   throwIfAborted(request.signal);
   await admitRoots(workspaceRootValue, supportRootValue, request);
   const declaration = request.catalog.declarations.find(

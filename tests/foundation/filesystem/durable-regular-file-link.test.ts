@@ -16,7 +16,6 @@ import { test } from "node:test";
 import {
   DurableRegularFileLinkError,
   type DurableRegularFileLinkErrorReason,
-  type DurableRegularFileLinkOptions,
   linkRegularFileWithoutReplacement,
 } from "../../../src/foundation/filesystem/durable-regular-file-link.js";
 import {
@@ -46,10 +45,6 @@ async function expectLinkError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): DurableRegularFileLinkOptions {
-  return value as DurableRegularFileLinkOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -285,55 +280,13 @@ test("destination requires an existing real parent", async () => {
   }
 });
 
-test("options, paths, and AbortSignal are passively admitted", async () => {
+test("paths and AbortSignal are checked before any link", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-link-input-"));
   writeFileSync(path.join(rootPath, "source"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
     const source = parsePortableResourcePath("source");
     const expected = await root.inspectExistingResource(source);
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ expectedSourceNode: expected.node, extra: true }, "$options"],
-      [{ expectedSourceNode: { ...expected.node } }, "$options.expectedSourceNode"],
-      [{ expectedSourceNode: expected.node, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectLinkError(
-        () =>
-          linkRegularFileWithoutReplacement(
-            root,
-            source,
-            parsePortableResourcePath("destination"),
-            asOptions(options),
-          ),
-        "input",
-        expectedPath,
-      );
-    }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "expectedSourceNode", {
-      get: () => {
-        getterCalls += 1;
-        return expected.node;
-      },
-      enumerable: true,
-    });
-    await expectLinkError(
-      () =>
-        linkRegularFileWithoutReplacement(
-          root,
-          source,
-          parsePortableResourcePath("destination"),
-          asOptions(accessor),
-        ),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
     await expectLinkError(
       () =>
         linkRegularFileWithoutReplacement(

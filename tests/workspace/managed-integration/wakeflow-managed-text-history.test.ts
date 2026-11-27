@@ -1,6 +1,8 @@
 import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -43,8 +45,14 @@ const PROFILES = Object.freeze([
   codexWorkspaceHostResourceProfile,
   claudeCodeWorkspaceHostResourceProfile,
 ]);
-const DESIGN_SURFACE_ID = "surface_33333333-3333-4333-8333-333333333333";
-const TEST_SURFACE_ID = "surface_44444444-4444-4444-8444-444444444444";
+const DESIGN_SURFACE_ID = parseWakeflowDurableIdOfKind(
+  "surface_33333333-3333-4333-8333-333333333333",
+  "surface",
+);
+const TEST_SURFACE_ID = parseWakeflowDurableIdOfKind(
+  "surface_44444444-4444-4444-8444-444444444444",
+  "surface",
+);
 const LANGUAGES = ["en", "zh-Hans"] as const;
 
 const PINNED_DIGESTS: Readonly<Record<string, string>> = Object.freeze({
@@ -96,10 +104,10 @@ function digest(body: string): string {
   return computeSha256Digest(encodeUtf8(body, "$body"), "$body");
 }
 
-function minimalConfig(language: (typeof LANGUAGES)[number]): Record<string, unknown> {
+function minimalConfig(language: (typeof LANGUAGES)[number]) {
   const config = createMinimalWakeflowConfig();
   (config.presentation as Record<string, unknown>).language = language;
-  return config;
+  return parseWakeflowConfig(config);
 }
 
 /** 当前渲染：每种托管正文按宿主画像（与语言）各算一份。 */
@@ -107,7 +115,7 @@ function currentRenders(): Readonly<Record<string, string>> {
   const renders: Record<string, string> = {};
   for (const language of LANGUAGES) {
     const minimal = minimalConfig(language);
-    const managed = createManagedBlockWakeflowConfig(language);
+    const managed = parseWakeflowConfig(createManagedBlockWakeflowConfig(language));
     for (const profile of PROFILES) {
       const key = `${language}/${profile.hostId}`;
       renders[`program-instruction/${key}`] = createWakeflowProgramInstructionBodyAuthority(

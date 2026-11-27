@@ -39,6 +39,10 @@ useDisposableDurability();
  * primary pod 的持久窗口；owner-managed 与 wakeflow-managed 的根不产生 target。
  */
 
+function managedConfig(language: "en" | "zh-Hans" = "en") {
+  return parseWakeflowConfig(createManagedBlockWakeflowConfig(language));
+}
+
 function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
   equal(Object.isFrozen(value), true);
@@ -65,8 +69,11 @@ function expectAuthorityError(
 }
 
 test("external instruction targets list only managed-block repositories and external-owned managed-block surfaces", () => {
-  deepEqual(listWakeflowExternalInstructionTargets(createMinimalWakeflowConfig()), []);
-  const targets = listWakeflowExternalInstructionTargets(createManagedBlockWakeflowConfig());
+  deepEqual(
+    listWakeflowExternalInstructionTargets(parseWakeflowConfig(createMinimalWakeflowConfig())),
+    [],
+  );
+  const targets = listWakeflowExternalInstructionTargets(managedConfig());
   deepEqual(targets, [MANAGED_BLOCK_REPOSITORY_TARGET, EXTERNAL_DESIGN_SURFACE_TARGET]);
   assertDeepFrozen(targets);
   deepEqual(targets.map(wakeflowExternalInstructionTargetKey), [
@@ -98,7 +105,7 @@ test("external instruction targets list only managed-block repositories and exte
 });
 
 test("repository instruction authority renders deterministic English content from the primary pod", () => {
-  const config = createManagedBlockWakeflowConfig();
+  const config = managedConfig();
   const authority = createWakeflowExternalInstructionBodyAuthority(
     config,
     codexWorkspaceHostResourceProfile,
@@ -177,7 +184,7 @@ test("repository instruction authority renders deterministic English content fro
   notEqual(claude.authorityDigest, authority.authorityDigest);
   deepEqual(
     createWakeflowExternalInstructionBodyAuthority(
-      parseWakeflowConfig(config),
+      managedConfig(),
       codexWorkspaceHostResourceProfile,
       MANAGED_BLOCK_REPOSITORY_TARGET,
     ),
@@ -187,7 +194,7 @@ test("repository instruction authority renders deterministic English content fro
 
 test("pod records outside the primary pod do not change the repository instruction authority", () => {
   const before = createWakeflowExternalInstructionBodyAuthority(
-    createManagedBlockWakeflowConfig(),
+    managedConfig(),
     codexWorkspaceHostResourceProfile,
     MANAGED_BLOCK_REPOSITORY_TARGET,
   );
@@ -247,8 +254,9 @@ test("pod records outside the primary pod do not change the repository instructi
     ],
     closing: null,
   });
+  const parsedWithPod = parseWakeflowConfig(withPod);
   const after = createWakeflowExternalInstructionBodyAuthority(
-    withPod,
+    parsedWithPod,
     codexWorkspaceHostResourceProfile,
     MANAGED_BLOCK_REPOSITORY_TARGET,
   );
@@ -256,7 +264,7 @@ test("pod records outside the primary pod do not change the repository instructi
   equal(after.body, before.body);
   equal(after.body.includes(windowIds.product), false);
   const surface = createWakeflowExternalInstructionBodyAuthority(
-    withPod,
+    parsedWithPod,
     codexWorkspaceHostResourceProfile,
     EXTERNAL_DESIGN_SURFACE_TARGET,
   );
@@ -265,7 +273,7 @@ test("pod records outside the primary pod do not change the repository instructi
 
 test("external support surface instruction authority renders the Design role for the primary window", () => {
   const authority = createWakeflowExternalInstructionBodyAuthority(
-    createManagedBlockWakeflowConfig(),
+    managedConfig(),
     codexWorkspaceHostResourceProfile,
     EXTERNAL_DESIGN_SURFACE_TARGET,
   );
@@ -296,7 +304,7 @@ test("external support surface instruction authority renders the Design role for
 
 test("external instruction authority renders Simplified Chinese only from the persisted language", () => {
   const repository = createWakeflowExternalInstructionBodyAuthority(
-    createManagedBlockWakeflowConfig("zh-Hans"),
+    managedConfig("zh-Hans"),
     claudeCodeWorkspaceHostResourceProfile,
     MANAGED_BLOCK_REPOSITORY_TARGET,
   );
@@ -313,7 +321,7 @@ test("external instruction authority renders Simplified Chinese only from the pe
     equal(repository.body.includes(expected), true, expected);
   }
   const surface = createWakeflowExternalInstructionBodyAuthority(
-    createManagedBlockWakeflowConfig("zh-Hans"),
+    managedConfig("zh-Hans"),
     claudeCodeWorkspaceHostResourceProfile,
     EXTERNAL_DESIGN_SURFACE_TARGET,
   );
@@ -329,7 +337,7 @@ test("external instruction authority renders Simplified Chinese only from the pe
   notEqual(
     repository.authorityDigest,
     createWakeflowExternalInstructionBodyAuthority(
-      createManagedBlockWakeflowConfig("en"),
+      managedConfig("en"),
       claudeCodeWorkspaceHostResourceProfile,
       MANAGED_BLOCK_REPOSITORY_TARGET,
     ).authorityDigest,
@@ -337,7 +345,7 @@ test("external instruction authority renders Simplified Chinese only from the pe
 });
 
 test("external instruction authority rejects targets outside the managed-block policy", () => {
-  const ownerManaged = createMinimalWakeflowConfig();
+  const ownerManaged = parseWakeflowConfig(createMinimalWakeflowConfig());
   expectAuthorityError(
     () =>
       createWakeflowExternalInstructionBodyAuthority(
@@ -361,42 +369,14 @@ test("external instruction authority rejects targets outside the managed-block p
   expectAuthorityError(
     () =>
       createWakeflowExternalInstructionBodyAuthority(
-        createManagedBlockWakeflowConfig(),
+        managedConfig(),
         codexWorkspaceHostResourceProfile,
-        {
+        parseWakeflowExternalInstructionTarget({
           kind: "repository",
           repositoryId: "repository_dddddddd-dddd-4ddd-8ddd-dddddddddddd",
-        },
+        }),
       ),
     "target",
     "$target.repositoryId",
-  );
-  expectAuthorityError(
-    () =>
-      createWakeflowExternalInstructionBodyAuthority(
-        createManagedBlockWakeflowConfig(),
-        codexWorkspaceHostResourceProfile,
-        { kind: "surface", surfaceId: EXTERNAL_DESIGN_SURFACE_ID },
-      ),
-    "input",
-    "$target",
-  );
-  expectAuthorityError(
-    () =>
-      createWakeflowExternalInstructionBodyAuthority(
-        { kind: "WakeflowConfig" },
-        codexWorkspaceHostResourceProfile,
-        MANAGED_BLOCK_REPOSITORY_TARGET,
-      ),
-    "config",
-  );
-  expectAuthorityError(
-    () =>
-      createWakeflowExternalInstructionBodyAuthority(
-        createManagedBlockWakeflowConfig(),
-        { hostId: "codex" },
-        MANAGED_BLOCK_REPOSITORY_TARGET,
-      ),
-    "profile",
   );
 });

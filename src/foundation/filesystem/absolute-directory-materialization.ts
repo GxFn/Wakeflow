@@ -1,6 +1,5 @@
 import nodePath from "node:path";
 
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   AbsoluteDirectoryPlacementError,
@@ -14,7 +13,7 @@ import {
 import { type FileNodeSnapshot, sameFileNodeIdentity } from "./file-node-snapshot.js";
 import { PortableResourcePathError, parsePortableResourcePath } from "./portable-resource-path.js";
 import { RootedDirectory, RootedDirectoryError } from "./rooted-directory.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：规范绝对目录位置的持久化逐级物化。
@@ -62,39 +61,9 @@ export class AbsoluteDirectoryMaterializationError extends ModuleError<AbsoluteD
   static override readonly code = "wakeflow-absolute-directory-materialization";
 }
 
-interface ParsedOptions {
-  readonly mode: number;
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<AbsoluteDirectoryMaterializationErrorReason> = failWith(
   AbsoluteDirectoryMaterializationError,
 );
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "mode") ||
-    Object.keys(record).some((key) => key !== "mode" && key !== "signal") ||
-    typeof record.mode !== "number" ||
-    !Number.isInteger(record.mode) ||
-    record.mode < 0 ||
-    record.mode > 0o777 ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    mode: record.mode,
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 async function inspect(value: unknown, path: string) {
   try {
@@ -156,7 +125,7 @@ function mapMaterializationError(error: DurableDirectoryMaterializationError): n
 async function materializeUnderAncestor(
   ancestor: string,
   resourcePath: Parameters<typeof materializeDirectoryPath>[1],
-  options: ReturnType<typeof parseOptions>,
+  options: AbsoluteDirectoryMaterializationOptions,
 ): Promise<Awaited<ReturnType<typeof materializeDirectoryPath>>> {
   let root: RootedDirectory;
   try {
@@ -195,9 +164,8 @@ async function materializeUnderAncestor(
 /** 从最近安全祖先开始，持久且幂等地物化一个规范绝对目录位置。 */
 export async function materializeAbsoluteDirectoryPlacement(
   value: unknown,
-  optionsValue: AbsoluteDirectoryMaterializationOptions,
+  options: AbsoluteDirectoryMaterializationOptions,
 ): Promise<Readonly<AbsoluteDirectoryMaterializationResult>> {
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
   const initial = await inspect(value, "$absolutePath");
   const absolutePath = initial.absolutePath;

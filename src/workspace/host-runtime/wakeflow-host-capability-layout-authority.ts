@@ -6,10 +6,9 @@ import {
   createWakeflowWorkspaceHostResourceCatalog,
   hostProfileHasOperationSurface,
 } from "../workspace-host-resource-catalog.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "../workspace-resource-declaration.js";
 
@@ -41,17 +40,8 @@ const fail: Fail<WakeflowHostCapabilityLayoutAuthorityErrorReason> = failWith(
 
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
 export function compileWakeflowHostCapabilityLayoutAuthority(
-  profileValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowHostCapabilityLayoutAuthority> {
-  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
   const prefix = `host-runtime.${profile.hostId}`;
   const declarationIds: string[] = [];
   if (profile.surfaces.podReceipts) {

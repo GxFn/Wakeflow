@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import {
   createWakeflowDurableId,
   type WakeflowDurableId,
@@ -91,11 +90,6 @@ const fail: Fail<WakeflowFreshConfigSelectionErrorReason> = failWith(
   WakeflowFreshConfigSelectionError,
 );
 
-interface ParsedOptions {
-  readonly uuidFactory: UuidV4Factory | undefined;
-  readonly workspaceRoot: string | undefined;
-}
-
 const TOP_LEVEL_FIELDS = Object.freeze([
   "governance",
   "hosts",
@@ -150,23 +144,6 @@ function assertFields(
   }
 }
 
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  const parsed = record(value, "$options");
-  if (
-    Object.keys(parsed).some((key) => key !== "uuidFactory" && key !== "workspaceRoot") ||
-    (parsed.uuidFactory !== undefined &&
-      (typeof parsed.uuidFactory !== "function" || types.isProxy(parsed.uuidFactory))) ||
-    (parsed.workspaceRoot !== undefined &&
-      (typeof parsed.workspaceRoot !== "string" || parsed.workspaceRoot.length === 0))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    uuidFactory: parsed.uuidFactory as UuidV4Factory | undefined,
-    workspaceRoot: parsed.workspaceRoot as string | undefined,
-  });
-}
-
 function selectionKey(value: unknown, path: string, seen: Set<string>): string {
   if (
     typeof value !== "string" ||
@@ -196,7 +173,7 @@ const WAKEFLOW_PRIMARY_POD_NAME = "main" as const;
  */
 function allocateId<Kind extends "program" | "repository" | "surface" | "window" | "pod">(
   kind: Kind,
-  options: Readonly<ParsedOptions>,
+  uuidFactory: UuidV4Factory | undefined,
   seenUuid: Set<string>,
   seed: Sha256Digest,
   key: string,
@@ -204,9 +181,9 @@ function allocateId<Kind extends "program" | "repository" | "surface" | "window"
   let uuid: ReturnType<typeof createUuidV4>;
   try {
     uuid =
-      options.uuidFactory === undefined
+      uuidFactory === undefined
         ? deriveUuidV4(FRESH_SELECTION_ID_NAMESPACE, seed, kind, key)
-        : createUuidV4(options.uuidFactory);
+        : createUuidV4(uuidFactory);
   } catch (error: unknown) {
     if (error instanceof UuidV4Error) fail("id-source", "$options.uuidFactory", error);
     throw error;
@@ -229,9 +206,8 @@ function sortedAllocations<Kind extends "repository" | "surface" | "window" | "p
 /** 把闭合Fresh selection编译为完整typed Config和可审查ID allocation。 */
 export function compileWakeflowFreshConfigSelection(
   selectionValue: unknown,
-  optionsValue: CompileWakeflowFreshConfigSelectionOptions = {},
+  { uuidFactory, workspaceRoot }: CompileWakeflowFreshConfigSelectionOptions = {},
 ): Readonly<WakeflowFreshConfigCompilation> {
-  const options = parseOptions(optionsValue);
   const selection = record(snapshotSelection(selectionValue), "$selection");
   if (Object.keys(selection).sort().join("\u0000") !== TOP_LEVEL_FIELDS.join("\u0000")) {
     fail("shape", "$selection");
@@ -321,16 +297,14 @@ export function compileWakeflowFreshConfigSelection(
   // 种子带工作区根（裁决 R2，复审 M5）：selection 字节相同的两个工作区不再得到相同的 program/window/pod id——
   // 助手按这些 id 认 tmux pane。preview 与 apply 在同一根上重算，确定性不受影响。
   const seed =
-    options.workspaceRoot === undefined
+    workspaceRoot === undefined
       ? computeCanonicalJsonSha256Digest(selection)
-      : computeCanonicalJsonSha256Digest(
-          parseJsonValue({ selection, workspaceRoot: options.workspaceRoot }, "$seed"),
-        );
-  const programId = allocateId("program", options, seenUuid, seed, "program");
+      : computeCanonicalJsonSha256Digest(parseJsonValue({ selection, workspaceRoot }, "$seed"));
+  const programId = allocateId("program", uuidFactory, seenUuid, seed, "program");
   const repositoryByKey = new Map<string, WakeflowDurableId<"repository">>();
   const repositoryAllocations: WakeflowFreshConfigSelectionAllocation<"repository">[] = [];
   const repositories = repositorySelections.map(({ key, value }) => {
-    const repositoryId = allocateId("repository", options, seenUuid, seed, key);
+    const repositoryId = allocateId("repository", uuidFactory, seenUuid, seed, key);
     repositoryByKey.set(key, repositoryId);
     repositoryAllocations.push(
       Object.freeze({
@@ -350,7 +324,7 @@ export function compileWakeflowFreshConfigSelection(
   const surfaceByKey = new Map<string, WakeflowDurableId<"surface">>();
   const surfaceAllocations: WakeflowFreshConfigSelectionAllocation<"surface">[] = [];
   const supportSurfaces = surfaceSelections.map(({ key, value }) => {
-    const surfaceId = allocateId("surface", options, seenUuid, seed, key);
+    const surfaceId = allocateId("surface", uuidFactory, seenUuid, seed, key);
     surfaceByKey.set(key, surfaceId);
     surfaceAllocations.push(Object.freeze({ selectionKey: key, id: surfaceId }));
     return {
@@ -366,7 +340,7 @@ export function compileWakeflowFreshConfigSelection(
 
   const windowAllocations: WakeflowFreshConfigSelectionAllocation<"window">[] = [];
   const windowDrafts = windowSelections.map(({ key, path, root, value }) => {
-    const windowId = allocateId("window", options, seenUuid, seed, key);
+    const windowId = allocateId("window", uuidFactory, seenUuid, seed, key);
     windowAllocations.push(Object.freeze({ selectionKey: key, id: windowId }));
     let resolvedRoot: Readonly<Record<string, unknown>>;
     if (root.kind === "program") {
@@ -390,7 +364,7 @@ export function compileWakeflowFreshConfigSelection(
       root: resolvedRoot,
     };
   });
-  const mainPodId = allocateId("pod", options, seenUuid, seed, WAKEFLOW_PRIMARY_POD_NAME);
+  const mainPodId = allocateId("pod", uuidFactory, seenUuid, seed, WAKEFLOW_PRIMARY_POD_NAME);
   const windows = windowDrafts.map(({ windowId, role, displayName, root, ...rest }) => ({
     windowId,
     podId: mainPodId,

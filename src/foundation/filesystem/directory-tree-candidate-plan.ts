@@ -1,5 +1,4 @@
 import { Buffer } from "node:buffer";
-import { types } from "node:util";
 
 import { computeCanonicalJsonSha256Digest } from "../crypto/canonical-json-sha256.js";
 import {
@@ -118,16 +117,6 @@ export class DurableDirectoryTreeCandidateError extends ModuleError<DurableDirec
   static override readonly code = "wakeflow-durable-directory-tree-candidate";
 }
 
-interface ParsedDirectoryTreeCandidateOptions {
-  readonly directoryMode: number;
-  readonly maximumDepth: number;
-  readonly maximumEntries: number;
-  readonly maximumFileBytes: ByteCount;
-  readonly maximumFiles: number;
-  readonly maximumTotalBytes: ByteCount;
-  readonly signal: AbortSignal | undefined;
-}
-
 export interface PreparedDirectoryTreeCandidateFile extends DirectoryTreeCandidatePlanFile {
   readonly bytes: Uint8Array;
 }
@@ -135,25 +124,9 @@ export interface PreparedDirectoryTreeCandidateFile extends DirectoryTreeCandida
 export interface PreparedDirectoryTreeCandidate {
   readonly plan: Readonly<DirectoryTreeCandidatePlan>;
   readonly files: readonly Readonly<PreparedDirectoryTreeCandidateFile>[];
-  readonly options: Readonly<ParsedDirectoryTreeCandidateOptions>;
+  readonly options: DirectoryTreeCandidateOptions;
 }
 
-const OPTION_FIELDS = Object.freeze([
-  "directoryMode",
-  "maximumDepth",
-  "maximumEntries",
-  "maximumFileBytes",
-  "maximumFiles",
-  "maximumTotalBytes",
-  "signal",
-] as const);
-const CAPACITY_FIELDS = Object.freeze([
-  "maximumDepth",
-  "maximumEntries",
-  "maximumFileBytes",
-  "maximumFiles",
-  "maximumTotalBytes",
-] as const);
 const PLAN_FIELDS = Object.freeze([
   "artifactKind",
   "directoryMode",
@@ -164,7 +137,6 @@ const PLAN_FIELDS = Object.freeze([
   "treeDigest",
 ] as const);
 const PLAN_FILE_FIELDS = Object.freeze(["byteCount", "digest", "mode", "path"] as const);
-const INPUT_FILE_FIELDS = Object.freeze(["bytes", "mode", "path"] as const);
 
 export function throwDirectoryTreeCandidateError(
   reason: DurableDirectoryTreeCandidateErrorReason,
@@ -234,13 +206,6 @@ function parseCandidateFileMode(value: unknown, path: string): number {
   return mode;
 }
 
-function parsePositiveCount(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-    fail("input", path);
-  }
-  return value;
-}
-
 function byteCount(value: unknown, path: string): ByteCount {
   try {
     return parseByteCount(value, path);
@@ -250,79 +215,26 @@ function byteCount(value: unknown, path: string): ByteCount {
   }
 }
 
-export function isDirectoryTreeCandidateAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
+const CAPACITY_FIELDS = Object.freeze([
+  "maximumDepth",
+  "maximumEntries",
+  "maximumFileBytes",
+  "maximumFiles",
+  "maximumTotalBytes",
+] as const);
 
-type ParsedDirectoryTreeCandidateCapacity = Readonly<{
-  readonly maximumDepth: number;
-  readonly maximumEntries: number;
-  readonly maximumFileBytes: ByteCount;
-  readonly maximumFiles: number;
-  readonly maximumTotalBytes: ByteCount;
-}>;
-
-function parseCapacityFields(
-  record: Readonly<Record<string, unknown>>,
-  path: string,
-): ParsedDirectoryTreeCandidateCapacity {
-  const capacity = Object.freeze({
-    maximumDepth: parsePositiveCount(record.maximumDepth, `${path}/maximumDepth`),
-    maximumEntries: parsePositiveCount(record.maximumEntries, `${path}/maximumEntries`),
-    maximumFileBytes: byteCount(record.maximumFileBytes, `${path}/maximumFileBytes`),
-    maximumFiles: parsePositiveCount(record.maximumFiles, `${path}/maximumFiles`),
-    maximumTotalBytes: byteCount(record.maximumTotalBytes, `${path}/maximumTotalBytes`),
-  });
+/**
+ * 业务容量界定计划的大小与准备时的复制：它们是普通数字，类型表达不了范围，NaN 会让比较全部放行，
+ * 所以在消费它们的这里断言一次——正的安全整数、不超过 v1 硬上限（1.4.5 层次计划 A，R4）。
+ */
+function assertCapacity(capacity: Readonly<DirectoryTreeCandidateCapacity>, path: string): void {
   const ceilings = DIRECTORY_TREE_CANDIDATE_V1_HARD_LIMITS;
-  if (capacity.maximumDepth > ceilings.maximumDepth) {
-    fail("input", `${path}/maximumDepth`);
+  for (const field of CAPACITY_FIELDS) {
+    const value = capacity[field];
+    if (!Number.isSafeInteger(value) || value <= 0 || value > ceilings[field]) {
+      fail("input", `${path}/${field}`);
+    }
   }
-  if (capacity.maximumEntries > ceilings.maximumEntries) {
-    fail("input", `${path}/maximumEntries`);
-  }
-  if (capacity.maximumFileBytes > ceilings.maximumFileBytes) {
-    fail("input", `${path}/maximumFileBytes`);
-  }
-  if (capacity.maximumFiles > ceilings.maximumFiles) {
-    fail("input", `${path}/maximumFiles`);
-  }
-  if (capacity.maximumTotalBytes > ceilings.maximumTotalBytes) {
-    fail("input", `${path}/maximumTotalBytes`);
-  }
-  return capacity;
-}
-
-function parseCapacity(value: unknown): ParsedDirectoryTreeCandidateCapacity {
-  const record = plainRecord(value, "$capacity");
-  exactFields(record, CAPACITY_FIELDS, "$capacity");
-  return parseCapacityFields(record, "$capacity");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedDirectoryTreeCandidateOptions> {
-  const record = plainRecord(value, "$options");
-  const allowed = new Set<string>(OPTION_FIELDS);
-  const missing = OPTION_FIELDS.filter((field) => field !== "signal").find(
-    (field) => !Object.hasOwn(record, field),
-  );
-  const unexpected = Object.keys(record).find((key) => !allowed.has(key));
-  if (missing !== undefined || unexpected !== undefined) {
-    fail("input", `$options/${unexpected ?? missing}`);
-  }
-  const signal = record.signal;
-  if (signal !== undefined && !isDirectoryTreeCandidateAbortSignal(signal)) {
-    fail("input", "$options/signal");
-  }
-  const capacity = parseCapacityFields(record, "$options");
-  return Object.freeze({
-    ...capacity,
-    directoryMode: parseCandidateDirectoryMode(record.directoryMode, "$options/directoryMode"),
-    signal,
-  });
 }
 
 export function parseDirectoryTreeCandidatePath(
@@ -525,32 +437,24 @@ function assertPlanCapacity(
   assertPlanComponentsCapacity(plan.directories, plan.files, plan.totalBytes, capacity, path);
 }
 
+/**
+ * 准备一棵目录树候选：复制每个文件的字节、核对容量、把文件路径解析成资源路径（成员路径可能来自
+ * 请求，路径规则只在这里）并生成计划。文件与选项的形状由类型保证，不再被动准入。
+ */
 export function prepareDirectoryTreeCandidate(
-  filesValue: unknown,
-  optionsValue: unknown,
+  inputs: readonly DirectoryTreeCandidateFileInput[],
+  options: DirectoryTreeCandidateOptions,
 ): Readonly<PreparedDirectoryTreeCandidate> {
-  const options = parseOptions(optionsValue);
+  assertCapacity(options, "$options");
   throwIfAborted(options.signal);
-  const values = denseArray(filesValue, options.maximumFiles, "$files");
-  if (values.length === 0) fail("input", "$files");
-  const files = values.map((value, index): Readonly<PreparedDirectoryTreeCandidateFile> => {
-    const input = plainRecord(value, `$files/${index}`);
-    exactFields(input, INPUT_FILE_FIELDS, `$files/${index}`);
-    const inputBytes = input.bytes;
-    if (
-      !ArrayBuffer.isView(inputBytes) ||
-      !(inputBytes instanceof Uint8Array) ||
-      types.isProxy(inputBytes) ||
-      inputBytes.buffer instanceof SharedArrayBuffer
-    ) {
-      fail("input", `$files/${index}/bytes`);
-    }
-    if (inputBytes.byteLength > options.maximumFileBytes) {
+  if (inputs.length > options.maximumFiles) fail("capacity", "$files");
+  const files = inputs.map((input, index): Readonly<PreparedDirectoryTreeCandidateFile> => {
+    if (input.bytes.byteLength > options.maximumFileBytes) {
       fail("capacity", `$files/${index}/bytes`);
     }
     let bytes: Uint8Array;
     try {
-      bytes = new Uint8Array(inputBytes);
+      bytes = new Uint8Array(input.bytes);
     } catch (cause: unknown) {
       fail("capacity", `$files/${index}/bytes`, cause);
     }
@@ -559,7 +463,7 @@ export function prepareDirectoryTreeCandidate(
       bytes,
       byteCount: parseByteCount(bytes.byteLength, `$files/${index}/bytes`),
       digest: computeSha256Digest(bytes, `$files/${index}/bytes`),
-      mode: parseCandidateFileMode(input.mode, `$files/${index}/mode`),
+      mode: input.mode,
     });
   });
   const planFiles = Object.freeze(
@@ -578,10 +482,10 @@ export function prepareDirectoryTreeCandidate(
 }
 
 export function planDirectoryTreeCandidate(
-  filesValue: readonly DirectoryTreeCandidateFileInput[],
-  optionsValue: DirectoryTreeCandidateOptions,
+  files: readonly DirectoryTreeCandidateFileInput[],
+  options: DirectoryTreeCandidateOptions,
 ): Readonly<DirectoryTreeCandidatePlan> {
-  return prepareDirectoryTreeCandidate(filesValue, optionsValue).plan;
+  return prepareDirectoryTreeCandidate(files, options).plan;
 }
 
 function parsePlanFile(value: unknown, index: number): Readonly<DirectoryTreeCandidatePlanFile> {
@@ -600,17 +504,26 @@ function parsePlanFile(value: unknown, index: number): Readonly<DirectoryTreeCan
  * 从已有内容摘要描述符生成与 bytes 入口完全相同的目录树候选计划。
  *
  * 本入口不读取文件或信任调用方摘要；上层必须把每个描述符交给真实 copy/verify
- * consumer。计划仍执行排序、路径闭包、总量、深度和 tree digest 的完整复验。
+ * consumer。计划仍执行排序、路径闭包、总量、深度和 tree digest 的完整复验。描述符是类型化的：
+ * 只复验资源路径（本层自己的路径规则与路径硬上限），字节数与摘要的品牌就是准入的证明。
  */
 export function planDirectoryTreeCandidateFromFileDescriptors(
-  filesValue: readonly DirectoryTreeCandidatePlanFile[],
-  optionsValue: DirectoryTreeCandidateOptions,
+  descriptors: readonly DirectoryTreeCandidatePlanFile[],
+  options: DirectoryTreeCandidateOptions,
 ): Readonly<DirectoryTreeCandidatePlan> {
-  const options = parseOptions(optionsValue);
+  assertCapacity(options, "$options");
   throwIfAborted(options.signal);
-  const values = denseArray(filesValue, options.maximumFiles, "$files");
-  if (values.length === 0) fail("input", "$files");
-  const files = Object.freeze(values.map(parsePlanFile));
+  if (descriptors.length > options.maximumFiles) fail("capacity", "$files");
+  const files = Object.freeze(
+    descriptors.map((file, index) =>
+      Object.freeze({
+        path: parsePlanPath(file.path, `$/files/${index}/path`),
+        byteCount: file.byteCount,
+        digest: file.digest,
+        mode: file.mode,
+      }),
+    ),
+  );
   const plan = buildPlan(options.directoryMode, files);
   assertPlanCapacity(plan, options, "$files");
   return plan;
@@ -624,9 +537,9 @@ export function planDirectoryTreeCandidateFromFileDescriptors(
  */
 export function parseDirectoryTreeCandidatePlan(
   value: unknown,
-  capacityValue?: DirectoryTreeCandidateCapacity,
+  capacity?: DirectoryTreeCandidateCapacity,
 ): Readonly<DirectoryTreeCandidatePlan> {
-  const capacity = capacityValue === undefined ? undefined : parseCapacity(capacityValue);
+  if (capacity !== undefined) assertCapacity(capacity, "$capacity");
   const record = plainRecord(value, "$plan");
   exactFields(record, PLAN_FIELDS, "$plan");
   if (

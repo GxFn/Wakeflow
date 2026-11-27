@@ -341,7 +341,7 @@ test("maintain_workspace 的过期进程守卫（§3.6 C6）：任一宿主的�
 test("maintain_workspace 把执行上下文带来的写者戳交给宿主 facade 的 apply 与 recover（C11）；preview 零写不碰它，省略即 null", async (t) => {
   const root = await fixture(t);
   const seen: Array<readonly [string, unknown]> = [];
-  // 协调器要求 facade 已冻结；先按端口类型写出字面量让 lambda 拿到参数类型，再冻结。
+  // 先按端口类型写出字面量让 lambda 拿到参数类型，再冻结（与组合根的门面一样）。
   const recording: WakeflowMaintenancePublicHostFacade = {
     hostId: "codex",
     artifactRoot: null,

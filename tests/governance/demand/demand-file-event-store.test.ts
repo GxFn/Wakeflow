@@ -16,11 +16,11 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { createFileCandidateDurably } from "../../../src/foundation/filesystem/durable-file-candidate.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import {
   RootedResourceParentHandle,
   RootedResourceParentHandleError,
 } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { decideDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
@@ -136,14 +136,6 @@ test("Demand File Event Store 以固定 commitSequence 槽位执行 no-replace a
     deepEqual(loaded.commits, [first.commit]);
     equal(loaded.cursor?.commitSequence, 1);
     equal(loaded.cursor?.streamRevision, 1);
-    if (loaded.cursor === null) throw new Error("Event cursor is missing.");
-    await rejects(
-      store.readCommitsAfter({
-        ...loaded.cursor,
-        streamRevision: 0,
-      }),
-      (error: unknown) => error instanceof DemandFileEventStoreError && error.reason === "input",
-    );
 
     await rejects(
       store.append({ ...first } as typeof first),

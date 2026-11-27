@@ -1,10 +1,7 @@
-import { types } from "node:util";
-
 import { parseSha256Digest, SHA256_DIGEST_PREFIX, type Sha256Digest } from "../crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { type RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
   GitReadOnlyProcessError,
@@ -88,34 +85,9 @@ const CHANGE_STATUSES: Readonly<Record<string, GitChangedPathStatus>> = Object.f
 
 const fail: Fail<GitCommitObservationErrorReason> = failWith(GitCommitObservationError);
 
-function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
-  }
-}
-
-function parseSignal(value: unknown): AbortSignal | undefined {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return record.signal as AbortSignal | undefined;
-}
-
+/**
+ * 对象号可能来自请求或回执，并且会成为 git 的命令行参数：格式规则留在这里（不是类型检查）。
+ */
 function parseObjectId(value: unknown, path: string): string {
   if (typeof value !== "string" || !OBJECT_ID_PATTERN.test(value)) fail("input", path);
   return value;
@@ -246,10 +218,9 @@ function patchOf(result: Readonly<GitReadOnlyResult>): Readonly<GitCommitPatch> 
 export async function observeGitCommit(
   rootValue: RootedDirectory,
   commitOidValue: string,
-  optionsValue?: GitCommitObservationOptions,
+  options: GitCommitObservationOptions = {},
 ): Promise<GitCommitObservation> {
-  assertRoot(rootValue, "$root");
-  const signal = parseSignal(optionsValue);
+  const { signal } = options;
   const commitOid = parseObjectId(commitOidValue, "$commitOid");
   throwIfAborted(signal);
   await assertRootCurrent(rootValue);
@@ -287,10 +258,9 @@ export async function observeGitCommit(
 export async function observeGitCommitKind(
   rootValue: RootedDirectory,
   commitOidValue: string,
-  optionsValue?: GitCommitObservationOptions,
+  options: GitCommitObservationOptions = {},
 ): Promise<GitCommitObservation["status"]> {
-  assertRoot(rootValue, "$root");
-  const signal = parseSignal(optionsValue);
+  const { signal } = options;
   const commitOid = parseObjectId(commitOidValue, "$commitOid");
   throwIfAborted(signal);
   await assertRootCurrent(rootValue);
@@ -313,10 +283,9 @@ export async function observeGitAncestry(
   rootValue: RootedDirectory,
   ancestorOidValue: string,
   descendantOidValue: string,
-  optionsValue?: GitCommitObservationOptions,
+  options: GitCommitObservationOptions = {},
 ): Promise<"ancestor" | "not-ancestor"> {
-  assertRoot(rootValue, "$root");
-  const signal = parseSignal(optionsValue);
+  const { signal } = options;
   const ancestorOid = parseObjectId(ancestorOidValue, "$ancestorOid");
   const descendantOid = parseObjectId(descendantOidValue, "$descendantOid");
   throwIfAborted(signal);

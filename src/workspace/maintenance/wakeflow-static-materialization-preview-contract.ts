@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   parseWakeflowConfig,
   WakeflowConfigError,
@@ -27,7 +25,6 @@ import {
 } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
@@ -149,75 +146,26 @@ export interface ParsedWakeflowStaticMaterializationPreviewRequest {
 export const failWakeflowStaticMaterializationPreview: Fail<WakeflowStaticMaterializationPreviewErrorReason> =
   failWith(WakeflowStaticMaterializationPreviewError);
 
-/** 验证 action-specific desired Config 与完整 Host Profile 集合。 */
-export function parseWakeflowStaticMaterializationPreviewRequest(
-  value: unknown,
-): Readonly<ParsedWakeflowStaticMaterializationPreviewRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  let profileValues: readonly unknown[];
-  try {
-    record = parsePlainRecord(value, "$request");
-    profileValues = parseDenseArray(
-      record.hostProfiles,
-      WAKEFLOW_WORKSPACE_HOST_IDS.length,
-      "$request.hostProfiles",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failWakeflowStaticMaterializationPreview("input", error.path, error);
-    }
-    throw error;
-  }
-  const required = ["action", "currentHostProfile", "desiredConfig", "hostProfiles"];
-  const expected = record.signal === undefined ? required : [...required, "signal"].sort();
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== expected.length ||
-    keys.some((key, index) => key !== expected[index]) ||
-    typeof record.action !== "string" ||
-    !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
-      record.action as WakeflowStaticMaterializationAction,
-    ) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    failWakeflowStaticMaterializationPreview("input", "$request");
-  }
-  const action = record.action as WakeflowStaticMaterializationAction;
-  // reconcile and detach-workspace carry no desired Config: the first converges onto the
-  // current one, the second retires it (its plan digests the current Config, which the
-  // retired file keeps). detach-repository carries the current Config minus the detached
-  // repository, which the planner re-derives and checks (ADR-0024).
-  if (
-    wakeflowStaticMaterializationActionUsesCurrentConfig(action) !==
-    (record.desiredConfig === null)
-  ) {
-    failWakeflowStaticMaterializationPreview("input", "$request.desiredConfig");
-  }
-  let desiredConfig: WakeflowConfigModel | null = null;
-  if (record.desiredConfig !== null) {
-    try {
-      desiredConfig = parseWakeflowConfig(record.desiredConfig);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowConfigError) {
-        failWakeflowStaticMaterializationPreview("config", error.path, error);
-      }
-      throw error;
-    }
-  }
+/**
+ * Host Profile 集合的领域关系：逐个解析、整个集合能编译出 Gitignore 正文权威、当前 profile 在集合里
+ * 且两者的静态资源矩阵相同。维护意图从盘上读回时靠它准入持久化的 profile 集合（A-spec R9a）。
+ */
+export function parseWakeflowStaticMaterializationHostProfiles(
+  currentHostProfileValue: unknown,
+  hostProfileValues: readonly unknown[],
+): Readonly<
+  Pick<ParsedWakeflowStaticMaterializationPreviewRequest, "currentHostProfile" | "hostProfiles">
+> {
   let currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   try {
-    currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(record.currentHostProfile);
+    currentHostProfile = parseWakeflowWorkspaceHostResourceProfile(currentHostProfileValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
       failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile", error);
     }
     throw error;
   }
-  const parsedProfiles = profileValues.map((profile, index) => {
+  const parsedProfiles = hostProfileValues.map((profile, index) => {
     try {
       return parseWakeflowWorkspaceHostResourceProfile(profile);
     } catch (error: unknown) {
@@ -246,12 +194,37 @@ export function parseWakeflowStaticMaterializationPreviewRequest(
   if (matching === undefined || !sameStaticResourceMatrix(matching, currentHostProfile)) {
     failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
   }
+  return Object.freeze({ currentHostProfile, hostProfiles: Object.freeze(parsedProfiles) });
+}
+
+/**
+ * 把组合根交来的已类型化请求变成执行用的模型。`action` 与 `signal` 已经有类型，直接使用；请求接口里
+ * `desiredConfig` 与两份 profile 仍声明为 `unknown`，所以这里还要解析一次——接口在 A-spec 第 2 步收紧
+ * 之后这一步随之删掉。
+ */
+export function admitWakeflowStaticMaterializationPreviewRequest({
+  action,
+  desiredConfig: desiredConfigValue,
+  currentHostProfile,
+  hostProfiles,
+  signal,
+}: WakeflowStaticMaterializationPreviewRequest): Readonly<ParsedWakeflowStaticMaterializationPreviewRequest> {
+  let desiredConfig: WakeflowConfigModel | null = null;
+  if (desiredConfigValue !== null) {
+    try {
+      desiredConfig = parseWakeflowConfig(desiredConfigValue);
+    } catch (error: unknown) {
+      if (error instanceof WakeflowConfigError) {
+        failWakeflowStaticMaterializationPreview("config", error.path, error);
+      }
+      throw error;
+    }
+  }
   return Object.freeze({
     action,
     desiredConfig,
-    currentHostProfile,
-    hostProfiles: Object.freeze(parsedProfiles),
-    signal: record.signal as AbortSignal | undefined,
+    ...parseWakeflowStaticMaterializationHostProfiles(currentHostProfile, hostProfiles),
+    signal,
   });
 }
 

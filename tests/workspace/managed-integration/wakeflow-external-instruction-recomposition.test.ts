@@ -23,7 +23,10 @@ import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
-import { createWakeflowExternalInstructionBodyAuthority } from "../../../src/workspace/managed-integration/wakeflow-external-instruction-body-authority.js";
+import {
+  createWakeflowExternalInstructionBodyAuthority,
+  type WakeflowExternalInstructionTarget,
+} from "../../../src/workspace/managed-integration/wakeflow-external-instruction-body-authority.js";
 import {
   inspectWakeflowExternalInstruction,
   WakeflowExternalInstructionInspectionError,
@@ -84,7 +87,7 @@ function config(language: "en" | "zh-Hans") {
 function request(
   currentConfig: ReturnType<typeof config> | null,
   desiredConfig: ReturnType<typeof config>,
-  target: unknown = MANAGED_BLOCK_REPOSITORY_TARGET,
+  target: WakeflowExternalInstructionTarget = MANAGED_BLOCK_REPOSITORY_TARGET,
 ) {
   return Object.freeze({
     profile: codexWorkspaceHostResourceProfile,
@@ -272,7 +275,7 @@ test("external instruction recomposition replaces only an admitted render and ne
   const foreignConfig = createManagedBlockWakeflowConfig("zh-Hans");
   (foreignConfig.program as Record<string, unknown>).displayName = "Another";
   const foreignAuthority = createWakeflowExternalInstructionBodyAuthority(
-    foreignConfig,
+    parseWakeflowConfig(foreignConfig),
     codexWorkspaceHostResourceProfile,
     MANAGED_BLOCK_REPOSITORY_TARGET,
   );
@@ -316,6 +319,7 @@ test("external instruction recomposition rejects unsafe sources, foreign targets
     "$source",
   );
 
+  // 不在托管块政策里的 target 由正文权威拒绝（请求层的 target 关系检查已删，A-spec R9）。
   const plain = await fixture(t);
   await expectRecompositionError(
     () =>
@@ -324,7 +328,7 @@ test("external instruction recomposition rejects unsafe sources, foreign targets
         request(null, parseWakeflowConfig(createMinimalWakeflowConfig())),
       ),
     "input",
-    "$request.target",
+    "$target.repositoryId",
   );
   const controller = new AbortController();
   controller.abort();

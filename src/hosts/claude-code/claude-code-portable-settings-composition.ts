@@ -1,9 +1,5 @@
-import { types } from "node:util";
-
 import {
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowConfigPlacement,
 } from "../../configuration/wakeflow-config.js";
@@ -15,7 +11,6 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   RootedDirectory,
@@ -23,15 +18,10 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   isWakeflowDetachAction,
-  WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS,
   type WakeflowStaticMaterializationAction,
   type WakeflowStaticMaterializationStepKind,
 } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../../workspace/workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
   ClaudeCodePortableSettingsPublicationError,
@@ -40,7 +30,6 @@ import {
 } from "./claude-code-portable-settings-publication.js";
 import {
   type ClaudeCodePortableSettingsTransition,
-  ClaudeCodePortableSettingsTransitionError,
   type ClaudeCodePortableSettingsTransitionReason,
   claudeCodePortableSettingsPublicationOwnerOf,
   claudeCodePortableSettingsRemovedRulesFor,
@@ -123,8 +112,9 @@ export interface ClaudeCodePortableSettingsCompositionPlan {
 
 export interface PlanClaudeCodePortableSettingsCompositionRequest {
   readonly action: ClaudeCodePortableSettingsCompositionAction;
-  readonly config: unknown;
-  readonly profile: unknown;
+  readonly config: WakeflowConfigModel;
+  /** 选出的本宿主传输 profile；工作区根的助手规则按它的助手文件名查表（ADR-0025 D6）。 */
+  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly signal?: AbortSignal;
 }
 
@@ -145,91 +135,6 @@ class ClaudeCodePortableSettingsCompositionError extends ModuleError<ClaudeCodeP
 const fail: Fail<ClaudeCodePortableSettingsCompositionErrorReason> = failWith(
   ClaudeCodePortableSettingsCompositionError,
 );
-
-interface ParsedRequest {
-  readonly action: ClaudeCodePortableSettingsCompositionAction;
-  readonly model: WakeflowConfigModel;
-  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile> & {
-    readonly hostId: "claude-code";
-  };
-  readonly signal: AbortSignal | undefined;
-}
-
-function parseRequestConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-}
-
-/** 请求里的宿主 profile：必须是本宿主的、带可移植 settings 面的，并且是本宿主某种传输的 profile。 */
-function parseRequestProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-  if (
-    profile.hostId !== "claude-code" ||
-    profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF
-  ) {
-    fail("profile", "$/profile");
-  }
-  // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
-  try {
-    claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
-  } catch (error: unknown) {
-    if (error instanceof ClaudeCodePortableSettingsTransitionError)
-      fail("profile", "$/profile", error);
-    throw error;
-  }
-  return profile;
-}
-
-function parseRequest(value: unknown): Readonly<ParsedRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "action") ||
-    !Object.hasOwn(record, "config") ||
-    !Object.hasOwn(record, "profile") ||
-    Object.keys(record).some(
-      (key) => key !== "action" && key !== "config" && key !== "profile" && key !== "signal",
-    ) ||
-    typeof record.action !== "string" ||
-    !WAKEFLOW_STATIC_MATERIALIZATION_ACTIONS.includes(
-      record.action as ClaudeCodePortableSettingsCompositionAction,
-    ) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$request");
-  }
-  const model = parseRequestConfig(record.config);
-  const profile = parseRequestProfile(record.profile);
-  return Object.freeze({
-    action: record.action as ClaudeCodePortableSettingsCompositionAction,
-    model,
-    profile: profile as Readonly<WakeflowWorkspaceHostResourceProfile> & {
-      readonly hostId: "claude-code";
-    },
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 export function compileClaudeCodePortableSettingsRootAuthority(
   model: WakeflowConfigModel,
@@ -392,7 +297,7 @@ interface PlanCollector {
 
 interface RootPlanContext {
   readonly workspaceRoot: RootedDirectory;
-  readonly request: Readonly<ParsedRequest>;
+  readonly request: Readonly<PlanClaudeCodePortableSettingsCompositionRequest>;
   readonly authority: Readonly<ClaudeCodePortableSettingsRootAuthority>;
   readonly placements: RootPlacements;
   readonly plan: PlanCollector;
@@ -564,29 +469,20 @@ function assemblePlan(
  * 没有仓库维度，ADR-0024）。
  */
 export async function planClaudeCodePortableSettingsComposition(
-  workspaceRootValue: RootedDirectory,
-  requestValue: PlanClaudeCodePortableSettingsCompositionRequest,
+  workspaceRoot: RootedDirectory,
+  request: Readonly<PlanClaudeCodePortableSettingsCompositionRequest>,
 ): Promise<Readonly<ClaudeCodePortableSettingsCompositionPlan>> {
-  if (
-    typeof workspaceRootValue !== "object" ||
-    workspaceRootValue === null ||
-    types.isProxy(workspaceRootValue) ||
-    !(workspaceRootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$workspaceRoot");
-  }
-  const request = parseRequest(requestValue);
   throwIfAborted(request.signal);
-  const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
+  const authority = compileClaudeCodePortableSettingsRootAuthority(request.config);
   const plan: PlanCollector = { rootEntries: [], operations: [], blockerCodes: new Set() };
   if (request.action === "detach-repository") {
     return assemblePlan(request.action, authority, plan);
   }
   const context: RootPlanContext = {
-    workspaceRoot: workspaceRootValue,
+    workspaceRoot,
     request,
     authority,
-    placements: await rootPlacements(workspaceRootValue, request.model),
+    placements: await rootPlacements(workspaceRoot, request.config),
     plan,
   };
   const planRoot = isWakeflowDetachAction(request.action) ? planRemovalRoot : planPublicationRoot;

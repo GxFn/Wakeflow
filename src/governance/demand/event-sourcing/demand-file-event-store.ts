@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import { threadId } from "node:worker_threads";
 import {
   DurableDirectoryMaterializationError,
@@ -25,7 +24,7 @@ import {
   sameFileNodeIdentity,
 } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { createUuidV4 } from "../../../foundation/identity/uuid-v4.js";
 import { OperationAbortedError } from "../../../foundation/node/abort-signal.js";
 import {
@@ -68,7 +67,6 @@ import {
   type DemandEventStreamCommit,
   DemandEventStreamCommitError,
   type PreparedDemandEventStreamCommit,
-  parseDemandEventStreamCommit,
   renderDemandEventStreamCommit,
 } from "./demand-event-stream-commit.js";
 import {
@@ -81,11 +79,11 @@ import {
   DEMAND_FILE_EVENT_STORE_MAXIMUM_TOTAL_BYTES,
   type DemandFileEventStoreAppendReceipt,
   type DemandFileEventStoreCandidateRecoveryReceipt,
+  type DemandFileEventStoreCursor,
   DemandFileEventStoreError,
   type DemandFileEventStoreReadResult,
   type DemandFileEventStoreTailReadResult,
   failDemandFileEventStore as fail,
-  parseDemandFileEventStoreOptions,
   sameDemandEventStreamCommit,
 } from "./demand-file-event-store-contract.js";
 import {
@@ -194,20 +192,12 @@ export class DemandFileEventStore {
   readonly #root: RootedDirectory;
 
   constructor(root: RootedDirectory) {
-    if (
-      typeof root !== "object" ||
-      root === null ||
-      types.isProxy(root) ||
-      !(root instanceof RootedDirectory)
-    ) {
-      fail("input", "$root");
-    }
     this.#root = root;
   }
 
   /** 幂等创建文件事件存储自身拥有的五个私有目录（事件溯源根及其四个子目录）。 */
   async initialize(options?: { readonly signal?: AbortSignal }): Promise<void> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     for (const ref of [
       DEMAND_EVENT_SOURCING_ROOT_REF,
       DEMAND_EVENT_STREAM_COMMITS_ROOT_REF,
@@ -234,23 +224,23 @@ export class DemandFileEventStore {
   async readCommits(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<DemandFileEventStoreReadResult>> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     return readAllDemandFileEventCommits(this.#root, signal);
   }
 
   async readCommitsAfter(
-    cursor: unknown,
+    cursor: Readonly<DemandFileEventStoreCursor>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreTailReadResult>> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     return readDemandFileEventCommitsAfter(this.#root, cursor, signal);
   }
 
   async readCommitAt(
-    sequence: unknown,
+    sequence: number,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandEventStreamCommit> | null> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     return readDemandFileEventCommitAt(this.#root, sequence, signal);
   }
 
@@ -259,7 +249,7 @@ export class DemandFileEventStore {
     expectedStreamId: string | null,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedStreamIndex> | null> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     return readLatestStreamIndex(
       this.#root,
       DEMAND_EVENT_STREAM_INDEX_ROOT_REF,
@@ -435,7 +425,7 @@ export class DemandFileEventStore {
 
   /** 只读观察已知候选及其所有者；不要求健康清单先准入，供维护预览使用。 */
   async inspectAppendCandidates(options?: { readonly signal?: AbortSignal }) {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     const inventory = await readDemandFileEventDirectory(
       this.#root,
       DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,
@@ -474,7 +464,7 @@ export class DemandFileEventStore {
   async #recoverAppendCandidates(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<DemandFileEventStoreCandidateRecoveryReceipt>> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     const candidates = await this.inspectAppendCandidates(options);
     for (const [index, candidate] of candidates.entries()) {
       if (candidate.ownerState !== "inactive") fail("candidate-busy", `$candidates/${index}`);
@@ -569,14 +559,14 @@ export class DemandFileEventStore {
     preparedValue: Readonly<PreparedDemandEventStreamCommit>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
-    const { signal } = parseDemandFileEventStoreOptions(options);
+    const { signal } = options ?? {};
     try {
       assertPreparedDemandEventStreamCommit(preparedValue);
     } catch (error: unknown) {
       if (error instanceof DemandEventStreamCommitError) fail("input", "$commit", error);
       throw error;
     }
-    const commit = parseDemandEventStreamCommit(preparedValue.commit);
+    const commit = preparedValue.commit;
     admitCommitPublication(commit);
     const commitRef = demandEventStreamCommitRef(commit.commitSequence);
     const existing = await readDemandFileEventCommitOrNull(this.#root, commitRef, signal);

@@ -20,7 +20,6 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
-  isRootedDirectory,
 } from "./rooted-directory.js";
 
 /**
@@ -82,10 +81,6 @@ function normalizeErrorPath(value: unknown): string {
 }
 
 const fail: Fail<RootedResourceParentHandleErrorReason> = failWith(RootedResourceParentHandleError);
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
 
 function parseAddress(
   resourcePath: PortableResourcePath,
@@ -224,7 +219,6 @@ export class RootedResourceParentHandle {
     resourcePath: PortableResourcePath,
     errorPath?: string,
   ): Promise<RootedResourceParentHandle> {
-    assertRoot(root);
     const path = normalizeErrorPath(errorPath);
     const address = parseAddress(resourcePath, path);
     const parent = await inspectInitialParent(root, address, path);

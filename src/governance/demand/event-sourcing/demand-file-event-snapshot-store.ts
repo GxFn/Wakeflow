@@ -1,12 +1,7 @@
-import { types } from "node:util";
 import pLimit from "p-limit";
 
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
@@ -27,7 +22,6 @@ import {
   isPrivateFile,
 } from "../../../foundation/filesystem/private-node-policy.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
@@ -55,7 +49,6 @@ import {
   computeDemandEventSourcingSnapshotDigest,
   type DemandEventSourcingSnapshot,
   DemandEventSourcingSnapshotError,
-  parseDemandEventSourcingSnapshot,
   parseDemandEventSourcingSnapshotDocument,
   renderDemandEventSourcingSnapshot,
 } from "./demand-event-sourcing-snapshot.js";
@@ -123,35 +116,6 @@ export class DemandFileEventSnapshotStoreError extends ModuleError<DemandFileEve
 const fail: Fail<DemandFileEventSnapshotStoreErrorReason> = failWith(
   DemandFileEventSnapshotStoreError,
 );
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
 
 function sameDirectoryRead(
   left: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
@@ -274,15 +238,14 @@ export class DemandFileEventSnapshotStore {
   readonly #root: RootedDirectory;
 
   constructor(root: RootedDirectory) {
-    assertRoot(root);
     this.#root = root;
   }
 
   /** 稳定读取所有快照观察结果，并按 `commitSequence` 升序返回。 */
-  async readSnapshots(options?: {
-    readonly signal?: AbortSignal;
-  }): Promise<Readonly<DemandFileEventSnapshotReadResult>> {
-    const { signal } = parseOptions(options);
+  async readSnapshots(
+    options: { readonly signal?: AbortSignal } = {},
+  ): Promise<Readonly<DemandFileEventSnapshotReadResult>> {
+    const { signal } = options;
     const before = await readDirectory(this.#root, signal);
     const snapshotEntries: Array<
       Readonly<{
@@ -335,9 +298,9 @@ export class DemandFileEventSnapshotStore {
   /** 直接退休一个序号的快照；不存在或失败返回 `false`，中止照常上抛。 */
   async retireSnapshotAt(
     sequence: number,
-    options?: { readonly signal?: AbortSignal },
+    options: { readonly signal?: AbortSignal } = {},
   ): Promise<boolean> {
-    const { signal } = parseOptions(options);
+    const { signal } = options;
     if (!Number.isSafeInteger(sequence) || sequence < 1) return false;
     const ref = demandEventSourcingSnapshotRef(
       parseDemandEventCommitSequence(sequence, "$sequence"),
@@ -368,9 +331,9 @@ export class DemandFileEventSnapshotStore {
    */
   async retireSnapshotsBefore(
     keepFromSequence: number,
-    options?: { readonly signal?: AbortSignal },
+    options: { readonly signal?: AbortSignal } = {},
   ): Promise<Readonly<{ retired: number; failed: number }>> {
-    const { signal } = parseOptions(options);
+    const { signal } = options;
     if (!Number.isSafeInteger(keepFromSequence) || keepFromSequence < 1) {
       fail("input", "$keepFromSequence");
     }
@@ -414,19 +377,10 @@ export class DemandFileEventSnapshotStore {
 
   /** 按 `commitSequence` 不替换目标地发布一个可重建快照。 */
   async publish(
-    snapshotValue: unknown,
-    options?: { readonly signal?: AbortSignal },
+    snapshot: Readonly<DemandEventSourcingSnapshot>,
+    options: { readonly signal?: AbortSignal } = {},
   ): Promise<Readonly<DemandFileEventSnapshotPublishReceipt>> {
-    let snapshot: Readonly<DemandEventSourcingSnapshot>;
-    try {
-      snapshot = parseDemandEventSourcingSnapshot(snapshotValue);
-    } catch (error: unknown) {
-      if (error instanceof DemandEventSourcingSnapshotError) {
-        fail("input", "$snapshot", error);
-      }
-      throw error;
-    }
-    const { signal } = parseOptions(options);
+    const { signal } = options;
     const declaration = createDemandEventSourcingSnapshotResourceDeclaration(
       snapshot.demandId,
       snapshot.commitSequence,

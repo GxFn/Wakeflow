@@ -51,8 +51,6 @@ const systemMonotonicClock: MonotonicClock = () => hrtime.bigint();
  * 注入函数恰好调用一次；本层无法也不会凭单个读数证明多次调用的递增关系。
  */
 export function readMonotonicClock(clock: MonotonicClock = systemMonotonicClock): MonotonicMoment {
-  if (typeof clock !== "function") fail("clock-type", "$clock");
-
   let value: unknown;
   try {
     value = clock();

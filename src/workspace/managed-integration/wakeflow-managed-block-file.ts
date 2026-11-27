@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
@@ -14,13 +12,8 @@ import {
   unlinkRegularFileExactly,
 } from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import { sameFileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -30,17 +23,9 @@ import {
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
-import {
-  isAbortSignal,
-  OperationAbortedError,
-  throwIfAborted,
-} from "../../foundation/node/abort-signal.js";
+import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
-import {
-  type ByteCount,
-  ByteCountError,
-  parseByteCount,
-} from "../../foundation/numeric/byte-count.js";
+import { type ByteCount, parseByteCount } from "../../foundation/numeric/byte-count.js";
 import {
   planWakeflowManagedTextAuthorityTransition,
   type WakeflowManagedTextAuthorityTransition,
@@ -48,7 +33,6 @@ import {
 } from "./wakeflow-managed-text-authority-transition.js";
 import {
   inspectWakeflowManagedTextEnvelope,
-  parseWakeflowManagedTextEnvelopeTarget,
   removeWakeflowManagedTextEnvelope,
   WakeflowManagedTextEnvelopeError,
   type WakeflowManagedTextEnvelopeIdentity,
@@ -67,9 +51,9 @@ import {
  */
 
 export interface WakeflowManagedBlockFileRequest {
-  readonly resourcePath: unknown;
-  readonly currentTargets: readonly unknown[];
-  readonly desiredTarget: unknown;
+  readonly resourcePath: PortableResourcePath;
+  readonly currentTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
+  readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
   readonly maximumBytes?: ByteCount;
   readonly signal?: AbortSignal;
 }
@@ -132,55 +116,14 @@ interface ParsedRequest extends SourceReadRequest {
   readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseRequest(value: WakeflowManagedBlockFileRequest): Readonly<ParsedRequest> {
-  if (typeof value !== "object" || value === null || types.isProxy(value)) {
-    fail("input", "$request");
-  }
-  let resourcePath: PortableResourcePath;
-  try {
-    resourcePath = parsePortableResourcePath(value.resourcePath, "$request.resourcePath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath", error);
-    throw error;
-  }
-  if (value.signal !== undefined && !isAbortSignal(value.signal)) {
-    fail("input", "$request.signal");
-  }
-  if (!Array.isArray(value.currentTargets)) fail("input", "$request.currentTargets");
-  // envelope target 的形状由 transition planner 严格准入；这里只做零 I/O 的预演。
-  try {
-    planWakeflowManagedTextAuthorityTransition(new Uint8Array(), {
-      currentTargets: value.currentTargets,
-      desiredTarget: value.desiredTarget,
-    });
-  } catch (error: unknown) {
-    if (error instanceof WakeflowManagedTextAuthorityTransitionError) {
-      fail("input", error.path, error);
-    }
-    throw error;
-  }
-  let maximumBytes = DEFAULT_MAXIMUM_BYTES;
-  if (value.maximumBytes !== undefined) {
-    try {
-      maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
-    } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes", error);
-      throw error;
-    }
-  }
-  return Object.freeze({
-    resourcePath,
-    currentTargets: Object.freeze([
-      ...value.currentTargets,
-    ] as Readonly<WakeflowManagedTextEnvelopeTarget>[]),
-    desiredTarget: value.desiredTarget as Readonly<WakeflowManagedTextEnvelopeTarget>,
-    maximumBytes,
-    signal: value.signal,
-  });
+function requestModel({
+  resourcePath,
+  currentTargets,
+  desiredTarget,
+  maximumBytes = DEFAULT_MAXIMUM_BYTES,
+  signal,
+}: WakeflowManagedBlockFileRequest): Readonly<ParsedRequest> {
+  return Object.freeze({ resourcePath, currentTargets, desiredTarget, maximumBytes, signal });
 }
 
 function currentUserId(): bigint {
@@ -306,12 +249,10 @@ async function inspectParsed(
 
 /** 稳定检查根目录里一个文件的托管块，生成零写入的 current 或重组候选。 */
 export async function inspectWakeflowManagedBlockFile(
-  rootValue: RootedDirectory,
-  requestValue: WakeflowManagedBlockFileRequest,
+  root: RootedDirectory,
+  request: WakeflowManagedBlockFileRequest,
 ): Promise<Readonly<WakeflowManagedBlockFileInspection>> {
-  assertRoot(rootValue);
-  const request = parseRequest(requestValue);
-  return inspectParsed(rootValue, request, currentUserId());
+  return inspectParsed(root, requestModel(request), currentUserId());
 }
 
 function mapAtomicError(error: DurableAtomicFileWriteError): never {
@@ -410,36 +351,13 @@ function assertReadback(
   }
 }
 
-function parseOptions(value: unknown): number {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    Object.keys(value).some((key) => key !== "createMode")
-  ) {
-    fail("input", "$options");
-  }
-  const createMode = (value as { readonly createMode?: unknown }).createMode;
-  if (
-    typeof createMode !== "number" ||
-    !Number.isInteger(createMode) ||
-    createMode < 0 ||
-    createMode > 0o777
-  ) {
-    fail("input", "$options.createMode");
-  }
-  return createMode;
-}
-
 /** 在调用方持有的事务内幂等创建或 CAS 替换一个文件里的 Wakeflow 托管块。 */
 export async function recomposeWakeflowManagedBlockFile(
   rootValue: RootedDirectory,
   requestValue: WakeflowManagedBlockFileRequest,
-  optionsValue: WakeflowManagedBlockFileRecompositionOptions,
+  { createMode }: WakeflowManagedBlockFileRecompositionOptions,
 ): Promise<Readonly<WakeflowManagedBlockFileReceipt>> {
-  assertRoot(rootValue);
-  const createMode = parseOptions(optionsValue);
-  const request = parseRequest(requestValue);
+  const request = requestModel(requestValue);
   throwIfAborted(request.signal);
   const expectedUserId = currentUserId();
   await assertCurrentUserRoot(rootValue, expectedUserId);
@@ -471,9 +389,9 @@ export async function recomposeWakeflowManagedBlockFile(
 // ---- 删除托管块（ADR-0024 的 remove-managed-block）---------------------------------------------
 
 export interface WakeflowManagedBlockRemovalRequest {
-  readonly resourcePath: unknown;
+  readonly resourcePath: PortableResourcePath;
   /** 可删的已知渲染：当前渲染与已登记的历史渲染，同 component、同 owner、正文互不相同。 */
-  readonly admittedTargets: readonly unknown[];
+  readonly admittedTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
   readonly maximumBytes?: ByteCount;
   readonly signal?: AbortSignal;
 }
@@ -505,69 +423,21 @@ interface ParsedRemovalRequest extends SourceReadRequest {
   readonly admittedBodies: readonly string[];
 }
 
-const MAXIMUM_ADMITTED_TARGETS = 8;
-
-function parseRemovalRequest(
-  value: WakeflowManagedBlockRemovalRequest,
-): Readonly<ParsedRemovalRequest> {
-  if (typeof value !== "object" || value === null || types.isProxy(value)) {
-    fail("input", "$request");
-  }
-  let resourcePath: PortableResourcePath;
-  try {
-    resourcePath = parsePortableResourcePath(value.resourcePath, "$request.resourcePath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", "$request.resourcePath", error);
-    throw error;
-  }
-  if (value.signal !== undefined && !isAbortSignal(value.signal)) {
-    fail("input", "$request.signal");
-  }
-  if (
-    !Array.isArray(value.admittedTargets) ||
-    value.admittedTargets.length === 0 ||
-    value.admittedTargets.length > MAXIMUM_ADMITTED_TARGETS
-  ) {
-    fail("input", "$request.admittedTargets");
-  }
-  const targets = value.admittedTargets.map((target, index) => {
-    try {
-      return parseWakeflowManagedTextEnvelopeTarget(target);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowManagedTextEnvelopeError) {
-        fail("input", `$request.admittedTargets/${index}`, error);
-      }
-      throw error;
-    }
-  });
-  const first = targets[0];
+function removalRequestModel({
+  resourcePath,
+  admittedTargets,
+  maximumBytes = DEFAULT_MAXIMUM_BYTES,
+  signal,
+}: WakeflowManagedBlockRemovalRequest): Readonly<ParsedRemovalRequest> {
+  // 第一份已知渲染给出块的 component 与 owner；调用方总以当前渲染开头，这里只为收窄类型。
+  const first = admittedTargets[0];
   if (first === undefined) fail("input", "$request.admittedTargets");
-  const admittedBodies: string[] = [];
-  for (const [index, target] of targets.entries()) {
-    if (
-      target.component !== first.component ||
-      target.owner !== first.owner ||
-      admittedBodies.includes(target.body)
-    ) {
-      fail("input", `$request.admittedTargets/${index}`);
-    }
-    admittedBodies.push(target.body);
-  }
-  let maximumBytes = DEFAULT_MAXIMUM_BYTES;
-  if (value.maximumBytes !== undefined) {
-    try {
-      maximumBytes = parseByteCount(value.maximumBytes, "$request.maximumBytes");
-    } catch (error: unknown) {
-      if (error instanceof ByteCountError) fail("input", "$request.maximumBytes", error);
-      throw error;
-    }
-  }
   return Object.freeze({
     resourcePath,
     identity: Object.freeze({ component: first.component, owner: first.owner }),
-    admittedBodies: Object.freeze(admittedBodies),
+    admittedBodies: Object.freeze(admittedTargets.map((target) => target.body)),
     maximumBytes,
-    signal: value.signal,
+    signal,
   });
 }
 
@@ -635,12 +505,10 @@ async function inspectRemovalParsed(
 
 /** 零写入检查一个文件里能否删掉 Wakeflow 托管块：不在或没有块即 absent，正文未知即 unknown-managed-body。 */
 export async function inspectWakeflowManagedBlockRemoval(
-  rootValue: RootedDirectory,
-  requestValue: WakeflowManagedBlockRemovalRequest,
+  root: RootedDirectory,
+  request: WakeflowManagedBlockRemovalRequest,
 ): Promise<Readonly<WakeflowManagedBlockRemovalInspection>> {
-  assertRoot(rootValue);
-  const request = parseRemovalRequest(requestValue);
-  return inspectRemovalParsed(rootValue, request, currentUserId());
+  return inspectRemovalParsed(root, removalRequestModel(request), currentUserId());
 }
 
 function mapUnlinkError(error: ExactRegularFileUnlinkError): never {
@@ -700,8 +568,7 @@ export async function removeWakeflowManagedBlockFile(
   rootValue: RootedDirectory,
   requestValue: WakeflowManagedBlockRemovalRequest,
 ): Promise<Readonly<WakeflowManagedBlockRemovalReceipt>> {
-  assertRoot(rootValue);
-  const request = parseRemovalRequest(requestValue);
+  const request = removalRequestModel(requestValue);
   throwIfAborted(request.signal);
   const expectedUserId = currentUserId();
   await assertCurrentUserRoot(rootValue, expectedUserId);

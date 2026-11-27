@@ -43,19 +43,15 @@ function normalizeErrorPath(path: unknown): string {
 
 const fail: Fail<Utf8ErrorReason> = failWith(Utf8Error);
 
-function isUint8Array(value: unknown): value is Uint8Array {
-  return ArrayBuffer.isView(value) && value instanceof Uint8Array;
-}
-
 /**
  * 严格解码指定的字节视图，不执行字符替换或输入强制转换。
  *
  * `Buffer` 作为 `Uint8Array` 子类可以直接使用；带偏移量的视图只读取可见区间。
- * 解码器不使用流式模式，任何被截断的多字节序列都会在本次调用中失败。
+ * 解码器不使用流式模式，任何被截断的多字节序列都会在本次调用中失败。输入类型由
+ * 签名保证，运行时不复验。
  */
 export function decodeUtf8(bytes: Uint8Array, errorPath?: string): string {
   const path = normalizeErrorPath(errorPath);
-  if (!isUint8Array(bytes)) fail("bytes-type", path);
 
   try {
     return UTF8_DECODER.decode(bytes);
@@ -72,7 +68,6 @@ export function decodeUtf8(bytes: Uint8Array, errorPath?: string): string {
  */
 export function encodeUtf8(text: string, errorPath?: string): Uint8Array {
   const path = normalizeErrorPath(errorPath);
-  if (typeof text !== "string") fail("text-type", path);
   if (!text.isWellFormed()) fail("ill-formed-text", path);
 
   try {

@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
@@ -8,24 +7,23 @@ import {
   parseSha256Digest,
   type Sha256Digest,
 } from "../foundation/crypto/sha256.js";
-import { parsePlainRecord, pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
+import { pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import type { DurableAtomicFileReplaceResult } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
 import type { StableFileSource } from "../foundation/filesystem/stable-file-read.js";
-import { isAbortSignal, OperationAbortedError } from "../foundation/node/abort-signal.js";
+import { OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8, Utf8Error } from "../foundation/text/utf8.js";
 import type { WorkspaceLockOptions } from "../kernel/workspace-locks.js";
 import {
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
   WakeflowConfigError,
   type WakeflowConfigModel,
 } from "./wakeflow-config.js";
@@ -92,12 +90,6 @@ export class WakeflowConfigAuthorityReplacementError extends ModuleError<Wakeflo
 export const failWakeflowConfigAuthorityReplacement: Fail<WakeflowConfigAuthorityReplacementErrorReason> =
   failWith(WakeflowConfigAuthorityReplacementError);
 
-export interface ParsedWakeflowConfigAuthorityReplacementOptions {
-  readonly acquireTimeoutMilliseconds: number;
-  readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 export interface ParsedWakeflowConfigAuthorityExpectation {
   readonly workspaceRoot: string;
   readonly source: Readonly<StableFileSource>;
@@ -110,69 +102,6 @@ export interface PreparedWakeflowConfigAuthorityDesired {
   readonly bytes: Uint8Array;
   readonly sourceDigest: Sha256Digest;
   readonly configDigest: Sha256Digest;
-}
-
-export function assertWakeflowConfigAuthorityRoot(
-  value: unknown,
-): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    failWakeflowConfigAuthorityReplacement("input", "$root");
-  }
-}
-
-function optionRecord(value: unknown): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (cause: unknown) {
-    failWakeflowConfigAuthorityReplacement("input", "$options", cause);
-  }
-}
-
-function parsePositiveMilliseconds(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
-    failWakeflowConfigAuthorityReplacement("input", path);
-  }
-  return value;
-}
-
-function parseSignal(value: unknown): AbortSignal | undefined {
-  if (value === undefined) return undefined;
-  if (!isAbortSignal(value)) {
-    failWakeflowConfigAuthorityReplacement("input", "$options.signal");
-  }
-  return value;
-}
-
-export function parseWakeflowConfigAuthorityReplacementOptions(
-  value: unknown,
-): Readonly<ParsedWakeflowConfigAuthorityReplacementOptions> {
-  const record = optionRecord(value);
-  const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
-  if (Object.keys(record).some((key) => !allowed.has(key))) {
-    failWakeflowConfigAuthorityReplacement("input", "$options");
-  }
-  return Object.freeze({
-    acquireTimeoutMilliseconds:
-      record.acquireTimeoutMilliseconds === undefined
-        ? WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS
-        : parsePositiveMilliseconds(
-            record.acquireTimeoutMilliseconds,
-            "$options.acquireTimeoutMilliseconds",
-          ),
-    retryDelayMilliseconds:
-      record.retryDelayMilliseconds === undefined
-        ? undefined
-        : parsePositiveMilliseconds(
-            record.retryDelayMilliseconds,
-            "$options.retryDelayMilliseconds",
-          ),
-    signal: parseSignal(record.signal),
-  });
 }
 
 export function currentWakeflowConfigAuthorityUserId(): bigint {
@@ -289,17 +218,8 @@ export function parseWakeflowConfigAuthorityExpectation(
 }
 
 export function prepareWakeflowConfigAuthorityDesired(
-  value: unknown,
+  model: WakeflowConfigModel,
 ): Readonly<PreparedWakeflowConfigAuthorityDesired> {
-  let model: WakeflowConfigModel;
-  try {
-    model = parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) {
-      failWakeflowConfigAuthorityReplacement("config", error.path, error);
-    }
-    failWakeflowConfigAuthorityReplacement("config", "$config", error);
-  }
   let bytes: Uint8Array;
   try {
     bytes = encodeUtf8(renderWakeflowConfig(model), "$config");
@@ -395,16 +315,12 @@ export function sameWakeflowConfigAuthoritySource(
   left: Readonly<StableFileSource>,
   right: Readonly<StableFileSource>,
 ): boolean {
-  try {
-    return (
-      left.resourcePath === right.resourcePath &&
-      left.byteCount === right.byteCount &&
-      left.digest === right.digest &&
-      sameFileNodeSnapshot(left.node, right.node)
-    );
-  } catch (cause: unknown) {
-    failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
-  }
+  return (
+    left.resourcePath === right.resourcePath &&
+    left.byteCount === right.byteCount &&
+    left.digest === right.digest &&
+    sameFileNodeSnapshot(left.node, right.node)
+  );
 }
 
 export function matchesWakeflowConfigAuthorityExpectation(
@@ -421,15 +337,16 @@ export function matchesWakeflowConfigAuthorityExpectation(
   );
 }
 
-export function wakeflowConfigAuthorityLockOptions(
-  options: Readonly<ParsedWakeflowConfigAuthorityReplacementOptions>,
-): WorkspaceLockOptions {
+/** 配置权威锁的选项：获取超时缺省 10 秒；数值范围由锁原语自己核对。 */
+export function wakeflowConfigAuthorityLockOptions({
+  acquireTimeoutMilliseconds = WAKEFLOW_CONFIG_AUTHORITY_LOCK_TIMEOUT_MILLISECONDS,
+  retryDelayMilliseconds,
+  signal,
+}: WakeflowConfigAuthorityReplacementOptions): WorkspaceLockOptions {
   return {
-    acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
-    ...(options.retryDelayMilliseconds === undefined
-      ? {}
-      : { retryDelayMilliseconds: options.retryDelayMilliseconds }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    acquireTimeoutMilliseconds,
+    ...(retryDelayMilliseconds === undefined ? {} : { retryDelayMilliseconds }),
+    ...(signal === undefined ? {} : { signal }),
   };
 }
 

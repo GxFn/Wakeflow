@@ -202,21 +202,6 @@ test("directory tree plan rejects non-canonical and over-budget input", async ()
     "capacity",
   );
 
-  await expectCandidateError(
-    () =>
-      planDirectoryTreeCandidate(
-        [
-          {
-            path: "shared.bin",
-            bytes: new Uint8Array(new SharedArrayBuffer(1)),
-            mode: 0o644,
-          },
-        ],
-        OPTIONS,
-      ),
-    "input",
-  );
-
   const controller = new AbortController();
   controller.abort();
   await rejects(
@@ -247,29 +232,6 @@ test("directory tree plan rejects non-canonical and over-budget input", async ()
         ...OPTIONS,
         maximumDepth: 65,
       }),
-    "input",
-  );
-
-  await expectCandidateError(
-    () =>
-      planDirectoryTreeCandidate(FILES, {
-        ...OPTIONS,
-        directoryMode: 0o500,
-      }),
-    "input",
-  );
-
-  await expectCandidateError(
-    () =>
-      planDirectoryTreeCandidate(
-        [
-          {
-            ...FILES[0],
-            mode: 0o200,
-          },
-        ],
-        OPTIONS,
-      ),
     "input",
   );
 });

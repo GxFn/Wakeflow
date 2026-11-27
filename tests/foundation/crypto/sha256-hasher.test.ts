@@ -31,10 +31,6 @@ function expectSha256HasherError(
   return caught;
 }
 
-function asBytes(value: unknown): Uint8Array {
-  return value as Uint8Array;
-}
-
 test("incremental chunks match the existing one-shot SHA-256 contract", () => {
   const text = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
   const bytes = encoder.encode(text);
@@ -91,48 +87,6 @@ test("byte counts accumulate exactly across many chunks", () => {
   equal(result.byteCount, expectedCount);
   equal(result.byteCount, expectedBytes.byteLength);
   equal(result.digest, computeSha256Digest(expectedBytes));
-});
-
-test("invalid inputs are rejected before mutating an active hasher", () => {
-  const hasher = new Sha256Hasher();
-  const invalid: readonly unknown[] = [
-    "abc",
-    [0x61, 0x62, 0x63],
-    new Uint16Array([0x6162]),
-    new DataView(new ArrayBuffer(3)),
-    new ArrayBuffer(3),
-  ];
-
-  for (const value of invalid) {
-    expectSha256HasherError(
-      () => hasher.update(asBytes(value), "$.chunk"),
-      "input-type",
-      "$.chunk",
-    );
-  }
-
-  hasher.update(encoder.encode("abc"));
-  const result = hasher.digest();
-  equal(result.byteCount, 3);
-  equal(result.digest, computeSha256Digest(encoder.encode("abc")));
-});
-
-test("Proxy byte views are rejected without invoking traps", () => {
-  let trapCalls = 0;
-  const proxy = new Proxy(new Uint8Array([0x61]), {
-    getPrototypeOf: () => {
-      trapCalls += 1;
-      return Uint8Array.prototype;
-    },
-  });
-  const hasher = new Sha256Hasher();
-
-  expectSha256HasherError(() => hasher.update(asBytes(proxy), "$.chunk"), "input-type", "$.chunk");
-  equal(trapCalls, 0);
-  hasher.update(encoder.encode("a"));
-  const result = hasher.digest();
-  equal(result.byteCount, 1);
-  equal(result.digest, computeSha256Digest(encoder.encode("a")));
 });
 
 test("digest and update cannot be repeated after finalization", () => {

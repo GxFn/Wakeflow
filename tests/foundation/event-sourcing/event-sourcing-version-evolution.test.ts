@@ -215,25 +215,6 @@ test("Event Sourcing version registry 以 definition 拒绝畸形定义并给出
       "$/steps/0",
     ],
     [
-      "extra codec field",
-      {
-        currentVersion: 1,
-        codecs: [{ ...codec(1), extra: true }],
-        steps: [],
-      },
-      "$/codecs/0",
-    ],
-    [
-      "extra definition field",
-      {
-        currentVersion: 1,
-        codecs: [codec(1)],
-        steps: [],
-        extra: true,
-      },
-      "$definition",
-    ],
-    [
       "empty codec list",
       {
         currentVersion: 1,
@@ -241,15 +222,6 @@ test("Event Sourcing version registry 以 definition 拒绝畸形定义并给出
         steps: [],
       },
       "$/codecs",
-    ],
-    [
-      "non-function parse",
-      {
-        currentVersion: 1,
-        codecs: [{ version: 1, parse: "parse" }],
-        steps: [],
-      },
-      "$/codecs/0/parse",
     ],
   ];
   for (const [label, definition, path] of cases) {

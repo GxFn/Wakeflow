@@ -46,8 +46,6 @@ const systemUtcWallClock: UtcWallClock = () =>
  * 结果会原样返回，严格递增策略必须由了解领域历史的职责所有者另行决定。
  */
 export function readUtcWallClock(clock: UtcWallClock = systemUtcWallClock): UtcInstant {
-  if (typeof clock !== "function") fail("clock-type", "$clock");
-
   let value: unknown;
   try {
     value = clock();

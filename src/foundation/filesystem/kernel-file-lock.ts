@@ -3,10 +3,8 @@ import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, lstat } from "node:fs/promises";
 import { join as joinPath } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { types } from "node:util";
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import { isAbortSignal, OperationAbortedError, throwIfAborted } from "../node/abort-signal.js";
+import { OperationAbortedError, throwIfAborted } from "../node/abort-signal.js";
 import { advisoryLockFlagsOrNull } from "../node/advisory-lock-flags.js";
 import { ownedByAnotherUser } from "../node/current-user.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
@@ -23,7 +21,7 @@ import {
   PortableResourcePathError,
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的内核咨询锁（ADR-0033）。
@@ -81,48 +79,42 @@ export class KernelFileLockError extends ModuleError<KernelFileLockErrorReason> 
 
 const fail: Fail<KernelFileLockErrorReason> = failWith(KernelFileLockError);
 
-interface ParsedOptions {
+interface LockTiming {
   readonly acquireTimeoutMilliseconds: number;
   readonly retryDelayMilliseconds: number;
   readonly signal: AbortSignal | undefined;
 }
 
-function boundedMilliseconds(value: unknown, fallback: number, maximum: number): number {
+/**
+ * 两个毫秒数界定等待与轮询：类型表达不了范围，NaN 会让等待永不到期，所以在消费它们的这里断言一次
+ * （1.4.5 层次计划 A，R4）。
+ */
+function boundedMilliseconds(value: number | undefined, fallback: number, maximum: number): number {
   if (value === undefined) return fallback;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > maximum) {
+  if (!Number.isSafeInteger(value) || value <= 0 || value > maximum) {
     fail("input", "$options");
   }
   return value;
 }
 
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value ?? {}, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const known = ["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"];
-  if (Object.keys(record).some((key) => !known.includes(key))) fail("input", "$options");
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) fail("input", "$options");
+function lockTiming(options: KernelFileLockOptions = {}): Readonly<LockTiming> {
+  const { acquireTimeoutMilliseconds, retryDelayMilliseconds, signal } = options;
   return {
     acquireTimeoutMilliseconds: boundedMilliseconds(
-      record.acquireTimeoutMilliseconds,
+      acquireTimeoutMilliseconds,
       DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS,
       MAXIMUM_ACQUIRE_TIMEOUT_MILLISECONDS,
     ),
     retryDelayMilliseconds: boundedMilliseconds(
-      record.retryDelayMilliseconds,
+      retryDelayMilliseconds,
       DEFAULT_RETRY_DELAY_MILLISECONDS,
       MAXIMUM_RETRY_DELAY_MILLISECONDS,
     ),
-    signal: record.signal as AbortSignal | undefined,
+    signal,
   };
 }
 
 function lockPathOf(root: RootedDirectory, lockRef: PortableResourcePath): string {
-  if (!isRootedDirectory(root)) fail("input", "$root");
   try {
     return joinPath(root.absolutePath, ...splitPortableResourcePath(lockRef));
   } catch (error: unknown) {
@@ -213,7 +205,7 @@ async function closeQuietly(handle: FileHandle): Promise<void> {
 }
 
 async function waitBeforeRetry(
-  options: Readonly<ParsedOptions>,
+  options: Readonly<LockTiming>,
   deadline: MonotonicDeadline,
 ): Promise<void> {
   if (isMonotonicDeadlineReached(deadline, readMonotonicClock())) fail("timeout", "$lock");
@@ -231,7 +223,7 @@ async function waitBeforeRetry(
 async function acquire(
   lockPath: string,
   mode: KernelFileLockMode,
-  options: Readonly<ParsedOptions>,
+  options: Readonly<LockTiming>,
 ): Promise<FileHandle> {
   const deadline = monotonicDeadlineAfter(
     readMonotonicClock(),
@@ -261,7 +253,7 @@ export interface KernelFileLockLease {
 async function acquireLease(
   lockPath: string,
   mode: KernelFileLockMode,
-  options: Readonly<ParsedOptions>,
+  options: Readonly<LockTiming>,
 ): Promise<Readonly<KernelFileLockLease>> {
   const handle = await acquire(lockPath, mode, options);
   let released = false;
@@ -282,10 +274,9 @@ export async function acquireKernelFileLock(
   root: RootedDirectory,
   lockRef: PortableResourcePath,
   mode: KernelFileLockMode,
-  optionsValue?: KernelFileLockOptions,
+  options?: KernelFileLockOptions,
 ): Promise<Readonly<KernelFileLockLease>> {
-  if (mode !== "shared" && mode !== "exclusive") fail("input", "$mode");
-  return acquireLease(lockPathOf(root, lockRef), mode, parseOptions(optionsValue));
+  return acquireLease(lockPathOf(root, lockRef), mode, lockTiming(options));
 }
 
 /** 这条异步调用链此刻持有的锁文件路径。 */
@@ -303,9 +294,7 @@ export async function withKernelFileLock<Result>(
   operation: () => Promise<Result>,
   optionsValue?: KernelFileLockOptions,
 ): Promise<Result> {
-  if (mode !== "shared" && mode !== "exclusive") fail("input", "$mode");
-  if (typeof operation !== "function" || types.isProxy(operation)) fail("input", "$operation");
-  const options = parseOptions(optionsValue);
+  const options = lockTiming(optionsValue);
   const lockPath = lockPathOf(root, lockRef);
   const chain = HELD_IN_CHAIN.getStore() ?? NOTHING_HELD;
   if (chain.has(lockPath)) fail("reentered", "$lock");

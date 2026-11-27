@@ -18,7 +18,7 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "../filesystem/portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "../filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../filesystem/rooted-directory.js";
 import {
   readStableRootResourceTree,
   StableResourceTreeReadError,
@@ -29,7 +29,7 @@ import {
   ByteCountError,
   parseByteCount,
 } from "../numeric/byte-count.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Artifact：已加载制品目录树的位置无关内容身份。
@@ -162,13 +162,6 @@ function assertExactFields(
   }
 }
 
-function parsePositiveInteger(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
-    fail("input", path);
-  }
-  return value;
-}
-
 function parseNonNegativeInteger(
   value: unknown,
   path: string,
@@ -180,63 +173,25 @@ function parseNonNegativeInteger(
   return value;
 }
 
-function parseLimits(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits> {
-  if (value === undefined) return LOADED_ARTIFACT_TREE_IDENTITY_LIMITS;
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options.limits");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options.limits", error);
-    throw error;
-  }
-  assertExactFields(record, LIMIT_FIELDS, "$options.limits", "input");
-  const parsed = Object.fromEntries(
-    LIMIT_FIELDS.map((field) => [
-      field,
-      parsePositiveInteger(record[field], `$options.limits.${field}`),
-    ]),
-  ) as unknown as LoadedArtifactTreeIdentityLimits;
+/**
+ * 上限界定整棵树的遍历、分配与清单解析：类型表达不了范围，NaN 会让上限失效，所以在消费它们的这里
+ * 断言一次——正的安全整数，不超过本模块的硬上限（1.4.5 层次计划 A，R4）。缺省就是硬上限本身。
+ */
+function admittedLimits(
+  limits: LoadedArtifactTreeIdentityLimits | undefined,
+): Readonly<LoadedArtifactTreeIdentityLimits> {
+  if (limits === undefined) return LOADED_ARTIFACT_TREE_IDENTITY_LIMITS;
   for (const field of LIMIT_FIELDS) {
-    if (parsed[field] > LOADED_ARTIFACT_TREE_IDENTITY_LIMITS[field]) {
+    const value = limits[field];
+    if (
+      !Number.isSafeInteger(value) ||
+      value <= 0 ||
+      value > LOADED_ARTIFACT_TREE_IDENTITY_LIMITS[field]
+    ) {
       fail("input", `$options.limits.${field}`);
     }
   }
-  return Object.freeze(parsed);
-}
-
-function parseIdentityOptions(value: unknown): Readonly<ParsedIdentityOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const allowed = new Set(["limits", "signal"]);
-  if (Object.keys(record).some((key) => !allowed.has(key))) {
-    fail("input", "$options");
-  }
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({
-    limits: parseLimits(record.limits),
-    signal: record.signal,
-  });
-}
-
-function parseValidationOptions(value: unknown): Readonly<LoadedArtifactTreeIdentityLimits> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "limits")) {
-    fail("input", "$options");
-  }
-  return parseLimits(record.limits);
+  return limits;
 }
 
 function parseManifestByteCount(value: unknown, path: string): ByteCount {
@@ -434,13 +389,9 @@ function parseManifest(
 
 export function validateLoadedArtifactTreeManifest(
   value: unknown,
-  options?: LoadedArtifactTreeManifestValidationOptions,
+  options: LoadedArtifactTreeManifestValidationOptions = {},
 ): LoadedArtifactTreeManifest {
-  return parseManifest(value, parseValidationOptions(options));
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
+  return parseManifest(value, admittedLimits(options.limits));
 }
 
 function mapStableTreeReadError(error: StableResourceTreeReadError): never {
@@ -521,12 +472,14 @@ function manifestJsonValue(manifest: LoadedArtifactTreeManifest): JsonValue {
 
 export async function inspectLoadedArtifactTree(
   root: RootedDirectory,
-  options?: LoadedArtifactTreeIdentityOptions,
+  options: LoadedArtifactTreeIdentityOptions = {},
 ): Promise<Readonly<LoadedArtifactTreeIdentity>> {
-  assertRoot(root);
-  const parsed = parseIdentityOptions(options);
-  throwIfAborted(parsed.signal);
-  const manifest = await inspectArtifactManifest(root, parsed);
+  const resolved = Object.freeze({
+    limits: admittedLimits(options.limits),
+    signal: options.signal,
+  });
+  throwIfAborted(resolved.signal);
+  const manifest = await inspectArtifactManifest(root, resolved);
   const value = manifestJsonValue(manifest);
   return Object.freeze({
     artifactDigest: computeCanonicalJsonSha256Digest(value),

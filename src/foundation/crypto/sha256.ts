@@ -55,19 +55,14 @@ function normalizeErrorPath(path: unknown): string {
 
 const fail: Fail<Sha256ErrorReason> = failWith(Sha256Error);
 
-function isUint8Array(value: unknown): value is Uint8Array {
-  return ArrayBuffer.isView(value) && value instanceof Uint8Array;
-}
-
 /**
  * 对指定字节视图计算完整小写 SHA-256 十六进制摘要。
  *
  * Buffer 作为 Uint8Array 子类自然被接受；字符串、ArrayBuffer、DataView 和其他
- * TypedArray 必须由调用方先显式转换。计算同步完成，不修改输入视图。
+ * TypedArray 必须由调用方先显式转换（类型保证，运行时不复验）。计算同步完成，不修改输入视图。
  */
 export function computeSha256Hex(bytes: Uint8Array, errorPath?: string): Sha256Hex {
   const path = normalizeErrorPath(errorPath);
-  if (!isUint8Array(bytes)) fail("input-type", path);
 
   let result: string;
   try {

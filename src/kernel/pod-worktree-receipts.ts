@@ -565,10 +565,9 @@ function mapWriteError(error: unknown, what: string): never {
 /** 写入或换代一份回执：同仓库的旧回执被整文件替换。 */
 export async function writePodWorktreeReceipt(
   root: RootedDirectory,
-  receiptValue: unknown,
+  receipt: Readonly<PodWorktreeReceipt>,
   options: Signal = {},
 ): Promise<void> {
-  const receipt = parsePodWorktreeReceipt(receiptValue);
   const signal = signalOptions(options.signal);
   const ref = podWorktreeReceiptRef(receipt.hostId, receipt.podId, receipt.repositoryId);
   const directory = parsePortableResourcePath(

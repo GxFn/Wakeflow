@@ -1,7 +1,5 @@
-import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   DurableDirectoryMaterializationError,
@@ -9,7 +7,6 @@ import {
 } from "../foundation/filesystem/durable-directory-materialization.js";
 import { isPrivateDirectory } from "../foundation/filesystem/private-node-policy.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
@@ -90,39 +87,6 @@ const fail: Fail<WakeflowSharedCoordinationLayoutErrorReason> = failWith(
   WakeflowSharedCoordinationLayoutError,
 );
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(
-  value: unknown,
-): Readonly<WakeflowSharedCoordinationLayoutMaterializationOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "mode") ||
-    Object.keys(record).some((key) => key !== "mode" && key !== "signal") ||
-    !new Set(["fresh", "recover", "ensure"]).has(record.mode as string) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  throwIfAborted(record.signal as AbortSignal | undefined);
-  return Object.freeze({
-    mode: record.mode as "fresh" | "recover" | "ensure",
-    ...(record.signal === undefined ? {} : { signal: record.signal as AbortSignal }),
-  });
-}
-
 async function optionalDirectory(
   root: RootedDirectory,
   declaration: Readonly<WakeflowWorkspaceResourceDeclaration>,
@@ -145,7 +109,6 @@ async function optionalDirectory(
 export async function inspectWakeflowSharedCoordinationLayout(
   root: RootedDirectory,
 ): Promise<Readonly<WakeflowSharedCoordinationLayoutInspection>> {
-  assertRoot(root);
   let existingDirectoryCount = 0;
   for (const declaration of WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS) {
     if (await optionalDirectory(root, declaration)) existingDirectoryCount += 1;
@@ -201,17 +164,16 @@ async function materializeDeclaredDirectory(
 /** 按fresh/recover/ensure语义耐久物化三层共享协调目录。 */
 export async function materializeWakeflowSharedCoordinationLayout(
   root: RootedDirectory,
-  optionsValue: WakeflowSharedCoordinationLayoutMaterializationOptions,
+  { mode, signal }: WakeflowSharedCoordinationLayoutMaterializationOptions,
 ): Promise<Readonly<WakeflowSharedCoordinationLayoutMaterializationResult>> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
+  throwIfAborted(signal);
   const before = await inspectWakeflowSharedCoordinationLayout(root);
-  if (options.mode === "fresh" && before.status !== "missing") {
+  if (mode === "fresh" && before.status !== "missing") {
     fail("strict-absent", "$layout");
   }
   let createdDirectoryCount = 0;
   for (const declaration of WAKEFLOW_SHARED_COORDINATION_LAYOUT_DECLARATIONS) {
-    if (await materializeDeclaredDirectory(root, declaration, options.signal)) {
+    if (await materializeDeclaredDirectory(root, declaration, signal)) {
       createdDirectoryCount += 1;
     }
   }

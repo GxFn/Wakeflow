@@ -47,19 +47,4 @@ test("atomic stage address 拒绝伪造格式与非签发 release", () => {
     () => releaseDurableAtomicFileStageAddress(Object.freeze({}) as never),
     DurableAtomicFileStageAddressError,
   );
-
-  let getterCalls = 0;
-  const accessor = {};
-  Object.defineProperty(accessor, "fileName", {
-    enumerable: true,
-    get() {
-      getterCalls += 1;
-      return "forged";
-    },
-  });
-  throws(
-    () => readDurableAtomicFileStageOwnerState(accessor as never),
-    DurableAtomicFileStageAddressError,
-  );
-  equal(getterCalls, 0);
 });

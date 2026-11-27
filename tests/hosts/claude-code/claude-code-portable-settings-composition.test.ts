@@ -11,6 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { planClaudeCodePortableSettingsComposition } from "../../../src/hosts/claude-code/claude-code-portable-settings-composition.js";
 import { publishClaudeCodePortableSettings } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
@@ -55,7 +56,7 @@ function config() {
 function request(action: "fresh-initialize" | "reconfigure" | "reconcile", configValue: unknown) {
   return Object.freeze({
     action,
-    config: configValue,
+    config: parseWakeflowConfig(configValue),
     profile: claudeCodeWorkspaceHostResourceProfile,
   });
 }

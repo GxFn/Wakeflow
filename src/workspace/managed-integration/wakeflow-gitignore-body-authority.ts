@@ -109,13 +109,6 @@ export function renderWakeflowGitignoreRootRule(
   return rootRule(resourcePath, directory);
 }
 
-/** 准入一个完整、无重复的宿主画像集合，按协议宿主顺序返回。 */
-export function parseWakeflowGitignoreHostProfileSet(
-  value: unknown,
-): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
-  return parseProfiles(value);
-}
-
 function isLiteralRootRule(value: string): boolean {
   if (!value.startsWith("/") || value === "/") return false;
   let encodedPath = value.slice(1);
@@ -370,31 +363,6 @@ export function parseWakeflowGitignoreBodyAuthority(
   });
 }
 
-function outsideSegments(
-  value: unknown,
-): Readonly<{ readonly prefix: string; readonly suffix: string }> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$outside");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("outside", "$outside", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 2 ||
-    keys[0] !== "prefix" ||
-    keys[1] !== "suffix" ||
-    typeof record.prefix !== "string" ||
-    typeof record.suffix !== "string" ||
-    !record.prefix.isWellFormed() ||
-    !record.suffix.isWellFormed()
-  ) {
-    fail("outside", "$outside");
-  }
-  return Object.freeze({ prefix: record.prefix, suffix: record.suffix });
-}
-
 function exactLines(text: string): ReadonlySet<string> {
   return new Set(text.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line)));
 }
@@ -404,11 +372,9 @@ function exactLines(text: string): ReadonlySet<string> {
  * 通配、父目录、全局 excludes 与顺序后的真实匹配结论必须由 Git 自身验证。
  */
 export function classifyWakeflowGitignoreExactOutsideRules(
-  authorityValue: unknown,
-  outsideValue: unknown,
+  authority: Readonly<WakeflowGitignoreBodyAuthority>,
+  outside: Readonly<{ readonly prefix: string; readonly suffix: string }>,
 ): Readonly<WakeflowGitignoreExactOutsideClassification> {
-  const authority = parseWakeflowGitignoreBodyAuthority(authorityValue);
-  const outside = outsideSegments(outsideValue);
   const lines = new Set([...exactLines(outside.prefix), ...exactLines(outside.suffix)]);
   const exactDuplicateRules = Object.freeze(authority.rules.filter((rule) => lines.has(rule)));
   const exactNegatedRules = Object.freeze(authority.rules.filter((rule) => lines.has(`!${rule}`)));

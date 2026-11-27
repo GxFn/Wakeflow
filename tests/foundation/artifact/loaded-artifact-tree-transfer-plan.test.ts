@@ -224,28 +224,3 @@ test("loaded artifact transfer plan maps manifest and capacity failures", () => 
     "$manifest",
   );
 });
-
-test("loaded artifact transfer plan rejects behavioral options without traps", () => {
-  const source = manifest();
-  let trapCalls = 0;
-  const options = new Proxy(
-    {
-      directoryMode: 0o755,
-      executableFileMode: 0o755,
-      regularFileMode: 0o644,
-    },
-    {
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return Object.prototype;
-      },
-    },
-  );
-  expectPlanError(
-    () =>
-      planLoadedArtifactTreeTransfer(source, parsePortableResourcePath("stages/bundle"), options),
-    "input",
-    "$options",
-  );
-  equal(trapCalls, 0);
-});

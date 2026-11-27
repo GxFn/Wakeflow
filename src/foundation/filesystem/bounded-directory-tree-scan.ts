@@ -1,8 +1,7 @@
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -11,7 +10,7 @@ import {
   type StableDirectoryReadOptions,
   type StableDirectoryReadResult,
 } from "./stable-directory-read.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的有界、确定性目录树遍历。
@@ -85,13 +84,6 @@ export class BoundedDirectoryTreeScanError extends ModuleError<BoundedDirectoryT
   static override readonly code = "wakeflow-bounded-directory-tree-scan";
 }
 
-interface ParsedBoundedDirectoryTreeScanOptions {
-  readonly maximumEntries: number;
-  readonly maximumDepth: number;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 interface PendingDirectory {
   readonly resourcePath: PortableResourcePath | null;
   readonly depth: number;
@@ -119,48 +111,17 @@ const LOWER_REASON_MAP = {
 
 const fail: Fail<BoundedDirectoryTreeScanErrorReason> = failWith(BoundedDirectoryTreeScanError);
 
-function parseLimit(
-  value: unknown,
-  path: "$options.maximumEntries" | "$options.maximumDepth",
-): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    fail("input", path);
+/**
+ * 两个上限界定整棵树的遍历与内存：类型表达不了范围，NaN 会让上限失效，所以在消费它们的这里断言
+ * 一次（1.4.5 层次计划 A，R4）。
+ */
+function assertLimits(options: BoundedDirectoryTreeScanOptions): void {
+  for (const [value, path] of [
+    [options.maximumEntries, "$options.maximumEntries"],
+    [options.maximumDepth, "$options.maximumDepth"],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0) fail("input", path);
   }
-  return value;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedBoundedDirectoryTreeScanOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-
-  const required = ["maximumDepth", "maximumEntries"] as const;
-  const allowed = new Set([...required, "expectedNode", "signal"]);
-  if (
-    required.some((field) => !Object.hasOwn(record, field)) ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  const maximumEntries = parseLimit(record.maximumEntries, "$options.maximumEntries");
-  const maximumDepth = parseLimit(record.maximumDepth, "$options.maximumDepth");
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({
-    maximumEntries,
-    maximumDepth,
-    expectedNode: record.expectedNode as Readonly<FileNodeSnapshot> | undefined,
-    signal: record.signal,
-  });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function compareText(left: string, right: string): number {
@@ -263,7 +224,7 @@ function collectDirectoryChildren(
 async function scanTree<TreeRootResourcePath extends PortableResourcePath | null>(
   root: RootedDirectory,
   treeRootResourcePath: TreeRootResourcePath,
-  options: Readonly<ParsedBoundedDirectoryTreeScanOptions>,
+  options: BoundedDirectoryTreeScanOptions,
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<TreeRootResourcePath>>> {
   const pendingDirectories: PendingDirectory[] = [
     {
@@ -312,10 +273,9 @@ export async function scanBoundedRootDirectoryTree(
   root: RootedDirectory,
   options: BoundedDirectoryTreeScanOptions,
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<null>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return scanTree(root, null, parsed);
+  assertLimits(options);
+  throwIfAborted(options.signal);
+  return scanTree(root, null, options);
 }
 
 /** 有界扫描 `RootedDirectory` 内一个资源目录的完整后代树。 */
@@ -324,8 +284,7 @@ export async function scanBoundedResourceDirectoryTree(
   resourcePath: PortableResourcePath,
   options: BoundedDirectoryTreeScanOptions,
 ): Promise<Readonly<BoundedDirectoryTreeScanResult<PortableResourcePath>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return scanTree(root, resourcePath, parsed);
+  assertLimits(options);
+  throwIfAborted(options.signal);
+  return scanTree(root, resourcePath, options);
 }

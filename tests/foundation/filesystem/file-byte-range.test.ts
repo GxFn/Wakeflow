@@ -3,12 +3,11 @@ import { test } from "node:test";
 
 import {
   createFileByteRange,
-  type FileByteOffset,
   FileByteRangeError,
   type FileByteRangeErrorReason,
   parseFileByteOffset,
 } from "../../../src/foundation/filesystem/file-byte-range.js";
-import { type ByteCount, parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
+import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
 
 function expectRangeError(
   action: () => unknown,
@@ -29,14 +28,6 @@ function expectRangeError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOffset(value: unknown): FileByteOffset {
-  return value as FileByteOffset;
-}
-
-function asByteCount(value: unknown): ByteCount {
-  return value as ByteCount;
 }
 
 test("file byte offsets admit exactly non-negative safe integers", () => {
@@ -71,15 +62,5 @@ test("range end arithmetic fails before safe-integer overflow", () => {
       ),
     "end-overflow",
     "$.range",
-  );
-  expectRangeError(
-    () => createFileByteRange(asOffset(-1), parseByteCount(1), "$.range"),
-    "offset-range",
-    "$.range.offset",
-  );
-  expectRangeError(
-    () => createFileByteRange(parseFileByteOffset(0), asByteCount(-1), "$.range"),
-    "length-range",
-    "$.range.length",
   );
 });

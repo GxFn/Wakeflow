@@ -1,10 +1,8 @@
 import { Buffer } from "node:buffer";
 import { constants as fileSystemConstants } from "node:fs";
 import type { FileHandle } from "node:fs/promises";
-import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
@@ -18,7 +16,7 @@ import {
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
   translateParentHandleError,
@@ -77,7 +75,8 @@ export class DurableFileCandidateError extends ModuleError<DurableFileCandidateE
   static override readonly code = "wakeflow-durable-file-candidate";
 }
 
-interface ParsedOptions {
+/** 选项补齐缺省值之后的样子：成员档把持久化级别固定为 `content-only`。 */
+interface ResolvedOptions {
   readonly mode: number;
   readonly durability: "fsync" | "content-only";
   readonly signal: AbortSignal | undefined;
@@ -94,51 +93,11 @@ const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
 
 const fail: Fail<DurableFileCandidateErrorReason> = failWith(DurableFileCandidateError);
 
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "mode") ||
-    Object.keys(record).some((key) => key !== "mode" && key !== "signal" && key !== "durability") ||
-    (record.durability !== undefined &&
-      record.durability !== "fsync" &&
-      record.durability !== "content-only") ||
-    typeof record.mode !== "number" ||
-    !Number.isInteger(record.mode) ||
-    record.mode < 0 ||
-    record.mode > 0o777 ||
-    (record.signal !== undefined &&
-      (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    mode: record.mode,
-    durability: (record.durability ?? "fsync") as "fsync" | "content-only",
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
-function snapshotInput(value: unknown): Readonly<InputBytes> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !ArrayBuffer.isView(value) ||
-    !(value instanceof Uint8Array) ||
-    value.buffer instanceof SharedArrayBuffer
-  ) {
-    fail("input", "$bytes");
-  }
+/**
+ * 字节的私有副本、容量与摘要：先复制再算摘要，调用方之后改它自己的数组不影响写下的内容。
+ * 字节类型由签名保证，不再复验。
+ */
+function snapshotInput(value: Uint8Array): Readonly<InputBytes> {
   const byteCount = parseByteCount(value.byteLength, "$bytes");
   if (byteCount > DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES) {
     fail("capacity", "$bytes");
@@ -322,13 +281,12 @@ export async function createFileCandidateDurably(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   bytesValue: Uint8Array,
-  optionsValue: DurableFileCandidateOptions,
+  options: DurableFileCandidateOptions,
 ): Promise<Readonly<DurableFileCandidateResult>> {
-  assertRoot(root);
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
+  const { mode, durability = "fsync", signal } = options;
+  throwIfAborted(signal);
   const input = snapshotInput(bytesValue);
-  return performCreate(root, resourcePath, input, options, "candidate");
+  return performCreate(root, resourcePath, input, { mode, durability, signal }, "candidate");
 }
 
 /**
@@ -340,24 +298,16 @@ export async function createDirectoryTreeMemberFileDurably(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   bytesValue: Uint8Array,
-  optionsValue: Omit<DurableFileCandidateOptions, "durability">,
+  options: Omit<DurableFileCandidateOptions, "durability">,
 ): Promise<Readonly<DurableFileCandidateResult>> {
-  assertRoot(root);
-  if (
-    typeof optionsValue === "object" &&
-    optionsValue !== null &&
-    Object.hasOwn(optionsValue, "durability")
-  ) {
-    fail("input", "$options");
-  }
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
+  const { mode, signal } = options;
+  throwIfAborted(signal);
   const input = snapshotInput(bytesValue);
   return performCreate(
     root,
     resourcePath,
     input,
-    Object.freeze({ ...options, durability: "content-only" as const }),
+    { mode, durability: "content-only", signal },
     "tree-member",
   );
 }
@@ -366,7 +316,7 @@ async function performCreate(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   input: Readonly<InputBytes>,
-  options: Readonly<ParsedOptions>,
+  options: Readonly<ResolvedOptions>,
   profile: "candidate" | "tree-member",
 ): Promise<Readonly<DurableFileCandidateResult>> {
   // 候选档写后、同步后、目录项同步后各回读一次字节；成员档只看句柄元数据。

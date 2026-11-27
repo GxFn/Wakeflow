@@ -17,6 +17,7 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -33,7 +34,10 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
-const DESIGN_ID = "surface_33333333-3333-4333-8333-333333333333";
+const DESIGN_ID = parseWakeflowDurableIdOfKind(
+  "surface_33333333-3333-4333-8333-333333333333",
+  "surface",
+);
 
 async function fixture(t: TestContext) {
   const container = realpathSync(

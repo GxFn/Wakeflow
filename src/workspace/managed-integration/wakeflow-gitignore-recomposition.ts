@@ -16,14 +16,9 @@ import {
 } from "./wakeflow-gitignore-inspection.js";
 import {
   assertCurrentUserWakeflowGitignoreRecompositionRoot,
-  assertWakeflowGitignoreRecompositionRoot,
   currentWakeflowGitignoreRecompositionUserId,
   failWakeflowGitignoreRecomposition as fail,
   mapWakeflowGitignoreRecompositionLockError,
-  type ParsedWakeflowGitignoreRecompositionOptions,
-  type ParsedWakeflowGitignoreRecompositionRequest,
-  parseWakeflowGitignoreRecompositionOptions,
-  parseWakeflowGitignoreRecompositionRequest,
   WAKEFLOW_GITIGNORE_FILE_MODE,
   type WakeflowGitignoreRecompositionEffect,
   WakeflowGitignoreRecompositionError,
@@ -65,7 +60,7 @@ function failInspectionBeforeCommit(error: unknown): never {
 
 async function inspectCurrent(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowGitignoreRecompositionRequest>,
+  request: Readonly<WakeflowGitignoreRecompositionRequest>,
   signal: AbortSignal | undefined,
   afterCommit: boolean,
 ): Promise<Readonly<WakeflowGitignoreInspection>> {
@@ -187,14 +182,14 @@ function assertReadback(
 
 async function recomposeUnderLock(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowGitignoreRecompositionRequest>,
-  options: Readonly<ParsedWakeflowGitignoreRecompositionOptions>,
+  request: Readonly<WakeflowGitignoreRecompositionRequest>,
+  signal: AbortSignal | undefined,
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowGitignoreRecompositionReceipt>> {
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId);
-  const before = await inspectCurrent(root, request, options.signal, false);
+  const before = await inspectCurrent(root, request, signal, false);
   if (before.status !== "recompose-required") {
     return Object.freeze({
       disposition: "current",
@@ -203,10 +198,10 @@ async function recomposeUnderLock(
     });
   }
   await assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId);
-  throwIfAborted(options.signal);
-  const effect = await publishTarget(root, before, options.signal);
+  throwIfAborted(signal);
+  const effect = await publishTarget(root, before, signal);
   markCommitted();
-  const after = await inspectCurrent(root, request, options.signal, true);
+  const after = await inspectCurrent(root, request, signal, true);
   assertReadback(before, effect, after, expectedUserId);
   return Object.freeze({
     disposition: effect.publication,
@@ -219,26 +214,24 @@ async function recomposeUnderLock(
  * 在 Gitignore 专属短锁内重推导当前目标，并执行幂等 current、原子创建或 CAS 替换。
  */
 export async function recomposeWakeflowWorkspaceGitignore(
-  rootValue: RootedDirectory,
-  requestValue: WakeflowGitignoreRecompositionRequest,
-  optionsValue?: WakeflowGitignoreRecompositionOptions,
+  root: RootedDirectory,
+  request: WakeflowGitignoreRecompositionRequest,
+  options: WakeflowGitignoreRecompositionOptions = {},
 ): Promise<Readonly<WakeflowGitignoreRecompositionReceipt>> {
-  assertWakeflowGitignoreRecompositionRoot(rootValue);
-  const options = parseWakeflowGitignoreRecompositionOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const request = parseWakeflowGitignoreRecompositionRequest(requestValue);
+  const { signal } = options;
+  throwIfAborted(signal);
   const expectedUserId = currentWakeflowGitignoreRecompositionUserId();
-  await assertCurrentUserWakeflowGitignoreRecompositionRoot(rootValue, expectedUserId);
+  await assertCurrentUserWakeflowGitignoreRecompositionRoot(root, expectedUserId);
 
   let committed = false;
   try {
     return await withWorkspaceLock(
-      rootValue,
+      root,
       "gitignore",
       async () => {
         // 上一个重组 `.gitignore` 的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
-        await settleStagesOfDeadWriters(rootValue, [WAKEFLOW_GITIGNORE_REF], options.signal);
-        return recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+        await settleStagesOfDeadWriters(root, [WAKEFLOW_GITIGNORE_REF], signal);
+        return recomposeUnderLock(root, request, signal, expectedUserId, () => {
           committed = true;
         });
       },

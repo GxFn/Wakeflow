@@ -2,9 +2,12 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
 import {
-  parseWakeflowGitignoreHostProfileSet,
+  WAKEFLOW_WORKSPACE_HOST_IDS,
+  type WakeflowWorkspaceHostId,
+  type WakeflowWorkspaceHostResourceProfile,
+} from "../workspace-host-resource-profile.js";
+import {
   renderWakeflowGitignoreRootRule,
   type WakeflowGitignoreRule,
 } from "./wakeflow-gitignore-body-authority.js";
@@ -44,9 +47,14 @@ export interface WakeflowSupportGitignoreBodyAuthority {
  * 从完整宿主画像集合生成支撑面 `.gitignore` 托管块权威；没有宿主本机设置路径时返回 null。
  */
 export function createWakeflowSupportGitignoreBodyAuthority(
-  profileValues: unknown,
+  profileValues: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
 ): Readonly<WakeflowSupportGitignoreBodyAuthority> | null {
-  const profiles = parseWakeflowGitignoreHostProfileSet(profileValues);
+  // 摘要基础里的 hostIds 按协议宿主顺序，与调用方给出的次序无关。
+  const profiles = [...profileValues].sort(
+    (left, right) =>
+      WAKEFLOW_WORKSPACE_HOST_IDS.indexOf(left.hostId) -
+      WAKEFLOW_WORKSPACE_HOST_IDS.indexOf(right.hostId),
+  );
   const rules = new Set<WakeflowGitignoreRule>();
   for (const profile of profiles) {
     const localPath = profile.surfaces.settingsIntegration?.localPath;

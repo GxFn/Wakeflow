@@ -51,7 +51,7 @@ test("durable file candidate 直接创建具名非权威文件且不产生匿名
   }
 });
 
-test("durable file candidate 在任何写入前拒绝取消和共享字节", async () => {
+test("durable file candidate 在任何写入前拒绝取消", async () => {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-candidate-input-"));
   const root = await RootedDirectory.open(fixtureRoot);
   try {
@@ -64,18 +64,6 @@ test("durable file candidate 在任何写入前拒绝取消和共享字节", asy
         signal: controller.signal,
       }),
       OperationAbortedError,
-    );
-
-    await rejects(
-      createFileCandidateDurably(root, ref, new Uint8Array(new SharedArrayBuffer(1)), {
-        mode: 0o600,
-      }),
-      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
-    );
-
-    await rejects(
-      createFileCandidateDurably(root, ref, new Proxy(new Uint8Array([1]), {}), { mode: 0o600 }),
-      (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
     );
     equal(readdirSync(fixtureRoot).length, 0);
   } finally {
@@ -218,12 +206,5 @@ test("a directory-tree member syncs its content once, not its parent, and reads 
     }),
     (error: unknown) =>
       error instanceof DurableFileCandidateError && error.reason === "target-exists",
-  );
-  await rejects(
-    createDirectoryTreeMemberFileDurably(root, parsePortableResourcePath("other.txt"), bytes, {
-      mode: 0o644,
-      durability: "fsync",
-    } as never),
-    (error: unknown) => error instanceof DurableFileCandidateError && error.reason === "input",
   );
 });

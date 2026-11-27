@@ -1,7 +1,5 @@
-import { types } from "node:util";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
@@ -97,41 +95,6 @@ export class LedgerAuthorityStoreError extends ModuleError<LedgerAuthorityStoreE
 
 export const throwLedgerAuthorityStoreError: Fail<LedgerAuthorityStoreErrorReason> =
   failWith(LedgerAuthorityStoreError);
-
-interface ParsedLedgerAuthorityStoreOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
-export function isLedgerAbortSignal(value: unknown): value is AbortSignal {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !types.isProxy(value) &&
-    value instanceof AbortSignal
-  );
-}
-
-export function parseLedgerAuthorityStoreOptions(
-  value: unknown,
-): Readonly<ParsedLedgerAuthorityStoreOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      throwLedgerAuthorityStoreError("input", "$options", error);
-    }
-    throw error;
-  }
-  const unexpected = Object.keys(record).find((key) => key !== "signal");
-  if (unexpected !== undefined) {
-    throwLedgerAuthorityStoreError("input", `$options/${unexpected}`);
-  }
-  if (record.signal !== undefined && !isLedgerAbortSignal(record.signal)) {
-    throwLedgerAuthorityStoreError("input", "$options/signal");
-  }
-  return Object.freeze({ signal: record.signal });
-}
 
 export function assertLedgerAuthorityNode(
   node: Readonly<FileNodeSnapshot>,

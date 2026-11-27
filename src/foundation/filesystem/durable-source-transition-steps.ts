@@ -1,7 +1,5 @@
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith } from "../error/module-error.js";
-import { isAbortSignal } from "../node/abort-signal.js";
-import { admitFrozenFileNodeSnapshot, type FileNodeSnapshot } from "./file-node-snapshot.js";
+import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -25,7 +23,7 @@ import {
  * Wakeflow Foundation / Filesystem：不替换目标的硬链接与持久化重命名共用的父目录与源步骤
  * （写一次，1.4.5）。
  *
- * 两个原语都解析同样的选项，打开源与目标两个父目录和一个精确源句柄，提交前后复验它们，提交后
+ * 两个原语都核对同样的资源路径，打开源与目标两个父目录和一个精确源句柄，提交前后复验它们，提交后
  * 同步父目录，最后关闭句柄。这里的每一步与两者原来各自的一份逐字相同：同样的句柄调用、同样的
  * 原因、路径与 cause，只是错误由调用方的错误类（`Failure`）构造。这里只放各步本身：步骤的先后、
  * 同步哪个父目录、关闭的顺序，仍写在两个原语里。打开源句柄与提交本身也各写各的：链接只准入
@@ -49,11 +47,6 @@ type SourceTransitionReason =
 
 type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
 
-interface ParsedSourceTransitionOptions {
-  readonly expectedSourceNode: Readonly<FileNodeSnapshot>;
-  readonly signal: AbortSignal | undefined;
-}
-
 /** 绑定到调用方错误类的共用步骤；调用方在模块顶层取一次。 */
 export function sourceTransitionSteps<E extends Error>(
   Failure: new (reason: SourceTransitionReason, path: string, options?: ErrorOptions) => E,
@@ -67,33 +60,6 @@ export function sourceTransitionSteps<E extends Error>(
       if (error instanceof PortableResourcePathError) fail("input", path, error);
       throw error;
     }
-  }
-
-  function parseOptions(value: unknown): Readonly<ParsedSourceTransitionOptions> {
-    let record: Readonly<Record<string, unknown>>;
-    try {
-      record = parsePlainRecord(value, "$options");
-    } catch (error: unknown) {
-      if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-      throw error;
-    }
-    const allowed = new Set(["expectedSourceNode", "signal"]);
-    if (
-      !Object.hasOwn(record, "expectedSourceNode") ||
-      Object.keys(record).some((key) => !allowed.has(key))
-    ) {
-      fail("input", "$options");
-    }
-    const signal = record.signal;
-    if (signal !== undefined && !isAbortSignal(signal)) {
-      fail("input", "$options.signal");
-    }
-    return Object.freeze({
-      expectedSourceNode: admitFrozenFileNodeSnapshot(record.expectedSourceNode, (cause) =>
-        fail("input", "$options.expectedSourceNode", cause),
-      ),
-      signal,
-    });
   }
 
   function mapParentHandleError(
@@ -207,7 +173,6 @@ export function sourceTransitionSteps<E extends Error>(
 
   return Object.freeze({
     parseResourcePath,
-    parseOptions,
     openResourceParent,
     assertParentCurrent,
     inspectParentTarget,

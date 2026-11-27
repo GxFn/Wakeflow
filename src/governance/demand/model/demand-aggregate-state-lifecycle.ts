@@ -1,24 +1,12 @@
 import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  type ManagedEvidenceManifest,
-  ManagedEvidenceManifestError,
-  parseManagedEvidenceManifest,
-} from "../../evidence/managed-evidence-manifest.js";
-import {
-  type DemandCompletion,
-  DemandCompletionError,
-  parseDemandCompletion,
-} from "../../lifecycle/demand-completion.js";
-import {
-  computeTaskPackageDigest,
-  parseTaskPackage,
-  type TaskPackage,
-  TaskPackageError,
-} from "../../tasking/task-package.js";
+import type { ManagedEvidenceManifest } from "../../evidence/managed-evidence-manifest.js";
+import type { DemandCompletion } from "../../lifecycle/demand-completion.js";
+import { computeTaskPackageDigest, type TaskPackage } from "../../tasking/task-package.js";
 import {
   currentTestTargetsOf,
   type DemandAggregateState,
   type DemandAwaitingDecision,
+  type DemandContinuationKind,
   type DemandSupersededTargetTaskState,
   type DemandTargetTaskState,
   fail,
@@ -27,7 +15,6 @@ import {
   compareText,
   computeDemandAggregateStateDigest,
   parseDemandAggregateState,
-  parseId,
 } from "./demand-aggregate-state-wire.js";
 
 /**
@@ -44,12 +31,10 @@ export interface DemandEscalationSource {
 
 /** `lifecycle.demand-escalated.v1`：活动 Demand 进入等待决定；同一时刻只能有一个未回答的升级。 */
 export function escalateDemandAggregateState(
-  currentValue: unknown,
+  current: Readonly<DemandAggregateState>,
   escalation: Readonly<DemandEscalationSource>,
-  escalationEventIdValue: unknown,
+  escalationEventId: WakeflowDurableId<"demand-event">,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  const escalationEventId = parseId(escalationEventIdValue, "demand-event", "$escalationEventId");
   if (
     current.lifecycle !== "active" ||
     current.awaitingDecision !== undefined ||
@@ -69,11 +54,9 @@ export function escalateDemandAggregateState(
 
 /** `lifecycle.decision-recorded.v1`：用户回答清除等待中的升级。 */
 export function recordDecisionInDemandAggregateState(
-  currentValue: unknown,
-  escalationEventIdValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  escalationEventId: string,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  const escalationEventId = parseId(escalationEventIdValue, "demand-event", "$escalationEventId");
   if (
     current.lifecycle !== "active" ||
     current.awaitingDecision === undefined ||
@@ -87,10 +70,10 @@ export function recordDecisionInDemandAggregateState(
 
 /** 续接决策用：续接前状态里已有的 test 目标，随 `lifecycle.demand-continued` 事件持久化。 */
 export function historicalTestTargetIdsAtContinuation(
-  currentValue: unknown,
+  current: Readonly<DemandAggregateState>,
 ): readonly WakeflowDurableId<"target-task">[] {
-  return parseDemandAggregateState(currentValue)
-    .targetTasks.filter((target) => target.workType === "test")
+  return current.targetTasks
+    .filter((target) => target.workType === "test")
     .map((target) => target.targetTaskId);
 }
 
@@ -99,22 +82,17 @@ export function historicalTestTargetIdsAtContinuation(
  * 历史 test 目标只取自事件携带的边界；早期事件没有该字段，重放得到与当时完全相同的状态。
  */
 export function continueDemandAggregateState(
-  currentValue: unknown,
-  kindValue: unknown,
-  eventIdValue: unknown,
-  historicalTestTargetIdsValue?: readonly unknown[],
-  supplementValue?: unknown,
+  current: Readonly<DemandAggregateState>,
+  kindValue: DemandContinuationKind,
+  eventId: WakeflowDurableId<"demand-event">,
+  historicalTestTargetIdsValue?: readonly string[],
+  supplementValue?: Readonly<{
+    readonly requirementId: string;
+    readonly recordRef: string;
+    readonly recordDigest: string;
+  }>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  const eventId = parseId(eventIdValue, "demand-event", "$eventId");
-  if (
-    current.lifecycle !== "completed" ||
-    (kindValue !== "optimization" &&
-      kindValue !== "requirement-supplement" &&
-      kindValue !== "verified-bug")
-  ) {
-    fail("transition", "$state/lifecycle");
-  }
+  if (current.lifecycle !== "completed") fail("transition", "$state/lifecycle");
   // 已接受的目标留在状态里作为历史；续接要求先规划新的任务包，同一仓库允许再次规划。
   // 事件携带的 test 目标成为历史，新一轮真实环境测试从零开始；成员关系由状态解析校验。
   const historicalTestTargetIds = historicalTestTargetIdsValue ?? [];
@@ -149,19 +127,9 @@ export function continueDemandAggregateState(
 
 /** `evidence.managed-evidence-recorded.v1`使用的纯状态转换。 */
 export function recordManagedEvidenceInDemandAggregateState(
-  currentValue: unknown,
-  manifestValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  manifest: Readonly<ManagedEvidenceManifest>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let manifest: Readonly<ManagedEvidenceManifest>;
-  try {
-    manifest = parseManagedEvidenceManifest(manifestValue);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidenceManifestError) {
-      fail("managed-evidence-manifest", "$manifest", error);
-    }
-    throw error;
-  }
   const recorded = current.managedEvidence ?? [];
   if (
     current.lifecycle !== "active" ||
@@ -374,17 +342,9 @@ function planImplementationTargetTask(
 }
 
 export function planTargetTaskInDemandAggregateState(
-  currentValue: unknown,
-  taskPackageValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  taskPackage: Readonly<TaskPackage>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let taskPackage: Readonly<TaskPackage>;
-  try {
-    taskPackage = parseTaskPackage(taskPackageValue);
-  } catch (error: unknown) {
-    if (error instanceof TaskPackageError) fail("task-package", "$taskPackage", error);
-    throw error;
-  }
   if (
     current.lifecycle !== "active" ||
     taskPackage.demandId !== current.demandId ||
@@ -402,8 +362,9 @@ export function planTargetTaskInDemandAggregateState(
 }
 
 /** lifecycle.demand-cancelled.v1 使用的纯状态转换。 */
-export function cancelDemandAggregateState(currentValue: unknown): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
+export function cancelDemandAggregateState(
+  current: Readonly<DemandAggregateState>,
+): Readonly<DemandAggregateState> {
   if (current.lifecycle !== "active") fail("transition", "$/lifecycle");
   // The cancellation event ends the wait; the escalation remains in event history.
   const { awaitingDecision: _awaitingDecision, ...rest } = current;
@@ -415,19 +376,9 @@ export function cancelDemandAggregateState(currentValue: unknown): Readonly<Dema
 
 /** `lifecycle.demand-completed.v1`使用的成功终态转换。 */
 export function completeDemandAggregateState(
-  currentValue: unknown,
-  completionValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  completion: Readonly<DemandCompletion>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let completion: Readonly<DemandCompletion>;
-  try {
-    completion = parseDemandCompletion(completionValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandCompletionError) {
-      fail("transition", "$completion", error);
-    }
-    throw error;
-  }
   const implementationTargets = current.targetTasks.filter(
     (target) => target.workType !== "test" && target.phase !== "superseded",
   );

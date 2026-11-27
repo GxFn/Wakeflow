@@ -1,11 +1,6 @@
 import pLimit from "p-limit";
 
-import { parseSha256Digest, Sha256Error } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
   type FileNodeSnapshot,
@@ -43,7 +38,6 @@ import {
 import {
   DemandEventStreamPositionError,
   parseDemandEventCommitSequence,
-  parseDemandEventStreamRevision,
 } from "./demand-event-stream-position.js";
 import {
   assertDemandFileEventStoreDirectory,
@@ -241,44 +235,6 @@ function demandFileEventCursorFrom(
   });
 }
 
-function parseCursor(value: unknown): Readonly<DemandFileEventStoreCursor> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$cursor");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$cursor", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3 ||
-    keys[0] !== "commitSequence" ||
-    keys[1] !== "lastCommitDigest" ||
-    keys[2] !== "streamRevision"
-  ) {
-    fail("input", "$cursor");
-  }
-  let lastCommitDigest: ReturnType<typeof parseSha256Digest>;
-  try {
-    lastCommitDigest = parseSha256Digest(record.lastCommitDigest, "$/lastCommitDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", "$/lastCommitDigest", error);
-    throw error;
-  }
-  try {
-    return Object.freeze({
-      commitSequence: parseDemandEventCommitSequence(record.commitSequence, "$/commitSequence"),
-      streamRevision: parseDemandEventStreamRevision(record.streamRevision, "$/streamRevision"),
-      lastCommitDigest,
-    });
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamPositionError) {
-      fail("input", error.path, error);
-    }
-    throw error;
-  }
-}
-
 async function readCommitEntries(
   root: RootedDirectory,
   entries: readonly Readonly<StableDirectoryEntry>[],
@@ -370,10 +326,9 @@ export async function readAllDemandFileEventCommits(
 
 export async function readDemandFileEventCommitsAfter(
   root: RootedDirectory,
-  cursorValue: unknown,
+  cursor: Readonly<DemandFileEventStoreCursor>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandFileEventStoreTailReadResult>> {
-  const cursor = parseCursor(cursorValue);
   // 尾部读取按序号逐文件探测，不枚举整个提交目录：成本只与尾部长度有关。
   const anchorLoaded = await readDemandFileEventCommitOrNull(
     root,
@@ -442,9 +397,10 @@ export async function readDemandFileEventCommitOrNull(
 
 export async function readDemandFileEventCommitAt(
   root: RootedDirectory,
-  sequenceValue: unknown,
+  sequenceValue: number,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DemandEventStreamCommit> | null> {
+  // 序号可能来自磁盘上的身份索引：在这里把数值造成提交序号品牌。
   let sequence: ReturnType<typeof parseDemandEventCommitSequence>;
   try {
     sequence = parseDemandEventCommitSequence(sequenceValue);

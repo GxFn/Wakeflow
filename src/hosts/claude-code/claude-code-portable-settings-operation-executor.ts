@@ -1,7 +1,4 @@
-import { types } from "node:util";
-
 import {
-  parseWakeflowConfig,
   parseWakeflowConfigPlacement,
   WakeflowConfigError,
   type WakeflowConfigModel,
@@ -26,10 +23,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../../workspace/workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
 import {
   type ClaudeCodePortableSettingsOperation,
   type ClaudeCodePortableSettingsRoot,
@@ -39,13 +33,12 @@ import {
 import {
   CLAUDE_CODE_PORTABLE_SETTINGS_REF,
   ClaudeCodePortableSettingsPublicationError,
-  type ClaudeCodePortableSettingsPublicationOptions,
+  type ClaudeCodePortableSettingsRuleSelection,
   inspectClaudeCodePortableSettings,
   publishClaudeCodePortableSettings,
   settleClaudeCodePortableSettingsPublicationStages,
 } from "./claude-code-portable-settings-publication.js";
 import {
-  ClaudeCodePortableSettingsTransitionError,
   claudeCodePortableSettingsPublicationOwnerOf,
   claudeCodePortableSettingsRemovedRulesFor,
   claudeCodePortableSettingsRetiredRulesFor,
@@ -55,7 +48,7 @@ import {
 /**
  * Wakeflow Host / Claude Code：confirmed portable settings 的单 operation executor。
  *
- * Executor 重新解析 Config/Profile、重建Root Authority、解析逻辑根与当前物理位置，
+ * Executor 准入持久化的操作负载、由请求里的 Config 重建Root Authority、解析逻辑根与当前物理位置，
  * 并只执行一个 source→target CAS。普通执行要求当前source精确匹配；只有明确的
  * affected-operation恢复才接受目标已提交或先结算同目标Foundation stage。
  * 已确认的 sourceDigest 同时作为发布器的 CAS 基底传入：executor 自己的检查与发布器读取之间的
@@ -64,8 +57,10 @@ import {
  */
 
 export interface ExecuteClaudeCodePortableSettingsOperationRequest {
-  readonly config: unknown;
-  readonly profile: unknown;
+  readonly config: WakeflowConfigModel;
+  /** 选出的本宿主传输 profile；写入操作的工作区根助手规则按它查表（ADR-0025 D6）。 */
+  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  /** 维护意图里持久化的操作负载：恢复时从盘上读回，所以在这里完整准入。 */
   readonly operation: unknown;
   readonly recoveringAffectedOperation: boolean;
   readonly signal?: AbortSignal;
@@ -102,12 +97,10 @@ const fail: Fail<ClaudeCodePortableSettingsOperationExecutionErrorReason> = fail
   ClaudeCodePortableSettingsOperationExecutionError,
 );
 
-interface ParsedRequest {
-  readonly model: WakeflowConfigModel;
-  readonly profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
+/** 执行用的请求：持久化的操作负载已经准入成本模块的操作模型。 */
+interface ParsedRequest
+  extends Omit<ExecuteClaudeCodePortableSettingsOperationRequest, "operation"> {
   readonly operation: Readonly<ClaudeCodePortableSettingsOperation>;
-  readonly recoveringAffectedOperation: boolean;
-  readonly signal: AbortSignal | undefined;
 }
 
 function digest(value: unknown, path: string): Sha256Digest {
@@ -237,75 +230,6 @@ function parseOperation(value: unknown): Readonly<ClaudeCodePortableSettingsOper
   return expected;
 }
 
-function parseRequest(value: unknown): Readonly<ParsedRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "config") ||
-    !Object.hasOwn(record, "profile") ||
-    !Object.hasOwn(record, "operation") ||
-    !Object.hasOwn(record, "recoveringAffectedOperation") ||
-    Object.keys(record).some(
-      (key) =>
-        key !== "config" &&
-        key !== "profile" &&
-        key !== "operation" &&
-        key !== "recoveringAffectedOperation" &&
-        key !== "signal",
-    ) ||
-    typeof record.recoveringAffectedOperation !== "boolean" ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$request");
-  }
-  let model: WakeflowConfigModel;
-  try {
-    model = parseWakeflowConfig(record.config);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-  if (
-    profile.hostId !== "claude-code" ||
-    profile.surfaces.settingsIntegration?.portablePath !== CLAUDE_CODE_PORTABLE_SETTINGS_REF
-  ) {
-    fail("profile", "$/profile");
-  }
-  // 工作区根的助手规则按 profile 的助手文件名查表（ADR-0025 D6）：不是本宿主传输的 profile 在这里就拒绝。
-  try {
-    claudeCodePortableSettingsPublicationOwnerOf({ rootKind: "program" }, profile);
-  } catch (error: unknown) {
-    if (error instanceof ClaudeCodePortableSettingsTransitionError)
-      fail("profile", "$/profile", error);
-    throw error;
-  }
-  return Object.freeze({
-    model,
-    profile,
-    operation: parseOperation(record.operation),
-    recoveringAffectedOperation: record.recoveringAffectedOperation,
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
 function sameRoot(
   left: Readonly<ClaudeCodePortableSettingsRoot>,
   right: Readonly<ClaudeCodePortableSettingsRoot>,
@@ -327,8 +251,8 @@ function sameRoot(
  */
 function transitionOptions(
   operation: Readonly<ClaudeCodePortableSettingsOperation>,
-  profile: ParsedRequest["profile"],
-): Pick<ClaudeCodePortableSettingsPublicationOptions, "rules" | "retiredRules" | "removedRules"> {
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+): ClaudeCodePortableSettingsRuleSelection {
   if (operation.action === "remove") {
     return { removedRules: claudeCodePortableSettingsRemovedRulesFor(operation.root) };
   }
@@ -427,20 +351,15 @@ async function executeAtRoot(root: RootedDirectory, request: Readonly<ParsedRequ
 
 /** 执行一个 exact confirmed portable settings operation。 */
 export async function executeClaudeCodePortableSettingsOperation(
-  workspaceRootValue: RootedDirectory,
-  requestValue: ExecuteClaudeCodePortableSettingsOperationRequest,
+  workspaceRoot: RootedDirectory,
+  requestValue: Readonly<ExecuteClaudeCodePortableSettingsOperationRequest>,
 ): Promise<Readonly<ClaudeCodePortableSettingsOperationExecutionResult>> {
-  if (
-    typeof workspaceRootValue !== "object" ||
-    workspaceRootValue === null ||
-    types.isProxy(workspaceRootValue) ||
-    !(workspaceRootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$workspaceRoot");
-  }
-  const request = parseRequest(requestValue);
+  const request: Readonly<ParsedRequest> = {
+    ...requestValue,
+    operation: parseOperation(requestValue.operation),
+  };
   throwIfAborted(request.signal);
-  const authority = compileClaudeCodePortableSettingsRootAuthority(request.model);
+  const authority = compileClaudeCodePortableSettingsRootAuthority(request.config);
   if (authority.authorityDigest !== request.operation.authorityDigest) {
     fail("authority-changed", "$operation.authorityDigest");
   }
@@ -453,12 +372,12 @@ export async function executeClaudeCodePortableSettingsOperation(
     fail("authority-changed", "$operation.root");
   }
 
-  let targetRoot = workspaceRootValue;
+  let targetRoot = workspaceRoot;
   let closeTarget = false;
   if (authoritativeRoot.rootKind === "support-surface") {
     let placements: Awaited<ReturnType<typeof validateWakeflowConfigRootPlacements>>;
     try {
-      placements = await validateWakeflowConfigRootPlacements(workspaceRootValue, request.model);
+      placements = await validateWakeflowConfigRootPlacements(workspaceRoot, request.config);
     } catch (error: unknown) {
       if (error instanceof WakeflowConfigRootPlacementError) {
         fail("placement", error.path, error);

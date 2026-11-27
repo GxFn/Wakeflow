@@ -24,6 +24,7 @@ import {
   WakeflowMaintenanceExecutionIntentStoreError,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-intent-store.js";
 import { createWakeflowMaintenanceExecutionPlan } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-plan.js";
+import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
@@ -34,7 +35,9 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 
 useDisposableDurability();
 
-const OPERATION_ID = "maintenance_operation_11111111-1111-4111-8111-111111111111";
+const OPERATION_ID = parseWakeflowMaintenanceOperationId(
+  "maintenance_operation_11111111-1111-4111-8111-111111111111",
+);
 const PROFILES = Object.freeze([
   claudeCodeWorkspaceHostResourceProfile,
   codexWorkspaceHostResourceProfile,
@@ -110,7 +113,9 @@ test("compact intent reconstructs the exact plan and request after restart", () 
   const text = renderWakeflowMaintenanceExecutionIntent(intent);
   deepEqual(parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)), intent);
   equal(
-    computeWakeflowMaintenanceExecutionIntentDigest(JSON.parse(text)),
+    computeWakeflowMaintenanceExecutionIntentDigest(
+      parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)),
+    ),
     computeWakeflowMaintenanceExecutionIntentDigest(intent),
   );
   equal(text.includes("absolutePath"), false);
@@ -308,7 +313,9 @@ test("intent carries the optional writer stamp, round-trips it and reconstructs 
   });
   deepEqual(parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)), intent);
   equal(
-    computeWakeflowMaintenanceExecutionIntentDigest(JSON.parse(text)),
+    computeWakeflowMaintenanceExecutionIntentDigest(
+      parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)),
+    ),
     computeWakeflowMaintenanceExecutionIntentDigest(intent),
   );
   const legacy = parseWakeflowMaintenanceExecutionIntent(

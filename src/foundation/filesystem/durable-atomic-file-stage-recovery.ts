@@ -1,11 +1,4 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { ownedByAnotherUser } from "../node/current-user.js";
 import {
@@ -32,11 +25,10 @@ import {
 } from "./file-node-snapshot.js";
 import {
   type PortableResourcePath,
-  PortableResourcePathError,
   parsePortableResourcePath,
   splitPortableResourcePath,
 } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -93,10 +85,6 @@ export class DurableAtomicFileStageRecoveryError extends ModuleError<DurableAtom
   static override readonly code = "wakeflow-durable-atomic-file-stage-recovery";
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 interface StageEntry {
   readonly address: Readonly<DurableAtomicFileStageAddress>;
   readonly entry: Readonly<StableDirectoryEntry>;
@@ -110,31 +98,6 @@ interface TargetScope {
 const fail: Fail<DurableAtomicFileStageRecoveryErrorReason> = failWith(
   DurableAtomicFileStageRecoveryError,
 );
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
 
 function assertCurrentOwner(node: Readonly<FileNodeSnapshot>, path: string): void {
   if (ownedByAnotherUser(node.userId)) {
@@ -156,51 +119,26 @@ function assertStageNode(stage: Readonly<StageEntry>, index: number): void {
   assertCurrentOwner(entry.node, `$stages/${index}`);
 }
 
-function parseDirectoryRef(value: unknown): PortableResourcePath | null {
-  if (value === null) return null;
-  try {
-    return parsePortableResourcePath(value, "$directoryResourcePath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$directoryResourcePath", error);
-    }
-    throw error;
-  }
-}
-
 function parentDirectoryRef(resourcePath: PortableResourcePath): PortableResourcePath | null {
   const segments = splitPortableResourcePath(resourcePath);
   return segments.length === 1 ? null : parsePortableResourcePath(segments.slice(0, -1).join("/"));
 }
 
-function parseTargetScope(value: unknown): Readonly<TargetScope> {
-  let values: readonly unknown[];
-  try {
-    values = parseDenseArray(
-      value,
-      DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE,
-      "$targetResourcePaths",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      fail("input", "$targetResourcePaths", error);
-    }
-    throw error;
+/**
+ * 目标集合的范围：非空且有上限、不重复、同一个父目录——这几条是元素之间的关系，类型表达不了，
+ * 所以留着；每个路径的词法由目标摘要的计算复验（本层的路径规则），数组本身不再被动准入。
+ */
+function targetScopeOf(resourcePaths: readonly PortableResourcePath[]): Readonly<TargetScope> {
+  if (
+    resourcePaths.length === 0 ||
+    resourcePaths.length > DURABLE_ATOMIC_FILE_STAGE_MAXIMUM_TARGET_SCOPE
+  ) {
+    fail("input", "$targetResourcePaths");
   }
-  if (values.length === 0) fail("input", "$targetResourcePaths");
   const paths: PortableResourcePath[] = [];
   const seen = new Set<string>();
   const targetDigests = new Set<Sha256Digest>();
-  for (const [index, value] of values.entries()) {
-    let resourcePath: PortableResourcePath;
-    try {
-      resourcePath = parsePortableResourcePath(value, `$targetResourcePaths/${index}`);
-    } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) {
-        fail("input", `$targetResourcePaths/${index}`, error);
-      }
-      throw error;
-    }
+  for (const [index, resourcePath] of resourcePaths.entries()) {
     if (seen.has(resourcePath)) {
       fail("input", `$targetResourcePaths/${index}`);
     }
@@ -449,13 +387,10 @@ async function recoverDirectoryStages(
 /** 清理指定父目录内所有安全且不再活动的自描述原子暂存文件。 */
 export async function recoverDurableAtomicFileStagesInDirectory(
   root: RootedDirectory,
-  directoryResourcePathValue: PortableResourcePath | null,
-  options?: DurableAtomicFileStageRecoveryOptions,
+  directoryResourcePath: PortableResourcePath | null,
+  options: DurableAtomicFileStageRecoveryOptions = {},
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  assertRoot(root);
-  const directoryResourcePath = parseDirectoryRef(directoryResourcePathValue);
-  const { signal } = parseOptions(options);
-  return recoverDirectoryStages(root, directoryResourcePath, signal, null, "ignore");
+  return recoverDirectoryStages(root, directoryResourcePath, options.signal, null, "ignore");
 }
 
 /**
@@ -463,16 +398,14 @@ export async function recoverDurableAtomicFileStagesInDirectory(
  */
 export async function recoverDurableAtomicFileStagesForTargets(
   root: RootedDirectory,
-  targetResourcePathValues: readonly PortableResourcePath[],
-  options?: DurableAtomicFileStageRecoveryOptions,
+  targetResourcePaths: readonly PortableResourcePath[],
+  options: DurableAtomicFileStageRecoveryOptions = {},
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  assertRoot(root);
-  const scope = parseTargetScope(targetResourcePathValues);
-  const { signal } = parseOptions(options);
+  const scope = targetScopeOf(targetResourcePaths);
   return recoverDirectoryStages(
     root,
     scope.directoryResourcePath,
-    signal,
+    options.signal,
     scope.targetDigests,
     "reject",
   );
@@ -483,16 +416,14 @@ export async function recoverDurableAtomicFileStagesForTargets(
  */
 export async function recoverDurableAtomicFileStagesMatchingTargets(
   root: RootedDirectory,
-  targetResourcePathValues: readonly PortableResourcePath[],
-  options?: DurableAtomicFileStageRecoveryOptions,
+  targetResourcePaths: readonly PortableResourcePath[],
+  options: DurableAtomicFileStageRecoveryOptions = {},
 ): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-  assertRoot(root);
-  const scope = parseTargetScope(targetResourcePathValues);
-  const { signal } = parseOptions(options);
+  const scope = targetScopeOf(targetResourcePaths);
   return recoverDirectoryStages(
     root,
     scope.directoryResourcePath,
-    signal,
+    options.signal,
     scope.targetDigests,
     "ignore",
     true,

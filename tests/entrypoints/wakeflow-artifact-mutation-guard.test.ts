@@ -8,10 +8,7 @@ import {
   resolveWakeflowArtifactIdentity,
   wakeflowArtifactWriterOf,
 } from "../../src/entrypoints/wakeflow-artifact-identity.js";
-import {
-  createWakeflowPublicMcpServer,
-  WakeflowPublicMcpServerConfigurationError,
-} from "../../src/entrypoints/wakeflow-public-mcp-server.js";
+import { createWakeflowPublicMcpServer } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
 import { parseSha256Digest } from "../../src/foundation/crypto/sha256.js";
 import { fail, WakeflowError } from "../../src/kernel/error.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
@@ -145,15 +142,4 @@ test("the composition root maps the artifact identity to a writer stamp and the 
     equal(result.isError, undefined);
   }
   deepEqual(seen, [writer, null, null]);
-  throws(
-    () =>
-      createWakeflowPublicMcpServer({
-        serverName: "artifact-writer",
-        serverVersion: "test",
-        ...defaultMcpExecutors(),
-        writer: { version: "1.2.0" } as never,
-      }),
-    (error: unknown) =>
-      error instanceof WakeflowPublicMcpServerConfigurationError && error.reason === "options",
-  );
 });

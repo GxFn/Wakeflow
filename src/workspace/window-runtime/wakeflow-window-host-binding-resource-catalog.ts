@@ -1,4 +1,4 @@
-import { parseWakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -15,9 +15,8 @@ import { wakeflowWindowHostBindingRef } from "./wakeflow-window-runtime-paths.js
  */
 export function createWakeflowWindowHostBindingResourceCatalog(
   configValue: unknown,
-  profileValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   const topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, profile);
   if (!profile.surfaces.windowIdentity) return Object.freeze([]);
   return Object.freeze(

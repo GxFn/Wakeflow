@@ -1,23 +1,17 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
 import type { ByteCount } from "../../../foundation/numeric/byte-count.js";
 import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
-  LedgerAuthorityStore,
+  type LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../ledger/ledger-authority-store.js";
 import {
@@ -315,34 +309,6 @@ async function readRecord(
   }
 }
 
-function parseOptions(value: unknown): Readonly<{
-  readonly audit: boolean;
-  readonly signal: AbortSignal | undefined;
-}> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "audit" && key !== "signal") ||
-    (record.audit !== undefined && typeof record.audit !== "boolean") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    audit: record.audit === true,
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
 type RootAuthorityPhase = Extract<
   DemandEventSourcingRootInventoryPhase,
   "healthy" | "managed-evidence-publication"
@@ -351,22 +317,10 @@ type RootAuthorityPhase = Extract<
 async function loadRootAuthority(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
-  options?: { readonly audit?: boolean; readonly signal?: AbortSignal },
+  options: { readonly audit?: boolean; readonly signal?: AbortSignal } = {},
   phase: RootAuthorityPhase = "healthy",
 ): Promise<Readonly<LoadedDemandEventSourcingRootAuthority>> {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory) ||
-    typeof ledgerStore !== "object" ||
-    ledgerStore === null ||
-    types.isProxy(ledgerStore) ||
-    !(ledgerStore instanceof LedgerAuthorityStore)
-  ) {
-    fail("input", "$input");
-  }
-  const { audit, signal } = parseOptions(options);
+  const { audit = false, signal } = options;
   let inventory: Readonly<DemandEventSourcingRootInventory>;
   try {
     inventory = await inspectDemandEventSourcingRootInventory(root, {

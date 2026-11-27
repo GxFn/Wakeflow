@@ -354,9 +354,8 @@ export function createManagedEvidencePublicationTransaction(
 
 /** 从事务重建将交给Demand Command Handler的exact Event Sourcing命令。 */
 export function deriveManagedEvidencePublicationEventSourcingCommand(
-  value: unknown,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): Readonly<RecordManagedEvidenceCommand> {
-  const transaction = parseManagedEvidencePublicationTransaction(value);
   return buildEventSourcingCommand(
     transaction.manifest,
     transaction.demandEventSourcingAppend.eventId,
@@ -365,16 +364,15 @@ export function deriveManagedEvidencePublicationEventSourcingCommand(
 
 /** 从事务中的单份Manifest重建exact stage/final record tree计划。 */
 export function deriveManagedEvidencePublicationRecordTreePlan(
-  value: unknown,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
 ): Readonly<ManagedEvidenceRecordTreePlan> {
-  return deriveRecordTreePlan(parseManagedEvidencePublicationTransaction(value).manifest);
+  return deriveRecordTreePlan(transaction.manifest);
 }
 
-export function renderManagedEvidencePublicationTransaction(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseManagedEvidencePublicationTransaction(value),
-    "$transaction",
-  );
+export function renderManagedEvidencePublicationTransaction(
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+): string {
+  return renderDeterministicJsonDocument(transaction, "$transaction");
 }
 
 export function parseManagedEvidencePublicationTransactionDocument(

@@ -16,7 +16,6 @@ import {
   readStableFileOrNull,
   StableFileReadError,
   type StableFileReadErrorReason,
-  type StableFileReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-read.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseByteCount } from "../../../src/foundation/numeric/byte-count.js";
@@ -41,10 +40,6 @@ async function expectStableFileReadError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): StableFileReadOptions {
-  return value as StableFileReadOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -187,12 +182,7 @@ test("a listed entry is read by handle: no path check, and the handle must be th
     equal(read.digest, listed.digest);
     deepEqual(read.node, listed.node);
 
-    // 列出来的节点是这种读法的起点；名字只能是这个目录里的一段。
-    await expectStableFileReadError(
-      () => readStableFile(root, resourcePath, asOptions({ maximumBytes, listed: true })),
-      "input",
-      "$options.listed",
-    );
+    // 列出来的节点是这种读法的起点（类型要求它在）；名字只能是这个目录里的一段。
     await expectStableFileReadError(
       () => readStableFile(root, parsePortableResourcePath("sub/record.json"), options),
       "input",
@@ -341,51 +331,6 @@ test("an already-aborted signal stops before reading", async () => {
       (error: unknown) =>
         error instanceof OperationAbortedError && !error.message.includes("private abort reason"),
     );
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("closed options reject accessors, unknown fields, and forged values", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-options-"));
-  writeFileSync(path.join(rootPath, "file"), "content");
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    let getterCalls = 0;
-    const accessor = Object.create(null) as Record<string, unknown>;
-    Object.defineProperty(accessor, "maximumBytes", {
-      get: () => {
-        getterCalls += 1;
-        return 1024;
-      },
-      enumerable: true,
-    });
-    await expectStableFileReadError(
-      () => readStableFile(root, parsePortableResourcePath("file"), asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
-    for (const options of [
-      { maximumBytes: 1024, extra: true },
-      { maximumBytes: -1 },
-      { maximumBytes: 1024, signal: {} },
-      { maximumBytes: 1024, expectedNode: {} },
-    ] as const) {
-      await expectStableFileReadError(
-        () => readStableFile(root, parsePortableResourcePath("file"), asOptions(options)),
-        "input",
-        options.maximumBytes === -1
-          ? "$options.maximumBytes"
-          : "signal" in options
-            ? "$options.signal"
-            : "expectedNode" in options
-              ? "$options.expectedNode"
-              : "$options",
-      );
-    }
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

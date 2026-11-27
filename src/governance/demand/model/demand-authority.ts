@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
 import type { WakeflowDemandAuthority as DemandAuthorityWire } from "../../../contracts/generated/governance/demand/demand-authority.generated.js";
@@ -40,7 +39,7 @@ import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   type LedgerAuthorityMemberReference,
-  LedgerAuthorityStore,
+  type LedgerAuthorityStore,
   LedgerAuthorityStoreError,
   type LoadedLedgerAuthorityRecord,
   parseLedgerAuthorityMemberReference,
@@ -266,7 +265,7 @@ function assertIdentityRelations(
 /** 解析 Demand Authority；提供 Identity 时，同时验证摘要、角色、测试和位置关系。 */
 export function parseDemandAuthority(
   value: unknown,
-  identityValue?: unknown,
+  identity?: Readonly<DemandIdentity>,
 ): Readonly<DemandAuthority> {
   let json: JsonValue;
   try {
@@ -299,10 +298,7 @@ export function parseDemandAuthority(
     authorityRefs: parseReferences(result.value.authorityRefs),
     testingDecision: parseTestingDecision(result.value.testingDecision),
   });
-  if (identityValue !== undefined) {
-    const identity = parseDemandIdentity(identityValue);
-    assertIdentityRelations(authority, identity);
-  }
+  if (identity !== undefined) assertIdentityRelations(authority, identity);
   return authority;
 }
 
@@ -361,28 +357,6 @@ export function createDemandAuthority(
   );
 }
 
-/** 准入的选项只认一个 `signal`，并且必须是真的 AbortSignal。 */
-function parseAdmissionSignal(options: unknown): AbortSignal | undefined {
-  let optionRecord: Readonly<Record<string, unknown>>;
-  try {
-    optionRecord = parsePlainRecord(options === undefined ? {} : options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(optionRecord).some((key) => key !== "signal") ||
-    (optionRecord.signal !== undefined &&
-      (typeof optionRecord.signal !== "object" ||
-        optionRecord.signal === null ||
-        types.isProxy(optionRecord.signal) ||
-        !(optionRecord.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return optionRecord.signal as AbortSignal | undefined;
-}
-
 /** 向账本解析权威引用；账本自己的失败归成解析失败，中止原样上抛。 */
 async function resolveAuthorityReferences(
   ledgerStore: LedgerAuthorityStore,
@@ -407,22 +381,12 @@ async function resolveAuthorityReferences(
  * 成员与身份需求包记录的绑定由解析时的身份关系检查保证。
  */
 export async function admitDemandAuthority(
-  identityValue: unknown,
-  authorityValue: unknown,
+  identity: Readonly<DemandIdentity>,
+  authority: Readonly<DemandAuthority>,
   ledgerStore: LedgerAuthorityStore,
-  options?: { readonly signal?: AbortSignal },
+  options: { readonly signal?: AbortSignal } = {},
 ): Promise<Readonly<AdmittedDemandAuthority>> {
-  const identity = parseDemandIdentity(identityValue);
-  const authority = parseDemandAuthority(authorityValue, identity);
-  if (
-    typeof ledgerStore !== "object" ||
-    ledgerStore === null ||
-    types.isProxy(ledgerStore) ||
-    !(ledgerStore instanceof LedgerAuthorityStore)
-  ) {
-    fail("input", "$ledgerStore");
-  }
-  const signal = parseAdmissionSignal(options);
+  const { signal } = options;
   throwIfAborted(signal);
   const resolved: ResolvedDemandAuthorityReference[] = [];
   const ledgerResolutions = await resolveAuthorityReferences(
@@ -449,13 +413,13 @@ export async function admitDemandAuthority(
   });
 }
 
-export function renderDemandAuthority(value: unknown): string {
-  return renderDeterministicJsonDocument(parseDemandAuthority(value), "$authority");
+export function renderDemandAuthority(authority: Readonly<DemandAuthority>): string {
+  return renderDeterministicJsonDocument(authority, "$authority");
 }
 
 export function parseDemandAuthorityDocument(
   text: unknown,
-  identityValue?: unknown,
+  identity?: Readonly<DemandIdentity>,
 ): Readonly<DemandAuthority> {
   let json: JsonValue;
   try {
@@ -466,13 +430,13 @@ export function parseDemandAuthorityDocument(
     }
     throw error;
   }
-  const authority = parseDemandAuthority(json, identityValue);
+  const authority = parseDemandAuthority(json, identity);
   if (renderDemandAuthority(authority) !== text) {
     fail("representation", "$authority");
   }
   return authority;
 }
 
-export function computeDemandAuthorityDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandAuthority(value));
+export function computeDemandAuthorityDigest(authority: Readonly<DemandAuthority>): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(authority);
 }

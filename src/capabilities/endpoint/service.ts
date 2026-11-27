@@ -55,7 +55,7 @@ import {
   HOST_HOOK_RECORDS_MAXIMUM,
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
-import { hostRuntimeRootRef, parseWakeflowHostId } from "../../kernel/layout.js";
+import { hostRuntimeRootRef } from "../../kernel/layout.js";
 import type { NextProjection } from "../../kernel/next-projection.js";
 import {
   type AdmittedPodWorktree,
@@ -96,7 +96,6 @@ import {
 } from "../../workspace/window-runtime/wakeflow-window-host-binding-store.js";
 import {
   parseWakeflowWindowHostHandle,
-  parseWakeflowWindowHostIdentityProfile,
   type WakeflowWindowHostHandle,
   type WakeflowWindowHostIdentityProfile,
   WakeflowWindowHostIdentityProfileError,
@@ -124,7 +123,6 @@ import {
   type WakeflowWindowRuntimeUnregisteredProjectionEntry,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-unregistered-projection.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostResourceProfile,
   wakeflowWorkspaceHostLocatorProvider,
 } from "../../workspace/workspace-host-resource-profile.js";
@@ -257,19 +255,9 @@ interface Envelope {
   readonly windowId: string;
 }
 
-interface AdmittedFacade {
-  readonly hostId: WakeflowHostId;
-  readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly transports?: Readonly<WakeflowWorkspaceHostTransportTable> | undefined;
-  readonly windowTransport?: Readonly<WakeflowWindowTransportPort> | undefined;
-  readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
-  readonly renderLaunchInstructions: WakeflowWindowLaunchInstructionsRenderer;
-  readonly renderLaunchValues?: WakeflowWindowLaunchValuesRenderer | undefined;
-}
-
 interface EndpointContext {
   readonly root: RootedDirectory;
-  readonly facade: AdmittedFacade;
+  readonly facade: Readonly<WindowBindingHostFacade>;
   /** 按这个工作区配置的窗口传输选出的端口；此后本上下文只调用这一份。 */
   readonly transport: Readonly<WakeflowWindowTransportPort>;
   readonly snapshot: Readonly<WakeflowConfigAuthoritySnapshot>;
@@ -332,46 +320,13 @@ interface AppliedBinding {
   readonly worktree: Readonly<WorktreeSummary> | null;
 }
 
-function admitFacade(facade: Readonly<WindowBindingHostFacade>): AdmittedFacade {
-  try {
-    const resourceProfile = parseWakeflowWorkspaceHostResourceProfile(facade.resourceProfile);
-    const identityProfile = parseWakeflowWindowHostIdentityProfile(facade.identityProfile);
-    const hostId = parseWakeflowHostId(facade.hostId, "$facade.hostId");
-    if (
-      resourceProfile.hostId !== hostId ||
-      identityProfile.hostId !== hostId ||
-      !resourceProfile.surfaces.windowIdentity ||
-      typeof facade.renderLaunchInstructions !== "function"
-    ) {
-      fail("unexpected", "host-facade", "$facade");
-    }
-    return Object.freeze({
-      hostId,
-      resourceProfile,
-      // 传输表随门面进来（ADR-0025 D1）：openContext 按配置从它选出本工作区的 profile 与端口。
-      ...(facade.transports === undefined ? {} : { transports: facade.transports }),
-      ...(facade.windowTransport === undefined ? {} : { windowTransport: facade.windowTransport }),
-      identityProfile,
-      renderLaunchInstructions: facade.renderLaunchInstructions,
-      ...(typeof facade.renderLaunchValues === "function"
-        ? { renderLaunchValues: facade.renderLaunchValues }
-        : {}),
-    });
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostIdentityProfileError) {
-      fail("unexpected", "host-facade", "$facade", { cause: error });
-    }
-    throw error;
-  }
-}
-
 /**
  * 按配置选出这个工作区的窗口传输端口（open-items L6）。门面没有给出端口，或端口的传输与选出的 profile
  * 推导出的定位子提供者（ADR-0025 D2）不是同一个，都是组合根的合同违背——两个值都来自宿主，这里只核对
  * 它们一致，不拿名字分支。
  */
 function selectTransport(
-  hostFacade: AdmittedFacade,
+  hostFacade: Readonly<WindowBindingHostFacade>,
   resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
 ): Readonly<WakeflowWindowTransportPort> {
@@ -421,14 +376,14 @@ async function readConfigSnapshot(
 
 async function openContext(
   root: RootedDirectory,
-  hostFacade: AdmittedFacade,
+  hostFacade: Readonly<WindowBindingHostFacade>,
   envelope: Readonly<Envelope>,
   options: ExecuteWindowBindingOptions,
 ): Promise<EndpointContext> {
   const snapshot = await readConfigSnapshot(root, options.signal);
   // ADR-0025 D1：按这个工作区配置的窗口传输选出 profile；此后本上下文只读选出的那一份。
   const resourceProfile = selectWakeflowWorkspaceHostResourceProfile(hostFacade, snapshot.model);
-  const facade: AdmittedFacade =
+  const facade: Readonly<WindowBindingHostFacade> =
     resourceProfile === hostFacade.resourceProfile
       ? hostFacade
       : Object.freeze({ ...hostFacade, resourceProfile });
@@ -1650,11 +1605,10 @@ async function executeOperation(
 
 /** 执行一次公共窗口绑定操作。 */
 export async function executeWindowBindingRequest(
-  facadeValue: Readonly<WindowBindingHostFacade>,
+  facade: Readonly<WindowBindingHostFacade>,
   value: unknown,
   options: ExecuteWindowBindingOptions = {},
 ): Promise<WindowBindingResult> {
-  const facade = admitFacade(facadeValue);
   return runCommandShell<Envelope, WindowBindingRequest, EndpointContext, WindowBindingResult>(
     {
       scope: ({ input }) => (input.operation === "inspect" ? "read" : "shared"),

@@ -15,7 +15,7 @@ import {
   convergePrivateNodeMode,
   PrivateModeConvergenceError,
 } from "../../foundation/filesystem/private-mode-convergence.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 
 /**
@@ -75,15 +75,6 @@ const fail: Fail<WakeflowPrivateModeCensusErrorReason> = failWith(WakeflowPrivat
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;
   return left > right ? 1 : 0;
-}
-
-function parseSignal(options: unknown): AbortSignal | undefined {
-  if (options === undefined) return undefined;
-  if (typeof options !== "object" || options === null) fail("input", "$options");
-  const signal: unknown = (options as { readonly signal?: unknown }).signal;
-  if (signal === undefined) return undefined;
-  if (!(signal instanceof AbortSignal)) fail("input", "$options.signal");
-  return signal;
 }
 
 function censusDigestOf(
@@ -157,10 +148,8 @@ function record(
  */
 export async function inspectWakeflowPrivateModes(
   root: RootedDirectory,
-  options?: Readonly<{ readonly signal?: AbortSignal }>,
+  { signal }: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowPrivateModeCensus>> {
-  if (!(root instanceof RootedDirectory)) fail("input", "$root");
-  const signal = parseSignal(options);
   throwIfAborted(signal);
   const drifted: Readonly<WakeflowPrivateModeNode>[] = [];
   const unsafe: PortableResourcePath[] = [];
@@ -197,13 +186,8 @@ export async function inspectWakeflowPrivateModes(
 export async function convergeWakeflowPrivateModes(
   root: RootedDirectory,
   census: Readonly<WakeflowPrivateModeCensus>,
-  options?: Readonly<{ readonly signal?: AbortSignal }>,
+  { signal }: Readonly<{ readonly signal?: AbortSignal }> = {},
 ): Promise<Readonly<WakeflowPrivateModeConvergenceReceipt>> {
-  if (!(root instanceof RootedDirectory)) fail("input", "$root");
-  if (typeof census !== "object" || census === null || !Array.isArray(census.drifted)) {
-    fail("input", "$census");
-  }
-  const signal = parseSignal(options);
   let converged = 0;
   let current = 0;
   let changed = 0;
@@ -238,7 +222,6 @@ export function wakeflowPrivateModeAreas(
   paths: readonly PortableResourcePath[],
   maximum: number = DEFAULT_AREA_MAXIMUM,
 ): readonly string[] {
-  if (!Array.isArray(paths)) fail("input", "$paths");
   if (!Number.isSafeInteger(maximum) || maximum < 0) fail("input", "$maximum");
   const areas = new Set<string>();
   for (const path of paths) areas.add(path.split("/").slice(0, AREA_SEGMENTS).join("/"));

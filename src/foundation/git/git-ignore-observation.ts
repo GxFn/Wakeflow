@@ -1,20 +1,10 @@
 import { Buffer } from "node:buffer";
-import { types } from "node:util";
 
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-} from "../filesystem/portable-resource-path.js";
-import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
+import type { PortableResourcePath } from "../filesystem/portable-resource-path.js";
+import { type RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { GitReadOnlyProcessError, runGitReadOnly } from "./git-read-only-process.js";
 
 /**
@@ -73,10 +63,6 @@ export class GitIgnoreObservationError extends ModuleError<GitIgnoreObservationE
   static override readonly code = "wakeflow-git-ignore-observation";
 }
 
-interface ParsedGitIgnoreObservationOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 interface GitCheckIgnoreResult {
   readonly exitCode: 0 | 1;
   readonly stdout: Buffer;
@@ -84,73 +70,21 @@ interface GitCheckIgnoreResult {
 
 const fail: Fail<GitIgnoreObservationErrorReason> = failWith(GitIgnoreObservationError);
 
-function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
+/**
+ * 路径条数与送进 Git 标准输入的总字节数有上限（容量，不是类型检查）；路径本身是类型化的资源路径，
+ * 不再逐个复验。
+ */
+function assertProbeCapacity(probePaths: readonly PortableResourcePath[]): void {
+  if (probePaths.length > GIT_IGNORE_OBSERVATION_LIMITS.maximumProbePaths) {
+    fail("input", "$probePaths");
   }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedGitIgnoreObservationOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const keys = Object.keys(record);
-  if (
-    keys.some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
-function parseProbePaths(value: unknown): readonly PortableResourcePath[] {
-  let members: readonly unknown[];
-  try {
-    members = parseDenseArray(
-      value,
-      GIT_IGNORE_OBSERVATION_LIMITS.maximumProbePaths,
-      "$probePaths",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$probePaths", error);
-    throw error;
-  }
-  if (members.length === 0) fail("input", "$probePaths");
-
-  const seen = new Set<string>();
-  const paths: PortableResourcePath[] = [];
   let inputBytes = 0;
-  for (const [index, member] of members.entries()) {
-    let path: PortableResourcePath;
-    try {
-      path = parsePortableResourcePath(member, `$probePaths/${index}`);
-    } catch (error: unknown) {
-      if (error instanceof PortableResourcePathError) {
-        fail("input", `$probePaths/${index}`, error);
-      }
-      throw error;
-    }
-    if (seen.has(path)) fail("input", `$probePaths/${index}`);
-    seen.add(path);
+  for (const path of probePaths) {
     inputBytes += Buffer.byteLength(path, "utf8") + 1;
     if (inputBytes > GIT_IGNORE_OBSERVATION_LIMITS.maximumInputBytes) {
       fail("input", "$probePaths");
     }
-    paths.push(path);
   }
-  return Object.freeze(paths);
 }
 
 async function assertRootCurrent(root: RootedDirectory, path: string): Promise<void> {
@@ -267,14 +201,14 @@ function parseOutput(
  */
 export async function observeGitIgnorePaths(
   rootValue: RootedDirectory,
-  probePathValues: readonly PortableResourcePath[],
-  optionsValue?: GitIgnoreObservationOptions,
+  probePaths: readonly PortableResourcePath[],
+  options: GitIgnoreObservationOptions = {},
 ): Promise<Readonly<GitIgnoreObservation>> {
   return observeGitIgnorePathsInWorkTreeInternal(
     rootValue,
     rootValue,
-    probePathValues,
-    optionsValue,
+    probePaths,
+    options,
     "$root",
     "$root",
   );
@@ -283,16 +217,13 @@ export async function observeGitIgnorePaths(
 async function observeGitIgnorePathsInWorkTreeInternal(
   repositoryRootValue: RootedDirectory,
   workTreeRootValue: RootedDirectory,
-  probePathValues: readonly PortableResourcePath[],
-  optionsValue: GitIgnoreObservationOptions | undefined,
+  probePaths: readonly PortableResourcePath[],
+  options: GitIgnoreObservationOptions,
   repositoryRootPath: string,
   workTreeRootPath: string,
 ): Promise<Readonly<GitIgnoreObservation>> {
-  assertRoot(repositoryRootValue, repositoryRootPath);
-  assertRoot(workTreeRootValue, workTreeRootPath);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
-  const probePaths = parseProbePaths(probePathValues);
+  assertProbeCapacity(probePaths);
   await assertRootCurrent(repositoryRootValue, repositoryRootPath);
   if (workTreeRootValue !== repositoryRootValue) {
     await assertRootCurrent(workTreeRootValue, workTreeRootPath);
@@ -321,14 +252,14 @@ async function observeGitIgnorePathsInWorkTreeInternal(
 export async function observeGitIgnorePathsInWorkTree(
   repositoryRootValue: RootedDirectory,
   workTreeRootValue: RootedDirectory,
-  probePathValues: readonly PortableResourcePath[],
-  optionsValue?: GitIgnoreObservationOptions,
+  probePaths: readonly PortableResourcePath[],
+  options: GitIgnoreObservationOptions = {},
 ): Promise<Readonly<GitIgnoreObservation>> {
   return observeGitIgnorePathsInWorkTreeInternal(
     repositoryRootValue,
     workTreeRootValue,
-    probePathValues,
-    optionsValue,
+    probePaths,
+    options,
     "$repositoryRoot",
     "$workTreeRoot",
   );

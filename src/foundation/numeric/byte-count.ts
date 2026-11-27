@@ -39,10 +39,6 @@ function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function memberPath(basePath: string, member: string): string {
-  return basePath === "$" ? `$${member}` : `${basePath}.${member}`;
-}
-
 const fail: Fail<ByteCountErrorReason> = failWith(ByteCountError);
 
 function parseNumberByteCount(value: unknown, path: string): ByteCount {
@@ -77,16 +73,13 @@ export function byteCountFromBigInt(value: bigint, errorPath?: string): ByteCoun
 }
 
 /**
- * 精确相加两个字节数；任何伪造的品牌类型输入都会先重新准入。
+ * 精确相加两个字节数；品牌就是准入的证明，输入不再复验。
  *
  * 溢出在执行加法前判断，不允许超过安全整数范围的近似 Number 进入结果。
  */
 export function addByteCounts(left: ByteCount, right: ByteCount, errorPath?: string): ByteCount {
-  const path = normalizeErrorPath(errorPath);
-  const admittedLeft = parseNumberByteCount(left, memberPath(path, "left"));
-  const admittedRight = parseNumberByteCount(right, memberPath(path, "right"));
-  if (admittedRight > MAX_SAFE_BYTE_COUNT - admittedLeft) {
-    fail("addition-overflow", path);
+  if (right > MAX_SAFE_BYTE_COUNT - left) {
+    fail("addition-overflow", normalizeErrorPath(errorPath));
   }
-  return (admittedLeft + admittedRight) as ByteCount;
+  return (left + right) as ByteCount;
 }

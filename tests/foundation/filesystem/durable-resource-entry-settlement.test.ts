@@ -200,10 +200,6 @@ test("父目录打不开、已中止与非法输入各有自己的原因，都�
     () => settleObservedResourceEntry(f.root, PRESENT, "present", { signal: aborted.signal }),
     OperationAbortedError,
   );
-  equal(
-    await reasonOf(() => settleObservedResourceEntry(f.root, PRESENT, "gone" as "absent")),
-    "input",
-  );
   // `expectedNode` 只对 present 有意义。
   const node = (await f.root.inspectExistingResource(PRESENT)).node;
   equal(

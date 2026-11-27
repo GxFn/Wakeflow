@@ -81,17 +81,6 @@ export interface AbsoluteNodeObservationOptions {
   readonly errorPath?: string;
 }
 
-function parseOptions(
-  value: AbsoluteNodeObservationOptions | undefined,
-  fallbackPath: string,
-): Readonly<{ follow: boolean; path: string }> {
-  if (value === undefined) return Object.freeze({ follow: false, path: fallbackPath });
-  if (typeof value !== "object" || value === null) fail("input", fallbackPath);
-  const path = normalizeErrorPath(value.errorPath, fallbackPath);
-  if (value.follow !== undefined && typeof value.follow !== "boolean") fail("input", path);
-  return Object.freeze({ follow: value.follow === true, path });
-}
-
 /**
  * 观察一个绝对路径：节点快照加 `realpath`。路径不存在（含中途不是目录）为 `missing`；其余
  * 观察失败为 `inspection-failure`。缺省按链接本身观察（`lstat`，`kind` 为 `symbolic-link`），
@@ -99,14 +88,14 @@ function parseOptions(
  */
 export async function observeAbsoluteNode(
   value: unknown,
-  optionsValue?: AbsoluteNodeObservationOptions,
+  options: AbsoluteNodeObservationOptions = {},
 ): Promise<AbsoluteNodeObservation> {
-  const options = parseOptions(optionsValue, "$node");
-  const path = options.path;
+  const { follow = false, errorPath } = options;
+  const path = normalizeErrorPath(errorPath, "$node");
   const absolutePath = parseAbsolutePath(value, path);
   let stats: BigIntStats;
   try {
-    stats = options.follow
+    stats = follow
       ? await stat(absolutePath, { bigint: true })
       : await lstat(absolutePath, { bigint: true });
   } catch (error: unknown) {

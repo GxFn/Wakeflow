@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
@@ -6,10 +5,9 @@ import {
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
-  assertWakeflowHostMaintenanceCapability,
   assertWakeflowHostMaintenanceContributionCapability,
   type WakeflowHostMaintenanceCapability,
   WakeflowHostMaintenanceCapabilityError,
@@ -23,10 +21,11 @@ import {
   type WakeflowMaintenanceExecutionPlan,
 } from "./wakeflow-maintenance-execution-plan.js";
 import type { WakeflowMaintenanceGateContext } from "./wakeflow-maintenance-gate.js";
-import { previewWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
+import { previewParsedWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
 import {
+  admitWakeflowStaticMaterializationPreviewRequest,
   isWakeflowDetachAction,
-  parseWakeflowStaticMaterializationPreviewRequest,
+  type ParsedWakeflowStaticMaterializationPreviewRequest,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
@@ -60,7 +59,7 @@ const fail: Fail<WakeflowMaintenanceExecutionPreviewErrorReason> = failWith(
  */
 async function resolveHostConfig(
   root: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sharedPreview: Readonly<{
     readonly currentConfigDigest: Sha256Digest | null;
     readonly desiredConfigDigest: Sha256Digest | null;
@@ -76,7 +75,7 @@ async function resolveHostConfig(
 /** 当前 Config 的稳定快照，摘要必须等于共享预览记下的那一个；预览没记（null）时快照也必须不在。 */
 async function resolveSnapshotConfig(
   root: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   expectedDigest: Sha256Digest | null,
 ): Promise<WakeflowConfigModel | null> {
   throwIfAborted(request.signal);
@@ -102,47 +101,37 @@ async function resolveSnapshotConfig(
 
 /** 构建共享静态步骤与当前宿主操作合并后的唯一 preview-only 计划。 */
 export async function previewWakeflowMaintenanceExecution(
-  rootValue: RootedDirectory,
+  root: RootedDirectory,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
-  capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
-  gateContextValue?: Readonly<WakeflowMaintenanceGateContext>,
+  capability?: Readonly<WakeflowHostMaintenanceCapability>,
+  gateContext?: Readonly<WakeflowMaintenanceGateContext>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  let request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
   try {
-    request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+    request = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
       fail("input", error.path, error);
     }
     throw error;
   }
+  return previewParsedWakeflowMaintenanceExecution(root, request, capability, gateContext);
+}
+
+/** 同上，请求已经准入过一次（聚合事务在门前与门内各重推一次计划，不再各解析一遍）。 */
+export async function previewParsedWakeflowMaintenanceExecution(
+  root: RootedDirectory,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  capability?: Readonly<WakeflowHostMaintenanceCapability>,
+  gateContext?: Readonly<WakeflowMaintenanceGateContext>,
+): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
   throwIfAborted(request.signal);
-  let capability: Readonly<WakeflowHostMaintenanceCapability> | undefined;
-  if (capabilityValue !== undefined) {
-    try {
-      assertWakeflowHostMaintenanceCapability(capabilityValue, request.currentHostProfile.hostId);
-      capability = capabilityValue;
-    } catch (error: unknown) {
-      if (error instanceof WakeflowHostMaintenanceCapabilityError) {
-        fail("capability", error.path, error);
-      }
-      throw error;
-    }
-  }
-  let sharedPreview: Awaited<ReturnType<typeof previewWakeflowStaticMaterialization>>;
+  let sharedPreview: Awaited<ReturnType<typeof previewParsedWakeflowStaticMaterialization>>;
   try {
-    sharedPreview = await previewWakeflowStaticMaterialization(
-      rootValue,
-      requestValue,
-      gateContextValue === undefined ? {} : { gateContext: gateContextValue },
+    sharedPreview = await previewParsedWakeflowStaticMaterialization(
+      root,
+      request,
+      gateContext === undefined ? {} : { gateContext },
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
@@ -152,7 +141,7 @@ export async function previewWakeflowMaintenanceExecution(
   }
   let hostConfig = request.desiredConfig;
   if (capability !== undefined) {
-    hostConfig = await resolveHostConfig(rootValue, request, sharedPreview);
+    hostConfig = await resolveHostConfig(root, request, sharedPreview);
   }
   let contribution = null;
   if (capability !== undefined && hostConfig === null) {
@@ -160,7 +149,7 @@ export async function previewWakeflowMaintenanceExecution(
   } else if (capability !== undefined && hostConfig !== null) {
     try {
       contribution = parseWakeflowHostMaintenanceContribution(
-        await capability.planContribution(rootValue, {
+        await capability.planContribution(root, {
           action: request.action,
           config: hostConfig,
           profile: request.currentHostProfile,

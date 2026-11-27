@@ -1,9 +1,7 @@
 import {
   buildWakeflowConfigIndexes,
-  parseWakeflowConfig,
   WAKEFLOW_ACTIVE_ROOT,
   WAKEFLOW_LOCAL_ROOT,
-  WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowPresentationLanguage,
 } from "../../configuration/wakeflow-config.js";
@@ -16,12 +14,10 @@ import {
   renderMarkdownJsonStringLiteral,
 } from "../../foundation/text/markdown-json-string-literal.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceComponent,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceComponent,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
@@ -70,28 +66,6 @@ const fail: Fail<WakeflowProgramInstructionBodyAuthorityErrorReason> = failWith(
 );
 
 const CONFIG_FILE_REF = "wakeflow.config.json" as const;
-
-function parseConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) {
-      fail("config", error.path, error);
-    }
-    throw error;
-  }
-}
-
-function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
 
 function markdownDataLiteral(value: string, path: string): string {
   try {
@@ -246,11 +220,9 @@ function authorityDigestBasis(
 
 /** 从当前 Config 与目标 Host Profile 生成唯一 Program Instruction 正文权威。 */
 export function createWakeflowProgramInstructionBodyAuthority(
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowProgramInstructionBodyAuthority> {
-  const config = parseConfig(configValue);
-  const profile = parseProfile(profileValue);
   const controllerWindowId = buildWakeflowConfigIndexes(config).controllerWindow.windowId;
   const body = renderBody(config, profile, controllerWindowId);
   let bodyDigest: Sha256Digest;

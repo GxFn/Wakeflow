@@ -151,37 +151,6 @@ test("Git ignore candidate rejects capacity, cancellation, and invalid repositor
     );
   });
 
-  await t.test("behavioral bytes", async (subtest) => {
-    const current = await fixture(subtest);
-    let trapCalls = 0;
-    const candidate = new Proxy(Buffer.from("/safe/\n"), {
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return Buffer.prototype;
-      },
-    });
-    await expectCandidateError(
-      () => observeGitIgnoreCandidate(current.root, candidate, probes("safe/path")),
-      "input",
-      "$candidateBytes",
-    );
-    equal(trapCalls, 0);
-  });
-
-  await t.test("duplicate probes are input errors", async (subtest) => {
-    const current = await fixture(subtest);
-    await expectCandidateError(
-      () =>
-        observeGitIgnoreCandidate(
-          current.root,
-          Buffer.from("/safe/\n"),
-          probes("same/path", "same/path"),
-        ),
-      "input",
-      "$probePaths/1",
-    );
-  });
-
   await t.test("pre-aborted", async (subtest) => {
     const current = await fixture(subtest);
     const controller = new AbortController();

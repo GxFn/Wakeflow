@@ -115,14 +115,4 @@ test("Managed Text authority transition rejects marker-only ownership claims", (
     "relation",
     "$source",
   );
-
-  expectTransitionError(
-    () =>
-      planWakeflowManagedTextAuthorityTransition(new Uint8Array(), {
-        currentTargets: [CURRENT, CURRENT],
-        desiredTarget: DESIRED,
-      }),
-    "input",
-    "$request.currentTargets/1",
-  );
 });

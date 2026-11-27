@@ -23,7 +23,6 @@ import {
   syncDurableAtomicFileTargetParent,
 } from "./durable-atomic-file-target-io.js";
 import {
-  assertDurableAtomicFileRoot,
   type DurableAtomicFileCreateOptions,
   type DurableAtomicFileDurability,
   type DurableAtomicFileExpectation,
@@ -34,8 +33,6 @@ import {
   DurableAtomicFileWriteError,
   type DurableAtomicFileWriteResult,
   failDurableAtomicFileWrite as fail,
-  parseDurableAtomicFileCreateOptions,
-  parseDurableAtomicFileReplaceOptions,
   snapshotDurableAtomicFileInputBytes,
 } from "./durable-atomic-file-write-contract.js";
 import {
@@ -316,48 +313,41 @@ export async function createFileAtomically(
   bytes: Uint8Array,
   options: DurableAtomicFileCreateOptions,
 ): Promise<Readonly<DurableAtomicFileWriteResult<"created">>> {
-  assertDurableAtomicFileRoot(root);
-  const parsed = parseDurableAtomicFileCreateOptions(options);
+  const { mode, durability = "fsync", signal } = options;
   const input = snapshotDurableAtomicFileInputBytes(bytes);
-  throwIfAborted(parsed.signal);
-  return performWrite(
-    root,
-    resourcePath,
-    input,
-    parsed.mode,
-    parsed.signal,
-    "created",
-    null,
-    parsed.durability,
-  );
+  throwIfAborted(signal);
+  return performWrite(root, resourcePath, input, mode, signal, "created", null, durability);
 }
 
-/** 耐久替换一个仍匹配完整前序 StableFileSource 的完整字节文件。 */
+/**
+ * 耐久替换一个仍匹配完整前序 StableFileSource 的完整字节文件。
+ *
+ * 预期必须是同一个资源路径上读到的那一份：两个参数之间的这层关系类型表达不了，所以这里核对。
+ */
 export async function replaceFileAtomically(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   bytes: Uint8Array,
   options: DurableAtomicFileReplaceOptions,
 ): Promise<Readonly<DurableAtomicFileReplaceResult>> {
-  assertDurableAtomicFileRoot(root);
-  const parsed = parseDurableAtomicFileReplaceOptions(options);
-  if (parsed.expected.resourcePath !== resourcePath) {
+  const { mode, expected, signal } = options;
+  if (expected.resourcePath !== resourcePath) {
     fail("input", "$options.expected.resourcePath");
   }
   const input = snapshotDurableAtomicFileInputBytes(bytes);
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
   const result = await performWrite(
     root,
     resourcePath,
     input,
-    parsed.mode,
-    parsed.signal,
+    mode,
+    signal,
     "replaced",
-    parsed.expected,
+    expected,
     // 替换永远按 `fsync` 请求，级别只由根收窄；这里没有可转发的逐次豁免。
     "fsync",
   );
-  return Object.freeze({ ...result, previous: parsed.expected });
+  return Object.freeze({ ...result, previous: expected });
 }
 
 export {

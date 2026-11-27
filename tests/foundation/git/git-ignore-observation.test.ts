@@ -186,33 +186,7 @@ test("Git ignore observation neutralizes inherited Git repository and config red
   equal(observed.paths[1]?.decision, null);
 });
 
-test("Git ignore observation rejects invalid inputs, cancellation, and non-repositories", async (t) => {
-  await t.test("duplicate probes", async (subtest) => {
-    const current = await fixture(subtest);
-    await expectObservationError(
-      () => observeGitIgnorePaths(current.root, probes("same/path", "same/path")),
-      "input",
-      "$probePaths/1",
-    );
-  });
-
-  await t.test("behavioral probe array", async (subtest) => {
-    const current = await fixture(subtest);
-    let trapCalls = 0;
-    const values = new Proxy(probes("safe/path"), {
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return Array.prototype;
-      },
-    });
-    await expectObservationError(
-      () => observeGitIgnorePaths(current.root, values),
-      "input",
-      "$probePaths",
-    );
-    equal(trapCalls, 0);
-  });
-
+test("Git ignore observation rejects cancellation and non-repositories", async (t) => {
   await t.test("pre-aborted", async (subtest) => {
     const current = await fixture(subtest);
     const controller = new AbortController();

@@ -11,19 +11,16 @@ import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abo
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import {
   inspectWakeflowProgramInstruction,
+  type ParsedWakeflowProgramInstructionInspectionRequest,
   WAKEFLOW_PROGRAM_INSTRUCTION_FILE_MODE,
   type WakeflowProgramInstructionInspection,
   WakeflowProgramInstructionInspectionError,
 } from "./wakeflow-program-instruction-inspection.js";
 import {
   assertCurrentUserWakeflowProgramInstructionRoot,
-  assertWakeflowProgramInstructionRecompositionRoot,
   currentWakeflowProgramInstructionRecompositionUserId,
   failWakeflowProgramInstructionRecomposition as fail,
   mapWakeflowProgramInstructionLockError,
-  type ParsedWakeflowProgramInstructionRecompositionOptions,
-  parseWakeflowProgramInstructionRecompositionOptions,
-  parseWakeflowProgramInstructionRecompositionRequest,
   type WakeflowProgramInstructionRecompositionEffect,
   WakeflowProgramInstructionRecompositionError,
   type WakeflowProgramInstructionRecompositionOptions,
@@ -31,8 +28,11 @@ import {
   type WakeflowProgramInstructionRecompositionRequest,
   wakeflowProgramInstructionInspectionRequest,
   wakeflowProgramInstructionLockOptions,
+  wakeflowProgramInstructionRecompositionRequestModel,
   wakeflowProgramInstructionTargetRef,
 } from "./wakeflow-program-instruction-recomposition-contract.js";
+
+type ProgramInstructionRequest = Readonly<ParsedWakeflowProgramInstructionInspectionRequest>;
 
 /**
  * Wakeflow Workspace / Managed Integration：Program Instruction 的锁内 CAS owner。
@@ -63,7 +63,7 @@ function failInspectionBeforeCommit(error: unknown): never {
 
 async function inspectCurrent(
   root: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
+  request: ProgramInstructionRequest,
   signal: AbortSignal | undefined,
   afterCommit: boolean,
 ): Promise<Readonly<WakeflowProgramInstructionInspection>> {
@@ -100,7 +100,7 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
 
 async function publishTarget(
   root: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
+  request: ProgramInstructionRequest,
   inspection: Readonly<WakeflowProgramInstructionInspection>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionEffect>> {
@@ -138,7 +138,7 @@ function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFile
 }
 
 function assertReadback(
-  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
+  request: ProgramInstructionRequest,
   before: Readonly<WakeflowProgramInstructionInspection>,
   effect: Readonly<WakeflowProgramInstructionRecompositionEffect>,
   after: Readonly<WakeflowProgramInstructionInspection>,
@@ -181,14 +181,14 @@ function assertReadback(
 
 async function recomposeUnderLock(
   root: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowProgramInstructionRecompositionRequest>,
-  options: Readonly<ParsedWakeflowProgramInstructionRecompositionOptions>,
+  request: ProgramInstructionRequest,
+  signal: AbortSignal | undefined,
   expectedUserId: bigint,
   markCommitted: () => void,
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionReceipt>> {
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
   await assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId);
-  const before = await inspectCurrent(root, request, options.signal, false);
+  const before = await inspectCurrent(root, request, signal, false);
   if (before.status !== "recompose-required") {
     return Object.freeze({
       disposition: "current",
@@ -197,10 +197,10 @@ async function recomposeUnderLock(
     });
   }
   await assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId);
-  throwIfAborted(options.signal);
-  const effect = await publishTarget(root, request, before, options.signal);
+  throwIfAborted(signal);
+  const effect = await publishTarget(root, request, before, signal);
   markCommitted();
-  const after = await inspectCurrent(root, request, options.signal, true);
+  const after = await inspectCurrent(root, request, signal, true);
   assertReadback(request, before, effect, after, expectedUserId);
   return Object.freeze({
     disposition: effect.publication,
@@ -213,30 +213,29 @@ async function recomposeUnderLock(
  * 在程序指令锁内重推导并幂等创建或 CAS 替换 Program Instruction managed block。
  */
 export async function recomposeWakeflowProgramInstruction(
-  rootValue: RootedDirectory,
+  root: RootedDirectory,
   requestValue: WakeflowProgramInstructionRecompositionRequest,
-  optionsValue?: WakeflowProgramInstructionRecompositionOptions,
+  options: WakeflowProgramInstructionRecompositionOptions = {},
 ): Promise<Readonly<WakeflowProgramInstructionRecompositionReceipt>> {
-  assertWakeflowProgramInstructionRecompositionRoot(rootValue);
-  const options = parseWakeflowProgramInstructionRecompositionOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const request = parseWakeflowProgramInstructionRecompositionRequest(requestValue);
+  const { signal } = options;
+  throwIfAborted(signal);
+  const request = wakeflowProgramInstructionRecompositionRequestModel(requestValue);
   const expectedUserId = currentWakeflowProgramInstructionRecompositionUserId();
-  await assertCurrentUserWakeflowProgramInstructionRoot(rootValue, expectedUserId);
+  await assertCurrentUserWakeflowProgramInstructionRoot(root, expectedUserId);
 
   let committed = false;
   try {
     return await withWorkspaceLock(
-      rootValue,
+      root,
       "program-instruction",
       async () => {
         // 上一个重组程序指令的进程死在写到一半时留下的暂存，先结算再读（ADR-0033 决定 6）。
         await settleStagesOfDeadWriters(
-          rootValue,
+          root,
           [wakeflowProgramInstructionTargetRef(request)],
-          options.signal,
+          signal,
         );
-        return recomposeUnderLock(rootValue, request, options, expectedUserId, () => {
+        return recomposeUnderLock(root, request, signal, expectedUserId, () => {
           committed = true;
         });
       },

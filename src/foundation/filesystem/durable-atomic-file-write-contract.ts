@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   computeSha256Digest,
   parseSha256Digest,
@@ -16,7 +14,6 @@ import {
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileSource } from "./stable-file-read.js";
 
 /** 耐久原子文件写入的公共合同、输入快照和稳定错误。 */
@@ -116,21 +113,12 @@ export class DurableAtomicFileWriteError extends ModuleError<DurableAtomicFileWr
   }
 }
 
-interface ParsedDurableAtomicFileWriteOptions {
+/**
+ * 替换选项的解析结果：没有逐次 `durability`，替换的持久化级别只由根决定。
+ */
+interface ParsedDurableAtomicFileReplaceOptions {
   readonly mode: number;
   readonly signal: AbortSignal | undefined;
-}
-
-/** 解析后的逐次级别缺省为 `fsync`；门面再按根的级别往下收。 */
-interface ParsedDurableAtomicFileCreateOptions extends ParsedDurableAtomicFileWriteOptions {
-  readonly durability: DurableAtomicFileDurability;
-}
-
-/**
- * 替换没有逐次豁免：解析结果里根本不带 `durability`，调用方也就无从转发一个
- * 恰好等于 `fsync` 的常量。替换的持久化级别只由根决定。
- */
-interface ParsedDurableAtomicFileReplaceOptions extends ParsedDurableAtomicFileWriteOptions {
   readonly expected: Readonly<DurableAtomicFileExpectation>;
 }
 
@@ -144,16 +132,9 @@ export const failDurableAtomicFileWrite: Fail<DurableAtomicFileWriteErrorReason>
   DurableAtomicFileWriteError,
 );
 
-export function assertDurableAtomicFileRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    failDurableAtomicFileWrite("input", "$root");
-  }
-}
+// 以下解析只服务 `parseDurableAtomicFileReplaceOptions`：本层自己的创建与替换门面已不再调用它，
+// 选项是类型化的（1.4.5 层次计划 A）。配置层仍用它解析一份尚未类型化的替换预期（附录 B），
+// 第二步把那里类型化以后连同这些帮助函数一起删掉。
 
 function parseMode(value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {
@@ -192,25 +173,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
     failDurableAtomicFileWrite("input", "$options.signal");
   }
   return value;
-}
-
-function parseDurability(value: unknown): DurableAtomicFileDurability {
-  if (value === undefined) return "fsync";
-  if (value !== "fsync" && value !== "none") {
-    failDurableAtomicFileWrite("input", "$options.durability");
-  }
-  return value;
-}
-
-export function parseDurableAtomicFileCreateOptions(
-  value: unknown,
-): Readonly<ParsedDurableAtomicFileCreateOptions> {
-  const record = parseOptionRecord(value, ["mode"], ["durability"]);
-  return Object.freeze({
-    mode: parseMode(record.mode),
-    durability: parseDurability(record.durability),
-    signal: parseSignal(record.signal),
-  });
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
@@ -288,19 +250,13 @@ export function parseDurableAtomicFileReplaceOptions(
   });
 }
 
+/**
+ * 字节的私有副本、容量与摘要：先复制再算摘要，调用方之后改它自己的数组不影响写下的内容。
+ * 字节类型由签名保证，不再复验。
+ */
 export function snapshotDurableAtomicFileInputBytes(
-  value: unknown,
+  value: Uint8Array,
 ): Readonly<DurableAtomicFileInputBytes> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !ArrayBuffer.isView(value) ||
-    !(value instanceof Uint8Array) ||
-    value.buffer instanceof SharedArrayBuffer
-  ) {
-    failDurableAtomicFileWrite("input", "$bytes");
-  }
   const byteCount = parseByteCount(value.byteLength, "$bytes");
   if (byteCount > DURABLE_ATOMIC_FILE_MAXIMUM_BYTES) {
     failDurableAtomicFileWrite("capacity", "$bytes");

@@ -1,6 +1,5 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../foundation/data/deterministic-json-document.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { ModuleError } from "../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
@@ -11,7 +10,6 @@ import {
 import {
   type RootedDirectory,
   RootedDirectoryError,
-  isRootedDirectory,
 } from "../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
@@ -32,11 +30,7 @@ import {
   WakeflowConfigRootPlacementError,
   type WakeflowConfigRootPlacementReport,
 } from "./wakeflow-config-root-placement.js";
-import {
-  isAbortSignal,
-  OperationAbortedError,
-  throwIfAborted,
-} from "../foundation/node/abort-signal.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 
 /**
  * Wakeflow Configuration：单次操作范围内的 配置权威快照。
@@ -139,33 +133,8 @@ export function failWakeflowConfigAuthority(
   failWakeflow("precondition-failed", "config-authority", path, { cause: error });
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 function fail(reason: WakeflowConfigAuthoritySnapshotErrorReason, path: string): never {
   throw new WakeflowConfigAuthoritySnapshotError(reason, path);
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "signal")) {
-    fail("input", "$options");
-  }
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({ signal: record.signal });
 }
 
 function mapStableReadError(error: StableFileReadError): never {
@@ -323,10 +292,10 @@ function admitConfigRecord(read: ConfigSourceRead): Readonly<WakeflowDetachedCon
 
 async function loadSnapshot(
   root: RootedDirectory,
-  options: Readonly<ParsedOptions>,
+  signal: AbortSignal | undefined,
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
-  const record = admitConfigRecord(await readConfigSource(root, resourcePath, options.signal));
+  const record = admitConfigRecord(await readConfigSource(root, resourcePath, signal));
   const placements = await validatePlacements(root, record.model);
   return Object.freeze({
     workspaceRoot: root.absolutePath,
@@ -351,13 +320,11 @@ function mapLoadFailure(error: unknown): never {
 /** 从已经打开的 Workspace 根目录读取并构造完整的 配置权威快照。 */
 export async function readWakeflowConfigAuthoritySnapshot(
   root: RootedDirectory,
-  options?: WakeflowConfigAuthoritySnapshotOptions,
+  { signal }: WakeflowConfigAuthoritySnapshotOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
-    assertRoot(root);
-    const parsed = parseOptions(options);
-    throwIfAborted(parsed.signal);
-    return await loadSnapshot(root, parsed, WAKEFLOW_CONFIG_FILE_REF);
+    throwIfAborted(signal);
+    return await loadSnapshot(root, signal, WAKEFLOW_CONFIG_FILE_REF);
   } catch (error: unknown) {
     mapLoadFailure(error);
   }
@@ -369,13 +336,11 @@ export async function readWakeflowConfigAuthoritySnapshot(
  */
 export async function readWakeflowDetachedConfigSnapshot(
   root: RootedDirectory,
-  options?: WakeflowConfigAuthoritySnapshotOptions,
+  { signal }: WakeflowConfigAuthoritySnapshotOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot>> {
   try {
-    assertRoot(root);
-    const parsed = parseOptions(options);
-    throwIfAborted(parsed.signal);
-    return await loadSnapshot(root, parsed, WAKEFLOW_DETACHED_CONFIG_FILE_REF);
+    throwIfAborted(signal);
+    return await loadSnapshot(root, signal, WAKEFLOW_DETACHED_CONFIG_FILE_REF);
   } catch (error: unknown) {
     mapLoadFailure(error);
   }
@@ -387,17 +352,11 @@ export async function readWakeflowDetachedConfigSnapshot(
  */
 export async function readWakeflowDetachedConfigRecord(
   root: RootedDirectory,
-  options?: WakeflowConfigAuthoritySnapshotOptions,
+  { signal }: WakeflowConfigAuthoritySnapshotOptions = {},
 ): Promise<Readonly<WakeflowDetachedConfigRecord> | null> {
   try {
-    assertRoot(root);
-    const parsed = parseOptions(options);
-    throwIfAborted(parsed.signal);
-    const read = await readConfigSourceOrNull(
-      root,
-      WAKEFLOW_DETACHED_CONFIG_FILE_REF,
-      parsed.signal,
-    );
+    throwIfAborted(signal);
+    const read = await readConfigSourceOrNull(root, WAKEFLOW_DETACHED_CONFIG_FILE_REF, signal);
     return read === null ? null : admitConfigRecord(read);
   } catch (error: unknown) {
     mapLoadFailure(error);

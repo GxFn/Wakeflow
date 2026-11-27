@@ -1,5 +1,5 @@
 /** shared-only 路径也必须经过唯一聚合 maintenance transaction。 */
-import { deepEqual, equal, rejects } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -35,7 +35,10 @@ import {
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
 import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
-import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
+import {
+  previewWakeflowStaticMaterialization,
+  type WakeflowStaticMaterializationPreview,
+} from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { executeWakeflowStaticMaterializationStep } from "../../../src/workspace/maintenance/wakeflow-static-materialization-step-executor.js";
 import { inspectWakeflowWorkspaceCoreLayout } from "../../../src/workspace/maintenance/wakeflow-workspace-core-layout-inspection.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -101,7 +104,7 @@ function desiredConfigWithLanguage(language: "en" | "zh-Hans") {
 }
 
 function sharedExecutionPlan(
-  preview: unknown,
+  preview: Readonly<WakeflowStaticMaterializationPreview>,
   currentHostProfile: (typeof PROFILES)[number] = codexWorkspaceHostResourceProfile,
 ) {
   return createWakeflowMaintenanceExecutionPlan(preview, currentHostProfile, null);
@@ -109,7 +112,7 @@ function sharedExecutionPlan(
 
 async function executeSharedMaintenanceTransaction(
   root: RootedDirectory,
-  preview: unknown,
+  preview: Readonly<WakeflowStaticMaterializationPreview>,
   input: ReturnType<typeof request>,
   options: WakeflowMaintenanceExecutionTransactionOptions = {},
 ) {
@@ -133,7 +136,7 @@ async function recoverSharedMaintenanceTransaction(
 async function publishPreparedSharedTransaction(
   root: RootedDirectory,
   context: Parameters<typeof publishWakeflowMaintenanceExecutionIntent>[1],
-  preview: unknown,
+  preview: Readonly<WakeflowStaticMaterializationPreview>,
   input: ReturnType<typeof request>,
   desired: ReturnType<typeof desiredConfig>,
 ) {
@@ -943,23 +946,11 @@ test("recovery retires an intent whose steps are all counted without running any
   equal((await inspectWakeflowWorkspaceCoreLayout(workspace.root)).local.status, "idle");
 });
 
-test("maintenance transaction validates the writer stamp option before any durable work and completes with a stamp (C11)", async (t) => {
+test("maintenance transaction completes with a writer stamp (C11)", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
   const input = request(desired);
   const preview = await previewWakeflowStaticMaterialization(workspace.root, input);
-  await rejects(
-    executeSharedMaintenanceTransaction(workspace.root, preview, input, {
-      writer: { version: "v1", manifestDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`) },
-    }),
-    (error: unknown) =>
-      error instanceof WakeflowMaintenanceExecutionTransactionError &&
-      error.reason === "input" &&
-      error.path === "$options.writer",
-  );
-  equal(existsSync(path.join(workspace.absolutePath, "wakeflow.config.json")), false);
-  equal(existsSync(path.join(workspace.absolutePath, ".wakeflow-local")), false);
-
   const completed = await executeSharedMaintenanceTransaction(workspace.root, preview, input, {
     uuidFactory: () => UUID,
     writer: { version: "1.2.0", manifestDigest: parseSha256Digest(`sha256:${"7".repeat(64)}`) },

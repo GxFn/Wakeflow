@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import pLimit from "p-limit";
 
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
@@ -17,7 +15,7 @@ import {
   validateLoadedArtifactTreeManifest,
 } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ownString } from "../../foundation/data/own-string.js";
 import {
   type FileNodeSnapshot,
   sameFileNodeIdentity,
@@ -34,6 +32,7 @@ import {
   readStableFile,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
+import type { GitCommitObservation } from "../../foundation/git/git-commit-observation.js";
 import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { decodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
@@ -87,8 +86,6 @@ import {
   managedEvidenceSourceKey,
   parseManagedEvidenceSourceSelection,
 } from "./managed-evidence-source-selection.js";
-import { ownString } from "../../foundation/data/own-string.js";
-import type { GitCommitObservation } from "../../foundation/git/git-commit-observation.js";
 
 /**
  * Wakeflow Governance / Evidence：证据来源的零写捕获规划（切片 8 D1 到 D3）。
@@ -183,11 +180,6 @@ export class ManagedEvidenceCapturePlanningServiceError extends Error {
   }
 }
 
-interface ParsedOptions {
-  readonly clock: UtcWallClock | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 interface CapturedSource {
   readonly identity: Readonly<LoadedArtifactTreeIdentity>;
   readonly source: ManagedEvidenceSource;
@@ -208,32 +200,6 @@ function fail(reason: ManagedEvidenceCapturePlanningServiceErrorReason, cause?: 
     ownString(cause, "reason"),
     cause === undefined ? undefined : { cause },
   );
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "clock" && key !== "signal") ||
-    (record.clock !== undefined &&
-      (typeof record.clock !== "function" || types.isProxy(record.clock))) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input");
-  }
-  return Object.freeze({
-    clock: record.clock as UtcWallClock | undefined,
-    signal: record.signal as AbortSignal | undefined,
-  });
 }
 
 function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
@@ -853,14 +819,6 @@ export class ManagedEvidenceCapturePlanningService {
   readonly #workspaceRoot: RootedDirectory;
 
   constructor(workspaceRoot: RootedDirectory) {
-    if (
-      typeof workspaceRoot !== "object" ||
-      workspaceRoot === null ||
-      types.isProxy(workspaceRoot) ||
-      !(workspaceRoot instanceof RootedDirectory)
-    ) {
-      fail("input");
-    }
     this.#workspaceRoot = workspaceRoot;
   }
 
@@ -871,9 +829,8 @@ export class ManagedEvidenceCapturePlanningService {
   async preview(
     demandIdValue: unknown,
     selectionValue: unknown,
-    optionsValue: ManagedEvidenceCapturePlanningOptions = {},
+    options: ManagedEvidenceCapturePlanningOptions = {},
   ): Promise<ManagedEvidenceCapturePreview> {
-    const options = parseOptions(optionsValue);
     throwIfAborted(options.signal);
     const demandId = parseDemandId(demandIdValue);
     const selection = parseSelection(selectionValue);

@@ -21,7 +21,6 @@ import {
   createTreeCandidateDirectoryAtomically,
   DurableDirectoryMaterializationError,
   type DurableDirectoryMaterializationErrorReason,
-  type DurableDirectoryOptions,
   materializeDirectoryPath,
 } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
@@ -68,10 +67,6 @@ async function expectDirectoryError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): DurableDirectoryOptions {
-  return value as DurableDirectoryOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -277,42 +272,11 @@ test("atomic create requires an existing real parent", async () => {
   }
 });
 
-test("options and AbortSignal are closed and passively admitted", async () => {
+test("an escaping path and a pre-aborted signal fail before any directory is created", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-dir-input-"));
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("directory");
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ mode: 0o700, extra: true }, "$options"],
-      [{ mode: -1 }, "$options.mode"],
-      [{ mode: 0o1000 }, "$options.mode"],
-      [{ mode: 0o700, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectDirectoryError(
-        () => createDirectoryAtomically(root, resourcePath, asOptions(options)),
-        "input",
-        expectedPath,
-      );
-    }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "mode", {
-      get: () => {
-        getterCalls += 1;
-        return 0o700;
-      },
-      enumerable: true,
-    });
-    await expectDirectoryError(
-      () => createDirectoryAtomically(root, resourcePath, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
     await expectDirectoryError(
       () => createDirectoryAtomically(root, asPortableResourcePath("../escape"), { mode: 0o700 }),
       "input",

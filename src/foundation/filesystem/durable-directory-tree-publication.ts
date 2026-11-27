@@ -1,27 +1,19 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateResult,
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
-  parseDirectoryTreeCandidatePlan,
 } from "./durable-directory-tree-candidate.js";
 import { DurableResourceRenameError, renameResourceDurably } from "./durable-resource-rename.js";
-import {
-  admitFrozenFileNodeSnapshot,
-  type FileNodeSnapshot,
-  sameFileNodeSnapshot,
-} from "./file-node-snapshot.js";
+import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
   parsePortableResourcePath,
 } from "./portable-resource-path.js";
-import { RootedDirectory } from "./rooted-directory.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import type { RootedDirectory } from "./rooted-directory.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：清单已闭合的目录树候选整体发布。
@@ -74,22 +66,9 @@ export class DurableDirectoryTreePublicationError extends ModuleError<DurableDir
   }
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const fail: Fail<DurableDirectoryTreePublicationErrorReason> = failWith(
   DurableDirectoryTreePublicationError,
 );
-
-function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path, error);
-    throw error;
-  }
-}
 
 function parsePath(value: unknown, path: string): PortableResourcePath {
   try {
@@ -98,53 +77,6 @@ function parsePath(value: unknown, path: string): PortableResourcePath {
     if (error instanceof PortableResourcePathError) fail("input", path, error);
     throw error;
   }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  const record = plainRecord(value, "$options");
-  const unexpected = Object.keys(record).find((key) => key !== "signal");
-  if (unexpected !== undefined) fail("input", `$options/${unexpected}`);
-  const signal = record.signal;
-  if (signal !== undefined && !isAbortSignal(signal)) {
-    fail("input", "$options/signal");
-  }
-  return Object.freeze({ signal });
-}
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
-    fail("input", "$candidate/rootNode", cause),
-  );
-  if (node.kind !== "directory") fail("input", "$candidate/rootNode");
-  return node;
-}
-
-function parseCandidate(value: unknown): Readonly<DirectoryTreeCandidateResult> {
-  const record = plainRecord(value, "$candidate");
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3 ||
-    keys[0] !== "candidateRootPath" ||
-    keys[1] !== "plan" ||
-    keys[2] !== "rootNode"
-  ) {
-    fail("input", "$candidate");
-  }
-  const candidateRootPath = parsePath(record.candidateRootPath, "$candidate/candidateRootPath");
-  let plan: Readonly<DirectoryTreeCandidatePlan>;
-  try {
-    plan = parseDirectoryTreeCandidatePlan(record.plan);
-  } catch (error: unknown) {
-    if (error instanceof DurableDirectoryTreeCandidateError) {
-      fail("input", "$candidate/plan", error);
-    }
-    throw error;
-  }
-  return Object.freeze({
-    candidateRootPath,
-    plan,
-    rootNode: parseExpectedNode(record.rootNode),
-  });
 }
 
 function mapCandidateError(error: DurableDirectoryTreeCandidateError, afterCommit: boolean): never {
@@ -183,20 +115,16 @@ function mapRenameError(error: DurableResourceRenameError): never {
 
 /**
  * 在同一 `RootedDirectory` 内，将清单已闭合的候选目录树发布到尚不存在的最终路径。
- * 调用方必须持有同时覆盖源路径和目标路径的领域锁。
+ * 调用方必须持有同时覆盖源路径和目标路径的领域锁。候选是本层签发的结果，不再复验：提交前的
+ * 闭合检查按它的根节点与计划重新观察目录树。
  */
 export async function publishDirectoryTreeCandidateDurably(
   root: RootedDirectory,
-  candidateValue: DirectoryTreeCandidateResult,
+  candidate: Readonly<DirectoryTreeCandidateResult>,
   destinationResourcePathValue: unknown,
-  optionsValue: DurableDirectoryTreePublicationOptions = {},
+  options: DurableDirectoryTreePublicationOptions = {},
 ): Promise<Readonly<DurableDirectoryTreePublicationResult>> {
-  if (!(root instanceof RootedDirectory) || types.isProxy(root)) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
-  const candidate = parseCandidate(candidateValue);
   const destinationResourcePath = parsePath(
     destinationResourcePathValue,
     "$destinationResourcePath",

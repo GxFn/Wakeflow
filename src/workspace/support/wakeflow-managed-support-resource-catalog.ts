@@ -1,19 +1,15 @@
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
 } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -53,7 +49,7 @@ export type WakeflowManagedSupportResourceCatalogErrorReason =
   | "declaration";
 
 /** 受管 Support 动态资源目录构建失败的稳定、脱敏错误。 */
-export class WakeflowManagedSupportResourceCatalogError extends ModuleError<WakeflowManagedSupportResourceCatalogErrorReason> {
+class WakeflowManagedSupportResourceCatalogError extends ModuleError<WakeflowManagedSupportResourceCatalogErrorReason> {
   static override readonly code = "wakeflow-managed-support-resource-catalog";
 }
 
@@ -61,26 +57,7 @@ const fail: Fail<WakeflowManagedSupportResourceCatalogErrorReason> = failWith(
   WakeflowManagedSupportResourceCatalogError,
 );
 
-function parseConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-}
-
-function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
-
+/** 声明模型只由声明 codec 的 parse 构造（本目录拼出的字面量经它变成带类型路径的冻结模型）。 */
 function declaration(value: unknown): Readonly<WakeflowWorkspaceResourceDeclaration> {
   try {
     return parseWakeflowWorkspaceResourceDeclaration(value);
@@ -174,11 +151,9 @@ function compareDeclarations(
 
 /** 从严格 Config 与当前 Host Profile 生成受管 Design/Test 动态资源目录。 */
 export function createWakeflowManagedSupportResourceCatalog(
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowManagedSupportResourceCatalog> {
-  const config = parseConfig(configValue);
-  const profile = parseProfile(profileValue);
   const indexes = buildWakeflowConfigIndexes(config);
   const declarations: Readonly<WakeflowWorkspaceResourceDeclaration>[] = [];
   for (const surface of config.topology.supportSurfaces) {

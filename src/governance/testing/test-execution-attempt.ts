@@ -255,7 +255,7 @@ function attemptContract(
 export function createInitialTestExecutionAttempt(
   input: Readonly<CreateInitialTestExecutionAttemptInput>,
 ): Readonly<TestExecutionAttempt> {
-  const taskPackage = testPackage(input.taskPackage);
+  const taskPackage = input.taskPackage;
   const policy = taskPackage.testContract.setupPolicy;
   return parseTestExecutionAttempt({
     kind: ATTEMPT_KIND,
@@ -277,7 +277,7 @@ export function createRerunTestExecutionAttempt(
   input: Readonly<CreateRerunTestExecutionAttemptInput>,
 ): Readonly<RerunTestExecutionAttempt> {
   const previousAttempt = parseTestExecutionAttempt(input.previousAttempt);
-  const taskPackage = testPackage(input.taskPackage);
+  const taskPackage = input.taskPackage;
   assertTestExecutionAttemptMatchesPackage(previousAttempt, taskPackage);
   const ordinal = previousAttempt.ordinal + 1;
   if (ordinal > taskPackage.testContract.maxAttempts) fail("relation", "$/ordinal");

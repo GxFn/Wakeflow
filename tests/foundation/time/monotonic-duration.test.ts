@@ -1,9 +1,6 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
-import {
-  type MonotonicMoment,
-  readMonotonicClock,
-} from "../../../src/foundation/time/monotonic-clock.js";
+import { readMonotonicClock } from "../../../src/foundation/time/monotonic-clock.js";
 import {
   type MonotonicDuration,
   MonotonicDurationError,
@@ -32,10 +29,6 @@ function expectMonotonicDurationError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asMonotonicMoment(value: unknown): MonotonicMoment {
-  return value as MonotonicMoment;
 }
 
 function asMilliseconds(value: unknown): number {
@@ -71,34 +64,6 @@ test("non-negative safe integer milliseconds convert without loss", () => {
     const duration: MonotonicDuration = monotonicDurationFromMilliseconds(milliseconds);
     equal(duration, expected);
   }
-});
-
-test("moment inputs are revalidated despite their compile-time brand", () => {
-  for (const [value, pathValue] of [
-    [-1n, "$start"],
-    [1, "$start"],
-    [null, "$start"],
-  ] as const) {
-    expectMonotonicDurationError(
-      () =>
-        monotonicDurationBetween(
-          asMonotonicMoment(value),
-          readMonotonicClock(() => 10n),
-        ),
-      "moment-type",
-      pathValue,
-    );
-  }
-
-  expectMonotonicDurationError(
-    () =>
-      monotonicDurationBetween(
-        readMonotonicClock(() => 0n),
-        asMonotonicMoment(-1n),
-      ),
-    "moment-type",
-    "$end",
-  );
 });
 
 test("an end moment before start is rejected as an ordering error", () => {

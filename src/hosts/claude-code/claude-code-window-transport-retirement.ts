@@ -45,7 +45,6 @@ import {
   publishWakeflowWindowRuntimeProjectionDocument,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-document.js";
 import {
-  admitWakeflowWindowRuntimeProjectionInputs,
   compileWakeflowWindowRuntimeProjectionExpectedEntries,
   WakeflowWindowRuntimeProjectionError,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
@@ -165,17 +164,15 @@ type ProjectionTarget = Parameters<typeof publishWakeflowWindowRuntimeProjection
 
 /** 期望 Config 与选出 profile 下每个窗口的 unregistered 投影目标（不看绑定）。 */
 function unregisteredTargets(
-  root: RootedDirectory,
   config: WakeflowConfigModel,
   profile: PlanWakeflowHostMaintenanceContributionRequest["profile"],
 ) {
   try {
-    const inputs = admitWakeflowWindowRuntimeProjectionInputs(
-      root,
+    const inputs = {
       config,
-      profile,
-      claudeCodeWindowHostIdentityProfile,
-    );
+      resourceProfile: profile,
+      identityProfile: claudeCodeWindowHostIdentityProfile,
+    };
     return new Map(
       compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, { bindings: [] }).map(
         (entry) => [entry.windowId, entry.target] as const,
@@ -269,7 +266,7 @@ export async function planClaudeCodeWindowTransportRetirement(
       blockerCodes: Object.freeze([CLAUDE_CODE_WINDOW_TRANSPORT_RETIREMENT_BLOCKER]),
     });
   }
-  const targets = unregisteredTargets(root, request.config, request.profile);
+  const targets = unregisteredTargets(request.config, request.profile);
   const operations: WakeflowHostMaintenanceOperationInput[] = [];
   for (const window of request.config.topology.windows) {
     throwIfAborted(request.signal);
@@ -336,7 +333,6 @@ async function unlinkExactly(
 
 /** 操作身份与目标都从期望 Config 与选出的 profile 重算，与计划不一致即拒绝，不做任何效果。 */
 function admitOperation(
-  root: RootedDirectory,
   request: ExecuteWakeflowHostMaintenanceOperationRequest,
 ): Readonly<{ readonly windowId: string; readonly target: ProjectionTarget }> {
   const { windowId } = parsePayload(request.operation.payload);
@@ -346,7 +342,7 @@ function admitOperation(
   ) {
     fail("operation", "$operation");
   }
-  const target = unregisteredTargets(root, request.config, request.profile).get(windowId);
+  const target = unregisteredTargets(request.config, request.profile).get(windowId);
   if (
     target === undefined ||
     targetDigest(windowId, target.documentDigest) !== request.operation.targetDigest
@@ -403,7 +399,7 @@ export async function executeClaudeCodeWindowTransportRetirement(
   root: RootedDirectory,
   request: ExecuteWakeflowHostMaintenanceOperationRequest,
 ): Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>> {
-  const { windowId, target } = admitOperation(root, request);
+  const { windowId, target } = admitOperation(request);
   let disposition: "current" | "updated";
   try {
     disposition = await withWakeflowWindowHostBindingStore(

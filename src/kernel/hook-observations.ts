@@ -465,9 +465,6 @@ function deriveHostHookObservationId(
 export function createHostHookObservation(
   input: Readonly<HostHookObservationInput>,
 ): Readonly<HostHookObservation> {
-  if (typeof input !== "object" || input === null) {
-    fail("invalid-request", "hook-input", "$observation");
-  }
   const hostId = parseWakeflowHostId(input.hostId, "$observation.hostId");
   if (!isHostHookEvent(input.event)) fail("invalid-request", "hook-event", "$observation.event");
   const partial = {

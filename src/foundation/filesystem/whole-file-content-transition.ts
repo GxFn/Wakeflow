@@ -1,11 +1,6 @@
 import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest } from "../crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 
@@ -95,35 +90,21 @@ function assertDistinctCurrentContents(current: readonly Readonly<ContentSnapsho
   }
 }
 
-function parseRequest(value: unknown): Readonly<{
+/**
+ * 请求的记录与数组形状由类型保证，不再被动准入；内容在类型上仍是 `unknown`（签名被别的层调用，
+ * 第一步不收紧），所以每份内容照旧经 `snapshotBytes` 复制并准入。当前内容的份数上限与两两不同是
+ * 类型表达不了的规则，留着。
+ */
+function snapshotRequest(request: WholeFileContentTransitionRequest): Readonly<{
   readonly current: readonly Readonly<ContentSnapshot>[];
   readonly desired: Readonly<ContentSnapshot>;
 }> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
+  if (request.currentContents.length > MAXIMUM_ADMITTED_CURRENT_CONTENTS) {
+    fail("input", "$request.currentContents");
   }
-  const keys = Object.keys(record).sort();
-  if (keys.length !== 2 || keys[0] !== "currentContents" || keys[1] !== "desiredContent") {
-    fail("input", "$request");
-  }
-  let currentValues: readonly unknown[];
-  try {
-    currentValues = parseDenseArray(
-      record.currentContents,
-      MAXIMUM_ADMITTED_CURRENT_CONTENTS,
-      "$request.currentContents",
-    );
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
-  }
-  const desired = snapshotBytes(record.desiredContent, "$request.desiredContent");
+  const desired = snapshotBytes(request.desiredContent, "$request.desiredContent");
   const current = Object.freeze(
-    currentValues.map((content, index) =>
+    request.currentContents.map((content, index) =>
       snapshotBytes(content, `$request.currentContents/${index}`),
     ),
   );
@@ -136,7 +117,7 @@ export function planWholeFileContentTransition(
   sourceValue: unknown | null,
   requestValue: WholeFileContentTransitionRequest,
 ): Readonly<WholeFileContentTransition> {
-  const request = parseRequest(requestValue);
+  const request = snapshotRequest(requestValue);
   const source = sourceValue === null ? null : snapshotBytes(sourceValue, "$source");
   if (source === null) {
     return Object.freeze({

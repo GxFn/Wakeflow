@@ -410,8 +410,7 @@ function eventPurposeOf(result: Readonly<TargetResult>): string {
 
 /** 结果事件与提交的身份由同一声明派生，重放自然命中同一提交；取代的那份有自己的一对。 */
 export function targetResultRecordedEventIdFromResult(
-  resultValue: unknown,
+  result: Readonly<TargetResult>,
 ): WakeflowDurableId<"demand-event"> {
-  const result = parseTargetResult(resultValue);
   return deriveDurableId("demand-event", eventPurposeOf(result), result.delivery.fence.claimId);
 }

@@ -363,35 +363,3 @@ test("durable file copy rejects unsafe sources, capacity, and cancellation", asy
     );
   });
 });
-
-test("durable file copy rejects behavioral expectation input without executing it", async (t) => {
-  const current = await fixture(t);
-  writeFileSync(path.join(current.sourcePath, "source"), "content");
-  let trapCalls = 0;
-  const expectation = new Proxy(
-    {
-      byteCount: parseByteCount(7),
-      digest: computeSha256Digest(Buffer.from("content")),
-    },
-    {
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return Object.prototype;
-      },
-    },
-  );
-  await expectCopyError(
-    () =>
-      copyFileToCandidateDurably(
-        current.sourceRoot,
-        current.destinationRoot,
-        parsePortableResourcePath("source"),
-        parsePortableResourcePath("candidate/source"),
-        expectation,
-        { maximumBytes: parseByteCount(7), mode: 0o600 },
-      ),
-    "input",
-    "$expectation",
-  );
-  equal(trapCalls, 0);
-});

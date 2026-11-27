@@ -1,14 +1,8 @@
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   inspectWakeflowManagedTextEnvelope,
-  parseWakeflowManagedTextEnvelopeTarget,
   recomposeWakeflowManagedTextEnvelope,
   WakeflowManagedTextEnvelopeError,
   type WakeflowManagedTextEnvelopeInspection,
@@ -37,8 +31,8 @@ export interface WakeflowManagedTextAuthorityTransition {
 }
 
 interface WakeflowManagedTextAuthorityTransitionRequest {
-  readonly currentTargets: readonly unknown[];
-  readonly desiredTarget: unknown;
+  readonly currentTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
+  readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
 export type WakeflowManagedTextAuthorityTransitionErrorReason =
@@ -62,21 +56,10 @@ interface ParsedTarget {
   readonly bodyDigest: Sha256Digest;
 }
 
-interface ParsedRequest {
-  readonly currentTargets: readonly Readonly<ParsedTarget>[];
-  readonly desiredTarget: Readonly<ParsedTarget>;
-}
-
-function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {
-  let target: Readonly<WakeflowManagedTextEnvelopeTarget>;
-  try {
-    target = parseWakeflowManagedTextEnvelopeTarget(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowManagedTextEnvelopeError) {
-      fail("target", path, error);
-    }
-    throw error;
-  }
+function withBodyDigest(
+  target: Readonly<WakeflowManagedTextEnvelopeTarget>,
+  path: string,
+): Readonly<ParsedTarget> {
   let bodyDigest: Sha256Digest;
   try {
     bodyDigest = computeSha256Digest(encodeUtf8(target.body, path), path);
@@ -87,40 +70,7 @@ function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {
   return Object.freeze({ target, bodyDigest });
 }
 
-function parseRequest(value: unknown): Readonly<ParsedRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  let currentValues: readonly unknown[];
-  try {
-    record = parsePlainRecord(value, "$request");
-    currentValues = parseDenseArray(record.currentTargets, 8, "$request.currentTargets");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
-  }
-  if (Object.keys(record).sort().join("\u0000") !== "currentTargets\u0000desiredTarget") {
-    fail("input", "$request");
-  }
-  const desiredTarget = parseTarget(record.desiredTarget, "$request.desiredTarget");
-  const currentTargets = Object.freeze(
-    currentValues.map((target, index) => parseTarget(target, `$request.currentTargets/${index}`)),
-  );
-  const seenDigests = new Set<Sha256Digest>();
-  for (const [index, current] of currentTargets.entries()) {
-    if (
-      current.target.component !== desiredTarget.target.component ||
-      current.target.owner !== desiredTarget.target.owner
-    ) {
-      fail("relation", `$request.currentTargets/${index}`);
-    }
-    if (seenDigests.has(current.bodyDigest)) {
-      fail("input", `$request.currentTargets/${index}`);
-    }
-    seenDigests.add(current.bodyDigest);
-  }
-  return Object.freeze({ currentTargets, desiredTarget });
-}
-
-function inspectSource(value: unknown): Readonly<WakeflowManagedTextEnvelopeInspection> {
+function inspectSource(value: Uint8Array): Readonly<WakeflowManagedTextEnvelopeInspection> {
   try {
     return inspectWakeflowManagedTextEnvelope(value);
   } catch (error: unknown) {
@@ -146,12 +96,14 @@ function sameManagedBody(
  * 检查当前正文所有权并生成零 I/O 的幂等 current 或精确重组候选。
  */
 export function planWakeflowManagedTextAuthorityTransition(
-  sourceValue: unknown,
+  sourceValue: Uint8Array,
   requestValue: WakeflowManagedTextAuthorityTransitionRequest,
 ): Readonly<WakeflowManagedTextAuthorityTransition> {
-  const request = parseRequest(requestValue);
+  const desired = withBodyDigest(requestValue.desiredTarget, "$request.desiredTarget");
+  const currentTargets = requestValue.currentTargets.map((target, index) =>
+    withBodyDigest(target, `$request.currentTargets/${index}`),
+  );
   const sourceEnvelope = inspectSource(sourceValue);
-  const desired = request.desiredTarget;
   if (
     sourceEnvelope.kind === "managed" &&
     (sourceEnvelope.component !== desired.target.component ||
@@ -167,9 +119,7 @@ export function planWakeflowManagedTextAuthorityTransition(
     });
   }
   if (sourceEnvelope.kind === "managed") {
-    const admitted = request.currentTargets.some((target) =>
-      sameManagedBody(sourceEnvelope, target),
-    );
+    const admitted = currentTargets.some((target) => sameManagedBody(sourceEnvelope, target));
     if (!admitted) fail("unadmitted-source", "$source");
   }
   let target: Readonly<WakeflowManagedTextRecompositionResult>;

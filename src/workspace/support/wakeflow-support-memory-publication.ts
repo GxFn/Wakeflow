@@ -16,15 +16,16 @@ import {
 } from "./wakeflow-support-memory-inspection.js";
 import {
   failWakeflowSupportMemoryPublication as fail,
-  parseWakeflowSupportMemoryPublicationOptions,
-  parseWakeflowSupportMemoryPublicationRequest,
   type WakeflowSupportMemoryPublicationEffect,
   WakeflowSupportMemoryPublicationError,
   type WakeflowSupportMemoryPublicationOptions,
   type WakeflowSupportMemoryPublicationReceipt,
   type WakeflowSupportMemoryPublicationRequest,
   wakeflowSupportMemoryInspectionRequest,
+  wakeflowSupportMemoryPublicationRequestModel,
 } from "./wakeflow-support-memory-publication-contract.js";
+
+type SupportMemoryRequest = ReturnType<typeof wakeflowSupportMemoryPublicationRequestModel>;
 
 /**
  * Wakeflow Workspace / Support：whole-file memory 的无锁单资源 CAS 发布 owner。
@@ -56,7 +57,7 @@ function mapInspectionError(
 async function inspectCurrent(
   workspaceRoot: RootedDirectory,
   supportRoot: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowSupportMemoryPublicationRequest>,
+  request: SupportMemoryRequest,
   signal: AbortSignal | undefined,
   afterCommit: boolean,
 ): Promise<Readonly<WakeflowSupportMemoryInspection>> {
@@ -98,7 +99,7 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
 
 async function publishTarget(
   supportRoot: RootedDirectory,
-  request: ReturnType<typeof parseWakeflowSupportMemoryPublicationRequest>,
+  request: SupportMemoryRequest,
   inspection: Readonly<WakeflowSupportMemoryInspection>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowSupportMemoryPublicationEffect>> {
@@ -146,7 +147,7 @@ function sameSource(left: Readonly<StableFileSource>, right: Readonly<StableFile
 }
 
 function assertReadback(
-  request: ReturnType<typeof parseWakeflowSupportMemoryPublicationRequest>,
+  request: SupportMemoryRequest,
   before: Readonly<WakeflowSupportMemoryInspection>,
   effect: Readonly<WakeflowSupportMemoryPublicationEffect>,
   after: Readonly<WakeflowSupportMemoryInspection>,
@@ -189,12 +190,11 @@ export async function publishWakeflowSupportMemory(
   workspaceRoot: RootedDirectory,
   supportRoot: RootedDirectory,
   requestValue: WakeflowSupportMemoryPublicationRequest,
-  optionsValue?: WakeflowSupportMemoryPublicationOptions,
+  { signal }: WakeflowSupportMemoryPublicationOptions = {},
 ): Promise<Readonly<WakeflowSupportMemoryPublicationReceipt>> {
-  const request = parseWakeflowSupportMemoryPublicationRequest(requestValue);
-  const options = parseWakeflowSupportMemoryPublicationOptions(optionsValue);
-  throwIfAborted(options.signal);
-  const before = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, false);
+  const request = wakeflowSupportMemoryPublicationRequestModel(requestValue);
+  throwIfAborted(signal);
+  const before = await inspectCurrent(workspaceRoot, supportRoot, request, signal, false);
   if (before.status === "current") {
     return Object.freeze({
       disposition: "current",
@@ -202,9 +202,9 @@ export async function publishWakeflowSupportMemory(
       inspection: before,
     });
   }
-  throwIfAborted(options.signal);
-  const effect = await publishTarget(supportRoot, request, before, options.signal);
-  const after = await inspectCurrent(workspaceRoot, supportRoot, request, options.signal, true);
+  throwIfAborted(signal);
+  const effect = await publishTarget(supportRoot, request, before, signal);
+  const after = await inspectCurrent(workspaceRoot, supportRoot, request, signal, true);
   assertReadback(request, before, effect, after);
   return Object.freeze({
     disposition: effect.publication,

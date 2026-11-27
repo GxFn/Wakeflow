@@ -1,9 +1,5 @@
-import { types } from "node:util";
-
 import {
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
 import {
@@ -18,24 +14,24 @@ import {
   retireWakeflowConfigAuthority,
   WakeflowConfigAuthorityRetirementError,
 } from "../../configuration/wakeflow-config-authority-retirement.js";
-import { wakeflowDetachedWindowIds } from "../../configuration/wakeflow-config-detach.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import { wakeflowDetachedWindowIds } from "../../configuration/wakeflow-config-detach.js";
 import {
   validateWakeflowConfigRootPlacements,
   WakeflowConfigRootPlacementError,
 } from "../../configuration/wakeflow-config-root-placement.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   AbsoluteDirectoryMaterializationError,
   materializeAbsoluteDirectoryPlacement,
 } from "../../foundation/filesystem/absolute-directory-materialization.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -77,7 +73,6 @@ import {
   WakeflowExternalInstructionRecompositionError,
 } from "../managed-integration/wakeflow-external-instruction-recomposition.js";
 import { createWakeflowGitignoreBodyAuthority } from "../managed-integration/wakeflow-gitignore-body-authority.js";
-import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
 import {
   recomposeWakeflowWorkspaceGitignore,
   WakeflowGitignoreRecompositionError,
@@ -87,6 +82,8 @@ import {
   removeWakeflowManagedBlockFile,
   WakeflowManagedBlockFileError,
 } from "../managed-integration/wakeflow-managed-block-file.js";
+import { WAKEFLOW_GITIGNORE_REF } from "../managed-integration/wakeflow-managed-integration-resource-catalog.js";
+import type { WakeflowManagedTextEnvelopeTarget } from "../managed-integration/wakeflow-managed-text-envelope.js";
 import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
@@ -144,9 +141,11 @@ import {
 } from "./wakeflow-maintenance-gate.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import {
+  admitWakeflowStaticMaterializationPreviewRequest,
+  type ParsedWakeflowStaticMaterializationPreviewRequest,
   parseWakeflowStaticMaterializationPreview,
-  parseWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationAction,
+  type WakeflowStaticMaterializationPreview,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationStep,
@@ -201,57 +200,6 @@ const fail: Fail<WakeflowStaticMaterializationStepExecutionErrorReason> = failWi
   WakeflowStaticMaterializationStepExecutionError,
 );
 
-interface ParsedStepExecutionOptions {
-  readonly sourceConfig: WakeflowConfigModel | null;
-  readonly recoveringAffectedStep: boolean;
-  readonly signal: AbortSignal | undefined;
-}
-
-function parseExecutionOptions(value: unknown): Readonly<ParsedStepExecutionOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "recoveringAffectedStep") ||
-    !Object.hasOwn(record, "sourceConfig") ||
-    Object.keys(record).some(
-      (key) => key !== "recoveringAffectedStep" && key !== "signal" && key !== "sourceConfig",
-    ) ||
-    typeof record.recoveringAffectedStep !== "boolean" ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  let sourceConfig: WakeflowConfigModel | null;
-  if (record.sourceConfig === null) {
-    sourceConfig = null;
-  } else {
-    try {
-      sourceConfig = parseWakeflowConfig(record.sourceConfig);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowConfigError) {
-        fail("source-config", "$options.sourceConfig", error);
-      }
-      throw error;
-    }
-  }
-  const signal = record.signal as AbortSignal | undefined;
-  throwIfAborted(signal);
-  return Object.freeze({
-    sourceConfig,
-    recoveringAffectedStep: record.recoveringAffectedStep,
-    signal,
-  });
-}
-
 function authorityDigest(value: unknown): Sha256Digest {
   return computeCanonicalJsonSha256Digest(value);
 }
@@ -270,7 +218,7 @@ function receipt(
 
 /** 执行时的期望 Config：reconcile 收敛到源 Config，detach-workspace 改名它（ADR-0024），其余带在请求里。 */
 function desiredConfig(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
 ): WakeflowConfigModel {
   const desired = wakeflowStaticMaterializationActionUsesCurrentConfig(request.action)
@@ -482,7 +430,7 @@ async function executeActiveWorkspaceProjection(
 async function executeLedgerLayout(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
@@ -571,7 +519,7 @@ async function executeLedgerLayout(
 async function executeUnregisteredWindowRuntime(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
@@ -631,7 +579,7 @@ async function executeUnregisteredWindowRuntime(
 async function executeHostCapabilityLayout(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   recovering: boolean,
   signal: AbortSignal | undefined,
 ) {
@@ -674,7 +622,7 @@ async function executeHostCapabilityLayout(
 async function executeSupportRoot(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel,
   recovering: boolean,
   signal: AbortSignal | undefined,
@@ -683,7 +631,9 @@ async function executeSupportRoot(
   const declaration = catalog.declarations.find(
     (entry) => entry.declarationId === `support.${step.targetKey}.root`,
   );
-  if (declaration === undefined) fail("plan", "$step.targetKey");
+  if (declaration === undefined || declaration.placement.root.kind !== "support-surface") {
+    fail("plan", "$step.targetKey");
+  }
   assertStepTarget(step, authorityDigest(declaration));
   try {
     const result = await materializeWakeflowManagedSupportRoot(root, {
@@ -691,7 +641,8 @@ async function executeSupportRoot(
       expectedConfigDigest: computeWakeflowConfigDigest(desired),
       profile: request.currentHostProfile,
       expectedCatalogDigest: catalog.catalogDigest,
-      surfaceId: step.targetKey,
+      // 步骤的 targetKey 来自（可能读自盘上的）计划：取目录里对上号的那份声明的类型化 surfaceId。
+      surfaceId: declaration.placement.root.surfaceId,
       ...(signal === undefined ? {} : { signal }),
     });
     // fresh 要求根严格不存在；reconcile/reconfigure 的修复接受已有根并只补齐 scaffold。
@@ -721,7 +672,7 @@ async function executeSupportRoot(
 async function executeGitignore(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   signal: AbortSignal | undefined,
 ) {
   const authority = createWakeflowGitignoreBodyAuthority(request.hostProfiles);
@@ -751,7 +702,7 @@ async function executeGitignore(
 
 /** 步骤 targetKey 点名的宿主：当前宿主或制品携带的对等宿主 profile（§13.120 D2）。 */
 function hostProfileFor(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   hostId: string,
 ) {
   const profile = request.hostProfiles.find((entry) => entry.hostId === hostId);
@@ -762,7 +713,7 @@ function hostProfileFor(
 async function executeProgramInstruction(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
@@ -801,7 +752,7 @@ async function executeProgramInstruction(
 async function executeExternalInstruction(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
@@ -903,7 +854,7 @@ async function executeExternalInstruction(
 async function executeSupportGitignore(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
@@ -985,14 +936,19 @@ async function executeSupportGitignore(
 async function executeSupportMemory(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   desired: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ) {
   const separator = step.targetKey.lastIndexOf(":");
   if (separator <= 0) fail("plan", "$step.targetKey");
-  const surfaceId = step.targetKey.slice(0, separator);
+  // targetKey 来自（可能读自盘上的）计划：在期望 Config 里找到对上号的 surface，取它的类型化标识。
+  const surfaceKey = step.targetKey.slice(0, separator);
+  const surfaceId = desired.topology.supportSurfaces.find(
+    (entry) => entry.surfaceId === surfaceKey,
+  )?.surfaceId;
+  if (surfaceId === undefined) fail("plan", "$step.targetKey");
   const profile = hostProfileFor(request, step.targetKey.slice(separator + 1));
   const authority = createWakeflowSupportMemoryAuthority(desired, profile, surfaceId);
   assertStepTarget(step, authority.authorityDigest);
@@ -1118,6 +1074,21 @@ async function executeConfig(
   }
 }
 
+/** 门的运行时活性：context 必须仍在同一根的门回调里。 */
+function assertGateContext(
+  gateContext: Readonly<WakeflowMaintenanceGateContext>,
+  root: RootedDirectory,
+): void {
+  try {
+    assertWakeflowMaintenanceGateContext(gateContext, root);
+  } catch (error: unknown) {
+    if (error instanceof WakeflowMaintenanceGateError) {
+      fail("gate", "$gateContext", error);
+    }
+    throw error;
+  }
+}
+
 /** 在 active maintenance gate 内执行计划中的一个 exact step。 */
 export async function executeWakeflowStaticMaterializationStep(
   root: RootedDirectory,
@@ -1127,15 +1098,10 @@ export async function executeWakeflowStaticMaterializationStep(
   stepIdValue: unknown,
   options: WakeflowStaticMaterializationStepExecutionOptions,
 ): Promise<Readonly<WakeflowStaticMaterializationStepExecutionReceipt>> {
-  try {
-    assertWakeflowMaintenanceGateContext(gateContext, root);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceGateError) {
-      fail("gate", "$gateContext", error);
-    }
-    throw error;
-  }
-  const parsedOptions = parseExecutionOptions(options);
+  // 这个入口的 preview、请求与 stepId 仍声明为 `unknown`（另一分区的测试直接调用，签名留到 A-spec 第 2 步），
+  // 所以在这里各解析一次；聚合事务走下面已类型化的那一个。门与取消先于解码。
+  assertGateContext(gateContext, root);
+  throwIfAborted(options.signal);
   let preview: ReturnType<typeof parseWakeflowStaticMaterializationPreview>;
   try {
     preview = parseWakeflowStaticMaterializationPreview(previewValue);
@@ -1145,9 +1111,9 @@ export async function executeWakeflowStaticMaterializationStep(
     }
     throw error;
   }
-  let request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>;
+  let request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
   try {
-    request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+    request = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowStaticMaterializationPreviewError) {
       fail("input", error.path, error);
@@ -1157,11 +1123,34 @@ export async function executeWakeflowStaticMaterializationStep(
   if (typeof stepIdValue !== "string" || stepIdValue.length > 256 || !stepIdValue.isWellFormed()) {
     fail("input", "$stepId");
   }
-  const step = preview.steps.find((entry) => entry.stepId === stepIdValue);
+  return executeParsedWakeflowStaticMaterializationStep(
+    root,
+    gateContext,
+    preview,
+    request,
+    stepIdValue,
+    options,
+  );
+}
+
+/** 同上，preview 与请求已经是模型（聚合事务从意图重建出来的那一份）。 */
+export async function executeParsedWakeflowStaticMaterializationStep(
+  root: RootedDirectory,
+  gateContext: Readonly<WakeflowMaintenanceGateContext>,
+  preview: Readonly<WakeflowStaticMaterializationPreview>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  stepId: string,
+  {
+    sourceConfig,
+    recoveringAffectedStep: recovering,
+    signal,
+  }: WakeflowStaticMaterializationStepExecutionOptions,
+): Promise<Readonly<WakeflowStaticMaterializationStepExecutionReceipt>> {
+  assertGateContext(gateContext, root);
+  throwIfAborted(signal);
+  const step = preview.steps.find((entry) => entry.stepId === stepId);
   if (step === undefined) fail("plan", "$stepId");
   if (preview.status !== "ready") fail("plan", "$preview.status");
-  const { sourceConfig, signal } = parsedOptions;
-  const recovering = parsedOptions.recoveringAffectedStep;
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(request.currentHostProfile);
   if (preview.action !== request.action || preview.matrixDigest !== matrix.matrixDigest) {
     fail("plan", "$preview");
@@ -1265,7 +1254,7 @@ function requireSourceConfig(sourceConfig: WakeflowConfigModel | null): Wakeflow
 
 /** 当前宿主的 targetKey 就是 target 键；对等宿主的以 `:<hostId>` 结尾（与 recompose 同形）。 */
 function resolveExternalInstructionStepTarget(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   config: WakeflowConfigModel,
   targetKey: string,
 ) {
@@ -1313,12 +1302,8 @@ interface ManagedBlockRemovalSpec {
         readonly kind: "external";
         readonly target: ReturnType<typeof listWakeflowExternalInstructionTargets>[number];
       }>;
-  readonly resourcePath: string;
-  readonly admittedTargets: readonly Readonly<{
-    readonly component: string;
-    readonly owner: string;
-    readonly body: string;
-  }>[];
+  readonly resourcePath: PortableResourcePath;
+  readonly admittedTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
 }
 
 const PROGRAM_INSTRUCTION_TARGET_KEY = "program-instruction" as const;
@@ -1330,7 +1315,7 @@ const WORKSPACE_IGNORE_TARGET_KEY = "workspace.ignore-integration" as const;
  * 指令目标的块（对等宿主以 `:<hostId>` 结尾）。
  */
 function resolveManagedBlockRemovalSpec(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   config: WakeflowConfigModel,
   targetKey: string,
 ): Readonly<ManagedBlockRemovalSpec> {
@@ -1403,7 +1388,7 @@ function resolveManagedBlockRemovalSpec(
 async function executeRemoveManagedBlock(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowStaticMaterializationStepExecutionReceipt>> {
@@ -1463,7 +1448,7 @@ async function executeRemoveManagedBlock(
 async function executeRetireWindowProjections(
   root: RootedDirectory,
   step: Readonly<WakeflowStaticMaterializationStep>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowStaticMaterializationStepExecutionReceipt>> {

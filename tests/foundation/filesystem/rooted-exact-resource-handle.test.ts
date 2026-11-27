@@ -12,10 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import {
-  type FileNodeSnapshot,
-  sameFileNodeIdentity,
-} from "../../../src/foundation/filesystem/file-node-snapshot.js";
+import { sameFileNodeIdentity } from "../../../src/foundation/filesystem/file-node-snapshot.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -50,10 +47,6 @@ async function expectExactHandleError(
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
-}
-
-function asExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  return value as Readonly<FileNodeSnapshot>;
 }
 
 test("regular-file factory admits one exact pathname and opened inode", async () => {
@@ -152,7 +145,7 @@ test("missing resources and stale expectations fail before a handle is issued", 
   }
 });
 
-test("inputs are revalidated without executing root or expectation proxies", async () => {
+test("an escaping resource path fails as input before a handle is issued", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-exact-input-"));
   writeFileSync(path.join(rootPath, "source"), "value");
   const root = await RootedDirectory.open(rootPath);
@@ -170,52 +163,6 @@ test("inputs are revalidated without executing root or expectation proxies", asy
       "input",
       "$.source",
     );
-    await expectExactHandleError(
-      () =>
-        RootedExactResourceHandle.openRegularFile(
-          root,
-          resourcePath,
-          asExpectedNode({ ...expected.node }),
-        ),
-      "input",
-      "$expectedNode",
-    );
-
-    let rootTrapCalls = 0;
-    const rootProxy = new Proxy(root, {
-      get: () => {
-        rootTrapCalls += 1;
-        return undefined;
-      },
-      getPrototypeOf: () => {
-        rootTrapCalls += 1;
-        return RootedDirectory.prototype;
-      },
-    });
-    await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(rootProxy, resourcePath, expected.node),
-      "input",
-      "$root",
-    );
-    equal(rootTrapCalls, 0);
-
-    let expectedTrapCalls = 0;
-    const expectedProxy = new Proxy(expected.node, {
-      get: () => {
-        expectedTrapCalls += 1;
-        return undefined;
-      },
-      ownKeys: () => {
-        expectedTrapCalls += 1;
-        return [];
-      },
-    });
-    await expectExactHandleError(
-      () => RootedExactResourceHandle.openRegularFile(root, resourcePath, expectedProxy),
-      "input",
-      "$expectedNode",
-    );
-    equal(expectedTrapCalls, 0);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

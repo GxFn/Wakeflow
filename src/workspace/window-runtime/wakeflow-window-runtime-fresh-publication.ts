@@ -1,8 +1,6 @@
-import { types } from "node:util";
-
+import { parseWakeflowConfig, WakeflowConfigError } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
@@ -26,7 +24,7 @@ import {
   isPrivateFile,
 } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -48,6 +46,7 @@ import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
+  type WakeflowWorkspaceHostResourceProfile,
   WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import {
@@ -114,11 +113,6 @@ const fail: Fail<WakeflowFreshWindowRuntimePublicationErrorReason> = failWith(
   WakeflowFreshWindowRuntimePublicationError,
 );
 
-interface ParsedOptions {
-  readonly recoveringFreshPublication: boolean;
-  readonly signal: AbortSignal | undefined;
-}
-
 interface DirectoryEffect {
   readonly resourcePath: PortableResourcePath;
   readonly disposition: "created" | "current";
@@ -139,32 +133,6 @@ function admitAuthorityOperations(authority: Readonly<WakeflowFreshWindowRuntime
     }
     throw error;
   }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    !Object.hasOwn(record, "recoveringFreshPublication") ||
-    Object.keys(record).some((key) => key !== "recoveringFreshPublication" && key !== "signal") ||
-    typeof record.recoveringFreshPublication !== "boolean" ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    recoveringFreshPublication: record.recoveringFreshPublication,
-    signal: record.signal as AbortSignal | undefined,
-  });
 }
 
 function assertPrivateNode(
@@ -393,34 +361,31 @@ export async function publishFreshWakeflowWindowRuntime(
   rootValue: RootedDirectory,
   configValue: unknown,
   profileValue: unknown,
-  optionsValue: WakeflowFreshWindowRuntimePublicationOptions,
+  { recoveringFreshPublication, signal }: WakeflowFreshWindowRuntimePublicationOptions,
 ): Promise<Readonly<WakeflowFreshWindowRuntimePublicationResult>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue);
-  throwIfAborted(options.signal);
+  throwIfAborted(signal);
+  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   let authority: Readonly<WakeflowFreshWindowRuntimeAuthority>;
   try {
-    authority = compileWakeflowFreshWindowRuntimeAuthority(configValue, profileValue);
+    // Config 与 Profile 在这个入口仍声明为 `unknown`（另一分区直接调用，签名留到 A-spec 第 2 步）：解析一次。
+    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+    authority = compileWakeflowFreshWindowRuntimeAuthority(
+      parseWakeflowConfig(configValue),
+      profile,
+    );
   } catch (error: unknown) {
     if (
       error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
       error instanceof WakeflowWindowRuntimeDesiredTopologyError ||
       error instanceof WakeflowWorkspaceHostResourceProfileError ||
-      error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError
+      error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError ||
+      error instanceof WakeflowConfigError
     ) {
       fail("authority", error.path, error);
     }
     throw error;
   }
   admitAuthorityOperations(authority);
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   await assertRuntimeParent(rootValue);
   const directoryPaths = [
     WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
@@ -433,12 +398,7 @@ export async function publishFreshWakeflowWindowRuntime(
   const directoryEffects: Readonly<DirectoryEffect>[] = [];
   for (const resourcePath of directoryPaths) {
     directoryEffects.push(
-      await ensureDirectory(
-        rootValue,
-        resourcePath,
-        options.recoveringFreshPublication,
-        options.signal,
-      ),
+      await ensureDirectory(rootValue, resourcePath, recoveringFreshPublication, signal),
     );
   }
   const declaredLayoutPaths = authority.layoutDeclarations.map(
@@ -454,57 +414,57 @@ export async function publishFreshWakeflowWindowRuntime(
     rootValue,
     WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
     [profile.runtimeDirectoryName],
-    options.signal,
+    signal,
   );
   await assertExactDirectoryChildren(
     rootValue,
     wakeflowHostRuntimeRootRef(profile),
     ["identity", "projections"],
-    options.signal,
+    signal,
   );
   await assertExactDirectoryChildren(
     rootValue,
     wakeflowHostIdentityRootRef(profile),
     ["window-bindings"],
-    options.signal,
+    signal,
   );
   await assertExactDirectoryChildren(
     rootValue,
     wakeflowHostProjectionsRootRef(profile),
     ["window-runtime"],
-    options.signal,
+    signal,
   );
   const bindingNode = await assertBindingsEmpty(
     rootValue,
     wakeflowWindowHostBindingRootRef(profile),
-    options.signal,
+    signal,
   );
-  await assertProjectionNamespaceNames(rootValue, authority, options.signal);
+  await assertProjectionNamespaceNames(rootValue, authority, signal);
   await settleStagesOfDeadWritersStrictly(
     rootValue,
     authority.projectionSet.entries.map((entry) => entry.resourceRef),
     "closed",
-    options.signal,
+    signal,
     (cause) =>
       cause?.reason === "root-scope"
         ? fail("root-scope", "$root", cause)
         : fail("prefix-conflict", "$projectionStages", cause),
   );
-  const before = await inspectProjectionInventory(rootValue, authority, options.signal);
+  const before = await inspectProjectionInventory(rootValue, authority, signal);
   const createdProjectionCount = await createMissingProjections(
     rootValue,
     authority,
     before.current,
-    options.signal,
+    signal,
   );
-  const after = await inspectProjectionInventory(rootValue, authority, options.signal);
+  const after = await inspectProjectionInventory(rootValue, authority, signal);
   if (after.current.size !== authority.projectionSet.entries.length) {
     fail("operation-failure", "$projectionReadback");
   }
   const finalBindingNode = await assertBindingsEmpty(
     rootValue,
     wakeflowWindowHostBindingRootRef(profile),
-    options.signal,
+    signal,
   );
   if (!sameFileNodeIdentity(bindingNode, finalBindingNode)) {
     fail("prefix-conflict", "$bindingInventory");

@@ -1,8 +1,4 @@
-import {
-  type ControllerProductDefectRemediationAuthorization,
-  ControllerProductDefectRemediationAuthorizationError,
-  parseControllerProductDefectRemediationAuthorization,
-} from "../../review/controller-product-defect-remediation-authorization.js";
+import type { ControllerProductDefectRemediationAuthorization } from "../../review/controller-product-defect-remediation-authorization.js";
 import {
   type ControllerReviewDecision,
   ControllerReviewDecisionError,
@@ -202,19 +198,9 @@ export function decideTargetResultReviewInDemandAggregateState(
 
 /** `review.product-defect-remediation-authorized.v1`使用的纯状态转换。 */
 export function authorizeProductDefectRemediationInDemandAggregateState(
-  currentValue: unknown,
-  authorizationValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  authorization: Readonly<ControllerProductDefectRemediationAuthorization>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let authorization: Readonly<ControllerProductDefectRemediationAuthorization>;
-  try {
-    authorization = parseControllerProductDefectRemediationAuthorization(authorizationValue);
-  } catch (error: unknown) {
-    if (error instanceof ControllerProductDefectRemediationAuthorizationError) {
-      fail("controller-product-defect-remediation-authorization", "$authorization", error);
-    }
-    throw error;
-  }
   const testTarget = current.targetTasks.find(
     (target) => target.targetTaskId === authorization.source.testTargetTaskId,
   );

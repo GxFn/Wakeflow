@@ -1,7 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -26,14 +23,6 @@ import {
  */
 
 export const MANAGED_EVIDENCE_RESOURCE_OWNER_ID = "demand-managed-evidence" as const;
-
-function demandId(value: unknown): WakeflowDurableId<"demand"> {
-  return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
-}
-
-function evidenceId(value: unknown): WakeflowDurableId<"evidence"> {
-  return parseWakeflowDurableIdOfKind(value, "evidence", "$evidenceId");
-}
 
 function demandChildRef(
   demand: WakeflowDurableId<"demand">,
@@ -69,9 +58,8 @@ function commonDeclaration(
 
 /** 一份Demand可选Managed Evidence容器的目录声明。 */
 export function createManagedEvidenceRootResourceDeclaration(
-  demandValue: unknown,
+  demand: WakeflowDurableId<"demand">,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demand = demandId(demandValue);
   return commonDeclaration(
     `demand.managed-evidence.${demand}.root`,
     demandChildRef(demand, MANAGED_EVIDENCE_ROOT_REF),
@@ -94,11 +82,9 @@ export function createManagedEvidenceRootResourceDeclaration(
 
 /** 一份完整Managed Evidence final record的Manifest闭合树声明。 */
 export function createManagedEvidenceRecordResourceDeclaration(
-  demandValue: unknown,
-  evidenceValue: unknown,
+  demand: WakeflowDurableId<"demand">,
+  evidence: WakeflowDurableId<"evidence">,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demand = demandId(demandValue);
-  const evidence = evidenceId(evidenceValue);
   return commonDeclaration(
     `demand.managed-evidence.${demand}.record.${evidence}`,
     demandChildRef(demand, managedEvidenceRecordRootRef(evidence)),
@@ -119,9 +105,8 @@ export function createManagedEvidenceRecordResourceDeclaration(
 
 /** 同一Demand一次只允许一份Managed Evidence publication journal。 */
 export function createManagedEvidencePublicationTransactionResourceDeclaration(
-  demandValue: unknown,
+  demand: WakeflowDurableId<"demand">,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demand = demandId(demandValue);
   return commonDeclaration(
     `demand.managed-evidence.${demand}.transaction`,
     demandChildRef(demand, MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF),

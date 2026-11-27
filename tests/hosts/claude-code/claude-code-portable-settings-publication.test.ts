@@ -26,7 +26,6 @@ import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import {
   ClaudeCodePortableSettingsPublicationError,
   type ClaudeCodePortableSettingsPublicationErrorReason,
-  inspectClaudeCodePortableSettings,
   publishClaudeCodePortableSettings,
 } from "../../../src/hosts/claude-code/claude-code-portable-settings-publication.js";
 import { WAKEFLOW_CLAUDE_CODE_MCP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-portable-settings-transition.js";
@@ -187,18 +186,4 @@ test("publication with expectedSourceDigest replaces only the exact source and r
   });
   equal(current.disposition, "current");
   equal(current.sourceDigest, updated.targetDigest);
-});
-
-test("expectedSourceDigest is publish-only input and must be a digest or null", async (t) => {
-  const value = await fixture(t);
-  const malformed = { expectedSourceDigest: "sha256:not-a-digest" } as never;
-  await expectPublicationError(
-    () => publishClaudeCodePortableSettings(value.root, malformed),
-    "input",
-  );
-  await expectPublicationError(
-    () => inspectClaudeCodePortableSettings(value.root, { expectedSourceDigest: null } as never),
-    "input",
-  );
-  equal(existsSync(path.join(value.absolutePath, ".claude")), false);
 });

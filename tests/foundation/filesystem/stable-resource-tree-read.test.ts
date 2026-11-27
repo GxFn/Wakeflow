@@ -53,10 +53,6 @@ function treeOptions(
   };
 }
 
-function asOptions(value: unknown): StableResourceTreeReadOptions {
-  return value as StableResourceTreeReadOptions;
-}
-
 function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
@@ -235,44 +231,24 @@ test("missing, file, symlink, and forged starting targets fail distinctly", asyn
   }
 });
 
-test("options are closed and passive, and AbortSignal remains cooperative", async () => {
+test("count limits are range-checked, and AbortSignal remains cooperative", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-tree-options-"));
   const root = await RootedDirectory.open(rootPath);
   try {
     const complete = treeOptions();
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
+    const invalid: readonly [StableResourceTreeReadOptions, string][] = [
       [{ ...complete, maximumFiles: -1 }, "$options.maximumFiles"],
-      [{ ...complete, maximumFileBytes: 1.5 }, "$options.maximumFileBytes"],
-      [{ ...complete, maximumTotalBytes: -1 }, "$options.maximumTotalBytes"],
-      [{ ...complete, expectedNode: null }, "$options.expectedNode"],
-      [{ ...complete, expectedNode: {} }, "$options.expectedNode"],
-      [{ ...complete, signal: {} }, "$options.signal"],
-      [{ ...complete, extra: true }, "$options"],
+      [{ ...complete, maximumFiles: Number.NaN }, "$options.maximumFiles"],
+      [{ ...complete, maximumEntries: 1.5 }, "$options.maximumEntries"],
+      [{ ...complete, maximumDepth: -1 }, "$options.maximumDepth"],
     ];
     for (const [options, expectedPath] of invalid) {
       await expectStableResourceTreeReadError(
-        () => readStableRootResourceTree(root, asOptions(options)),
+        () => readStableRootResourceTree(root, options),
         "input",
         expectedPath,
       );
     }
-
-    let getterCalls = 0;
-    const accessor = { ...complete } as Record<string, unknown>;
-    Object.defineProperty(accessor, "maximumFiles", {
-      get: () => {
-        getterCalls += 1;
-        return 1;
-      },
-      enumerable: true,
-    });
-    await expectStableResourceTreeReadError(
-      () => readStableRootResourceTree(root, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
 
     const controller = new AbortController();
     controller.abort("private-tree-abort");

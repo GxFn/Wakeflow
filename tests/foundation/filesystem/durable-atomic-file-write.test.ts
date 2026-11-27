@@ -24,8 +24,6 @@ import {
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
   createFileAtomically,
-  type DurableAtomicFileCreateOptions,
-  type DurableAtomicFileReplaceOptions,
   DurableAtomicFileWriteError,
   type DurableAtomicFileWriteErrorReason,
   replaceFileAtomically,
@@ -174,14 +172,6 @@ async function countFsyncsWithPublicationOrder<Result>(
   return Object.freeze({ ...counted, syncsAtPublication: Object.freeze(syncsAtPublication) });
 }
 
-function asCreateOptions(value: unknown): DurableAtomicFileCreateOptions {
-  return value as DurableAtomicFileCreateOptions;
-}
-
-function asReplaceOptions(value: unknown): DurableAtomicFileReplaceOptions {
-  return value as DurableAtomicFileReplaceOptions;
-}
-
 function asPortableResourcePath(value: unknown): PortableResourcePath {
   return value as PortableResourcePath;
 }
@@ -273,7 +263,7 @@ test("none 级别的根不执行任何 fsync，字节与回执与 fsync 级别�
   }
 });
 
-test("替换没有逐次 durability：带这个键就是非法输入，替换只跟随根的级别（fsync 的根两次，none 的根零次）", {
+test("替换没有逐次 durability，只跟随根的级别（fsync 的根两次，none 的根零次）", {
   concurrency: false,
 }, async (t) => {
   const durablePath = mkdtempSync(
@@ -308,27 +298,6 @@ test("替换没有逐次 durability：带这个键就是非法输入，替换只
   }
 
   try {
-    // 档表没有要降档的替换（锁不替换）：任何取值的 durability 键，连 `fsync` 在内，都是非法输入，
-    // 不是一次悄悄的降档；目标保持原样。
-    const expected = await readStableFileDigest(durableRoot, resourcePath, {
-      maximumBytes: parseByteCount(1024),
-    });
-    for (const durability of ["fsync", "none", "bogus"]) {
-      await expectAtomicWriteError(
-        () =>
-          replaceFileAtomically(
-            durableRoot,
-            resourcePath,
-            bytes,
-            asReplaceOptions({ mode: 0o600, expected, durability }),
-          ),
-        "input",
-        "$options",
-      );
-    }
-    equal(readFileSync(path.join(durablePath, "state"), "utf8"), "before");
-    deepEqual(directoryNames(durablePath), []);
-
     // fsync 的根恰好两次（暂存内容、重命名之后的父目录），none 的根一次都不同步。
     const durable = await replaceCountingSyncs(durableRoot);
     equal(durable.syncCount, 2);
@@ -1428,57 +1397,12 @@ test("missing or unsafe parent chains fail before stage creation", async () => {
   }
 });
 
-test("options, bytes, expectation, and AbortSignal are passively admitted", async () => {
+test("an escaping resource path, a pre-aborted signal, and an expectation for another path fail before any write", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-atomic-input-"));
   writeFileSync(path.join(rootPath, "state"), "before");
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("new");
-    const invalidCreate: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ mode: 0o600, extra: true }, "$options"],
-      [{ mode: 0o600, durability: "bogus" }, "$options.durability"],
-      // 只同步内容的中间一档随锁文件一起删掉了（ADR-0033），不再是合法取值。
-      [{ mode: 0o600, durability: "content-only" }, "$options.durability"],
-      [{ mode: -1 }, "$options.mode"],
-      [{ mode: 0o1000 }, "$options.mode"],
-      [{ mode: 0o600, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalidCreate) {
-      await expectAtomicWriteError(
-        () =>
-          createFileAtomically(root, resourcePath, Buffer.from("value"), asCreateOptions(options)),
-        "input",
-        expectedPath,
-      );
-    }
-    await expectAtomicWriteError(
-      () =>
-        createFileAtomically(root, resourcePath, "text" as unknown as Uint8Array, { mode: 0o600 }),
-      "input",
-      "$bytes",
-    );
-    await expectAtomicWriteError(
-      () =>
-        createFileAtomically(root, resourcePath, new Uint8Array(new SharedArrayBuffer(1)), {
-          mode: 0o600,
-        }),
-      "input",
-      "$bytes",
-    );
-    let byteTrapCalls = 0;
-    const byteProxy = new Proxy(new Uint8Array([1]), {
-      get() {
-        byteTrapCalls += 1;
-        return undefined;
-      },
-    });
-    await expectAtomicWriteError(
-      () => createFileAtomically(root, resourcePath, byteProxy, { mode: 0o600 }),
-      "input",
-      "$bytes",
-    );
-    equal(byteTrapCalls, 0);
     await expectAtomicWriteError(
       () =>
         createFileAtomically(root, asPortableResourcePath("../escape"), Buffer.from("value"), {
@@ -1487,23 +1411,6 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       "input",
       "$resourcePath",
     );
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "mode", {
-      get: () => {
-        getterCalls += 1;
-        return 0o600;
-      },
-      enumerable: true,
-    });
-    await expectAtomicWriteError(
-      () =>
-        createFileAtomically(root, resourcePath, Buffer.from("value"), asCreateOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
 
     const controller = new AbortController();
     controller.abort("private-abort");
@@ -1522,20 +1429,6 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
     });
     await expectAtomicWriteError(
       () =>
-        replaceFileAtomically(
-          root,
-          parsePortableResourcePath("state"),
-          Buffer.from("after"),
-          asReplaceOptions({
-            mode: 0o600,
-            expected: { ...stable, node: { ...stable.node } },
-          }),
-        ),
-      "input",
-      "$options.expected.node",
-    );
-    await expectAtomicWriteError(
-      () =>
         replaceFileAtomically(root, parsePortableResourcePath("state"), Buffer.from("after"), {
           mode: 0o600,
           expected: {
@@ -1546,20 +1439,8 @@ test("options, bytes, expectation, and AbortSignal are passively admitted", asyn
       "input",
       "$options.expected.resourcePath",
     );
-    await expectAtomicWriteError(
-      () =>
-        replaceFileAtomically(
-          root,
-          parsePortableResourcePath("state"),
-          Buffer.from("after"),
-          asReplaceOptions({
-            mode: 0o600,
-            expected: { ...stable, byteCount: stable.byteCount + 1 },
-          }),
-        ),
-      "input",
-      "$options.expected.byteCount",
-    );
+    equal(readFileSync(path.join(rootPath, "state"), "utf8"), "before");
+    deepEqual(directoryNames(rootPath), []);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

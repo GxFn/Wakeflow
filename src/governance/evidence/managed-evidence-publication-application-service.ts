@@ -1,4 +1,3 @@
-import { types } from "node:util";
 import {
   readWakeflowConfigAuthoritySnapshot,
   type WakeflowConfigAuthoritySnapshot,
@@ -14,8 +13,12 @@ import {
   type Sha256Digest,
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ownString } from "../../foundation/data/own-string.js";
 import type { DirectoryTreeCandidateRetirementReceipt } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -32,11 +35,9 @@ import {
 } from "../demand/demand-operation-authority-context.js";
 import type { DemandEventSourcingAggregate } from "../demand/event-sourcing/demand-event-sourcing-aggregate.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import {
-  type DemandEventStreamCommit,
-  DemandEventStreamCommitError,
-  type DemandEventStreamCommitWriter,
-  parseDemandEventStreamCommitWriter,
+import type {
+  DemandEventStreamCommit,
+  DemandEventStreamCommitWriter,
 } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import {
   ManagedEvidenceConfiguredSourceRootError,
@@ -69,11 +70,6 @@ import {
   ManagedEvidencePublicationTransactionStoreError,
   type StoredManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction-store.js";
-import { ownString } from "../../foundation/data/own-string.js";
-import {
-  type PortableResourcePath,
-  parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
@@ -195,11 +191,6 @@ export class ManagedEvidencePublicationApplicationServiceError extends Error {
   }
 }
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
-}
-
 interface RecoveryRoots {
   readonly config: Readonly<WakeflowConfigAuthoritySnapshot>;
   readonly demandRoot: RootedDirectory;
@@ -217,34 +208,6 @@ function fail(
     "unknown",
     cause === undefined ? undefined : { cause },
   );
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal" && key !== "writer") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input");
-  }
-  let writer: Readonly<DemandEventStreamCommitWriter> | null;
-  try {
-    writer = parseDemandEventStreamCommitWriter(record.writer, "$options.writer");
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamCommitError) fail("input");
-    throw error;
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined, writer });
 }
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
@@ -530,14 +493,6 @@ export class ManagedEvidencePublicationApplicationService {
   readonly #workspaceRoot: RootedDirectory;
 
   constructor(workspaceRoot: RootedDirectory) {
-    if (
-      typeof workspaceRoot !== "object" ||
-      workspaceRoot === null ||
-      types.isProxy(workspaceRoot) ||
-      !(workspaceRoot instanceof RootedDirectory)
-    ) {
-      fail("input");
-    }
     this.#workspaceRoot = workspaceRoot;
   }
 
@@ -545,9 +500,8 @@ export class ManagedEvidencePublicationApplicationService {
   async apply(
     transactionValue: unknown,
     transactionDigestValue: unknown,
-    optionsValue: ManagedEvidencePublicationApplicationOptions = {},
+    options: ManagedEvidencePublicationApplicationOptions = {},
   ): Promise<Readonly<ManagedEvidencePublicationCompletionResult>> {
-    const options = parseOptions(optionsValue);
     assertNotAborted(options.signal);
     const { transaction, transactionDigest } = parseApplyInput(
       transactionValue,
@@ -682,9 +636,8 @@ export class ManagedEvidencePublicationApplicationService {
    */
   async recover(
     demandIdValue: unknown,
-    optionsValue: ManagedEvidencePublicationApplicationOptions = {},
+    options: ManagedEvidencePublicationApplicationOptions = {},
   ): Promise<Readonly<ManagedEvidencePublicationRecoveryResult>> {
-    const options = parseOptions(optionsValue);
     assertNotAborted(options.signal);
     const demandId = parseDemandId(demandIdValue);
     let roots: Readonly<RecoveryRoots> | undefined;

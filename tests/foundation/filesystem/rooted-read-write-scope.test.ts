@@ -212,18 +212,8 @@ test("共享持有者被强杀：写者不需要任何清理就进得去；目�
   ]);
 });
 
-test("输入不对与目录不在：模式、选项不认识报 input；锁目录不在报 unsafe", async (t) => {
+test("锁目录不在报 unsafe", async (t) => {
   const root = await fixture(t);
-  await rejects(
-    withRootedReadWriteScope(root, LOCKS, "upgrade" as "shared", async () => undefined),
-    scopeError("input"),
-  );
-  await rejects(
-    withRootedReadWriteScope(root, LOCKS, "shared", async () => undefined, {
-      unknown: true,
-    } as never),
-    scopeError("input"),
-  );
   const missing = Object.freeze({
     gate: parsePortableResourcePath("absent/gate.lock"),
     scope: parsePortableResourcePath("absent/scope.lock"),

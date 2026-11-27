@@ -1,5 +1,4 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   createFileAtomically,
@@ -7,15 +6,8 @@ import {
   type DurableAtomicFileWriteResult,
 } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
-import {
-  isRootedDirectory,
-  type RootedDirectory,
-} from "../foundation/filesystem/rooted-directory.js";
-import {
-  isAbortSignal,
-  OperationAbortedError,
-  throwIfAborted,
-} from "../foundation/node/abort-signal.js";
+import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import {
@@ -40,7 +32,7 @@ import {
 /**
  * Wakeflow Configuration：严格 Config 权威记录的仅限首次创建持久发布。
  *
- * 本模块只负责首次创建单个 Config 资源。它先准入无副作用的选项数据，验证 POSIX
+ * 本模块只负责首次创建单个 Config 资源。它先验证 POSIX
  * 根目录所有者、严格模型、1 MiB 确定性字节和全部配置根目录位置，再复用 Foundation
  * 原子创建能力完成不替换目标的发布。最后，模块通过 Config Authority Snapshot 回读
  * 同一文件系统节点、源摘要和配置摘要。成功回执同时证明物理发布和领域准入成立。
@@ -79,33 +71,6 @@ export class WakeflowConfigAuthorityPublicationError extends ModuleError<Wakeflo
 const fail: Fail<WakeflowConfigAuthorityPublicationErrorReason> = failWith(
   WakeflowConfigAuthorityPublicationError,
 );
-
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
 
 async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigint): Promise<void> {
   try {
@@ -234,11 +199,9 @@ function assertReadback(
 export async function publishWakeflowConfigAuthority(
   root: RootedDirectory,
   modelValue: unknown,
-  options?: WakeflowConfigAuthorityPublicationOptions,
+  { signal }: WakeflowConfigAuthorityPublicationOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityPublicationReceipt>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
   const expectedUserId = requireCurrentUserId(() => fail("unsupported-platform", "$root"));
   const model = parseModel(modelValue);
   const bytes = renderModelBytes(model);
@@ -248,9 +211,9 @@ export async function publishWakeflowConfigAuthority(
   await assertPlacements(root, model);
   // 位置检查可能触及多个同级根目录；提交前再次确认 Workspace 根目录所有者和当前状态。
   await assertCurrentUserRoot(root, expectedUserId);
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
 
-  const publication = await publishBytes(root, bytes, parsed.signal);
+  const publication = await publishBytes(root, bytes, signal);
   // 发布已经跨过不替换目标的提交点；此后的失败不能再表述为“提交前已取消”。
   const authority = await readBackCommittedAuthority(root);
   assertReadback(publication, authority, expectedConfigDigest, expectedUserId);

@@ -1,45 +1,23 @@
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  isRootedDirectory,
-  type RootedDirectory,
-} from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
   readStableFileOrNull,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
-import { isAbortSignal, throwIfAborted } from "../../foundation/node/abort-signal.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import {
-  createWakeflowWorkspaceStaticResourceMatrix,
-  parseWakeflowWorkspaceStaticResourceMatrix,
-  type WakeflowWorkspaceStaticResourceMatrix,
-  WakeflowWorkspaceStaticResourceMatrixError,
-} from "../wakeflow-workspace-static-resource-matrix.js";
+import type { WakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   createWakeflowWorkspaceStaticResourceOperationContext,
   type WakeflowWorkspaceStaticResourceOperationContext,
   WakeflowWorkspaceStaticResourceOperationContextError,
 } from "../wakeflow-workspace-static-resource-operation-context.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   planWakeflowManagedTextAuthorityTransition,
   type WakeflowManagedTextAuthorityTransition,
@@ -89,10 +67,10 @@ export interface WakeflowProgramInstructionInspection {
 export interface WakeflowProgramInstructionInspectionRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
   readonly expectedMatrixDigest: Sha256Digest;
-  readonly profile: unknown;
-  readonly currentConfig: unknown | null;
+  readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly currentConfig: WakeflowConfigModel | null;
   readonly expectedCurrentConfigDigest: Sha256Digest | null;
-  readonly desiredConfig: unknown;
+  readonly desiredConfig: WakeflowConfigModel;
   readonly expectedDesiredConfigDigest: Sha256Digest;
   readonly signal?: AbortSignal;
 }
@@ -129,128 +107,31 @@ export interface ParsedWakeflowProgramInstructionInspectionRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-function parseDigest(value: unknown, path: string): Sha256Digest {
-  try {
-    return parseSha256Digest(value, path);
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", path, error);
-    throw error;
-  }
-}
-
-function parseConfig(value: unknown, path: string): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("input", path, error);
-    throw error;
-  }
-}
-
-/** 快照并绑定 Matrix、Host Profile 与 current/desired Config 摘要。 */
-export function parseWakeflowProgramInstructionInspectionRequest(
-  value: unknown,
+/**
+ * 把调用方已类型化的请求换成执行用的形状。唯一保留的检查是 current 与 desired 是同一个 program：
+ * reconfigure 的 desired Config 来自公共请求，current 来自盘上，这是两者第一次相遇的地方（A-spec R10）；
+ * 改了 programId 的 reconfigure 由此在预览时以 `program-instruction-input` 阻塞。
+ */
+export function wakeflowProgramInstructionRequestModel(
+  request: Omit<WakeflowProgramInstructionInspectionRequest, "signal">,
+  signal: AbortSignal | undefined,
 ): Readonly<ParsedWakeflowProgramInstructionInspectionRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  const requiredKeys = [
-    "currentConfig",
-    "desiredConfig",
-    "expectedCurrentConfigDigest",
-    "expectedDesiredConfigDigest",
-    "expectedMatrixDigest",
-    "matrix",
-    "profile",
-  ];
-  const validKeys = record.signal === undefined ? requiredKeys : [...requiredKeys, "signal"].sort();
   if (
-    keys.length !== validKeys.length ||
-    keys.some((key, index) => key !== validKeys[index]) ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
+    request.currentConfig !== null &&
+    request.currentConfig.program.programId !== request.desiredConfig.program.programId
   ) {
-    fail("input", "$request");
-  }
-  let matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
-  try {
-    matrix = parseWakeflowWorkspaceStaticResourceMatrix(record.matrix);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-      fail("input", "$request.matrix", error);
-    }
-    throw error;
-  }
-  const expectedMatrixDigest = parseDigest(
-    record.expectedMatrixDigest,
-    "$request.expectedMatrixDigest",
-  );
-  if (expectedMatrixDigest !== matrix.matrixDigest) {
-    fail("input", "$request.expectedMatrixDigest");
-  }
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(record.profile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$request.profile", error);
-    }
-    throw error;
-  }
-  if (
-    profile.hostId !== matrix.hostId ||
-    createWakeflowWorkspaceStaticResourceMatrix(profile).matrixDigest !== matrix.matrixDigest
-  ) {
-    fail("input", "$request.matrix");
-  }
-
-  const desiredConfig = parseConfig(record.desiredConfig, "$request.desiredConfig");
-  const desiredConfigDigest = parseDigest(
-    record.expectedDesiredConfigDigest,
-    "$request.expectedDesiredConfigDigest",
-  );
-  if (computeWakeflowConfigDigest(desiredConfig) !== desiredConfigDigest) {
-    fail("input", "$request.expectedDesiredConfigDigest");
-  }
-  let currentConfig: WakeflowConfigModel | null;
-  let currentConfigDigest: Sha256Digest | null;
-  if (record.currentConfig === null) {
-    if (record.expectedCurrentConfigDigest !== null) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    currentConfig = null;
-    currentConfigDigest = null;
-  } else {
-    currentConfig = parseConfig(record.currentConfig, "$request.currentConfig");
-    currentConfigDigest = parseDigest(
-      record.expectedCurrentConfigDigest,
-      "$request.expectedCurrentConfigDigest",
-    );
-    if (computeWakeflowConfigDigest(currentConfig) !== currentConfigDigest) {
-      fail("input", "$request.expectedCurrentConfigDigest");
-    }
-    if (currentConfig.program.programId !== desiredConfig.program.programId) {
-      fail("input", "$request.desiredConfig.program.programId");
-    }
+    fail("input", "$request.desiredConfig.program.programId");
   }
   return Object.freeze({
-    matrix,
-    expectedMatrixDigest,
-    profile,
-    currentConfig,
-    currentConfigDigest,
-    desiredConfig,
-    desiredConfigDigest,
-    signal: record.signal as AbortSignal | undefined,
+    matrix: request.matrix,
+    expectedMatrixDigest: request.expectedMatrixDigest,
+    profile: request.profile,
+    currentConfig: request.currentConfig,
+    currentConfigDigest: request.expectedCurrentConfigDigest,
+    desiredConfig: request.desiredConfig,
+    desiredConfigDigest: request.expectedDesiredConfigDigest,
+    signal,
   });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function currentUserId(): bigint {
@@ -349,11 +230,10 @@ function createAuthority(
 
 /** 稳定检查当前宿主指令文件并生成零写入的 current 或重组候选。 */
 export async function inspectWakeflowProgramInstruction(
-  rootValue: unknown,
-  requestValue: WakeflowProgramInstructionInspectionRequest,
+  rootValue: RootedDirectory,
+  { signal, ...requestValue }: WakeflowProgramInstructionInspectionRequest,
 ): Promise<Readonly<WakeflowProgramInstructionInspection>> {
-  assertRoot(rootValue);
-  const request = parseWakeflowProgramInstructionInspectionRequest(requestValue);
+  const request = wakeflowProgramInstructionRequestModel(requestValue, signal);
   throwIfAborted(request.signal);
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;
   try {

@@ -14,7 +14,6 @@ import { test } from "node:test";
 import {
   createFileNodeSnapshot,
   type FileNodeKind,
-  type FileNodeSnapshot,
   FileNodeSnapshotError,
   type FileNodeSnapshotErrorReason,
   sameFileNodeIdentity,
@@ -60,10 +59,6 @@ function fakeBigIntStats(
     ctimeNs: 5n,
     ...overrides,
   };
-}
-
-function asFileNodeSnapshot(value: unknown): FileNodeSnapshot {
-  return value as FileNodeSnapshot;
 }
 
 test("real file, directory, and symlink Stats become frozen snapshots", () => {
@@ -227,21 +222,4 @@ test("node identity and complete snapshot comparisons remain distinct", () => {
   equal(sameFileNodeSnapshot(base, contentChanged), false);
   equal(sameFileNodeIdentity(base, replacement), false);
   equal(sameFileNodeSnapshot(base, replacement), false);
-});
-
-test("comparison revalidates forged snapshot fields", () => {
-  const valid = createFileNodeSnapshot(fakeBigIntStats(fileSystemConstants.S_IFREG | 0o600));
-  const wrongKind = { ...valid, kind: "directory" };
-  expectFileNodeSnapshotError(
-    () => sameFileNodeIdentity(asFileNodeSnapshot(wrongKind), valid),
-    "snapshot-field",
-    "$left.kind",
-  );
-
-  const extra = { ...valid, extra: true };
-  expectFileNodeSnapshotError(
-    () => sameFileNodeSnapshot(asFileNodeSnapshot(extra), valid),
-    "snapshot-shape",
-    "$left",
-  );
 });

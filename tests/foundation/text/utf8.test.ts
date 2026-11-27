@@ -30,14 +30,6 @@ function expectUtf8Error(
   return caught;
 }
 
-function asBytes(value: unknown): Uint8Array {
-  return value as Uint8Array;
-}
-
-function asText(value: unknown): string {
-  return value as string;
-}
-
 test("ASCII, Unicode, NUL, Buffer, and offset views round-trip exactly", () => {
   const values = ["", "Wakeflow", "Wakeflow 中文 🚀", "a\0b", "𝄞 café"] as const;
 
@@ -85,39 +77,7 @@ test("fatal decoding rejects malformed and truncated UTF-8 without replacement",
   equal(decodeUtf8(Uint8Array.from([0x61])), "a");
 });
 
-test("decoding accepts only Uint8Array inputs and invokes no proxy traps", () => {
-  for (const value of [
-    "abc",
-    [0x61, 0x62, 0x63],
-    new ArrayBuffer(3),
-    new DataView(new ArrayBuffer(3)),
-    new Uint16Array([0x6162]),
-  ]) {
-    expectUtf8Error(() => decodeUtf8(asBytes(value), "$.bytes"), "bytes-type", "$.bytes");
-  }
-
-  let trapCalls = 0;
-  const proxy = new Proxy(new Uint8Array([0x61]), {
-    getPrototypeOf() {
-      trapCalls += 1;
-      return Uint8Array.prototype;
-    },
-  });
-  expectUtf8Error(() => decodeUtf8(asBytes(proxy), "$.bytes"), "bytes-type", "$.bytes");
-  equal(trapCalls, 0);
-});
-
-test("encoding rejects non-strings and lone surrogates without coercion", () => {
-  let conversionCalls = 0;
-  const executableText = {
-    toString() {
-      conversionCalls += 1;
-      return "text";
-    },
-  };
-  expectUtf8Error(() => encodeUtf8(asText(executableText), "$.text"), "text-type", "$.text");
-  equal(conversionCalls, 0);
-
+test("encoding rejects lone surrogates without coercion", () => {
   for (const value of ["\ud800", "\udfff", "a\ud800b", "a\udfffb"]) {
     expectUtf8Error(() => encodeUtf8(value, "$.text"), "ill-formed-text", "$.text");
   }

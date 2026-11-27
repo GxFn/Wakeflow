@@ -1,5 +1,4 @@
-import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   admitWakeflowResourceOperation,
@@ -8,9 +7,7 @@ import {
 } from "../foundation/resource/resource-processing-contract.js";
 import {
   findWakeflowWorkspaceStaticResourceByDeclarationId,
-  parseWakeflowWorkspaceStaticResourceMatrix,
   type WakeflowWorkspaceStaticResourceMatrix,
-  WakeflowWorkspaceStaticResourceMatrixError,
 } from "./wakeflow-workspace-static-resource-matrix.js";
 import type { WakeflowWorkspaceHostId } from "./workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceResourceDeclaration } from "./workspace-resource-declaration.js";
@@ -50,68 +47,17 @@ const fail: Fail<WakeflowWorkspaceStaticResourceOperationContextErrorReason> = f
   WakeflowWorkspaceStaticResourceOperationContextError,
 );
 
-interface ParsedRequest {
+export interface WakeflowWorkspaceStaticResourceOperationRequest {
   readonly expectedMatrixDigest: Sha256Digest;
   readonly declarationId: string;
-  readonly recipe: unknown;
-}
-
-function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path, error);
-    throw error;
-  }
-}
-
-function parseRequest(value: unknown): Readonly<ParsedRequest> {
-  const record = plainRecord(value, "$request");
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== 3 ||
-    keys[0] !== "declarationId" ||
-    keys[1] !== "expectedMatrixDigest" ||
-    keys[2] !== "recipe" ||
-    typeof record.declarationId !== "string" ||
-    record.declarationId.length === 0
-  ) {
-    fail("input", "$request");
-  }
-  let expectedMatrixDigest: Sha256Digest;
-  try {
-    expectedMatrixDigest = parseSha256Digest(
-      record.expectedMatrixDigest,
-      "$request.expectedMatrixDigest",
-    );
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) {
-      fail("input", "$request.expectedMatrixDigest", error);
-    }
-    throw error;
-  }
-  return Object.freeze({
-    expectedMatrixDigest,
-    declarationId: record.declarationId,
-    recipe: record.recipe,
-  });
+  readonly recipe: string;
 }
 
 /** 把一个静态矩阵声明与调用方选择的唯一 recipe 绑定为冻结上下文。 */
 export function createWakeflowWorkspaceStaticResourceOperationContext(
-  matrixValue: unknown,
-  requestValue: unknown,
+  matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>,
+  request: Readonly<WakeflowWorkspaceStaticResourceOperationRequest>,
 ): Readonly<WakeflowWorkspaceStaticResourceOperationContext> {
-  let matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
-  try {
-    matrix = parseWakeflowWorkspaceStaticResourceMatrix(matrixValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-      fail("matrix", "$matrix", error);
-    }
-    throw error;
-  }
-  const request = parseRequest(requestValue);
   if (request.expectedMatrixDigest !== matrix.matrixDigest) {
     fail("matrix-changed", "$request.expectedMatrixDigest");
   }

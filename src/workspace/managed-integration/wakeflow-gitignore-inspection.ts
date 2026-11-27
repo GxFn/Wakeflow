@@ -1,14 +1,10 @@
-import { types } from "node:util";
-
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  isRootedDirectory,
   type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
@@ -37,6 +33,7 @@ import {
   type WakeflowWorkspaceStaticResourceOperationContext,
   WakeflowWorkspaceStaticResourceOperationContextError,
 } from "../wakeflow-workspace-static-resource-operation-context.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   classifyWakeflowGitignoreExactOutsideRules,
   createWakeflowGitignoreBodyAuthority,
@@ -116,43 +113,11 @@ const fail: Fail<WakeflowGitignoreInspectionErrorReason> = failWith(
   WakeflowGitignoreInspectionError,
 );
 
-interface ParsedRequest {
+export interface WakeflowGitignoreInspectionRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
   readonly expectedMatrixDigest: Sha256Digest;
-  readonly hostProfiles: readonly unknown[];
-  readonly signal: AbortSignal | undefined;
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseRequest(value: unknown): Readonly<ParsedRequest> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$request");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$request", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    (keys.length !== 3 && keys.length !== 4) ||
-    keys[0] !== "expectedMatrixDigest" ||
-    keys[1] !== "hostProfiles" ||
-    keys[2] !== "matrix" ||
-    (keys.length === 4 && keys[3] !== "signal") ||
-    (record.signal !== undefined &&
-      (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$request");
-  }
-  return Object.freeze({
-    matrix: record.matrix as Readonly<WakeflowWorkspaceStaticResourceMatrix>,
-    expectedMatrixDigest: record.expectedMatrixDigest as Sha256Digest,
-    hostProfiles: record.hostProfiles as readonly unknown[],
-    signal: record.signal as AbortSignal | undefined,
-  });
+  readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+  readonly signal?: AbortSignal;
 }
 
 async function readSource(
@@ -419,11 +384,9 @@ async function assertGitRepositoryRoot(root: RootedDirectory): Promise<void> {
 
 /** 稳定检查当前 `.gitignore` 并生成零写入的下一操作候选。 */
 export async function inspectWakeflowWorkspaceGitignore(
-  rootValue: unknown,
-  requestValue: unknown,
+  rootValue: RootedDirectory,
+  request: WakeflowGitignoreInspectionRequest,
 ): Promise<Readonly<WakeflowGitignoreInspection>> {
-  assertRoot(rootValue);
-  const request = parseRequest(requestValue);
   throwIfAborted(request.signal);
   const expectedUserId = requireCurrentUserId(() => fail("source-policy", "$source"));
   let context: Readonly<WakeflowWorkspaceStaticResourceOperationContext>;

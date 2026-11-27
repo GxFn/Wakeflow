@@ -115,7 +115,7 @@ test("missing, symlink, and non-directory parents fail distinctly", async () => 
   }
 });
 
-test("resource and root inputs are revalidated without executing proxies", async () => {
+test("an escaping resource path is revalidated as input", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-parent-input-"));
   const root = await RootedDirectory.open(rootPath);
   try {
@@ -124,24 +124,6 @@ test("resource and root inputs are revalidated without executing proxies", async
       "input",
       "$.target",
     );
-
-    let trapCalls = 0;
-    const proxy = new Proxy(root, {
-      get: () => {
-        trapCalls += 1;
-        return undefined;
-      },
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return RootedDirectory.prototype;
-      },
-    });
-    await expectParentHandleError(
-      () => RootedResourceParentHandle.open(proxy, parsePortableResourcePath("target")),
-      "input",
-      "$root",
-    );
-    equal(trapCalls, 0);
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

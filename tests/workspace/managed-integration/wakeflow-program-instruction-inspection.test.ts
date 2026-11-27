@@ -8,7 +8,6 @@ import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
 } from "../../../src/configuration/wakeflow-config.js";
-import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
@@ -174,17 +173,5 @@ test("Program Instruction inspection rejects unknown managed text and source-pol
     () => inspectWakeflowProgramInstruction(workspace.root, request(null, desired)),
     "source-policy",
     "$source",
-  );
-
-  const invalidDigestRequest = {
-    ...request(null, desired),
-    expectedDesiredConfigDigest: parseSha256Digest(
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-    ),
-  };
-  await expectInspectionError(
-    () => inspectWakeflowProgramInstruction(workspace.root, invalidDigestRequest),
-    "input",
-    "$request.expectedDesiredConfigDigest",
   );
 });

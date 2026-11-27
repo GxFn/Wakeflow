@@ -336,15 +336,4 @@ test("record drafts close their relations before reading the wall clock", () => 
       }),
     "time",
   );
-  expectRecordError(
-    () =>
-      createRequirementRecord(
-        {
-          ...requirementRecordDraft(),
-          recordedAt: FIXTURE_RECORDED_AT,
-        } as CreateRequirementRecordInput,
-        CLOCK,
-      ),
-    "input",
-  );
 });

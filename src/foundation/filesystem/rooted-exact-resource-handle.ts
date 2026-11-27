@@ -4,7 +4,6 @@ import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
-  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
   FileNodeSnapshotError,
@@ -16,7 +15,6 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
-  isRootedDirectory,
 } from "./rooted-directory.js";
 
 /**
@@ -70,14 +68,6 @@ function normalizeErrorPath(value: unknown): string {
 }
 
 const fail: Fail<RootedExactResourceHandleErrorReason> = failWith(RootedExactResourceHandleError);
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  return admitFrozenFileNodeSnapshot(value, (cause) => fail("input", "$expectedNode", cause));
-}
 
 function admitResourceKind(
   node: Readonly<FileNodeSnapshot>,
@@ -232,15 +222,14 @@ export class RootedExactResourceHandle {
     resourcePath: PortableResourcePath,
     expectedNode: Readonly<FileNodeSnapshot>,
     admission: ResourceAdmission,
-    requestedErrorPath: unknown,
+    requestedErrorPath: string | undefined,
   ): Promise<RootedExactResourceHandle> {
-    assertRoot(root);
     const errorPath = normalizeErrorPath(requestedErrorPath);
-    const expected = parseExpectedNode(expectedNode);
+    // 预期按值与观察到的节点比较：调用方给的是本层签发的快照，形状不再复验。
     const initial = await inspectInitialResource(
       root,
       resourcePath,
-      expected,
+      expectedNode,
       admission,
       errorPath,
     );

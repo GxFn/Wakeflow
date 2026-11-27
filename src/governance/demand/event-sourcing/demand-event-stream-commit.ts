@@ -27,7 +27,6 @@ import {
 } from "../../../foundation/data/json-value.js";
 import {
   PassiveOwnDataError,
-  parseDenseArray,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
@@ -38,18 +37,13 @@ import {
 } from "../model/demand-aggregate-state.js";
 import {
   type DemandEventSourcingAggregate,
-  DemandEventSourcingAggregateError,
   parseDemandEventSourcingAggregate,
 } from "./demand-event-sourcing-aggregate.js";
 import {
   DemandEventSourcingDecisionError,
   evolveDemandEventSourcingState,
 } from "./demand-event-sourcing-decider.js";
-import {
-  DemandEventSourcingEventError,
-  type DemandUncommittedEvent,
-  parseDemandUncommittedEvent,
-} from "./demand-event-sourcing-event.js";
+import type { DemandUncommittedEvent } from "./demand-event-sourcing-event.js";
 import {
   assertSupportedDemandEventSourcingStateModelVersion,
   DemandEventSourcingStateVersionError,
@@ -85,7 +79,6 @@ import {
 
 const DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND = "wakeflow-demand-event-stream-commit" as const;
 const DEMAND_EVENT_STREAM_COMMIT_SCHEMA_VERSION = 1 as const;
-const DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS = 64;
 
 export interface DemandEventStreamCommit {
   readonly artifactKind: typeof DEMAND_EVENT_STREAM_COMMIT_ARTIFACT_KIND;
@@ -227,8 +220,6 @@ const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"] as const);
-const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency", "writer"] as const);
 const ISSUED_PREPARED_COMMITS = new WeakSet<object>();
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
@@ -363,8 +354,8 @@ export function parseDemandEventStreamCommit(value: unknown): Readonly<DemandEve
   });
 }
 
-export function renderDemandEventStreamCommit(value: unknown): string {
-  return renderDeterministicJsonDocument(parseDemandEventStreamCommit(value), "$commit");
+export function renderDemandEventStreamCommit(commit: Readonly<DemandEventStreamCommit>): string {
+  return renderDeterministicJsonDocument(commit, "$commit");
 }
 
 export function parseDemandEventStreamCommitDocument(
@@ -390,56 +381,16 @@ export function computeDemandEventStreamCommitDigest(value: unknown): Sha256Dige
   return computeCanonicalJsonSha256Digest(parseDemandEventStreamCommit(value));
 }
 
-function parsePrepareInput(value: unknown): Readonly<{
+/** 一条命令产生的全部未提交事件及其提交身份；写者戳省略与 `null` 同义（不盖戳）。 */
+export interface DemandEventStreamCommitDraft {
   readonly commitId: WakeflowDurableId<"demand-event-commit">;
   readonly commandDigest: Sha256Digest;
-  readonly events: readonly Readonly<DemandUncommittedEvent>[];
-  readonly idempotency: Readonly<DemandEventStreamCommitIdempotency> | undefined;
-  readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
-}> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$input");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$input", error);
-    throw error;
-  }
-  const keys = Object.keys(record)
-    .filter((key) => !(PREPARE_OPTIONAL_FIELDS as readonly string[]).includes(key))
-    .sort();
-  if (
-    keys.length !== PREPARE_FIELDS.length ||
-    keys.some((key, index) => key !== PREPARE_FIELDS[index])
-  ) {
-    fail("input", "$input");
-  }
-  const idempotency = parseIdempotency(record.idempotency, "$/idempotency");
-  const writer = parseDemandEventStreamCommitWriter(record.writer, "$/writer");
-  let values: readonly unknown[];
-  try {
-    values = parseDenseArray(record.events, DEMAND_EVENT_STREAM_COMMIT_MAXIMUM_EVENTS, "$/events");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$/events", error);
-    throw error;
-  }
-  if (values.length === 0) fail("input", "$/events");
-  const events = values.map((eventValue, index) => {
-    try {
-      return parseDemandUncommittedEvent(eventValue);
-    } catch (error: unknown) {
-      if (error instanceof DemandEventSourcingEventError) {
-        fail("event", `$/events/${index}`, error);
-      }
-      throw error;
-    }
-  });
-  return Object.freeze({
-    commitId: parseCommitId(record.commitId, "$/commitId"),
-    commandDigest: parseDigest(record.commandDigest, "$/commandDigest"),
-    events: Object.freeze(events),
-    idempotency,
-    writer,
-  });
+  readonly events: readonly [
+    Readonly<DemandUncommittedEvent>,
+    ...Readonly<DemandUncommittedEvent>[],
+  ];
+  readonly idempotency?: Readonly<DemandEventStreamCommitIdempotency>;
+  readonly writer?: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
 /**
@@ -497,21 +448,9 @@ function assertEventCommitBoundary(
  * 候选资源不能先成为不可变提交记录，再由后置重放发现错误。
  */
 export function applyDemandEventStreamCommit(
-  currentValue: unknown,
-  commitValue: unknown,
+  current: Readonly<DemandEventSourcingAggregate> | null,
+  commit: Readonly<DemandEventStreamCommit>,
 ): Readonly<DemandEventSourcingAggregate> {
-  let current: Readonly<DemandEventSourcingAggregate> | null = null;
-  if (currentValue !== null) {
-    try {
-      current = parseDemandEventSourcingAggregate(currentValue);
-    } catch (error: unknown) {
-      if (error instanceof DemandEventSourcingAggregateError) {
-        fail("aggregate", "$aggregate", error);
-      }
-      throw error;
-    }
-  }
-  const commit = parseDemandEventStreamCommit(commitValue);
   if (
     (current === null &&
       (commit.commitSequence !== 1 ||
@@ -607,23 +546,10 @@ export function assertPreparedDemandEventStreamCommit(
 }
 
 function buildDemandEventStreamCommit(
-  currentValue: unknown,
-  inputValue: unknown,
+  current: Readonly<DemandEventSourcingAggregate> | null,
+  input: Readonly<DemandEventStreamCommitDraft>,
 ): Readonly<PreparedDemandEventStreamCommit> {
-  let current: Readonly<DemandEventSourcingAggregate> | null = null;
-  if (currentValue !== null) {
-    try {
-      current = parseDemandEventSourcingAggregate(currentValue);
-    } catch (error: unknown) {
-      if (error instanceof DemandEventSourcingAggregateError) {
-        fail("aggregate", "$aggregate", error);
-      }
-      throw error;
-    }
-  }
-  const input = parsePrepareInput(inputValue);
   const firstEvent = input.events[0];
-  if (firstEvent === undefined) fail("input", "$/events");
   const expectedStreamRevision = current?.streamRevision ?? 0;
   if (
     (current !== null && current.commitSequence >= Number.MAX_SAFE_INTEGER) ||
@@ -671,7 +597,7 @@ function buildDemandEventStreamCommit(
     previousCommitDigest: current?.lastCommitDigest ?? null,
     events: storedEvents,
     ...(input.idempotency === undefined ? {} : { idempotency: input.idempotency }),
-    ...(input.writer === null ? {} : { writer: input.writer }),
+    ...(input.writer === undefined || input.writer === null ? {} : { writer: input.writer }),
   });
   const aggregate = applyDemandEventStreamCommit(current, commit);
   const sourceExpectation = Object.freeze({
@@ -683,18 +609,18 @@ function buildDemandEventStreamCommit(
 
 /** 纯计算一条Commit计划，不签发Event Store append capability。 */
 export function planDemandEventStreamCommit(
-  currentValue: unknown,
-  inputValue: unknown,
+  current: Readonly<DemandEventSourcingAggregate> | null,
+  input: Readonly<DemandEventStreamCommitDraft>,
 ): Readonly<DemandEventStreamCommit> {
-  return buildDemandEventStreamCommit(currentValue, inputValue).commit;
+  return buildDemandEventStreamCommit(current, input).commit;
 }
 
 /** 根据当前聚合和一条命令产生的全部未提交事件签发完整追加能力。 */
 export function prepareDemandEventStreamCommit(
-  currentValue: unknown,
-  inputValue: unknown,
+  current: Readonly<DemandEventSourcingAggregate> | null,
+  input: Readonly<DemandEventStreamCommitDraft>,
 ): Readonly<PreparedDemandEventStreamCommit> {
-  const prepared = buildDemandEventStreamCommit(currentValue, inputValue);
+  const prepared = buildDemandEventStreamCommit(current, input);
   ISSUED_PREPARED_COMMITS.add(prepared);
   return prepared;
 }

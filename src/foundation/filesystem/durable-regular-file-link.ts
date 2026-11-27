@@ -9,7 +9,7 @@ import {
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   type RootedExactResourceHandleError,
@@ -87,7 +87,6 @@ export class DurableRegularFileLinkError extends ModuleError<DurableRegularFileL
 // 选项、父目录与源句柄的各步与重命名是同一份（durable-source-transition-steps.ts）。
 const {
   parseResourcePath,
-  parseOptions,
   openResourceParent,
   assertParentCurrent,
   inspectParentTarget,
@@ -99,10 +98,6 @@ const {
 } = sourceTransitionSteps(DurableRegularFileLinkError);
 
 const fail: Fail<DurableRegularFileLinkErrorReason> = failWith(DurableRegularFileLinkError);
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
 
 function mapExactSourceOpenError(error: RootedExactResourceHandleError): never {
   if (error.reason === "input") fail("input", "$sourceResourcePath");
@@ -191,14 +186,13 @@ export async function linkRegularFileWithoutReplacement(
   destinationResourcePath: PortableResourcePath,
   options: DurableRegularFileLinkOptions,
 ): Promise<Readonly<DurableRegularFileLinkResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
+  const { expectedSourceNode, signal } = options;
   const sourcePath = parseResourcePath(sourceResourcePath, "$sourceResourcePath");
   const destinationPath = parseResourcePath(destinationResourcePath, "$destinationResourcePath");
   if (sourcePath === destinationPath) {
     fail("input", "$destinationResourcePath");
   }
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
 
   const sourceParent = await openResourceParent(root, sourcePath, "$sourceResourcePath");
   let destinationParent: RootedResourceParentHandle | undefined;
@@ -209,7 +203,7 @@ export async function linkRegularFileWithoutReplacement(
   try {
     destinationParent = await openResourceParent(root, destinationPath, "$destinationResourcePath");
 
-    source = await openExactSource(root, sourcePath, parsed.expectedSourceNode);
+    source = await openExactSource(root, sourcePath, expectedSourceNode);
     if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
       fail("root-scope", "$sourceResourcePath");
     }
@@ -238,7 +232,7 @@ export async function linkRegularFileWithoutReplacement(
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
-    throwIfAborted(parsed.signal);
+    throwIfAborted(signal);
 
     try {
       await filesystemMutation.link(

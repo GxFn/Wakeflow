@@ -278,28 +278,6 @@ test("Gitignore inspection rejects unsafe or semantically conflicting sources", 
     );
   });
 
-  await t.test("behavioral signal", async (subtest) => {
-    const current = await fixture(subtest);
-    let trapCalls = 0;
-    const signal = new Proxy(new AbortController().signal, {
-      getPrototypeOf: () => {
-        trapCalls += 1;
-        return AbortSignal.prototype;
-      },
-    });
-    const base = request();
-    await expectInspectionError(
-      () =>
-        inspectWakeflowWorkspaceGitignore(current.root, {
-          ...base,
-          signal,
-        }),
-      "input",
-      "$request",
-    );
-    equal(trapCalls, 0);
-  });
-
   await t.test("broader negation after managed block", async (subtest) => {
     const managed = recomposeWakeflowManagedTextEnvelope(
       new Uint8Array(),

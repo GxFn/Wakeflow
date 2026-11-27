@@ -1,8 +1,3 @@
-import { types } from "node:util";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type FileNodeSnapshot,
@@ -13,7 +8,7 @@ import {
   isPrivateDirectory,
   isPrivateFile,
 } from "../../../foundation/filesystem/private-node-policy.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   readStableRootDirectory,
@@ -211,40 +206,6 @@ async function readResource(
   }
 }
 
-function parseOptions(value: unknown): Readonly<{
-  readonly phase: DemandEventSourcingRootInventoryPhase;
-  readonly signal: AbortSignal | undefined;
-}> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "phase" && key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal))) ||
-    (record.phase !== undefined &&
-      record.phase !== "healthy" &&
-      record.phase !== "demand-publication" &&
-      record.phase !== "managed-evidence-publication")
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    phase:
-      record.phase === "demand-publication" || record.phase === "managed-evidence-publication"
-        ? record.phase
-        : "healthy",
-    signal: record.signal as AbortSignal | undefined,
-  });
-}
-
 function assertEmpty(
   read: Readonly<StableDirectoryReadResult<PortableResourcePath>>,
   path: string,
@@ -347,20 +308,12 @@ function stageDirectoryMembers(
 /** 稳定证明一个 normal-load Demand root 的完整允许集合。 */
 export async function inspectDemandEventSourcingRootInventory(
   root: RootedDirectory,
-  options?: {
+  options: {
     readonly phase?: DemandEventSourcingRootInventoryPhase;
     readonly signal?: AbortSignal;
-  },
+  } = {},
 ): Promise<Readonly<DemandEventSourcingRootInventory>> {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const { phase, signal } = parseOptions(options);
+  const { phase = "healthy", signal } = options;
   let before: Awaited<ReturnType<typeof readStableRootDirectory>>;
   try {
     before = await readStableRootDirectory(root, {

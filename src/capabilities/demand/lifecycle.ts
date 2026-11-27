@@ -242,15 +242,17 @@ interface Journal {
   readonly verify: VerifyReport | null;
 }
 
-function planDigest(plan: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseJsonValue(plan, "$plan"));
+function planDigest(plan: Readonly<TerminalPlan | ContinuationPlan>): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(plan, "$plan");
 }
 
 function blockedPlan<Plan>(blockers: readonly string[]): PublicationTransactionPlan<Plan> {
   return Object.freeze({ status: "blocked", blockers, plan: null, digest: null });
 }
 
-function readyPlan<Plan>(plan: Plan): PublicationTransactionPlan<Plan> {
+function readyPlan<Plan extends TerminalPlan | ContinuationPlan>(
+  plan: Plan,
+): PublicationTransactionPlan<Plan> {
   return Object.freeze({
     status: "ready",
     blockers: Object.freeze([]),

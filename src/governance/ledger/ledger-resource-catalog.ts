@@ -13,10 +13,7 @@ import {
   ledgerAuthorityRecordRef,
   ledgerAuthorityRootRef,
 } from "./ledger-authority-paths.js";
-import {
-  type LedgerAuthorityRecord,
-  parseLedgerAuthorityRecord,
-} from "./ledger-authority-record.js";
+import type { LedgerAuthorityRecord } from "./ledger-authority-record.js";
 
 /**
  * Wakeflow Governance / Ledger：需求包记录职责所有者的资源目录。
@@ -177,9 +174,8 @@ function memberDeclarationId(
  * 返回顺序固定为聚合根目录、记录清单、按记录顺序排列的成员、发布意图记录和锁文件。
  */
 export function createLedgerAuthorityResourceCatalog(
-  recordValue: unknown,
+  record: Readonly<LedgerAuthorityRecord>,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const record = parseLedgerAuthorityRecord(recordValue);
   const prefix = `ledger.authority.${record.requirementId}`;
   const root = parseWakeflowWorkspaceResourceDeclaration({
     kind: "WakeflowWorkspaceResourceDeclaration",

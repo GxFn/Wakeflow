@@ -3,6 +3,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
@@ -16,7 +17,8 @@ import {
  */
 
 export function wakeflowWindowHostBindingRootRef(profileValue: unknown): PortableResourcePath {
-  return parsePortableResourcePath(`${wakeflowHostIdentityRootRef(profileValue)}/window-bindings`);
+  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+  return parsePortableResourcePath(`${wakeflowHostIdentityRootRef(profile)}/window-bindings`);
 }
 
 export function wakeflowWindowHostBindingRef(
@@ -32,9 +34,8 @@ export function wakeflowWindowHostBindingRef(
 export function wakeflowWindowRuntimeProjectionRootRef(
   profileValue: unknown,
 ): PortableResourcePath {
-  return parsePortableResourcePath(
-    `${wakeflowHostProjectionsRootRef(profileValue)}/window-runtime`,
-  );
+  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+  return parsePortableResourcePath(`${wakeflowHostProjectionsRootRef(profile)}/window-runtime`);
 }
 
 export function wakeflowWindowRuntimeProjectionRef(

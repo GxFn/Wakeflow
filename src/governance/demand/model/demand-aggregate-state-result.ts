@@ -1,16 +1,8 @@
 import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parseTargetResult,
-  type TargetResult,
-  TargetResultError,
-  targetResultIdForClaim,
-} from "../../result/target-result.js";
+import { type TargetResult, targetResultIdForClaim } from "../../result/target-result.js";
 import {
   deriveTargetResultCallbackId,
-  parseTargetResultCallbackRecord,
-  parseTargetResultCallbackReissue,
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
-  TargetResultCallbackError,
   type TargetResultCallbackRecord,
   type TargetResultCallbackReissue,
 } from "../../result/target-result-callback.js";
@@ -259,27 +251,10 @@ function recordImplementationTargetResult(
 }
 
 export function recordTargetResultInDemandAggregateState(
-  currentValue: unknown,
-  resultValue: unknown,
-  callbackValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  result: Readonly<TargetResult>,
+  callbackRecord: Readonly<TargetResultCallbackRecord>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let result: Readonly<TargetResult>;
-  try {
-    result = parseTargetResult(resultValue);
-  } catch (error: unknown) {
-    if (error instanceof TargetResultError) fail("target-result", "$result", error);
-    throw error;
-  }
-  let callbackRecord: Readonly<TargetResultCallbackRecord>;
-  try {
-    callbackRecord = parseTargetResultCallbackRecord(callbackValue);
-  } catch (error: unknown) {
-    if (error instanceof TargetResultCallbackError) {
-      fail("target-result-callback", "$callback", error);
-    }
-    throw error;
-  }
   const callback = callbackSummaryOf(result, callbackRecord);
   const target = current.targetTasks.find((entry) => entry.targetTaskId === result.targetTaskId);
   if (result.workType === "test") {
@@ -293,19 +268,9 @@ export function recordTargetResultInDemandAggregateState(
  * Controller 决定的阶段允许，决定一旦记录回调即 acknowledged。
  */
 export function reissueCallbackInDemandAggregateState(
-  currentValue: unknown,
-  reissueValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  reissue: Readonly<TargetResultCallbackReissue>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let reissue: Readonly<TargetResultCallbackReissue>;
-  try {
-    reissue = parseTargetResultCallbackReissue(reissueValue);
-  } catch (error: unknown) {
-    if (error instanceof TargetResultCallbackError) {
-      fail("target-result-callback", "$reissue", error);
-    }
-    throw error;
-  }
   const target = current.targetTasks.find(
     (entry) =>
       (entry.phase === "result-reported" || entry.phase === "test-result-reported") &&

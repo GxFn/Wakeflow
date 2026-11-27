@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   parseSha256Digest,
   type Sha256Digest,
@@ -20,7 +18,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFileOrNull,
   StableFileReadError,
@@ -95,17 +93,6 @@ const ASSETS_DIRECTORY_REF = parsePortableResourcePath(
   "$asset",
 );
 
-function assertRoot(root: unknown): asserts root is RootedDirectory {
-  if (
-    typeof root !== "object" ||
-    root === null ||
-    types.isProxy(root) ||
-    !(root instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-}
-
 /** 当前资产的稳定来源；缺失为 null。 */
 async function currentAsset(
   root: RootedDirectory,
@@ -134,10 +121,9 @@ async function currentAsset(
 export async function planClaudeCodeHostAssetOperation(
   root: RootedDirectory,
   asset: Readonly<ClaudeCodeHostAssetDescriptor>,
-  options: { readonly signal?: AbortSignal } = {},
+  { signal }: { readonly signal?: AbortSignal } = {},
 ): Promise<WakeflowHostMaintenanceOperationInput | null> {
-  assertRoot(root);
-  const current = await currentAsset(root, asset, options.signal);
+  const current = await currentAsset(root, asset, signal);
   if (
     current !== null &&
     current.digest === asset.digest &&
@@ -210,7 +196,6 @@ export async function executeClaudeCodeHostAssetOperation(
   asset: Readonly<ClaudeCodeHostAssetDescriptor>,
   request: Readonly<ExecuteClaudeCodeHostAssetOperationRequest>,
 ): Promise<Readonly<ClaudeCodeHostAssetOperationResult>> {
-  assertRoot(root);
   const payload = parsePayload(request.operation, asset);
   const current = await currentAsset(root, asset, request.signal);
   if (

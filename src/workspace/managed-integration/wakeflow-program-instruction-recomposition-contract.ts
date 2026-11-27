@@ -1,6 +1,3 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type {
   DurableAtomicFileReplaceResult,
@@ -8,19 +5,18 @@ import type {
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
 import type { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import { isAbortSignal } from "../../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../../foundation/node/current-user.js";
 import type { WorkspaceLockOptions } from "../../kernel/workspace-locks.js";
 import type { WakeflowWorkspaceHostResourceComponent } from "../workspace-host-resource-profile.js";
 import {
   type ParsedWakeflowProgramInstructionInspectionRequest,
-  parseWakeflowProgramInstructionInspectionRequest,
   type WakeflowProgramInstructionInspection,
   WakeflowProgramInstructionInspectionError,
   type WakeflowProgramInstructionInspectionRequest,
+  wakeflowProgramInstructionRequestModel,
 } from "./wakeflow-program-instruction-inspection.js";
 
 /**
@@ -72,88 +68,21 @@ export class WakeflowProgramInstructionRecompositionError extends ModuleError<Wa
   static override readonly code = "wakeflow-program-instruction-recomposition";
 }
 
-export interface ParsedWakeflowProgramInstructionRecompositionOptions {
-  readonly acquireTimeoutMilliseconds: number;
-  readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 export const failWakeflowProgramInstructionRecomposition: Fail<WakeflowProgramInstructionRecompositionErrorReason> =
   failWith(WakeflowProgramInstructionRecompositionError);
 
-export function assertWakeflowProgramInstructionRecompositionRoot(
-  value: unknown,
-): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    failWakeflowProgramInstructionRecomposition("input", "$root");
-  }
-}
-
-function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) {
-      failWakeflowProgramInstructionRecomposition("input", path, error);
-    }
-    throw error;
-  }
-}
-
-export function parseWakeflowProgramInstructionRecompositionRequest(
-  value: unknown,
+/** 已类型化的重组请求换成执行用的形状；program 一致性检查失败归为本模块的 `input`。 */
+export function wakeflowProgramInstructionRecompositionRequestModel(
+  value: WakeflowProgramInstructionRecompositionRequest,
 ): Readonly<ParsedWakeflowProgramInstructionInspectionRequest> {
   try {
-    const parsed = parseWakeflowProgramInstructionInspectionRequest(value);
-    if (parsed.signal !== undefined) {
-      failWakeflowProgramInstructionRecomposition("input", "$request.signal");
-    }
-    return parsed;
+    return wakeflowProgramInstructionRequestModel(value, undefined);
   } catch (error: unknown) {
     if (error instanceof WakeflowProgramInstructionInspectionError) {
       failWakeflowProgramInstructionRecomposition("input", error.path, error);
     }
     throw error;
   }
-}
-
-function positiveMilliseconds(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
-    failWakeflowProgramInstructionRecomposition("input", path);
-  }
-  return value;
-}
-
-export function parseWakeflowProgramInstructionRecompositionOptions(
-  value: unknown,
-): Readonly<ParsedWakeflowProgramInstructionRecompositionOptions> {
-  const record = plainRecord(value === undefined ? {} : value, "$options");
-  const allowed = new Set(["acquireTimeoutMilliseconds", "retryDelayMilliseconds", "signal"]);
-  if (
-    Object.keys(record).some((key) => !allowed.has(key)) ||
-    (record.signal !== undefined && !isAbortSignal(record.signal))
-  ) {
-    failWakeflowProgramInstructionRecomposition("input", "$options");
-  }
-  return Object.freeze({
-    acquireTimeoutMilliseconds:
-      record.acquireTimeoutMilliseconds === undefined
-        ? WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS
-        : positiveMilliseconds(
-            record.acquireTimeoutMilliseconds,
-            "$options.acquireTimeoutMilliseconds",
-          ),
-    retryDelayMilliseconds:
-      record.retryDelayMilliseconds === undefined
-        ? undefined
-        : positiveMilliseconds(record.retryDelayMilliseconds, "$options.retryDelayMilliseconds"),
-    signal: record.signal as AbortSignal | undefined,
-  });
 }
 
 export function currentWakeflowProgramInstructionRecompositionUserId(): bigint {
@@ -204,15 +133,15 @@ export function wakeflowProgramInstructionTargetRef(
   return request.profile.instructionFileName;
 }
 
-export function wakeflowProgramInstructionLockOptions(
-  options: Readonly<ParsedWakeflowProgramInstructionRecompositionOptions>,
-): WorkspaceLockOptions {
+export function wakeflowProgramInstructionLockOptions({
+  acquireTimeoutMilliseconds = WAKEFLOW_PROGRAM_INSTRUCTION_RECOMPOSITION_LOCK_TIMEOUT_MILLISECONDS,
+  retryDelayMilliseconds,
+  signal,
+}: WakeflowProgramInstructionRecompositionOptions): WorkspaceLockOptions {
   return {
-    acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
-    ...(options.retryDelayMilliseconds === undefined
-      ? {}
-      : { retryDelayMilliseconds: options.retryDelayMilliseconds }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    acquireTimeoutMilliseconds,
+    ...(retryDelayMilliseconds === undefined ? {} : { retryDelayMilliseconds }),
+    ...(signal === undefined ? {} : { signal }),
   };
 }
 

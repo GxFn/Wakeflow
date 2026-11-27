@@ -59,10 +59,6 @@ function normalizeErrorPath(path: unknown): string {
 
 const fail: Fail<Sha256HasherErrorReason> = failWith(Sha256HasherError);
 
-function isUint8Array(value: unknown): value is Uint8Array {
-  return ArrayBuffer.isView(value) && value instanceof Uint8Array;
-}
-
 /**
  * 按顺序消费字节分块的单次 SHA-256 累加器。
  *
@@ -86,14 +82,13 @@ export class Sha256Hasher {
   /**
    * 消费一个 `Uint8Array` 的精确可见区间，并返回当前实例以支持顺序链式调用。
    *
-   * 输入类型错误发生在任何状态改变之前。Node.js 更新失败或累计溢出会把实例永久
-   * 标记为失败，避免调用方继续使用结果不确定的部分摘要。
+   * Node.js 更新失败或累计溢出会把实例永久标记为失败，避免调用方继续使用结果不确定的
+   * 部分摘要。
    */
   update(bytes: Uint8Array, errorPath?: string): this {
     const path = normalizeErrorPath(errorPath);
     if (this.#state === "finalized") fail("already-finalized", "$hasher");
     if (this.#state === "failed") fail("failed-state", "$hasher");
-    if (!isUint8Array(bytes)) fail("input-type", path);
 
     let nextByteCount: ByteCount;
     try {

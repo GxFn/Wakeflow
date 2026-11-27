@@ -10,7 +10,6 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import {
   StableFileReadError,
   type StableFileReadErrorReason,
-  type StableFileReadOptions,
 } from "../../../src/foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
@@ -59,10 +58,6 @@ async function expectStableFileReadError(
   }
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
-}
-
-function asOptions(value: unknown): StableFileReadOptions {
-  return value as StableFileReadOptions;
 }
 
 test("strict UTF-8 text returns exact NFC/LF bytes and stable source facts", async () => {
@@ -242,54 +237,6 @@ test("expectedNode is delegated to the stable file version boundary", async () =
         }),
       "expectation-changed",
       "$options.expectedNode",
-    );
-  } finally {
-    await root.close();
-    rmSync(rootPath, { recursive: true, force: true });
-  }
-});
-
-test("stable file read remains the sole owner of read options", async () => {
-  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-options-"));
-  writeFileSync(path.join(rootPath, "file"), "value\n");
-  const root = await RootedDirectory.open(rootPath);
-  try {
-    await expectStableFileReadError(
-      () =>
-        readStrictTextFile(
-          root,
-          parsePortableResourcePath("file"),
-          asOptions({ maximumBytes: parseByteCount(1024), extra: true }),
-        ),
-      "input",
-      "$options",
-    );
-
-    let getterCalls = 0;
-    const accessor = Object.create(null) as Record<string, unknown>;
-    Object.defineProperty(accessor, "maximumBytes", {
-      enumerable: true,
-      get() {
-        getterCalls += 1;
-        return 1024;
-      },
-    });
-    await expectStableFileReadError(
-      () => readStrictTextFile(root, parsePortableResourcePath("file"), asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
-    await expectStableFileReadError(
-      () =>
-        readStrictTextFile(
-          root,
-          parsePortableResourcePath("file"),
-          asOptions({ maximumBytes: -1 }),
-        ),
-      "input",
-      "$options.maximumBytes",
     );
   } finally {
     await root.close();

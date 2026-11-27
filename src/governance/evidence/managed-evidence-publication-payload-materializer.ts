@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   LoadedArtifactTreeTransferCandidateError,
   materializeLoadedArtifactTreeTransferCandidate,
@@ -8,7 +6,6 @@ import {
   LoadedArtifactTreeTransferPlanError,
   planLoadedArtifactTreeTransfer,
 } from "../../foundation/artifact/loaded-artifact-tree-transfer-plan.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import {
@@ -34,18 +31,12 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  type ManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  parseManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+import type { ManagedEvidencePublicationTransaction } from "./managed-evidence-publication-transaction.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
   type ManagedEvidenceRecordTreePlan,
-  ManagedEvidenceRecordTreePlanError,
-  parseManagedEvidenceRecordTreePlan,
 } from "./managed-evidence-record-tree-plan.js";
 import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME } from "./managed-evidence-resource-paths.js";
 import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
@@ -81,72 +72,11 @@ const fail: Fail<ManagedEvidencePublicationPayloadMaterializationErrorReason> = 
   ManagedEvidencePublicationPayloadMaterializationError,
 );
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 const PAYLOAD_REF = parsePortableResourcePath(MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME);
 const CONTENT_REF = parsePortableResourcePath("content");
 const PAYLOAD_CONTENT_REF = parsePortableResourcePath(
   `${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/content`,
 );
-
-function assertRoot(
-  value: unknown,
-  path: "$sourceRoot" | "$demandRoot",
-): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", path);
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
-  try {
-    return parseManagedEvidencePublicationTransaction(value);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction", error);
-    }
-    throw error;
-  }
-}
-
-function parseRecordPlan(value: unknown): Readonly<ManagedEvidenceRecordTreePlan> {
-  try {
-    return parseManagedEvidenceRecordTreePlan(value);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidenceRecordTreePlanError) {
-      fail(error.reason === "capacity" ? "capacity" : "input", "$plan", error);
-    }
-    throw error;
-  }
-}
 
 function assertPlanRelation(
   transaction: Readonly<ManagedEvidencePublicationTransaction>,
@@ -166,10 +96,6 @@ function assertProgressRelation(
   plan: Readonly<ManagedEvidenceRecordTreePlan>,
 ): void {
   if (
-    typeof progress !== "object" ||
-    progress === null ||
-    types.isProxy(progress) ||
-    !Object.isFrozen(progress) ||
     progress.candidateRootPath !== plan.candidateRootPath ||
     progress.plan.treeDigest !== plan.directoryPlan.treeDigest ||
     (progress.status !== "complete" && progress.status !== "incomplete")
@@ -489,16 +415,12 @@ async function materializeTreePayload(
 export async function materializeManagedEvidencePublicationPayload(
   sourceRootValue: RootedDirectory | null,
   demandRootValue: RootedDirectory,
-  transactionValue: unknown,
-  planValue: unknown,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+  plan: Readonly<ManagedEvidenceRecordTreePlan>,
   progress: Readonly<DirectoryTreeCandidateProgress>,
-  optionsValue: ManagedEvidencePublicationPayloadMaterializationOptions = {},
+  options: ManagedEvidencePublicationPayloadMaterializationOptions = {},
 ): Promise<readonly PortableResourcePath[]> {
-  assertRoot(demandRootValue, "$demandRoot");
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
-  const transaction = parseTransaction(transactionValue);
-  const plan = parseRecordPlan(planValue);
   assertPlanRelation(transaction, plan);
   assertProgressRelation(progress, plan);
   const source = transaction.manifest.source;
@@ -512,7 +434,7 @@ export async function materializeManagedEvidencePublicationPayload(
       options.signal,
     );
   }
-  assertRoot(sourceRootValue, "$sourceRoot");
+  if (sourceRootValue === null) fail("input", "$sourceRoot");
   return source.resourceType === "file"
     ? materializeFilePayload(
         sourceRootValue,

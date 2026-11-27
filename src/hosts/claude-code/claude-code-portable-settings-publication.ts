@@ -1,11 +1,4 @@
-import { types } from "node:util";
-
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { ModuleError } from "../../foundation/error/module-error.js";
 import {
   DurableAtomicFileStageRecoveryError,
@@ -23,7 +16,7 @@ import {
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -55,28 +48,43 @@ import {
 export const CLAUDE_CODE_SETTINGS_DIRECTORY_REF = parsePortableResourcePath(".claude");
 export const CLAUDE_CODE_PORTABLE_SETTINGS_REF = parsePortableResourcePath(".claude/settings.json");
 
-export interface ClaudeCodePortableSettingsPublicationOptions {
-  readonly signal?: AbortSignal;
+/** 写入路径的规则表。 */
+interface ClaudeCodePortableSettingsWriteRules {
   /** 这个根拥有的托管 allow 规则；缺省是 transition 的默认（只有 MCP 一条）。 */
   readonly rules?: readonly string[];
   /** 这个根上曾拥有、现在要精确删除的规则（§13.168）。 */
   readonly retiredRules?: readonly string[];
-  /**
-   * 退出路径（ADR-0024）：给出即只精确删除这些条目、不再写入任何规则；与 `rules`/`retiredRules`
-   * 互斥。文件不存在或没有这些条目是 current，发布器不会为删除建目录或建文件。
-   */
-  readonly removedRules?: readonly string[];
+  readonly removedRules?: undefined;
 }
 
-export interface ClaudeCodePortableSettingsPublishOptions
-  extends ClaudeCodePortableSettingsPublicationOptions {
-  /**
-   * 调用方已确认的 source 摘要，`null` 表示期望文件不存在（open-items W6 / CR-H7）。
-   * 发布器自己读到的 `before` 与之不同就以 `source-changed` 拒绝、不建目录也不写：CAS 基底是
-   * 调用方确认过的 source，而不是发布器的二次读。缺省不校验。只有发布接受这个选项。
-   */
-  readonly expectedSourceDigest?: Sha256Digest | null;
+/**
+ * 退出路径（ADR-0024）：给出即只精确删除这些条目、不再写入任何规则；与 `rules`/`retiredRules`
+ * 互斥（由类型表达）。文件不存在或没有这些条目是 current，发布器不会为删除建目录或建文件。
+ */
+interface ClaudeCodePortableSettingsRemovalRules {
+  readonly removedRules: readonly string[];
+  readonly rules?: undefined;
+  readonly retiredRules?: undefined;
 }
+
+/** 一次发布要么写规则，要么删条目（ADR-0024）。 */
+export type ClaudeCodePortableSettingsRuleSelection =
+  | ClaudeCodePortableSettingsWriteRules
+  | ClaudeCodePortableSettingsRemovalRules;
+
+export type ClaudeCodePortableSettingsPublicationOptions = {
+  readonly signal?: AbortSignal;
+} & ClaudeCodePortableSettingsRuleSelection;
+
+export type ClaudeCodePortableSettingsPublishOptions =
+  ClaudeCodePortableSettingsPublicationOptions & {
+    /**
+     * 调用方已确认的 source 摘要，`null` 表示期望文件不存在（open-items W6 / CR-H7）。
+     * 发布器自己读到的 `before` 与之不同就以 `source-changed` 拒绝、不建目录也不写：CAS 基底是
+     * 调用方确认过的 source，而不是发布器的二次读。缺省不校验。只有发布接受这个选项。
+     */
+    readonly expectedSourceDigest?: Sha256Digest | null;
+  };
 
 export interface ClaudeCodePortableSettingsPublicationResult {
   readonly disposition: "current" | "created" | "updated";
@@ -120,25 +128,6 @@ export class ClaudeCodePortableSettingsPublicationError extends ModuleError<Clau
 
 const MAXIMUM_SETTINGS_BYTES = parseByteCount(1024 * 1024);
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-  readonly rules: readonly string[] | undefined;
-  readonly retiredRules: readonly string[] | undefined;
-  readonly removedRules: readonly string[] | undefined;
-  readonly expectedSourceDigest: Sha256Digest | null | undefined;
-}
-
-const PUBLICATION_OPTION_KEYS: readonly string[] = Object.freeze([
-  "signal",
-  "rules",
-  "retiredRules",
-  "removedRules",
-]);
-const PUBLISH_OPTION_KEYS: readonly string[] = Object.freeze([
-  ...PUBLICATION_OPTION_KEYS,
-  "expectedSourceDigest",
-]);
-
 interface SettingsSourceInspection {
   readonly directoryNode: Readonly<FileNodeSnapshot> | null;
   readonly source: Readonly<StableFileReadResult> | null;
@@ -158,60 +147,6 @@ function fail(
     transitionReason,
     cause === undefined ? undefined : { cause },
   );
-}
-
-function parseExpectedSourceDigest(value: unknown): Sha256Digest | null | undefined {
-  if (value === undefined || value === null) return value;
-  try {
-    return parseSha256Digest(value, "$options.expectedSourceDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", "$options.expectedSourceDigest");
-    throw error;
-  }
-}
-
-function isStringArrayOrAbsent(value: unknown): boolean {
-  return (
-    value === undefined ||
-    (Array.isArray(value) && value.every((entry) => typeof entry === "string"))
-  );
-}
-
-function stringArrayOrUndefined(value: unknown): readonly string[] | undefined {
-  return value === undefined ? undefined : Object.freeze([...(value as readonly string[])]);
-}
-
-function parseOptions(value: unknown, allowedKeys: readonly string[]): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => !allowedKeys.includes(key)) ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal))) ||
-    !isStringArrayOrAbsent(record.rules) ||
-    !isStringArrayOrAbsent(record.retiredRules) ||
-    !isStringArrayOrAbsent(record.removedRules) ||
-    // 删除表与写入表互斥：一次发布要么写规则，要么删条目（ADR-0024）。
-    (record.removedRules !== undefined &&
-      (record.rules !== undefined || record.retiredRules !== undefined))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({
-    signal: record.signal as AbortSignal | undefined,
-    rules: stringArrayOrUndefined(record.rules),
-    retiredRules: stringArrayOrUndefined(record.retiredRules),
-    removedRules: stringArrayOrUndefined(record.removedRules),
-    expectedSourceDigest: parseExpectedSourceDigest(record.expectedSourceDigest),
-  });
 }
 
 function assertDirectoryNode(node: Readonly<FileNodeSnapshot>): void {
@@ -285,10 +220,10 @@ async function sourceOrNull(
   }
 }
 
-/** 写入路径按托管规则表规划，退出路径只按删除表规划（ADR-0024）；两者互斥由选项准入保证。 */
+/** 写入路径按托管规则表规划，退出路径只按删除表规划（ADR-0024）；两者互斥由选项类型保证。 */
 function planTransition(
   sourceText: string | null,
-  options: Readonly<ParsedOptions>,
+  options: ClaudeCodePortableSettingsPublicationOptions,
 ): Readonly<ClaudeCodePortableSettingsTransition> {
   return options.removedRules === undefined
     ? planClaudeCodePortableSettingsTransition(sourceText, options.rules, options.retiredRules)
@@ -297,7 +232,7 @@ function planTransition(
 
 async function inspectSource(
   root: RootedDirectory,
-  options: Readonly<ParsedOptions>,
+  options: ClaudeCodePortableSettingsPublicationOptions,
 ): Promise<Readonly<SettingsSourceInspection>> {
   const directoryNode = await directoryNodeOrNull(root);
   const source = directoryNode === null ? null : await sourceOrNull(root, options.signal);
@@ -316,20 +251,11 @@ async function inspectSource(
 
 /** 只读检查一个已授权根的 portable settings，不返回用户源文本或节点身份。 */
 export async function inspectClaudeCodePortableSettings(
-  rootValue: RootedDirectory,
-  optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
+  root: RootedDirectory,
+  options: ClaudeCodePortableSettingsPublicationOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsInspection>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
   throwIfAborted(options.signal);
-  const inspection = await inspectSource(rootValue, options);
+  const inspection = await inspectSource(root, options);
   return Object.freeze({
     kind: "ClaudeCodePortableSettingsInspection",
     directoryStatus: inspection.directoryNode === null ? "absent" : "present",
@@ -439,20 +365,11 @@ async function publishTransition(
  * `source-changed` 拒绝（W6）。
  */
 export async function publishClaudeCodePortableSettings(
-  rootValue: RootedDirectory,
-  optionsValue: ClaudeCodePortableSettingsPublishOptions = {},
+  root: RootedDirectory,
+  options: ClaudeCodePortableSettingsPublishOptions = {},
 ): Promise<Readonly<ClaudeCodePortableSettingsPublicationResult>> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue, PUBLISH_OPTION_KEYS);
   throwIfAborted(options.signal);
-  const before = await inspectSource(rootValue, options);
+  const before = await inspectSource(root, options);
   assertExpectedSource(before, options.expectedSourceDigest);
   if (before.transition.status === "blocked") {
     fail("transition-blocked", "$transition", before.transition.reason);
@@ -468,15 +385,15 @@ export async function publishClaudeCodePortableSettings(
       transition: before.transition,
     });
   }
-  await ensureSettingsDirectory(rootValue, before, options.signal);
+  await ensureSettingsDirectory(root, before, options.signal);
   if (before.directoryNode === null) {
-    const afterDirectory = await inspectSource(rootValue, options);
+    const afterDirectory = await inspectSource(root, options);
     if (afterDirectory.source !== null || afterDirectory.transition.status !== "create") {
       fail("source-changed", "$settings");
     }
   }
-  await publishTransition(rootValue, before, options.signal);
-  const after = await inspectSource(rootValue, options);
+  await publishTransition(root, before, options.signal);
+  const after = await inspectSource(root, options);
   if (
     after.transition.status !== "current" ||
     before.transition.desiredDigest === null ||
@@ -494,25 +411,16 @@ export async function publishClaudeCodePortableSettings(
 
 /** 只结算目标同父目录内属于 portable settings 的 inactive Foundation stage。 */
 export async function settleClaudeCodePortableSettingsPublicationStages(
-  rootValue: RootedDirectory,
-  optionsValue: ClaudeCodePortableSettingsPublicationOptions = {},
+  root: RootedDirectory,
+  { signal }: { readonly signal?: AbortSignal } = {},
 ): Promise<void> {
-  if (
-    typeof rootValue !== "object" ||
-    rootValue === null ||
-    types.isProxy(rootValue) ||
-    !(rootValue instanceof RootedDirectory)
-  ) {
-    fail("input", "$root");
-  }
-  const options = parseOptions(optionsValue, PUBLICATION_OPTION_KEYS);
-  const directory = await directoryNodeOrNull(rootValue);
+  const directory = await directoryNodeOrNull(root);
   if (directory !== null) {
     try {
       const recovery = await recoverDurableAtomicFileStagesForTargets(
-        rootValue,
+        root,
         [CLAUDE_CODE_PORTABLE_SETTINGS_REF],
-        options.signal === undefined ? undefined : { signal: options.signal },
+        signal === undefined ? undefined : { signal },
       );
       if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
         fail("recovery-required", "$settingsStage");

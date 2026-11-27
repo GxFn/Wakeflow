@@ -187,18 +187,8 @@ export function parseDemandIdentity(value: unknown): Readonly<DemandIdentity> {
 }
 
 function readCreationTime(options: CreateDemandIdentityOptions): UtcInstant {
-  let record: Readonly<Record<string, unknown>>;
   try {
-    record = parsePlainRecord(options, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (Object.keys(record).some((key) => key !== "clock")) {
-    fail("input", "$options");
-  }
-  try {
-    return readUtcWallClock(record.clock as UtcWallClock | undefined);
+    return readUtcWallClock(options.clock);
   } catch (error: unknown) {
     if (error instanceof UtcWallClockError) fail("time", "$options/clock", error);
     throw error;
@@ -243,8 +233,8 @@ export function createDemandIdentity(
   });
 }
 
-export function renderDemandIdentity(value: unknown): string {
-  return renderDeterministicJsonDocument(parseDemandIdentity(value), "$identity");
+export function renderDemandIdentity(identity: Readonly<DemandIdentity>): string {
+  return renderDeterministicJsonDocument(identity, "$identity");
 }
 
 export function parseDemandIdentityDocument(text: unknown): Readonly<DemandIdentity> {
@@ -264,6 +254,6 @@ export function parseDemandIdentityDocument(text: unknown): Readonly<DemandIdent
   return identity;
 }
 
-export function computeDemandIdentityDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandIdentity(value));
+export function computeDemandIdentityDigest(identity: Readonly<DemandIdentity>): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(identity);
 }

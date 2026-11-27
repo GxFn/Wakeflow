@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   computeWakeflowConfigDigest,
   type WakeflowConfigModel,
@@ -12,7 +10,6 @@ import {
   type WakeflowDetachedConfigRecord,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
@@ -20,7 +17,6 @@ import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abo
 import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
-  assertWakeflowHostMaintenanceCapability,
   assertWakeflowHostMaintenanceContributionCapability,
   type WakeflowHostMaintenanceCapability,
   WakeflowHostMaintenanceCapabilityError,
@@ -48,7 +44,7 @@ import {
   type WakeflowMaintenanceExecutionStep,
 } from "./wakeflow-maintenance-execution-plan.js";
 import {
-  previewWakeflowMaintenanceExecution,
+  previewParsedWakeflowMaintenanceExecution,
   WakeflowMaintenanceExecutionPreviewError,
 } from "./wakeflow-maintenance-execution-preview.js";
 import {
@@ -64,19 +60,16 @@ import {
   WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
 } from "./wakeflow-maintenance-operation-id.js";
+import type { WakeflowMaintenanceWriter } from "./wakeflow-maintenance-writer.js";
 import {
-  parseWakeflowMaintenanceWriter,
-  type WakeflowMaintenanceWriter,
-  WakeflowMaintenanceWriterError,
-} from "./wakeflow-maintenance-writer.js";
-import {
+  admitWakeflowStaticMaterializationPreviewRequest,
   isWakeflowDetachAction,
-  parseWakeflowStaticMaterializationPreviewRequest,
+  type ParsedWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreviewRequest,
   wakeflowStaticMaterializationActionUsesCurrentConfig,
 } from "./wakeflow-static-materialization-preview-contract.js";
 import {
-  executeWakeflowStaticMaterializationStep,
+  executeParsedWakeflowStaticMaterializationStep,
   WakeflowStaticMaterializationStepExecutionError,
 } from "./wakeflow-static-materialization-step-executor.js";
 
@@ -176,14 +169,6 @@ export class WakeflowMaintenanceExecutionTransactionError extends ModuleError<Wa
   }
 }
 
-interface ParsedOptions {
-  readonly acquireTimeoutMilliseconds: number | undefined;
-  readonly retryDelayMilliseconds: number | undefined;
-  readonly signal: AbortSignal | undefined;
-  readonly uuidFactory: UuidV4Factory | undefined;
-  readonly writer: Readonly<WakeflowMaintenanceWriter> | null;
-}
-
 function fail(
   reason: WakeflowMaintenanceExecutionTransactionErrorReason,
   path: string,
@@ -218,25 +203,13 @@ function assertNotAborted(
   if (signal?.aborted === true) fail("aborted", "$signal", operationId);
 }
 
+/** 恢复入口的 operation ID 仍声明为 `unknown`（宿主组合根直接转交，签名留到 A-spec 第 2 步）。 */
 function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
   try {
     return parseWakeflowMaintenanceOperationId(value);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceOperationIdError) {
       fail("input", "$operationId");
-    }
-    throw error;
-  }
-}
-
-function createOperationId(factory: UuidV4Factory | undefined): WakeflowMaintenanceOperationId {
-  try {
-    return factory === undefined
-      ? createWakeflowMaintenanceOperationId()
-      : createWakeflowMaintenanceOperationId(factory);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", "$options.uuidFactory");
     }
     throw error;
   }
@@ -252,8 +225,9 @@ function effectiveSignal(
   return optionSignal ?? requestSignal;
 }
 
+/** 带上本次执行的取消信号，换回宿主门面所用的请求形状。 */
 function requestWithSignal(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   signal: AbortSignal | undefined,
 ): Readonly<WakeflowStaticMaterializationPreviewRequest> {
   return Object.freeze({
@@ -265,69 +239,12 @@ function requestWithSignal(
   });
 }
 
-function positiveMilliseconds(value: unknown, path: string): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0 || value > 300_000) {
-    fail("input", path);
-  }
-  return value;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  if (
-    Object.keys(record).some(
-      (key) =>
-        key !== "acquireTimeoutMilliseconds" &&
-        key !== "retryDelayMilliseconds" &&
-        key !== "signal" &&
-        key !== "uuidFactory" &&
-        key !== "writer",
-    )
-  ) {
-    fail("input", "$options");
-  }
-  let writer: Readonly<WakeflowMaintenanceWriter> | null;
-  try {
-    writer = parseWakeflowMaintenanceWriter(record.writer, "$options.writer");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceWriterError) fail("input", error.path);
-    throw error;
-  }
-  if (
-    record.signal !== undefined &&
-    (typeof record.signal !== "object" ||
-      record.signal === null ||
-      types.isProxy(record.signal) ||
-      !(record.signal instanceof AbortSignal))
-  ) {
-    fail("input", "$options.signal");
-  }
-  if (
-    record.uuidFactory !== undefined &&
-    (typeof record.uuidFactory !== "function" || types.isProxy(record.uuidFactory))
-  ) {
-    fail("input", "$options.uuidFactory");
-  }
-  return Object.freeze({
-    acquireTimeoutMilliseconds: positiveMilliseconds(
-      record.acquireTimeoutMilliseconds,
-      "$options.acquireTimeoutMilliseconds",
-    ),
-    retryDelayMilliseconds: positiveMilliseconds(
-      record.retryDelayMilliseconds,
-      "$options.retryDelayMilliseconds",
-    ),
-    signal: record.signal as AbortSignal | undefined,
-    uuidFactory: record.uuidFactory as UuidV4Factory | undefined,
-    writer,
-  });
+/** 已解析请求换上本次执行的取消信号。 */
+function parsedRequestWithSignal(
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  signal: AbortSignal | undefined,
+): Readonly<ParsedWakeflowStaticMaterializationPreviewRequest> {
+  return Object.freeze({ ...request, signal });
 }
 
 async function currentConfigSnapshot(
@@ -361,7 +278,6 @@ function parseCapability(
   }
   if (value === undefined) fail("capability", "$capability");
   try {
-    assertWakeflowHostMaintenanceCapability(value, plan.hostId);
     assertWakeflowHostMaintenanceContributionCapability(value, plan.hostContribution);
   } catch (error: unknown) {
     if (error instanceof WakeflowHostMaintenanceCapabilityError) {
@@ -374,7 +290,7 @@ function parseCapability(
 
 function assertRequestMatchesPlan(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
 ): void {
   if (
     request.action !== plan.sharedPreview.action ||
@@ -434,7 +350,7 @@ async function assertTerminalConfig(
  * reconcile 也是当前 Config；fresh 与 reconfigure 是期望 Config。
  */
 function hostConfigForExecution(
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   operationId: WakeflowMaintenanceOperationId,
 ): WakeflowConfigModel {
@@ -464,8 +380,7 @@ async function executeStep(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   stepId: string,
@@ -476,11 +391,11 @@ async function executeStep(
   if (step === undefined) fail("step", `$step:${stepId}`, context.operationId);
   if (step.boundary === "shared-static") {
     try {
-      const executed = await executeWakeflowStaticMaterializationStep(
+      const executed = await executeParsedWakeflowStaticMaterializationStep(
         root,
         context,
         plan.sharedPreview,
-        requestValue,
+        request,
         stepId,
         {
           sourceConfig,
@@ -543,8 +458,7 @@ async function advanceIntent(
   context: Readonly<WakeflowMaintenanceGateContext>,
   sourceValue: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
-  request: ReturnType<typeof parseWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   recovery: boolean,
@@ -562,7 +476,6 @@ async function advanceIntent(
         root,
         context,
         plan,
-        requestValue,
         request,
         sourceConfig,
         capability,
@@ -584,16 +497,15 @@ async function advanceIntent(
 }
 
 function gateOptions(
-  options: Readonly<ParsedOptions>,
-  signal: AbortSignal | undefined = options.signal,
+  {
+    acquireTimeoutMilliseconds,
+    retryDelayMilliseconds,
+  }: WakeflowMaintenanceExecutionTransactionOptions,
+  signal: AbortSignal | undefined,
 ) {
   return {
-    ...(options.acquireTimeoutMilliseconds === undefined
-      ? {}
-      : { acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds }),
-    ...(options.retryDelayMilliseconds === undefined
-      ? {}
-      : { retryDelayMilliseconds: options.retryDelayMilliseconds }),
+    ...(acquireTimeoutMilliseconds === undefined ? {} : { acquireTimeoutMilliseconds }),
+    ...(retryDelayMilliseconds === undefined ? {} : { retryDelayMilliseconds }),
     ...(signal === undefined ? {} : { signal }),
   };
 }
@@ -628,20 +540,20 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   planValue: unknown,
   requestValue: WakeflowStaticMaterializationPreviewRequest,
   capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
-  optionsValue: WakeflowMaintenanceExecutionTransactionOptions = {},
+  options: WakeflowMaintenanceExecutionTransactionOptions = {},
 ): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
-  const options = parseOptions(optionsValue);
+  const { uuidFactory, writer = null } = options;
   const plan = parseWakeflowMaintenanceExecutionPlan(planValue);
-  const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
-  const signal = effectiveSignal(request.signal, options.signal);
+  const admitted = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
+  const signal = effectiveSignal(admitted.signal, options.signal);
   throwIfAborted(signal);
-  const executionRequestValue = requestWithSignal(request, signal);
+  const request = parsedRequestWithSignal(admitted, signal);
   assertRequestMatchesPlan(plan, request);
   if (plan.status !== "ready") fail("plan-blocked", "$plan");
   const capability = parseCapability(plan, capabilityValue);
-  let rederived: Awaited<ReturnType<typeof previewWakeflowMaintenanceExecution>>;
+  let rederived: Awaited<ReturnType<typeof previewParsedWakeflowMaintenanceExecution>>;
   try {
-    rederived = await previewWakeflowMaintenanceExecution(root, executionRequestValue, capability);
+    rederived = await previewParsedWakeflowMaintenanceExecution(root, request, capability);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
       fail("plan-stale", "$plan", null);
@@ -669,15 +581,15 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   ) {
     fail("source-config", "$config");
   }
-  const operationId = createOperationId(options.uuidFactory);
+  const operationId = createWakeflowMaintenanceOperationId(uuidFactory);
   let intent: ReturnType<typeof createWakeflowMaintenanceExecutionIntent>;
   try {
     intent = createWakeflowMaintenanceExecutionIntent(
       operationId,
       plan,
-      executionRequestValue,
+      requestWithSignal(request, signal),
       desiredConfig,
-      options.writer,
+      writer,
     );
     assertWakeflowMaintenanceExecutionIntentCapacity(intent);
   } catch (error: unknown) {
@@ -691,8 +603,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   }
   const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intent);
   const intentPlan = reconstructed.plan;
-  const intentRequest = parseWakeflowStaticMaterializationPreviewRequest(reconstructed.request);
-  const intentRequestValue = requestWithSignal(intentRequest, signal);
+  const intentRequest = parsedRequestWithSignal(reconstructed.request, signal);
   try {
     return await withWakeflowMaintenanceGate(
       root,
@@ -703,11 +614,11 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
         ...gateOptions(options, signal),
       },
       async (context) => {
-        let lockedPlan: Awaited<ReturnType<typeof previewWakeflowMaintenanceExecution>>;
+        let lockedPlan: Awaited<ReturnType<typeof previewParsedWakeflowMaintenanceExecution>>;
         try {
-          lockedPlan = await previewWakeflowMaintenanceExecution(
+          lockedPlan = await previewParsedWakeflowMaintenanceExecution(
             root,
-            executionRequestValue,
+            request,
             capability,
             context,
           );
@@ -726,7 +637,6 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
           context,
           intentSource,
           intentPlan,
-          intentRequestValue,
           intentRequest,
           current?.model ?? null,
           capability,
@@ -843,12 +753,11 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
   root: RootedDirectory,
   operationIdValue: unknown,
   capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
-  optionsValue: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
+  options: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
-  const options = parseOptions(optionsValue);
-  if (options.uuidFactory !== undefined) fail("input", "$options.uuidFactory");
+  const { signal, writer = null } = options;
   const operationId = admittedOperationId(operationIdValue);
-  assertNotAborted(options.signal, operationId);
+  assertNotAborted(signal, operationId);
   try {
     // 先回收这次操作的 intent 自己留下的、写者已经不在的原子写暂存；属主还活着或说不清的不动，恢复不往下走。
     await settleStagesOfDeadWritersStrictly(
@@ -858,7 +767,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
       undefined,
       () => fail("recovery-required", "$transactions", operationId),
     );
-    assertNotAborted(options.signal, operationId);
+    assertNotAborted(signal, operationId);
     const intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
     if (intentSource === null) fail("intent", "$intent", operationId);
     let reconstructed: ReturnType<typeof reconstructWakeflowMaintenanceExecutionFromIntent>;
@@ -867,23 +776,18 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
     } catch (error: unknown) {
       if (!(error instanceof WakeflowMaintenanceExecutionIntentError)) throw error;
       // 意图读得进来，但本构建按它重算不出同一份计划：另一版制品写的就说出来，否则是意图本身坏了。
-      failIfWrittenByAnotherArtifact(
-        intentSource.intent.writer ?? null,
-        options.writer,
-        operationId,
-      );
+      failIfWrittenByAnotherArtifact(intentSource.intent.writer ?? null, writer, operationId);
       fail("intent", "$intent", operationId);
     }
     const plan = reconstructed.plan;
-    const requestValue = reconstructed.request;
-    const request = parseWakeflowStaticMaterializationPreviewRequest(requestValue);
+    const request = reconstructed.request;
     assertRequestMatchesPlan(plan, request);
     const capability = parseCapability(plan, capabilityValue);
     await assertWakeflowMaintenanceIntentIsOnlyTransaction(root, intentSource);
-    const current = await currentConfigSnapshot(root, options.signal, operationId);
+    const current = await currentConfigSnapshot(root, signal, operationId);
     const retired =
       plan.sharedPreview.action === "detach-workspace"
-        ? await detachedConfigRecord(root, options.signal, operationId)
+        ? await detachedConfigRecord(root, signal, operationId)
         : null;
     const sourceConfig = assertRecoveryConfigState(
       plan,
@@ -910,12 +814,11 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
           context,
           currentIntent,
           plan,
-          requestValue,
           request,
           sourceConfig,
           capability,
           true,
-          options.signal,
+          signal,
         );
         await assertTerminalConfig(root, plan, operationId);
         await retireWakeflowMaintenanceExecutionIntent(root, context, advanced.terminalSource);
@@ -926,7 +829,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
           stepReceipts: advanced.receipts,
         });
       },
-      gateOptions(options),
+      gateOptions(options, signal),
     );
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionTransactionError) throw error;
@@ -941,7 +844,7 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
         // 本构建解析不了这份意图：先看它是不是另一版制品写的。
         failIfWrittenByAnotherArtifact(
           await peekWakeflowMaintenanceIntentWriter(root, operationId),
-          options.writer,
+          writer,
           operationId,
         );
       }

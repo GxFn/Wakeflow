@@ -79,7 +79,6 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-utf8": "unexpected",
     // ---- foundation/time ----
     "wakeflow-monotonic-clock": "io-failure",
-    "wakeflow-monotonic-deadline": "io-failure",
     "wakeflow-monotonic-duration": "io-failure",
     "wakeflow-utc-instant": "io-failure",
     "wakeflow-utc-wall-clock": "io-failure",
@@ -223,6 +222,4 @@ export const LEGACY_ERROR_CODE_FAMILIES: Readonly<Record<string, WakeflowErrorCo
     "wakeflow-claude-code-statusline-settings-operation": "precondition-failed",
     "wakeflow-claude-code-window-transport-retirement": "precondition-failed",
     "wakeflow-codex-maintenance-capability": "precondition-failed",
-    // ---- entrypoints ----
-    "wakeflow-public-mcp-server-configuration": "unexpected",
   });

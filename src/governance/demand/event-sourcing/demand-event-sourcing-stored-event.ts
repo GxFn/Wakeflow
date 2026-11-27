@@ -3,14 +3,8 @@ import { type Fail, failWith, ModuleError } from "../../../foundation/error/modu
 import {
   computeDemandAggregateStateDigest,
   type DemandAggregateState,
-  DemandAggregateStateError,
-  parseDemandAggregateState,
 } from "../model/demand-aggregate-state.js";
-import {
-  DemandEventSourcingEventError,
-  type DemandUncommittedEvent,
-  parseDemandUncommittedEvent,
-} from "./demand-event-sourcing-event.js";
+import type { DemandUncommittedEvent } from "./demand-event-sourcing-event.js";
 import { encodeCurrentDemandEventVersion } from "./demand-event-sourcing-event-version-codec.js";
 import {
   computeDemandEventSourcingPersistedEventEnvelopeDigest,
@@ -21,10 +15,6 @@ import {
   parseDemandEventSourcingPersistedEventEnvelope,
 } from "./demand-event-sourcing-persisted-event-envelope.js";
 import { DEMAND_EVENT_SOURCING_CURRENT_STATE_MODEL_VERSION } from "./demand-event-sourcing-state-version.js";
-import {
-  DemandEventStreamPositionError,
-  parseDemandEventStreamRevision,
-} from "./demand-event-stream-position.js";
 
 /**
  * Demand 事件溯源持久化事件的兼容门面和当前版本写入器。
@@ -82,35 +72,12 @@ export function parseDemandEventSourcingStoredEvent(
 
 /** 根据当前事件和已经演进的状态编码最新持久化事件封装。 */
 export function createDemandEventSourcingStoredEvent(
-  eventValue: unknown,
-  streamRevisionValue: unknown,
-  resultingStateValue: unknown,
+  event: Readonly<DemandUncommittedEvent>,
+  streamRevision: number,
+  state: Readonly<DemandAggregateState>,
 ): Readonly<DemandEventSourcingStoredEvent> {
-  let event: Readonly<DemandUncommittedEvent>;
-  try {
-    event = parseDemandUncommittedEvent(eventValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandEventSourcingEventError) fail("event", "$event", error);
-    throw error;
-  }
-  let state: Readonly<DemandAggregateState>;
-  try {
-    state = parseDemandAggregateState(resultingStateValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandAggregateStateError) fail("state", "$state", error);
-    throw error;
-  }
   if (state.demandId !== event.demandId) fail("state", "$state/demandId");
   const encoded = encodeCurrentDemandEventVersion(event);
-  let streamRevision: ReturnType<typeof parseDemandEventStreamRevision>;
-  try {
-    streamRevision = parseDemandEventStreamRevision(streamRevisionValue);
-  } catch (error: unknown) {
-    if (error instanceof DemandEventStreamPositionError) {
-      fail("revision", "$streamRevision", error);
-    }
-    throw error;
-  }
   return parseDemandEventSourcingStoredEvent({
     artifactKind: DEMAND_EVENT_SOURCING_STORED_EVENT_ARTIFACT_KIND,
     schemaVersion: DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA_VERSION,
@@ -126,8 +93,8 @@ export function createDemandEventSourcingStoredEvent(
   });
 }
 
-export function computeDemandEventSourcingStoredEventDigest(value: unknown): Sha256Digest {
-  // 门面先维持自己的稳定错误合同，再委托事件封装摘要计算。
-  const event = parseDemandEventSourcingStoredEvent(value);
+export function computeDemandEventSourcingStoredEventDigest(
+  event: Readonly<DemandEventSourcingStoredEvent>,
+): Sha256Digest {
   return computeDemandEventSourcingPersistedEventEnvelopeDigest(event);
 }

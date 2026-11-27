@@ -7,7 +7,6 @@ import { test } from "node:test";
 import {
   DurableRegularFileSettlementError,
   type DurableRegularFileSettlementErrorReason,
-  type DurableRegularFileSettlementOptions,
   settleRegularFileDurability,
 } from "../../../src/foundation/filesystem/durable-regular-file-settlement.js";
 import { sameFileNodeSnapshot } from "../../../src/foundation/filesystem/file-node-snapshot.js";
@@ -36,10 +35,6 @@ async function expectSettlementError(
   equal(caught.code, "wakeflow-durable-regular-file-settlement");
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
-}
-
-function asOptions(value: unknown): DurableRegularFileSettlementOptions {
-  return value as DurableRegularFileSettlementOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -137,43 +132,13 @@ test("settlement 拒绝 stale、missing、directory 与 symlink target", async (
   }
 });
 
-test("settlement options、path 与 AbortSignal 使用被动关闭准入", async () => {
+test("settlement 在任何同步之前拒绝越界 path 与已取消的 AbortSignal", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-file-settlement-input-"));
   writeFileSync(path.join(rootPath, "file"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
     const ref = parsePortableResourcePath("file");
     const expected = await root.inspectExistingResource(ref);
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ expectedNode: expected.node, extra: true }, "$options"],
-      [{ expectedNode: { ...expected.node } }, "$options.expectedNode"],
-      [{ expectedNode: expected.node, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectSettlementError(
-        () => settleRegularFileDurability(root, ref, asOptions(options)),
-        "input",
-        expectedPath,
-      );
-    }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "expectedNode", {
-      get: () => {
-        getterCalls += 1;
-        return expected.node;
-      },
-      enumerable: true,
-    });
-    await expectSettlementError(
-      () => settleRegularFileDurability(root, ref, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
     await expectSettlementError(
       () =>
         settleRegularFileDurability(root, asPortableResourcePath("../escape"), {

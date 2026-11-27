@@ -1,6 +1,4 @@
-import { types } from "node:util";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidateResult,
@@ -16,7 +14,7 @@ import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-sna
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
 import {
-  RootedDirectory,
+  type RootedDirectory,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -31,8 +29,6 @@ import {
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  parseManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
 import {
   ManagedEvidencePublicationTransactionStoreError,
@@ -90,56 +86,9 @@ const fail: Fail<ManagedEvidencePublicationRecordPublisherErrorReason> = failWit
   ManagedEvidencePublicationRecordPublisherError,
 );
 
-interface ParsedOptions {
-  readonly signal: AbortSignal | undefined;
-}
-
 interface PhysicalState {
   readonly stageNode: Readonly<FileNodeSnapshot> | null;
   readonly finalNode: Readonly<FileNodeSnapshot> | null;
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$demandRoot");
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return Object.freeze({ signal: record.signal as AbortSignal | undefined });
-}
-
-function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
-  try {
-    return parseManagedEvidencePublicationTransaction(value);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction", error);
-    }
-    throw error;
-  }
 }
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
@@ -359,13 +308,10 @@ async function readPublishedFinal(
 /** 发布或幂等读取journal绑定的immutable final record；不检查或追加Event。 */
 export async function publishManagedEvidencePublicationRecord(
   demandRootValue: RootedDirectory,
-  transactionValue: unknown,
-  optionsValue: ManagedEvidencePublicationRecordPublisherOptions = {},
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+  options: ManagedEvidencePublicationRecordPublisherOptions = {},
 ): Promise<Readonly<ManagedEvidencePublicationRecordResult>> {
-  assertRoot(demandRootValue);
-  const options = parseOptions(optionsValue);
   throwIfAborted(options.signal);
-  const transaction = parseTransaction(transactionValue);
   const stored = await requireJournal(demandRootValue, transaction, options.signal);
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   const physical = await inspectPhysicalState(demandRootValue, plan);

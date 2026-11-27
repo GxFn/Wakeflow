@@ -18,7 +18,6 @@ import { test } from "node:test";
 import {
   ExactRegularFileUnlinkError,
   type ExactRegularFileUnlinkErrorReason,
-  type ExactRegularFileUnlinkOptions,
   unlinkRegularFileExactly,
 } from "../../../src/foundation/filesystem/exact-regular-file-unlink.js";
 import {
@@ -75,10 +74,6 @@ async function expectUnlinkError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): ExactRegularFileUnlinkOptions {
-  return value as ExactRegularFileUnlinkOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -370,46 +365,13 @@ test("source requires an existing real parent chain", async () => {
   }
 });
 
-test("options, path, and AbortSignal are closed and passively admitted", async () => {
+test("an escaping path and a pre-aborted signal fail before any unlink", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-unlink-input-"));
   writeFileSync(path.join(rootPath, "file"), "value");
   const root = await RootedDirectory.open(rootPath);
   try {
     const resourcePath = parsePortableResourcePath("file");
     const expected = await root.inspectExistingResource(resourcePath);
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ expectedNode: expected.node, extra: true }, "$options"],
-      [{ expectedNode: { ...expected.node } }, "$options.expectedNode"],
-      [{ expectedNode: expected.node, settlement: null }, "$options.settlement"],
-      [{ expectedNode: expected.node, settlement: "eventually-absent" }, "$options.settlement"],
-      [{ expectedNode: expected.node, durability: "bogus" }, "$options.durability"],
-      [{ expectedNode: expected.node, signal: {} }, "$options.signal"],
-    ];
-    for (const [options, expectedPath] of invalid) {
-      await expectUnlinkError(
-        () => unlinkRegularFileExactly(root, resourcePath, asOptions(options)),
-        "input",
-        expectedPath,
-      );
-    }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "expectedNode", {
-      get: () => {
-        getterCalls += 1;
-        return expected.node;
-      },
-      enumerable: true,
-    });
-    await expectUnlinkError(
-      () => unlinkRegularFileExactly(root, resourcePath, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
-
     await expectUnlinkError(
       () =>
         unlinkRegularFileExactly(root, asPortableResourcePath("../escape"), {

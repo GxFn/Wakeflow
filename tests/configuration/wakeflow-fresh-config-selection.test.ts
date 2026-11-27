@@ -1,4 +1,4 @@
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
@@ -211,7 +211,7 @@ test("Fresh selection without a factory derives the same IDs from the same selec
   );
 });
 
-test("id 种子带工作区根（裁决 R2）：同 selection 不同根得到不同 id，同根重算相同，空根被拒", () => {
+test("id 种子带工作区根（裁决 R2）：同 selection 不同根得到不同 id，同根重算相同", () => {
   const selection = createMinimalWakeflowFreshConfigSelection();
   const a = compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "/srv/workspaces/a" });
   const b = compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "/srv/workspaces/b" });
@@ -224,10 +224,5 @@ test("id 种子带工作区根（裁决 R2）：同 selection 不同根得到不
     a.selectionDigest,
     b.selectionDigest,
     "the selection digest itself does not include the root",
-  );
-  throws(
-    () => compileWakeflowFreshConfigSelection(selection, { workspaceRoot: "" }),
-    (error: unknown) =>
-      error instanceof WakeflowFreshConfigSelectionError && error.reason === "input",
   );
 });

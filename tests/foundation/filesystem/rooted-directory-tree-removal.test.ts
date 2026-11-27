@@ -104,13 +104,6 @@ test("删除根内一整棵目录树；缺失按选项报 not-found 或返回 ab
       }),
     OperationAbortedError,
   );
-  await expectError(
-    () =>
-      removeRootedDirectoryTree(root, parsePortableResourcePath("x"), {
-        missing: "maybe" as never,
-      }),
-    "input",
-  );
 });
 
 test("fsync 根：一次删除恰好一次同步，落在父目录上，且在 removeTree 返回之后", {

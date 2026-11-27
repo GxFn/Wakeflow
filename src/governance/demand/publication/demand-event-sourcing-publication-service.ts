@@ -1,27 +1,22 @@
-import { types } from "node:util";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
-import {
   DurableResourceEntrySettlementError,
   settleObservedResourceEntry,
 } from "../../../foundation/filesystem/durable-resource-entry-settlement.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
+import type { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import type { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import { withWorkspaceLockOrRefuse } from "../../../kernel/workspace-locks.js";
 import {
-  LedgerAuthorityStore,
+  type LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../ledger/ledger-authority-store.js";
 import { admitDemandAuthority, DemandAuthorityError } from "../model/demand-authority.js";
@@ -74,47 +69,6 @@ import {
  *（1.4 第 5 段 5a 的 B 行，ADR-0031）。被打断的创建由 `recover` 凭它续做；同一个创建请求再发一次时，
  * 调用方先读它、沿用它记下的时间，得到同一份事务，于是每一步都按"已经做过"重入。
  */
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input", "$root", "unchanged");
-  }
-}
-
-function assertLedgerStore(value: unknown): asserts value is LedgerAuthorityStore {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof LedgerAuthorityStore)
-  ) {
-    fail("input", "$ledgerStore", "unchanged");
-  }
-}
-
-function parseSignal(value: unknown): AbortSignal | undefined {
-  if (value === undefined) return undefined;
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options");
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return record.signal as AbortSignal | undefined;
-}
 
 /**
  * Demand 根已经在它的最终位置、这一次没有做改名时，先把那次改名落盘再往下做（1.4.1 段 1b，“沿用之前先
@@ -310,12 +264,9 @@ export async function publishDemandFromPackage(
   inputValue: unknown,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
-  assertRoot(root);
-  assertLedgerStore(ledgerStore);
-  let signal: AbortSignal | undefined;
+  const signal = options?.signal;
   let transaction: Readonly<DemandEventSourcingPublicationTransaction>;
   try {
-    signal = parseSignal(options);
     try {
       transaction = createDemandEventSourcingPublicationTransaction(inputValue);
     } catch (error: unknown) {
@@ -433,10 +384,8 @@ export async function readPendingDemandPublication(
   demandIdValue: unknown,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationTransaction> | null> {
-  assertRoot(root);
-  let signal: AbortSignal | undefined;
+  const signal = options?.signal;
   try {
-    signal = parseSignal(options);
     const demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
     throwIfAborted(signal);
     return (await readPendingPublication(root, demandId, signal, false))?.transaction ?? null;
@@ -455,12 +404,9 @@ export async function recoverDemandPublication(
   demandIdValue: unknown,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
-  assertRoot(root);
-  assertLedgerStore(ledgerStore);
-  let signal: AbortSignal | undefined;
+  const signal = options?.signal;
   let demandId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
   try {
-    signal = parseSignal(options);
     demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
     throwIfAborted(signal);
   } catch (error: unknown) {

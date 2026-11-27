@@ -33,10 +33,6 @@ function expectByteCountError(
   return caught;
 }
 
-function asByteCount(value: unknown): ByteCount {
-  return value as ByteCount;
-}
-
 function asBigInt(value: unknown): bigint {
   return value as bigint;
 }
@@ -111,19 +107,6 @@ test("checked addition preserves exact values and rejects overflow", () => {
     "$.treeBytes",
   );
   equal(error.message.includes(String(Number.MAX_SAFE_INTEGER)), false);
-});
-
-test("addition revalidates forged ByteCount inputs at member paths", () => {
-  expectByteCountError(
-    () => addByteCounts(asByteCount(-1), parseByteCount(1)),
-    "number-range",
-    "$left",
-  );
-  expectByteCountError(
-    () => addByteCounts(parseByteCount(1), asByteCount(0.5), "$.sum"),
-    "number-range",
-    "$.sum.right",
-  );
 });
 
 test("ByteCount is distinct from an unchecked number", () => {

@@ -4,12 +4,10 @@ import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 import { join as joinPath } from "node:path";
 import type { Sha256Digest } from "../crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
-import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
+import type { ByteCount } from "../numeric/byte-count.js";
 import {
-  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
   FileNodeSnapshotError,
@@ -20,9 +18,8 @@ import {
   type RootedDirectory,
   RootedDirectoryError,
   type RootedResourceSnapshot,
-  isRootedDirectory,
 } from "./rooted-directory.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内稳定、有界的普通文件读取。
@@ -40,18 +37,28 @@ import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 /** regular-file positioned read 的内部性能参数，不属于公共容量合同。 */
 const STABLE_FILE_READ_CHUNK_BYTES = 512 * 1024;
 
-export interface StableFileReadOptions {
+/**
+ * 读取选项。`listed` 与 `expectedNode` 的关系由类型表达：列出来的一项必须带着列目录时看到的节点。
+ */
+export type StableFileReadOptions = {
   readonly maximumBytes: ByteCount;
-  readonly expectedNode?: Readonly<FileNodeSnapshot>;
-  /**
-   * 调用方刚在 `root` 这个目录里列出了这一项，`expectedNode` 就是列目录时看到的节点，`resourcePath` 是它的
-   * 名字（一段）：不再对这个名字读前读后各核对一次路径，直接不跟随符号链接地打开，在句柄上核对它就是列出来
-   * 的那个文件，读完再核对句柄没有变（1.4.3，open-items B15）。目录本身由调用方在这一批读取前后各核对一次。
-   * 不再发现的：读的过程中这个名字被换成别的文件或被删掉——读到的仍是列目录时那个文件的完整内容。
-   */
-  readonly listed?: true;
   readonly signal?: AbortSignal;
-}
+} & (
+  | {
+      readonly listed?: undefined;
+      readonly expectedNode?: Readonly<FileNodeSnapshot>;
+    }
+  | {
+      /**
+       * 调用方刚在 `root` 这个目录里列出了这一项，`expectedNode` 就是列目录时看到的节点，`resourcePath` 是它的
+       * 名字（一段）：不再对这个名字读前读后各核对一次路径，直接不跟随符号链接地打开，在句柄上核对它就是列出来
+       * 的那个文件，读完再核对句柄没有变（1.4.3，open-items B15）。目录本身由调用方在这一批读取前后各核对一次。
+       * 不再发现的：读的过程中这个名字被换成别的文件或被删掉——读到的仍是列目录时那个文件的完整内容。
+       */
+      readonly listed: true;
+      readonly expectedNode: Readonly<FileNodeSnapshot>;
+    }
+);
 
 /** 一次稳定读取签发的物理源资源事实。 */
 export interface StableFileSource {
@@ -89,13 +96,6 @@ export class StableFileReadError extends ModuleError<StableFileReadErrorReason> 
   static override readonly code = "wakeflow-stable-file-read";
 }
 
-interface ParsedStableFileReadOptions {
-  readonly maximumBytes: ByteCount;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly listed: boolean;
-  readonly signal: AbortSignal | undefined;
-}
-
 type StableFileReadMode = "bytes" | "digest";
 
 interface InternalStableFileReadResult extends StableFileSource {
@@ -103,57 +103,6 @@ interface InternalStableFileReadResult extends StableFileSource {
 }
 
 const fail: Fail<StableFileReadErrorReason> = failWith(StableFileReadError);
-
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
-  if (value === undefined) return undefined;
-  return admitFrozenFileNodeSnapshot(value, (cause) =>
-    fail("input", "$options.expectedNode", cause),
-  );
-}
-
-function parseOptions(value: unknown): Readonly<ParsedStableFileReadOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const allowed = new Set(["expectedNode", "listed", "maximumBytes", "signal"]);
-  if (
-    !Object.hasOwn(record, "maximumBytes") ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-
-  let maximumBytes: ByteCount;
-  try {
-    maximumBytes = parseByteCount(record.maximumBytes, "$options.maximumBytes");
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) {
-      fail("input", "$options.maximumBytes", error);
-    }
-    throw error;
-  }
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  const expectedNode = parseExpectedNode(record.expectedNode);
-  if (record.listed !== undefined && (record.listed !== true || expectedNode === undefined)) {
-    fail("input", "$options.listed");
-  }
-  return Object.freeze({
-    maximumBytes,
-    expectedNode,
-    listed: record.listed === true,
-    signal: record.signal,
-  });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
 
 async function inspectInitialResource(
   root: RootedDirectory,
@@ -198,12 +147,6 @@ async function inspectFinalResource(
 function assertRegularFile(node: Readonly<FileNodeSnapshot>): void {
   if (node.kind === "symbolic-link") fail("symlink", "$resourcePath");
   if (node.kind !== "file") fail("not-file", "$resourcePath");
-}
-
-/** `listed` 的读取以列目录时看到的节点为起点；`parseOptions` 已保证它在。 */
-function listedNodeOf(parsed: Readonly<ParsedStableFileReadOptions>): Readonly<FileNodeSnapshot> {
-  if (parsed.expectedNode === undefined) fail("input", "$options.listed");
-  return parsed.expectedNode;
 }
 
 /** 列出来的那一项在 `root` 目录里的物理路径：名字只能是一段，不经路径核对。 */
@@ -360,15 +303,22 @@ async function readStableFileVersion(
   options: StableFileReadOptions,
   mode: StableFileReadMode,
 ): Promise<Readonly<InternalStableFileReadResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
+  const { maximumBytes, signal } = options;
+  throwIfAborted(signal);
 
-  const initial = parsed.listed ? null : await inspectInitialResource(root, resourcePath);
-  const initialNode = initial === null ? listedNodeOf(parsed) : initial.node;
-  assertRegularFile(initialNode);
-  if (initial !== null) assertExpectedNode(initial.node, parsed.expectedNode);
-  assertWithinMaximum(initialNode.byteCount, parsed.maximumBytes);
+  // 列出来的一项以列目录时看到的节点为起点（类型保证它在）；否则先按路径看一次，再与预期比较。
+  let initial: Readonly<RootedResourceSnapshot> | null = null;
+  let initialNode: Readonly<FileNodeSnapshot>;
+  if (options.listed === true) {
+    initialNode = options.expectedNode;
+    assertRegularFile(initialNode);
+  } else {
+    initial = await inspectInitialResource(root, resourcePath);
+    initialNode = initial.node;
+    assertRegularFile(initialNode);
+    assertExpectedNode(initialNode, options.expectedNode);
+  }
+  assertWithinMaximum(initialNode.byteCount, maximumBytes);
   if (mode === "bytes" && initialNode.byteCount > bufferConstants.MAX_LENGTH) {
     fail("too-large", "$resourcePath");
   }
@@ -384,10 +334,10 @@ async function readStableFileVersion(
     if (opened.kind !== "file" || !sameFileNodeSnapshot(initialNode, opened)) {
       fail(initial === null ? "expectation-changed" : "source-changed", "$resourcePath");
     }
-    assertWithinMaximum(opened.byteCount, parsed.maximumBytes);
+    assertWithinMaximum(opened.byteCount, maximumBytes);
 
     const capture = createCapture(mode, opened.byteCount);
-    const read = await readExactFile(handle, opened.byteCount, capture, parsed.signal);
+    const read = await readExactFile(handle, opened.byteCount, capture, signal);
     const afterHandle = await snapshotOpenedFile(handle);
     if (!sameFileNodeSnapshot(opened, afterHandle)) fail("source-changed", "$resourcePath");
     let finalNode = afterHandle;
@@ -398,7 +348,7 @@ async function readStableFileVersion(
       }
       finalNode = afterPath.node;
     }
-    throwIfAborted(parsed.signal);
+    throwIfAborted(signal);
 
     result = Object.freeze({
       resourcePath,

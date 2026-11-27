@@ -1,6 +1,5 @@
 import pLimit from "p-limit";
 
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   addByteCounts,
@@ -18,13 +17,13 @@ import {
 } from "./bounded-directory-tree-scan.js";
 import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableFileDigest,
   StableFileReadError,
   type StableFileSource,
 } from "./stable-file-read.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根作用域内的稳定、有界资源树内容观察。
@@ -105,75 +104,19 @@ export class StableResourceTreeReadError extends ModuleError<StableResourceTreeR
   static override readonly code = "wakeflow-stable-resource-tree-read";
 }
 
-interface ParsedStableResourceTreeReadOptions {
-  readonly maximumEntries: number;
-  readonly maximumDepth: number;
-  readonly maximumFiles: number;
-  readonly maximumFileBytes: ByteCount;
-  readonly maximumTotalBytes: ByteCount;
-  readonly expectedNode: Readonly<FileNodeSnapshot> | undefined;
-  readonly signal: AbortSignal | undefined;
-}
-
 type TreeRootResourcePath = PortableResourcePath | null;
 
 const fail: Fail<StableResourceTreeReadErrorReason> = failWith(StableResourceTreeReadError);
 
-function parseCount(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    fail("input", path);
+/**
+ * 文件数上限在这里界定读取的文件数：类型表达不了范围，NaN 会让上限失效，所以在消费它的这里断言一次
+ * （1.4.5 层次计划 A，R4）。目录项与深度上限只是转交给目录树扫描，由它断言；两个字节上限是
+ * `ByteCount`，品牌就是准入的证明。
+ */
+function assertFileLimit(maximumFiles: number): void {
+  if (!Number.isSafeInteger(maximumFiles) || maximumFiles < 0) {
+    fail("input", "$options.maximumFiles");
   }
-  return value;
-}
-
-function parseBytes(value: unknown, path: string): ByteCount {
-  try {
-    return parseByteCount(value, path);
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) fail("input", path, error);
-    throw error;
-  }
-}
-
-function parseOptions(value: unknown): Readonly<ParsedStableResourceTreeReadOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-
-  const required = Object.freeze([
-    "maximumDepth",
-    "maximumEntries",
-    "maximumFileBytes",
-    "maximumFiles",
-    "maximumTotalBytes",
-  ] as const);
-  const allowed = new Set([...required, "expectedNode", "signal"]);
-  if (
-    required.some((field) => !Object.hasOwn(record, field)) ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  if (record.signal !== undefined && !isAbortSignal(record.signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({
-    maximumEntries: parseCount(record.maximumEntries, "$options.maximumEntries"),
-    maximumDepth: parseCount(record.maximumDepth, "$options.maximumDepth"),
-    maximumFiles: parseCount(record.maximumFiles, "$options.maximumFiles"),
-    maximumFileBytes: parseBytes(record.maximumFileBytes, "$options.maximumFileBytes"),
-    maximumTotalBytes: parseBytes(record.maximumTotalBytes, "$options.maximumTotalBytes"),
-    expectedNode: record.expectedNode as Readonly<FileNodeSnapshot> | undefined,
-    signal: record.signal,
-  });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
 function mapTreeScanError(error: BoundedDirectoryTreeScanError, phase: "before" | "after"): never {
@@ -221,7 +164,7 @@ function mapStableFileReadError(error: StableFileReadError): never {
 }
 
 function scanOptions(
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
   expectedNode: Readonly<FileNodeSnapshot> | undefined,
 ): BoundedDirectoryTreeScanOptions {
   return {
@@ -235,7 +178,7 @@ function scanOptions(
 async function scanTree(
   root: RootedDirectory,
   treeRootResourcePath: TreeRootResourcePath,
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
   expectedNode: Readonly<FileNodeSnapshot> | undefined,
   phase: "before" | "after",
 ): Promise<Readonly<BoundedDirectoryTreeScanResult>> {
@@ -265,7 +208,7 @@ function addTreeBytes(current: ByteCount, next: ByteCount): ByteCount {
 
 function collectFileEntries(
   tree: Readonly<BoundedDirectoryTreeScanResult>,
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
 ): {
   readonly entries: readonly Readonly<BoundedDirectoryTreeEntry>[];
   readonly totalBytes: ByteCount;
@@ -292,7 +235,7 @@ function collectFileEntries(
 async function readOneFile(
   root: RootedDirectory,
   entry: Readonly<BoundedDirectoryTreeEntry>,
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
 ): Promise<Readonly<StableResourceTreeFile>> {
   try {
     const source = await readStableFileDigest(root, entry.resourcePath, {
@@ -315,7 +258,7 @@ async function readOneFile(
 async function readFiles(
   root: RootedDirectory,
   entries: readonly Readonly<BoundedDirectoryTreeEntry>[],
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
 ): Promise<readonly Readonly<StableResourceTreeFile>[]> {
   const limit = pLimit(STABLE_RESOURCE_TREE_FILE_CONCURRENCY);
   const settled = await Promise.allSettled(
@@ -354,7 +297,7 @@ function sameTree(
 async function readTree<TreeRoot extends TreeRootResourcePath>(
   root: RootedDirectory,
   treeRootResourcePath: TreeRoot,
-  options: Readonly<ParsedStableResourceTreeReadOptions>,
+  options: StableResourceTreeReadOptions,
 ): Promise<Readonly<StableResourceTreeReadResult<TreeRoot>>> {
   const before = await scanTree(
     root,
@@ -382,10 +325,9 @@ export async function readStableRootResourceTree(
   root: RootedDirectory,
   options: StableResourceTreeReadOptions,
 ): Promise<Readonly<StableResourceTreeReadResult<null>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return readTree(root, null, parsed);
+  assertFileLimit(options.maximumFiles);
+  throwIfAborted(options.signal);
+  return readTree(root, null, options);
 }
 
 /** 稳定读取 `RootedDirectory` 内一个资源目录的完整目录树内容事实。 */
@@ -394,8 +336,7 @@ export async function readStableResourceTree(
   resourcePath: PortableResourcePath,
   options: StableResourceTreeReadOptions,
 ): Promise<Readonly<StableResourceTreeReadResult<PortableResourcePath>>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
-  throwIfAborted(parsed.signal);
-  return readTree(root, resourcePath, parsed);
+  assertFileLimit(options.maximumFiles);
+  throwIfAborted(options.signal);
+  return readTree(root, resourcePath, options);
 }

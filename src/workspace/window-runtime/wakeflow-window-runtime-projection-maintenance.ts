@@ -59,10 +59,10 @@ import {
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_FILE_MODE,
 } from "./wakeflow-window-runtime-projection-document.js";
 import {
-  admitWakeflowWindowRuntimeProjectionInputs,
   compileWakeflowWindowRuntimeProjectionExpectedEntries,
   failWindowRuntimeProjection,
   inspectWakeflowWindowRuntimeProjectionEntries,
+  parseWakeflowWindowRuntimeProjectionInputs,
   resolveWakeflowWindowRuntimeProjectionExpectedEntries,
   type WakeflowWindowRuntimeProjectionExpectedEntries,
   type WakeflowWindowRuntimeProjectionExpectedEntry,
@@ -150,8 +150,7 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(
   request: PlanWakeflowWindowRuntimeProjectionMaintenanceRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionMaintenancePlan>> {
   throwIfAborted(request.signal);
-  const inputs = admitWakeflowWindowRuntimeProjectionInputs(
-    rootValue,
+  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
     request.config,
     request.resourceProfile,
     request.identityProfile,
@@ -311,8 +310,7 @@ export async function refreshWakeflowWindowRuntimeProjections(
       }
       throw error;
     }
-    return admitWakeflowWindowRuntimeProjectionInputs(
-      rootValue,
+    return parseWakeflowWindowRuntimeProjectionInputs(
       snapshot.model,
       request.resourceProfile,
       request.identityProfile,
@@ -556,8 +554,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
   request: ExecuteWakeflowWindowRuntimeProjectionOperationRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionOperationReceipt>> {
   throwIfAborted(request.signal);
-  const inputs = admitWakeflowWindowRuntimeProjectionInputs(
-    rootValue,
+  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
     request.config,
     request.resourceProfile,
     request.identityProfile,

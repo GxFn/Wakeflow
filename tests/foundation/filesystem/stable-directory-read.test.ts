@@ -17,7 +17,6 @@ import {
   readStableRootDirectoryPage,
   StableDirectoryReadError,
   type StableDirectoryReadErrorReason,
-  type StableDirectoryReadOptions,
 } from "../../../src/foundation/filesystem/stable-directory-read.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 
@@ -41,10 +40,6 @@ async function expectStableDirectoryReadError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asOptions(value: unknown): StableDirectoryReadOptions {
-  return value as StableDirectoryReadOptions;
 }
 
 function asPortableResourcePath(value: unknown): PortableResourcePath {
@@ -299,42 +294,17 @@ test("non-portable physical entry names fail instead of being normalized", async
   }
 });
 
-test("options are closed, passive, and support pre-aborted reads", async () => {
+test("the entry limit is range-checked and pre-aborted reads stop before reading", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-options-"));
   const root = await RootedDirectory.open(rootPath);
   try {
-    const invalid: readonly [unknown, string][] = [
-      [{}, "$options"],
-      [{ maximumEntries: 1, extra: true }, "$options"],
-      [{ maximumEntries: -1 }, "$options.maximumEntries"],
-      [{ maximumEntries: 1.5 }, "$options.maximumEntries"],
-      [{ maximumEntries: Number.MAX_SAFE_INTEGER + 1 }, "$options.maximumEntries"],
-      [{ maximumEntries: 1, signal: {} }, "$options.signal"],
-      [{ maximumEntries: 1, expectedNode: {} }, "$options.expectedNode"],
-    ];
-    for (const [options, expectedPath] of invalid) {
+    for (const maximumEntries of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
       await expectStableDirectoryReadError(
-        () => readStableRootDirectory(root, asOptions(options)),
+        () => readStableRootDirectory(root, { maximumEntries }),
         "input",
-        expectedPath,
+        "$options.maximumEntries",
       );
     }
-
-    let getterCalls = 0;
-    const accessor: Record<string, unknown> = {};
-    Object.defineProperty(accessor, "maximumEntries", {
-      get: () => {
-        getterCalls += 1;
-        return 1;
-      },
-      enumerable: true,
-    });
-    await expectStableDirectoryReadError(
-      () => readStableRootDirectory(root, asOptions(accessor)),
-      "input",
-      "$options",
-    );
-    equal(getterCalls, 0);
 
     const controller = new AbortController();
     controller.abort("private-abort-reason");

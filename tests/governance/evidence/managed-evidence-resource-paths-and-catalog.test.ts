@@ -1,7 +1,10 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -58,7 +61,10 @@ function assertDeepFrozen(value: unknown): void {
 }
 
 /** 一次Evidence事务涉及的三份声明：容器、final tree与journal。 */
-function evidenceDeclarations(demandId: string, evidenceId: string) {
+function evidenceDeclarations(
+  demandId: WakeflowDurableId<"demand">,
+  evidenceId: WakeflowDurableId<"evidence">,
+) {
   return [
     createManagedEvidenceRootResourceDeclaration(demandId),
     createManagedEvidenceRecordResourceDeclaration(demandId, evidenceId),

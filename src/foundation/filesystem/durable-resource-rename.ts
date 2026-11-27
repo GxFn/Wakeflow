@@ -9,7 +9,7 @@ import {
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
-import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
+import type { RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
   type RootedExactResourceHandleError,
@@ -90,7 +90,6 @@ export class DurableResourceRenameError extends ModuleError<DurableResourceRenam
 // 选项、父目录与源句柄的各步与硬链接是同一份（durable-source-transition-steps.ts）。
 const {
   parseResourcePath,
-  parseOptions,
   openResourceParent,
   assertParentCurrent,
   inspectParentTarget,
@@ -102,10 +101,6 @@ const {
 } = sourceTransitionSteps(DurableResourceRenameError);
 
 const fail: Fail<DurableResourceRenameErrorReason> = failWith(DurableResourceRenameError);
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (!isRootedDirectory(value)) fail("input", "$root");
-}
 
 function mapExactSourceOpenError(error: RootedExactResourceHandleError): never {
   if (error.reason === "input") fail("input", "$sourceResourcePath");
@@ -219,18 +214,17 @@ export async function renameResourceDurably(
   destinationResourcePath: PortableResourcePath,
   options: DurableResourceRenameOptions,
 ): Promise<Readonly<DurableResourceRenameResult>> {
-  assertRoot(root);
-  const parsed = parseOptions(options);
+  const { expectedSourceNode, signal } = options;
   const sourcePath = parseResourcePath(sourceResourcePath, "$sourceResourcePath");
   const destinationPath = parseResourcePath(destinationResourcePath, "$destinationResourcePath");
   if (
     sourcePath === destinationPath ||
-    (parsed.expectedSourceNode.kind === "directory" &&
+    (expectedSourceNode.kind === "directory" &&
       destinationInsideSource(sourcePath, destinationPath))
   ) {
     fail("input", "$destinationResourcePath");
   }
-  throwIfAborted(parsed.signal);
+  throwIfAborted(signal);
 
   const sourceParent = await openResourceParent(root, sourcePath, "$sourceResourcePath");
   let destinationParent: RootedResourceParentHandle | undefined;
@@ -241,7 +235,7 @@ export async function renameResourceDurably(
   try {
     destinationParent = await openResourceParent(root, destinationPath, "$destinationResourcePath");
 
-    source = await openExactSource(root, sourcePath, parsed.expectedSourceNode);
+    source = await openExactSource(root, sourcePath, expectedSourceNode);
     if (source.resourceAbsolutePath !== sourceParent.resourceAbsolutePath) {
       fail("root-scope", "$sourceResourcePath");
     }
@@ -270,7 +264,7 @@ export async function renameResourceDurably(
     ) {
       fail("destination-exists", "$destinationResourcePath");
     }
-    throwIfAborted(parsed.signal);
+    throwIfAborted(signal);
 
     try {
       await filesystemMutation.rename(

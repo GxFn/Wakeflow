@@ -1,8 +1,5 @@
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
+import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
@@ -51,9 +48,7 @@ import {
   WakeflowMaintenanceGateError,
 } from "./wakeflow-maintenance-gate.js";
 import {
-  parseWakeflowMaintenanceOperationId,
   type WakeflowMaintenanceOperationId,
-  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
 } from "./wakeflow-maintenance-operation-id.js";
 import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "./wakeflow-maintenance-resource-catalog.js";
@@ -115,17 +110,6 @@ const fail: Fail<WakeflowMaintenanceExecutionIntentStoreErrorReason> = failWith(
 
 const ISSUED_SOURCES = new WeakSet<object>();
 
-function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
-  try {
-    return parseWakeflowMaintenanceOperationId(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", "$operationId", error);
-    }
-    throw error;
-  }
-}
-
 function admittedByteCount(bytes: Uint8Array): ByteCount {
   if (bytes.byteLength > WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_MAXIMUM_BYTES) {
     fail("capacity", "$intent");
@@ -134,27 +118,19 @@ function admittedByteCount(bytes: Uint8Array): ByteCount {
 }
 
 /** 在任何bootstrap/gate效果前验证intent的确定性持久表示容量。 */
-export function assertWakeflowMaintenanceExecutionIntentCapacity(value: unknown): ByteCount {
-  let bytes: ReturnType<typeof encodeUtf8>;
-  try {
-    bytes = encodeUtf8(renderWakeflowMaintenanceExecutionIntent(value));
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceExecutionIntentError) {
-      fail("input", "$intent", error);
-    }
-    throw error;
-  }
-  return admittedByteCount(bytes);
+export function assertWakeflowMaintenanceExecutionIntentCapacity(
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
+): ByteCount {
+  return admittedByteCount(encodeUtf8(renderWakeflowMaintenanceExecutionIntent(intent)));
 }
 
 function currentUserId(): bigint {
   return requireCurrentUserId(() => fail("source-policy", "$intent"));
 }
 
+/** 只认本 store 签发的 source（ISSUED_SOURCES）。 */
 function assertSource(value: Readonly<WakeflowMaintenanceExecutionIntentSource>): void {
-  if (typeof value !== "object" || value === null || !ISSUED_SOURCES.has(value)) {
-    fail("input", "$intentSource");
-  }
+  if (!ISSUED_SOURCES.has(value)) fail("input", "$intentSource");
 }
 
 function admitOperation(
@@ -300,9 +276,8 @@ async function readIntentAtNode(
 /** 读取并严格复验一个immutable execution intent。 */
 export async function readWakeflowMaintenanceExecutionIntent(
   root: RootedDirectory,
-  operationIdValue: unknown,
+  operationId: WakeflowMaintenanceOperationId,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
-  const operationId = admittedOperationId(operationIdValue);
   const node = await resourceNodeOrNull(root, wakeflowMaintenanceIntentRef(operationId));
   if (node === null) fail("source", "$intent");
   return readIntentAtNode(root, operationId, node);
@@ -348,9 +323,8 @@ export async function peekWakeflowMaintenanceIntentWriter(
 
 export async function readWakeflowMaintenanceExecutionIntentOrNull(
   root: RootedDirectory,
-  operationIdValue: unknown,
+  operationId: WakeflowMaintenanceOperationId,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource> | null> {
-  const operationId = admittedOperationId(operationIdValue);
   const node = await resourceNodeOrNull(root, wakeflowMaintenanceIntentRef(operationId));
   return node === null ? null : readIntentAtNode(root, operationId, node);
 }
@@ -369,19 +343,18 @@ export async function publishWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
+  // `intentValue` 仍声明为 `unknown`（另一分区的测试直接调用，签名留到 A-spec 第 2 步），所以这里解析一次；
+  // 此前是"渲染时解析一次、再把渲染结果解析一次"。
   let intent: Readonly<WakeflowMaintenanceExecutionIntent>;
-  let text: string;
   try {
-    text = renderWakeflowMaintenanceExecutionIntent(intentValue);
-    intent = parseWakeflowMaintenanceExecutionIntent(
-      parseDeterministicJsonDocument(text, "$intent"),
-    );
+    intent = parseWakeflowMaintenanceExecutionIntent(intentValue);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionIntentError) {
       fail("input", "$intent", error);
     }
     throw error;
   }
+  const text = renderWakeflowMaintenanceExecutionIntent(intent);
   if (intent.operationId !== context.operationId) {
     fail("input", "$/operationId");
   }

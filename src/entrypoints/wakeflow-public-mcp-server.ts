@@ -3,16 +3,11 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { WAKEFLOW_STATUS_PUBLIC_TOOL_NAME } from "../capabilities/observation/contract.js";
 import { wakeflowRoleToolAccess } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "./wakeflow-public-mcp-catalog.js";
-import {
-  type CreateWakeflowPublicMcpServerOptions,
-  parseCreateWakeflowPublicMcpServerOptions,
-} from "./wakeflow-public-mcp-server-configuration.js";
+import type { CreateWakeflowPublicMcpServerOptions } from "./wakeflow-public-mcp-server-configuration.js";
 import {
   registerWakeflowPublicMcpCatalog,
   type WakeflowPublicMcpExecutor,
 } from "./wakeflow-public-mcp-tool.js";
-
-export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp-server-configuration.js";
 
 /**
  * Wakeflow公共MCP的唯一组合根。
@@ -24,11 +19,10 @@ export { WakeflowPublicMcpServerConfigurationError } from "./wakeflow-public-mcp
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,
 ): McpServer {
-  const admitted = parseCreateWakeflowPublicMcpServerOptions(options, WAKEFLOW_PUBLIC_TOOL_CATALOG);
   const server = new McpServer(
     {
-      name: admitted.serverName,
-      version: admitted.serverVersion,
+      name: options.serverName,
+      version: options.serverVersion,
     },
     {
       instructions: [
@@ -48,7 +42,7 @@ export function createWakeflowPublicMcpServer(
     authorizeCall,
     listedRole,
     ...executors
-  } = admitted;
+  } = options;
   registerWakeflowPublicMcpCatalog(
     server,
     WAKEFLOW_PUBLIC_TOOL_CATALOG,

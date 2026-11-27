@@ -1,7 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -27,7 +24,7 @@ import {
   demandEventSourcingSnapshotRef,
   demandEventStreamCommitRef,
 } from "./event-sourcing/demand-event-sourcing-paths.js";
-import { parseDemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
+import type { DemandEventCommitSequence } from "./event-sourcing/demand-event-stream-position.js";
 import {
   DEMAND_PUBLICATION_ROOT_REF,
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
@@ -111,10 +108,6 @@ function privateFileDeclaration(
     },
     processing,
   });
-}
-
-function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
-  return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
 }
 
 function demandChildRef(
@@ -208,9 +201,8 @@ type DemandEventSourcingResourceCatalog = readonly [
  * 不会作为长期资源实例加入返回目录。
  */
 export function createDemandEventSourcingResourceCatalog(
-  value: unknown,
+  demandId: WakeflowDurableId<"demand">,
 ): DemandEventSourcingResourceCatalog {
-  const demandId = parseDemandId(value);
   const prefix = `demand.event-sourcing.${demandId}`;
   const rootRef = demandFinalRootRef(demandId);
   const immutableFactProcessing = {
@@ -291,15 +283,9 @@ export function createDemandEventSourcingResourceCatalog(
 
 /** 为一个事件权威 TaskPackage 生成按 ID 不可覆盖的可重建投影声明。 */
 export function createTaskPackageProjectionResourceDeclaration(
-  demandValue: unknown,
-  taskPackageValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
+  taskPackageId: WakeflowDurableId<"task-package">,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demandId = parseDemandId(demandValue);
-  const taskPackageId = parseWakeflowDurableIdOfKind(
-    taskPackageValue,
-    "task-package",
-    "$taskPackageId",
-  );
   return privateFileDeclaration(
     `demand.tasking.${demandId}.task-package.${taskPackageId}`,
     DEMAND_TASKING_PROJECTION_OWNER_ID,
@@ -315,11 +301,9 @@ export function createTaskPackageProjectionResourceDeclaration(
 
 /** 为一个物理事件流槽位生成不可变权威提交声明。 */
 export function createDemandEventStreamCommitResourceDeclaration(
-  demandValue: unknown,
-  commitSequenceValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
+  commitSequence: DemandEventCommitSequence,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.commit-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,
@@ -338,11 +322,9 @@ export function createDemandEventStreamCommitResourceDeclaration(
  * Snapshot 与权威 Commit 共用序号词汇，但不会取得事件事实角色或覆写能力。
  */
 export function createDemandEventSourcingSnapshotResourceDeclaration(
-  demandValue: unknown,
-  commitSequenceValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
+  commitSequence: DemandEventCommitSequence,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> {
-  const demandId = parseDemandId(demandValue);
-  const commitSequence = parseDemandEventCommitSequence(commitSequenceValue, "$commitSequence");
   return privateFileDeclaration(
     `demand.event-sourcing.${demandId}.snapshot-${commitSequence}`,
     DEMAND_EVENT_SOURCING_OWNER_ID,

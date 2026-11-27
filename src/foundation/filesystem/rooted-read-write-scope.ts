@@ -1,5 +1,3 @@
-import { types } from "node:util";
-import { parsePlainRecord } from "../data/passive-own-data.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { readMonotonicClock } from "../time/monotonic-clock.js";
 import {
@@ -59,48 +57,9 @@ export class RootedReadWriteScopeError extends Error {
 }
 
 const DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS = 30_000;
-const MAXIMUM_ACQUIRE_TIMEOUT_MILLISECONDS = 300_000;
 
 function fail(reason: RootedReadWriteScopeError["reason"], cause?: unknown): never {
   throw new RootedReadWriteScopeError(reason, cause === undefined ? undefined : { cause });
-}
-
-function optionsOf(
-  value: RootedReadWriteScopeOptions,
-): Required<Pick<RootedReadWriteScopeOptions, "acquireTimeoutMilliseconds">> &
-  Pick<RootedReadWriteScopeOptions, "signal" | "beforeEnter"> {
-  const record = parsePlainRecord(value, "$options");
-  if (
-    Object.keys(record).some(
-      (key) => !["signal", "acquireTimeoutMilliseconds", "beforeEnter"].includes(key),
-    )
-  )
-    fail("input");
-  const budget = record.acquireTimeoutMilliseconds ?? DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS;
-  if (
-    typeof budget !== "number" ||
-    !Number.isSafeInteger(budget) ||
-    budget <= 0 ||
-    budget > MAXIMUM_ACQUIRE_TIMEOUT_MILLISECONDS
-  )
-    fail("input");
-  if (
-    record.signal !== undefined &&
-    (types.isProxy(record.signal) || !(record.signal instanceof AbortSignal))
-  )
-    fail("input");
-  if (
-    record.beforeEnter !== undefined &&
-    (typeof record.beforeEnter !== "function" || types.isProxy(record.beforeEnter))
-  )
-    fail("input");
-  return {
-    acquireTimeoutMilliseconds: budget,
-    ...(record.signal === undefined ? {} : { signal: record.signal as AbortSignal }),
-    ...(record.beforeEnter === undefined
-      ? {}
-      : { beforeEnter: record.beforeEnter as () => Promise<void> }),
-  };
 }
 
 /** 锁原语的失败说成作用域的失败；别的错误原样上抛。 */
@@ -135,32 +94,31 @@ async function acquireWithin(
 
 /**
  * 在读写作用域里执行 `operation`。操作的结果或错误就是这次调用的结果；准入失败报
- * `RootedReadWriteScopeError`，`beforeEnter` 的错误原样上抛。
+ * `RootedReadWriteScopeError`，`beforeEnter` 的错误原样上抛。等待预算只是转交：两次获取共用的期限由
+ * 单调时长的构造器准入，每一次获取的毫秒数由锁原语断言范围。
  */
 export async function withRootedReadWriteScope<Result>(
   root: RootedDirectory,
   locks: Readonly<RootedReadWriteScopeLocks>,
   mode: RootedReadWriteMode,
   operation: () => Promise<Result>,
-  value: RootedReadWriteScopeOptions = {},
+  options: RootedReadWriteScopeOptions = {},
 ): Promise<Result> {
-  if (
-    (mode !== "shared" && mode !== "exclusive") ||
-    typeof operation !== "function" ||
-    types.isProxy(operation)
-  )
-    fail("input");
-  const options = optionsOf(value);
-  throwIfAborted(options.signal);
+  const {
+    signal,
+    acquireTimeoutMilliseconds = DEFAULT_ACQUIRE_TIMEOUT_MILLISECONDS,
+    beforeEnter,
+  } = options;
+  throwIfAborted(signal);
   const deadline = monotonicDeadlineAfter(
     readMonotonicClock(),
-    monotonicDurationFromMilliseconds(options.acquireTimeoutMilliseconds),
+    monotonicDurationFromMilliseconds(acquireTimeoutMilliseconds),
   );
-  const gate = await acquireWithin(root, locks.gate, mode, deadline, options.signal);
+  const gate = await acquireWithin(root, locks.gate, mode, deadline, signal);
   let scope: Readonly<KernelFileLockLease>;
   try {
-    await options.beforeEnter?.();
-    scope = await acquireWithin(root, locks.scope, mode, deadline, options.signal);
+    await beforeEnter?.();
+    scope = await acquireWithin(root, locks.scope, mode, deadline, signal);
   } catch (error: unknown) {
     await gate.release();
     throw error;

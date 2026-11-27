@@ -63,10 +63,7 @@ import {
   type TaskPackage,
   TaskPackageError,
 } from "../tasking/task-package.js";
-import {
-  TaskPackageProjectionPathError,
-  taskPackageProjectionRef,
-} from "../tasking/task-package-projection-paths.js";
+import { taskPackageProjectionRef } from "../tasking/task-package-projection-paths.js";
 import {
   parseTestExecutionAttempt,
   type TestExecutionAttempt,
@@ -629,10 +626,7 @@ export function deliveryTaskPackageRef(
       `${demandFinalRootRef(demandId)}/${taskPackageProjectionRef(taskPackageId)}`,
     );
   } catch (error: unknown) {
-    if (
-      error instanceof PortableResourcePathError ||
-      error instanceof TaskPackageProjectionPathError
-    ) {
+    if (error instanceof PortableResourcePathError) {
       fail("path", "$/target/taskPackageRef", error);
     }
     throw error;

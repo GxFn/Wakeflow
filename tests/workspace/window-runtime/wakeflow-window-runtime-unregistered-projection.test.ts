@@ -1,6 +1,7 @@
 import { deepEqual, equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { compileWakeflowFreshWindowRuntimeAuthority } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-authority.js";
@@ -99,7 +100,7 @@ test("fresh Window Runtime projections are deterministic and explicitly unregist
   );
 
   const authority = compileWakeflowFreshWindowRuntimeAuthority(
-    config,
+    parseWakeflowConfig(config),
     codexWorkspaceHostResourceProfile,
   );
   equal(authority.layoutDeclarations.length, 6);

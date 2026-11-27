@@ -3,12 +3,11 @@
  * current 与 blocked 理由，以及退出路径的精确删除（ADR-0024 `remove-portable-settings-rules`）：只删
  * Wakeflow 当前与退役的条目、用户条目与键原样保留、无条目或无文件即 current、读不出即 blocked。
  */
-import { deepEqual, equal, throws } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import { WAKEFLOW_CLAUDE_CODE_DESKTOP_PERMISSION_RULE } from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
 import {
-  ClaudeCodePortableSettingsTransitionError,
   claudeCodePortableSettingsRemovedRulesFor,
   claudeCodePortableSettingsRetiredRulesFor,
   claudeCodePortableSettingsRulesFor,
@@ -178,7 +177,7 @@ test("removal blocks on unreadable or mistyped documents with the write path's r
   deepEqual(allowOf(removal.desiredText), ["Bash(git *)"]);
 });
 
-test("the removed-rule table is the deduplicated union of current and retired rules, and removal input is validated", () => {
+test("the removed-rule table is the deduplicated union of current and retired rules", () => {
   for (const role of ["design", "test"] as const) {
     const owner = { rootKind: "support-surface" as const, role };
     deepEqual(
@@ -193,17 +192,4 @@ test("the removed-rule table is the deduplicated union of current and retired ru
       claudeCodePortableSettingsRemovedRulesFor(owner).length,
     );
   }
-  for (const removedRules of [[], ["a", "a"], [""], "not-an-array", undefined]) {
-    throws(
-      () => planClaudeCodePortableSettingsRemovalTransition('{"permissions":{}}', removedRules),
-      (error: unknown) =>
-        error instanceof ClaudeCodePortableSettingsTransitionError &&
-        error.path === "$removedRules",
-    );
-  }
-  throws(
-    () => planClaudeCodePortableSettingsRemovalTransition(42, ["a"]),
-    (error: unknown) =>
-      error instanceof ClaudeCodePortableSettingsTransitionError && error.path === "$sourceText",
-  );
 });

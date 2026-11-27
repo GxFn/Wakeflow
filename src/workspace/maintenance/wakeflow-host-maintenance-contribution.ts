@@ -251,36 +251,23 @@ function assertOrderedBlockers(
  *
  * operation 与 blocker 会在边界内排序；调用方对象和 payload 不会被引用保存。
  */
-export function createWakeflowHostMaintenanceContribution(
-  requestValue: CreateWakeflowHostMaintenanceContributionRequest,
-): Readonly<WakeflowHostMaintenanceContribution> {
-  let record: Readonly<Record<string, unknown>>;
-  let blockerValues: readonly unknown[];
-  let operationValues: readonly unknown[];
-  try {
-    record = parsePlainRecord(requestValue, "$request");
-    blockerValues = parseDenseArray(record.blockerCodes, MAXIMUM_BLOCKERS, "$request.blockerCodes");
-    operationValues = parseDenseArray(record.operations, MAXIMUM_OPERATIONS, "$request.operations");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", error.path, error);
-    throw error;
-  }
-  if (
-    Object.keys(record).sort().join("\u0000") !==
-      "blockerCodes\u0000capabilityId\u0000hostId\u0000operations\u0000status" ||
-    typeof record.hostId !== "string" ||
-    !HOST_ID_SET.has(record.hostId) ||
-    (record.status !== "ready" && record.status !== "blocked")
-  ) {
-    fail("input", "$request");
-  }
+export function createWakeflowHostMaintenanceContribution({
+  hostId,
+  capabilityId,
+  status,
+  blockerCodes: blockerValues,
+  operations: operationValues,
+}: CreateWakeflowHostMaintenanceContributionRequest): Readonly<WakeflowHostMaintenanceContribution> {
+  // 读回时 parse 认的上限；建出来的 contribution 必须读得回去。
+  if (blockerValues.length > MAXIMUM_BLOCKERS) fail("input", "$request.blockerCodes");
+  if (operationValues.length > MAXIMUM_OPERATIONS) fail("input", "$request.operations");
   const blockerCodes = Object.freeze(
     [...blockerValues]
       .map((entry, index) => parseBlockerCode(entry, `$request.blockerCodes/${index}`))
       .sort(),
   );
   assertOrderedBlockers(blockerCodes, "$request");
-  if ((record.status === "ready") !== (blockerCodes.length === 0)) {
+  if ((status === "ready") !== (blockerCodes.length === 0)) {
     fail("status", "$request.status");
   }
   const operations = Object.freeze(
@@ -294,9 +281,9 @@ export function createWakeflowHostMaintenanceContribution(
   const basis: Omit<WakeflowHostMaintenanceContribution, "contributionDigest"> = Object.freeze({
     kind: "WakeflowHostMaintenanceContribution",
     schemaVersion: 1,
-    hostId: record.hostId as WakeflowWorkspaceHostId,
-    capabilityId: parseIdentity(record.capabilityId, "$request.capabilityId", COMPONENT_ID_PATTERN),
-    status: record.status,
+    hostId,
+    capabilityId: parseIdentity(capabilityId, "$request.capabilityId", COMPONENT_ID_PATTERN),
+    status,
     blockerCodes,
     operations,
   });

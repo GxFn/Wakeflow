@@ -1,16 +1,11 @@
-import { types } from "node:util";
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
-import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { computeTaskPackageDigest, type TaskPackage } from "../../tasking/task-package.js";
 import type { DemandTargetTaskState } from "../model/demand-aggregate-state.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
@@ -210,27 +205,6 @@ const fail: Fail<DemandEventSourcingRepositoryErrorReason> = failWith(
   DemandEventSourcingRepositoryError,
 );
 
-function parseSignal(value: unknown): AbortSignal | undefined {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input", "$options");
-  }
-  return record.signal as AbortSignal | undefined;
-}
-
 function replayCommits(
   initial: Readonly<DemandEventSourcingAggregate> | null,
   commits: readonly Readonly<DemandEventStreamCommit>[],
@@ -283,14 +257,6 @@ export class DemandEventSourcingRepository {
   readonly #snapshotStore: DemandFileEventSnapshotStore;
 
   constructor(root: RootedDirectory) {
-    if (
-      typeof root !== "object" ||
-      root === null ||
-      types.isProxy(root) ||
-      !(root instanceof RootedDirectory)
-    ) {
-      fail("input", "$root");
-    }
     this.#eventStore = new DemandFileEventStore(root);
     this.#snapshotStore = new DemandFileEventSnapshotStore(root);
   }
@@ -299,7 +265,7 @@ export class DemandEventSourcingRepository {
   async load(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<LoadedDemandEventSourcingAggregate> | null> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     // 快照是可重建缓存：并发的检查点刷新会让一次快照目录读取报告
     // stream-changed，此时立即重读一次；仍失败（含崩溃残留的暂存文件）则视为
     // 本次没有可用快照，退回完整重放并以 `snapshotStatus: "invalid"` 报告。
@@ -382,7 +348,7 @@ export class DemandEventSourcingRepository {
   async audit(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<AuditedDemandEventSourcingAggregate>> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
@@ -404,7 +370,7 @@ export class DemandEventSourcingRepository {
   async readWriters(options?: {
     readonly signal?: AbortSignal;
   }): Promise<readonly (Readonly<DemandEventStreamCommitWriter> | null)[]> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
@@ -423,7 +389,7 @@ export class DemandEventSourcingRepository {
   async auditTargetResultHistory(options?: {
     readonly signal?: AbortSignal;
   }): Promise<Readonly<AuditedDemandTargetResultHistory>> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let stream: Awaited<ReturnType<DemandFileEventStore["readCommits"]>>;
     try {
       stream = await this.#eventStore.readCommits(signal === undefined ? undefined : { signal });
@@ -970,7 +936,7 @@ export class DemandEventSourcingRepository {
     taskPackageIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedTargetTaskPlannedEvent> | null> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let taskPackageId: WakeflowDurableId<"task-package">;
     try {
       taskPackageId = parseWakeflowDurableIdOfKind(
@@ -1018,7 +984,7 @@ export class DemandEventSourcingRepository {
     deliveryIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedDeliveryPreparedEvent> | null> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
       deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
@@ -1063,7 +1029,7 @@ export class DemandEventSourcingRepository {
     deliveryIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<readonly Readonly<LocatedDeliveryOutcomeRecordedEvent>[]> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let deliveryId: WakeflowDurableId<"target-delivery">;
     try {
       deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
@@ -1106,7 +1072,7 @@ export class DemandEventSourcingRepository {
     claimIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedTargetResultRecordedEvent> | null> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let claimId: WakeflowDurableId<"work-claim">;
     try {
       claimId = parseWakeflowDurableIdOfKind(claimIdValue, "work-claim", "$claimId");
@@ -1248,7 +1214,7 @@ export class DemandEventSourcingRepository {
     commitIdValue: unknown,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandEventStreamCommit> | null> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let commitId: WakeflowDurableId<"demand-event-commit">;
     try {
       commitId = parseWakeflowDurableIdOfKind(commitIdValue, "demand-event-commit", "$commitId");
@@ -1287,10 +1253,7 @@ export class DemandEventSourcingRepository {
     key: string,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandEventStreamCommit> | null> {
-    const signal = parseSignal(options);
-    if (typeof key !== "string" || key.length === 0 || key.length > 128) {
-      fail("input", "$idempotencyKey");
-    }
+    const signal = options?.signal;
     const located = await this.#eventStore.readIndex(
       null,
       signal === undefined ? undefined : { signal },
@@ -1330,19 +1293,19 @@ export class DemandEventSourcingRepository {
     prepared: Readonly<PreparedDemandEventStreamCommit>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventStoreAppendReceipt>> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     return this.#eventStore.append(prepared, signal === undefined ? undefined : { signal });
   }
 
   /** 显式发布当前聚合的不可变检查点；该操作不属于加载副作用。 */
   async publishSnapshot(
-    aggregateValue: unknown,
+    aggregate: Readonly<DemandEventSourcingAggregate>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandFileEventSnapshotPublishReceipt>> {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     let snapshot: ReturnType<typeof createDemandEventSourcingSnapshot>;
     try {
-      snapshot = createDemandEventSourcingSnapshot(aggregateValue);
+      snapshot = createDemandEventSourcingSnapshot(aggregate);
     } catch (error: unknown) {
       if (error instanceof DemandEventSourcingSnapshotError) {
         fail("input", "$aggregate", error);
@@ -1367,7 +1330,7 @@ export class DemandEventSourcingRepository {
    * 快照是可重建缓存，退休失败只计数。
    */
   async refreshCheckpoints(
-    aggregateValue: unknown,
+    aggregate: Readonly<DemandEventSourcingAggregate>,
     options?: { readonly signal?: AbortSignal },
   ): Promise<
     Readonly<{
@@ -1375,9 +1338,9 @@ export class DemandEventSourcingRepository {
       readonly retiredSnapshots: number;
     }>
   > {
-    const signal = parseSignal(options);
+    const signal = options?.signal;
     const receipt = await this.publishSnapshot(
-      aggregateValue,
+      aggregate,
       signal === undefined ? undefined : { signal },
     );
     let retiredSnapshots = 0;

@@ -3,7 +3,6 @@ import { types } from "node:util";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   type AuditedDemandTargetResultHistory,
@@ -169,27 +168,6 @@ export class DemandResultReviewSnapshotError extends Error {
 
 function fail(reason: DemandResultReviewSnapshotErrorReason, cause?: unknown): never {
   throw new DemandResultReviewSnapshotError(reason, cause === undefined ? undefined : { cause });
-}
-
-function parseSignal(value: unknown): AbortSignal | undefined {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value === undefined ? {} : value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input");
-    throw error;
-  }
-  if (
-    Object.keys(record).some((key) => key !== "signal") ||
-    (record.signal !== undefined &&
-      (typeof record.signal !== "object" ||
-        record.signal === null ||
-        types.isProxy(record.signal) ||
-        !(record.signal instanceof AbortSignal)))
-  ) {
-    fail("input");
-  }
-  return record.signal as AbortSignal | undefined;
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
@@ -517,7 +495,7 @@ export async function readDemandResultReviewSnapshot(
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandResultReviewSnapshot>> {
   assertRoot(rootValue);
-  const signal = parseSignal(options);
+  const signal = options?.signal;
   let sources: Readonly<AuditedDemandTargetResultHistory>;
   try {
     sources = await new DemandEventSourcingRepository(rootValue).auditTargetResultHistory(
@@ -550,11 +528,10 @@ const ARCHIVED_STREAM_FAILURES: ReadonlySet<string> = new Set([
  * 同形。只读。
  */
 export async function readArchivedDemandResultReviewSnapshot(
-  payloadRootValue: unknown,
+  payloadRootValue: RootedDirectory,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandResultReviewSnapshot>> {
-  assertRoot(payloadRootValue);
-  const signal = parseSignal(options);
+  const signal = options?.signal;
   let sources: Readonly<AuditedDemandTargetResultHistory>;
   try {
     const read = await readAllDemandFileEventCommits(payloadRootValue, signal, "archived");

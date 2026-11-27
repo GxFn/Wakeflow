@@ -7073,3 +7073,14 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 0 档 `wf verify quick --changed`：224 个测试文件，1,225/1,225，回执 `.build/verification/run-9KsAfU/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
 
 **结论：批 4 完成，净减 67 行；四批合计 `src` 净减 1,113 行。**
+
+### 13.301 1.4.5 批 5：写入"结果不确定"由错误自己说（2026-11-26）
+
+- **与计划的出入。** 计划的批 5 是在维护意图存储上试点"写入动词的端口"。前四批的数字都指向同一件事：样板在错误翻译里，不在读写动词里；那个试点能省的主要就是下面这组判断。所以没有建端口，改成同一形状的一条规则。
+- **改了什么。** 五个基础层错误类各带一个只读的 `commitUncertain`，在构造时由自己的原因算出（先例是 `KernelFileLockError.retryable`）：原子写是 `commit-uncertain` / `durability-failure` / `stage-cleanup-failure` / `close-failure`，删除、目录物化、改名是前两个加 `close-failure`，目录树发布是前两个。基础层之上逐个列这些原因的 25 处判断里 23 处改读标志，其中 7 处是"标志或再加一个原因"。提交见本节之前的 `refactor:` 提交：`src` 22 个文件 +54 / −166（净减 112 行），`tests` 5 个文件 +147（每个类一条用例，把整个原因联合列成表，新加的原因漏不掉）。机械改动由 Opus 子代理做，我定规则、读了标志的定义与一个文件的差异。
+- **没有动的两处。** 一处判断的是治理层自己的错误类，一处把两个原因分别翻成两个不同的原因。
+- **读代码时看到、没有改的。** 原子写在提交之后的两种失败按原因分不出"已落盘"，以及目录树发布对改名失败的读法与治理层不一致：登记为 B16，待核实。
+- **对外。** 没有变化：新字段不进公开细节，`refusals:check` 189 个原因不变，已有测试没有改。
+- **验证。** 第 0 档 `wf verify quick --changed`：1,265/1,265，回执 `.build/verification/run-wujMho/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
+
+**结论：五批做完，`src` 合计净减 1,225 行（802 + 100 + 144 + 67 + 112）。接下来改版本号、重建制品、过一次门。**

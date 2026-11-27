@@ -9,11 +9,7 @@ import {
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { isAbortSignal } from "../node/abort-signal.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
-import {
-  type FileNodeSnapshot,
-  FileNodeSnapshotError,
-  sameFileNodeSnapshot,
-} from "./file-node-snapshot.js";
+import { admitFrozenFileNodeSnapshot, type FileNodeSnapshot } from "./file-node-snapshot.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -252,25 +248,9 @@ export function parseDurableAtomicFileCreateOptions(
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    failDurableAtomicFileWrite("input", "$options.expected.node");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      failDurableAtomicFileWrite("input", "$options.expected.node");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      failDurableAtomicFileWrite("input", "$options.expected.node", error);
-    }
-    throw error;
-  }
-  const node = value as Readonly<FileNodeSnapshot>;
+  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
+    failDurableAtomicFileWrite("input", "$options.expected.node", cause),
+  );
   if (node.kind !== "file") {
     failDurableAtomicFileWrite("input", "$options.expected.node");
   }

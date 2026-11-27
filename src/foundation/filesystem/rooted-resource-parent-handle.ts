@@ -37,6 +37,10 @@ import {
  * `parentAbsolutePath` 和 `resourceAbsolutePath` 只供 Foundation I/O 组合使用，禁止
  * 写入可移植记录、错误或日志。Node.js 未暴露 `openat`，因此目标路径名竞态边界与
  * `RootedDirectory` 保持一致。
+ *
+ * 文件末尾的三个函数供各耐久原语共用（写一次，1.4.5）：六种打开拒绝的原因名，以及调用或关闭
+ * 一次句柄时只接住本类错误、其余原样上抛的骨架。把本类的原因归成哪个原语原因、报在哪条路径上，
+ * 仍由每个原语自己说。
  */
 
 /** 父目录句柄打开、复验、目标观察、同步或关闭失败的分类。 */
@@ -403,5 +407,66 @@ export class RootedResourceParentHandle {
 
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
+  }
+}
+
+/** 打开时的六种拒绝：各耐久原语都用与本类相同的原因名报出。 */
+type RootedResourceParentOpenRefusal = Extract<
+  RootedResourceParentHandleErrorReason,
+  | "input"
+  | "root-scope"
+  | "parent-not-found"
+  | "parent-symlink"
+  | "parent-not-directory"
+  | "parent-open-failure"
+>;
+
+/**
+ * 打开父目录句柄的失败是六种拒绝之一时返回它的原因名；其余（打开途中父目录变了）返回
+ * `undefined`，由调用方按自己的口径归类。
+ */
+export function parentOpenRefusal(
+  error: RootedResourceParentHandleError,
+): RootedResourceParentOpenRefusal | undefined {
+  switch (error.reason) {
+    case "input":
+    case "root-scope":
+    case "parent-not-found":
+    case "parent-symlink":
+    case "parent-not-directory":
+    case "parent-open-failure":
+      return error.reason;
+    default:
+      return undefined;
+  }
+}
+
+/** 调用一次父目录句柄：本类的错误交给 `translate` 抛出调用方自己的错误，别的错误原样上抛。 */
+export async function translateParentHandleError<T>(
+  run: () => Promise<T>,
+  translate: (error: RootedResourceParentHandleError) => never,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) translate(error);
+    throw error;
+  }
+}
+
+/**
+ * 关闭父目录句柄：成功返回 `undefined`；本类的错误由 `describe` 换成调用方自己的错误后返回，
+ * 是否成为主错误由调用方决定；别的错误原样上抛。
+ */
+export async function closeParentHandle<E>(
+  parent: RootedResourceParentHandle,
+  describe: (error: RootedResourceParentHandleError) => E,
+): Promise<E | undefined> {
+  try {
+    await parent.close();
+    return undefined;
+  } catch (error: unknown) {
+    if (error instanceof RootedResourceParentHandleError) return describe(error);
+    throw error;
   }
 }

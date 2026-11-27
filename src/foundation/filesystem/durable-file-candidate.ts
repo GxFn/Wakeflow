@@ -12,7 +12,7 @@ import { DURABLE_ATOMIC_FILE_MAXIMUM_BYTES } from "./durable-atomic-file-write-c
 import {
   createFileNodeSnapshot,
   type FileNodeSnapshot,
-  sameFileNodeIdentity,
+  sameFileAfterLinkChange,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
@@ -20,7 +20,7 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
-  RootedResourceParentHandleError,
+  translateParentHandleError,
 } from "./rooted-resource-parent-handle.js";
 
 /**
@@ -220,41 +220,33 @@ async function snapshotHandle(
   }
 }
 
-async function assertParentCurrent(
+function assertParentCurrent(
   parent: RootedResourceParentHandle,
   reason: "parent" | "candidate-changed",
   path: "$resourcePath" | "$candidate",
-): Promise<void> {
-  try {
-    await parent.assertCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) fail(reason, path, error);
-    throw error;
-  }
+): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.assertCurrent(),
+    (error) => fail(reason, path, error),
+  );
 }
 
-async function inspectParentTarget(
+function inspectParentTarget(
   parent: RootedResourceParentHandle,
   reason: "parent" | "candidate-changed",
   path: "$resourcePath" | "$candidate",
 ): Promise<Readonly<FileNodeSnapshot> | null> {
-  try {
-    return await parent.inspectTarget();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) fail(reason, path, error);
-    throw error;
-  }
+  return translateParentHandleError(
+    () => parent.inspectTarget(),
+    (error) => fail(reason, path, error),
+  );
 }
 
-async function syncParent(parent: RootedResourceParentHandle): Promise<void> {
-  try {
-    await parent.sync();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      fail("durability-failure", "$candidate", error);
-    }
-    throw error;
-  }
+function syncParent(parent: RootedResourceParentHandle): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.sync(),
+    (error) => fail("durability-failure", "$candidate", error),
+  );
 }
 
 async function writeAll(
@@ -351,26 +343,6 @@ async function closeParent(
   }
 }
 
-function sameRetiredCandidateNode(
-  before: Readonly<FileNodeSnapshot>,
-  after: Readonly<FileNodeSnapshot>,
-): boolean {
-  return (
-    sameFileNodeIdentity(before, after) &&
-    before.kind === "file" &&
-    after.kind === "file" &&
-    before.rawMode === after.rawMode &&
-    before.permissionBits === after.permissionBits &&
-    before.linkCount === 1n &&
-    after.linkCount === 0n &&
-    before.userId === after.userId &&
-    before.groupId === after.groupId &&
-    before.specialDeviceId === after.specialDeviceId &&
-    before.byteCount === after.byteCount &&
-    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
-  );
-}
-
 /** 直接创建并同步一个具名、非权威文件候选资源。 */
 export async function createFileCandidateDurably(
   root: RootedDirectory,
@@ -429,17 +401,14 @@ async function performCreate(
       ? verifyBytes(handle, input, options.signal)
       : snapshotHandle(handle, "candidate-changed");
 
-  let parent: RootedResourceParentHandle;
-  try {
-    parent = await RootedResourceParentHandle.open(root, resourcePath);
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
+  const parent = await translateParentHandleError(
+    () => RootedResourceParentHandle.open(root, resourcePath),
+    (error) => {
       if (error.reason === "root-scope") fail("root-scope", "$root", error);
       if (error.reason === "input") fail("input", "$resourcePath", error);
       fail("parent", "$resourcePath", error);
-    }
-    throw error;
-  }
+    },
+  );
   let handle: FileHandle | undefined;
   let created = false;
   let primaryError: unknown;
@@ -529,7 +498,7 @@ async function performCreate(
       }
       await filesystemMutation.unlink(parent.resourceAbsolutePath);
       const retired = await snapshotHandle(handle, "cleanup-failure");
-      if (!sameRetiredCandidateNode(opened, retired)) {
+      if (!sameFileAfterLinkChange(opened, retired, 0n) || opened.linkCount !== 1n) {
         fail("cleanup-failure", "$candidate");
       }
       await parent.sync();

@@ -4,10 +4,9 @@ import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
+  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
-  sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
   type PortableResourcePath,
@@ -161,25 +160,9 @@ function plainRecord(value: unknown, path: string): Readonly<Record<string, unkn
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    failDurableFileCopyCandidate("input", "$expectation.expectedNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      failDurableFileCopyCandidate("input", "$expectation.expectedNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      failDurableFileCopyCandidate("input", "$expectation.expectedNode", error);
-    }
-    throw error;
-  }
-  const node = value as Readonly<FileNodeSnapshot>;
+  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
+    failDurableFileCopyCandidate("input", "$expectation.expectedNode", cause),
+  );
   if (node.kind !== "file") {
     failDurableFileCopyCandidate("input", "$expectation.expectedNode");
   }

@@ -1,9 +1,9 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
-import { types } from "node:util";
 
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
+  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
   FileNodeSnapshotError,
@@ -32,6 +32,9 @@ import {
  * 本类不暴露原始 `FileHandle`，不读取或写入字节，不修改权限，也不执行链接、重命名、
  * 删除或领域恢复。Node.js 未暴露 `openat`，因此路径名竞态边界与 `RootedDirectory`
  * 保持一致。
+ *
+ * 文件末尾的两个函数供各耐久原语共用（写一次，1.4.5）：调用或关闭一次句柄时只接住本类错误、
+ * 其余原样上抛的骨架。把本类的原因归成哪个原语原因、报在哪条路径上，仍由每个原语自己说。
  */
 
 /** 指定资源句柄可以准入的真实节点类型。 */
@@ -100,25 +103,7 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$expectedNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$expectedNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$expectedNode", error);
-    }
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
+  return admitFrozenFileNodeSnapshot(value, (cause) => fail("input", "$expectedNode", cause));
 }
 
 function admitResourceKind(
@@ -416,5 +401,35 @@ export class RootedExactResourceHandle {
 
   async [Symbol.asyncDispose](): Promise<void> {
     await this.close();
+  }
+}
+
+/** 调用一次指定资源句柄：本类的错误交给 `translate` 抛出调用方自己的错误，别的错误原样上抛。 */
+export async function translateExactResourceHandleError<T>(
+  run: () => Promise<T>,
+  translate: (error: RootedExactResourceHandleError) => never,
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error: unknown) {
+    if (error instanceof RootedExactResourceHandleError) translate(error);
+    throw error;
+  }
+}
+
+/**
+ * 关闭指定资源句柄：成功返回 `undefined`；本类的错误由 `describe` 换成调用方自己的错误后返回，
+ * 是否成为主错误由调用方决定；别的错误原样上抛。
+ */
+export async function closeExactResourceHandle<E>(
+  resource: RootedExactResourceHandle,
+  describe: (error: RootedExactResourceHandleError) => E,
+): Promise<E | undefined> {
+  try {
+    await resource.close();
+    return undefined;
+  } catch (error: unknown) {
+    if (error instanceof RootedExactResourceHandleError) return describe(error);
+    throw error;
   }
 }

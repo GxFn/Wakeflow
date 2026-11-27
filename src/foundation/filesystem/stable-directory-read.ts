@@ -1,16 +1,15 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, lstat, opendir, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
-import { types } from "node:util";
 import pLimit from "p-limit";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
+  admitFrozenFileNodeSnapshot,
   createFileNodeSnapshot,
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
@@ -157,25 +156,9 @@ function fail(reason: StableDirectoryReadErrorReason, path: string, cause?: unkn
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$options.expectedNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$options.expectedNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode", error);
-    }
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
+  return admitFrozenFileNodeSnapshot(value, (cause) =>
+    fail("input", "$options.expectedNode", cause),
+  );
 }
 
 function parseOptions(value: unknown): ParsedStableDirectoryReadOptions {

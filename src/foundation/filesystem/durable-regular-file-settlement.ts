@@ -1,20 +1,23 @@
-import { types } from "node:util";
-
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import {
+  admitFrozenFileNodeSnapshot,
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
 import {
+  closeExactResourceHandle,
   RootedExactResourceHandle,
-  RootedExactResourceHandleError,
+  type RootedExactResourceHandleError,
+  translateExactResourceHandleError,
 } from "./rooted-exact-resource-handle.js";
 import {
+  closeParentHandle,
+  parentOpenRefusal,
   RootedResourceParentHandle,
-  RootedResourceParentHandleError,
+  type RootedResourceParentHandleError,
+  translateParentHandleError,
 } from "./rooted-resource-parent-handle.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 
@@ -110,25 +113,9 @@ function assertRoot(value: unknown): asserts value is RootedDirectory {
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$options.expectedNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$options.expectedNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedNode", error);
-    }
-    throw error;
-  }
-  const node = value as Readonly<FileNodeSnapshot>;
+  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
+    fail("input", "$options.expectedNode", cause),
+  );
   if (node.kind === "file" && node.linkCount < 1n) {
     fail("input", "$options.expectedNode");
   }
@@ -165,73 +152,44 @@ function mapParentError(
   if (operation === "sync" && error.reason === "sync-failure") {
     fail("durability-failure", "$resourcePath");
   }
-  if (operation === "open") {
-    if (error.reason === "input") fail("input", "$resourcePath");
-    if (error.reason === "root-scope") fail("root-scope", "$root");
-    if (error.reason === "parent-not-found") {
-      fail("parent-not-found", "$resourcePath");
-    }
-    if (error.reason === "parent-symlink") {
-      fail("parent-symlink", "$resourcePath");
-    }
-    if (error.reason === "parent-not-directory") {
-      fail("parent-not-directory", "$resourcePath");
-    }
-    if (error.reason === "parent-open-failure") {
-      fail("parent-open-failure", "$resourcePath");
-    }
-  }
+  const refusal = operation === "open" ? parentOpenRefusal(error) : undefined;
+  if (refusal !== undefined) fail(refusal, refusal === "root-scope" ? "$root" : "$resourcePath");
   fail("parent-changed", "$resourcePath");
 }
 
-async function openParent(
+function openParent(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
-  try {
-    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentError(error, "open");
-    }
-    throw error;
-  }
+  return translateParentHandleError(
+    () => RootedResourceParentHandle.open(root, resourcePath, "$resourcePath"),
+    (error) => mapParentError(error, "open"),
+  );
 }
 
-async function assertParentCurrent(parent: RootedResourceParentHandle): Promise<void> {
-  try {
-    await parent.assertCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentError(error, "current");
-    }
-    throw error;
-  }
+function assertParentCurrent(
+  parent: RootedResourceParentHandle,
+): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.assertCurrent(),
+    (error) => mapParentError(error, "current"),
+  );
 }
 
-async function syncParent(parent: RootedResourceParentHandle): Promise<void> {
-  try {
-    await parent.sync();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentError(error, "sync");
-    }
-    throw error;
-  }
+function syncParent(parent: RootedResourceParentHandle): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.sync(),
+    (error) => mapParentError(error, "sync"),
+  );
 }
 
-async function closeParent(
+function closeParent(
   parent: RootedResourceParentHandle,
 ): Promise<DurableRegularFileSettlementError | undefined> {
-  try {
-    await parent.close();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      return new DurableRegularFileSettlementError("close-failure", "$resourcePath");
-    }
-    throw error;
-  }
+  return closeParentHandle(
+    parent,
+    () => new DurableRegularFileSettlementError("close-failure", "$resourcePath"),
+  );
 }
 
 function mapResourceError(
@@ -262,65 +220,42 @@ function mapResourceError(
   fail("resource-changed", "$resourcePath");
 }
 
-async function openResource(
+function openResource(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   expectedNode: Readonly<FileNodeSnapshot>,
 ): Promise<RootedExactResourceHandle> {
-  try {
-    return await RootedExactResourceHandle.openRegularFile(
-      root,
-      resourcePath,
-      expectedNode,
-      "$resourcePath",
-    );
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapResourceError(error, "open");
-    }
-    throw error;
-  }
+  return translateExactResourceHandleError(
+    () =>
+      RootedExactResourceHandle.openRegularFile(root, resourcePath, expectedNode, "$resourcePath"),
+    (error) => mapResourceError(error, "open"),
+  );
 }
 
-async function assertResourceCurrent(
+function assertResourceCurrent(
   resource: RootedExactResourceHandle,
   operation: "current" | "settled",
 ): Promise<Readonly<FileNodeSnapshot>> {
-  try {
-    return await resource.assertPathCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapResourceError(error, operation);
-    }
-    throw error;
-  }
+  return translateExactResourceHandleError(
+    () => resource.assertPathCurrent(),
+    (error) => mapResourceError(error, operation),
+  );
 }
 
-async function syncResource(
-  resource: RootedExactResourceHandle,
-): Promise<Readonly<FileNodeSnapshot>> {
-  try {
-    return await resource.syncOpenedNode();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapResourceError(error, "sync");
-    }
-    throw error;
-  }
+function syncResource(resource: RootedExactResourceHandle): Promise<Readonly<FileNodeSnapshot>> {
+  return translateExactResourceHandleError(
+    () => resource.syncOpenedNode(),
+    (error) => mapResourceError(error, "sync"),
+  );
 }
 
-async function closeResource(
+function closeResource(
   resource: RootedExactResourceHandle,
 ): Promise<DurableRegularFileSettlementError | undefined> {
-  try {
-    await resource.close();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      return new DurableRegularFileSettlementError("close-failure", "$resourcePath");
-    }
-    throw error;
-  }
+  return closeExactResourceHandle(
+    resource,
+    () => new DurableRegularFileSettlementError("close-failure", "$resourcePath"),
+  );
 }
 
 /**

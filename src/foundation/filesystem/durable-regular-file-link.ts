@@ -1,29 +1,20 @@
-import { types } from "node:util";
-
-import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
-import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
+import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
+import { sourceTransitionSteps } from "./durable-source-transition-steps.js";
 import {
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
-  sameFileNodeIdentity,
+  sameFileAfterLinkChange,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
-import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-} from "./portable-resource-path.js";
+import type { PortableResourcePath } from "./portable-resource-path.js";
 import { isRootedDirectory, type RootedDirectory } from "./rooted-directory.js";
 import {
   RootedExactResourceHandle,
-  RootedExactResourceHandleError,
+  type RootedExactResourceHandleError,
+  translateExactResourceHandleError,
 } from "./rooted-exact-resource-handle.js";
-import {
-  RootedResourceParentHandle,
-  RootedResourceParentHandleError,
-} from "./rooted-resource-parent-handle.js";
+import type { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
 
 /**
  * Wakeflow Foundation / Filesystem：普通文件的不替换目标持久化硬链接。
@@ -123,201 +114,29 @@ export class DurableRegularFileLinkError extends Error {
   }
 }
 
-interface ParsedOptions {
-  readonly expectedSourceNode: Readonly<FileNodeSnapshot>;
-  readonly signal: AbortSignal | undefined;
-}
-
-type ResourceErrorPath = "$sourceResourcePath" | "$destinationResourcePath";
+// 选项、父目录与源句柄的各步与重命名是同一份（durable-source-transition-steps.ts）。
+const {
+  parseResourcePath,
+  parseOptions,
+  openResourceParent,
+  assertParentCurrent,
+  inspectParentTarget,
+  syncParent,
+  closeParent,
+  assertSourceCurrent,
+  inspectCommittedSource,
+  closeSource,
+} = sourceTransitionSteps(DurableRegularFileLinkError);
 
 function fail(reason: DurableRegularFileLinkErrorReason, path: string, cause?: unknown): never {
   throw new DurableRegularFileLinkError(reason, path, cause === undefined ? undefined : { cause });
-}
-
-function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableResourcePath {
-  try {
-    return parsePortableResourcePath(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path, error);
-    throw error;
-  }
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");
 }
 
-function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$options.expectedSourceNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$options.expectedSourceNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$options.expectedSourceNode", error);
-    }
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
-}
-
-function parseOptions(value: unknown): Readonly<ParsedOptions> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$options", error);
-    throw error;
-  }
-  const allowed = new Set(["expectedSourceNode", "signal"]);
-  if (
-    !Object.hasOwn(record, "expectedSourceNode") ||
-    Object.keys(record).some((key) => !allowed.has(key))
-  ) {
-    fail("input", "$options");
-  }
-  const signal = record.signal;
-  if (signal !== undefined && !isAbortSignal(signal)) {
-    fail("input", "$options.signal");
-  }
-  return Object.freeze({
-    expectedSourceNode: parseExpectedNode(record.expectedSourceNode),
-    signal,
-  });
-}
-
-function mapParentHandleError(
-  error: RootedResourceParentHandleError,
-  operation: "open" | "current" | "inspect" | "sync",
-  errorPath: ResourceErrorPath,
-  inspectionReason?: "destination-inspection-failure" | "commit-uncertain",
-): never {
-  if (operation === "sync" && error.reason === "sync-failure") {
-    fail("durability-failure", errorPath);
-  }
-  if (operation === "inspect" && error.reason === "target-inspection-failure") {
-    fail(inspectionReason ?? "destination-inspection-failure", errorPath);
-  }
-  if (operation === "open") {
-    if (error.reason === "input") fail("input", errorPath);
-    if (error.reason === "root-scope") fail("root-scope", errorPath);
-    if (error.reason === "parent-not-found") {
-      fail("parent-not-found", errorPath);
-    }
-    if (error.reason === "parent-symlink") {
-      fail("parent-symlink", errorPath);
-    }
-    if (error.reason === "parent-not-directory") {
-      fail("parent-not-directory", errorPath);
-    }
-    if (error.reason === "parent-open-failure") {
-      fail("parent-open-failure", errorPath);
-    }
-  }
-  // 提交后的 inspect 与 sync 遇到父目录漂移时，不能读作干净的提交前拒绝。
-  if (
-    (operation === "inspect" && inspectionReason === "commit-uncertain") ||
-    operation === "sync"
-  ) {
-    fail("commit-uncertain", errorPath);
-  }
-  fail("parent-changed", errorPath);
-}
-
-async function openResourceParent(
-  root: RootedDirectory,
-  resourcePath: PortableResourcePath,
-  errorPath: ResourceErrorPath,
-): Promise<RootedResourceParentHandle> {
-  try {
-    return await RootedResourceParentHandle.open(root, resourcePath, errorPath);
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "open", errorPath);
-    }
-    throw error;
-  }
-}
-
-async function assertParentCurrent(
-  parent: RootedResourceParentHandle,
-  errorPath: ResourceErrorPath,
-  afterCommit = false,
-): Promise<void> {
-  try {
-    await parent.assertCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      if (afterCommit) fail("commit-uncertain", errorPath, error);
-      mapParentHandleError(error, "current", errorPath);
-    }
-    throw error;
-  }
-}
-
-async function inspectParentTarget(
-  parent: RootedResourceParentHandle,
-  errorPath: ResourceErrorPath,
-  reason: "destination-inspection-failure" | "commit-uncertain",
-): Promise<Readonly<FileNodeSnapshot> | null> {
-  try {
-    return await parent.inspectTarget();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "inspect", errorPath, reason);
-    }
-    throw error;
-  }
-}
-
-async function syncParent(
-  parent: RootedResourceParentHandle,
-  errorPath: ResourceErrorPath,
-): Promise<void> {
-  try {
-    await parent.sync();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "sync", errorPath);
-    }
-    throw error;
-  }
-}
-
-async function closeParent(
-  parent: RootedResourceParentHandle,
-  errorPath: ResourceErrorPath,
-): Promise<DurableRegularFileLinkError | undefined> {
-  try {
-    await parent.close();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      return new DurableRegularFileLinkError(
-        error.reason === "close-failure" ? "close-failure" : "parent-changed",
-        errorPath,
-      );
-    }
-    throw error;
-  }
-}
-
-function mapExactSourceError(
-  error: RootedExactResourceHandleError,
-  operation: "open" | "current" | "inspect-after-commit",
-): never {
-  if (operation === "inspect-after-commit") {
-    fail("commit-uncertain", "$destinationResourcePath");
-  }
-  if (operation === "current") fail("source-changed", "$sourceResourcePath");
+function mapExactSourceOpenError(error: RootedExactResourceHandleError): never {
   if (error.reason === "input") fail("input", "$sourceResourcePath");
   if (error.reason === "root-scope") fail("root-scope", "$sourceResourcePath");
   if (error.reason === "resource-not-found") {
@@ -335,81 +154,20 @@ function mapExactSourceError(
   fail("source-changed", "$sourceResourcePath");
 }
 
-async function openExactSource(
+function openExactSource(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
   expected: Readonly<FileNodeSnapshot>,
 ): Promise<RootedExactResourceHandle> {
-  try {
-    return await RootedExactResourceHandle.openRegularFile(
-      root,
-      resourcePath,
-      expected,
-      "$sourceResourcePath",
-    );
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapExactSourceError(error, "open");
-    }
-    throw error;
-  }
-}
-
-async function assertSourceCurrent(source: RootedExactResourceHandle): Promise<void> {
-  try {
-    await source.assertPathCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapExactSourceError(error, "current");
-    }
-    throw error;
-  }
-}
-
-async function inspectCommittedSource(
-  source: RootedExactResourceHandle,
-): Promise<Readonly<FileNodeSnapshot>> {
-  try {
-    return await source.inspectOpenedNode();
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      mapExactSourceError(error, "inspect-after-commit");
-    }
-    throw error;
-  }
-}
-
-async function closeSource(
-  source: RootedExactResourceHandle,
-): Promise<DurableRegularFileLinkError | undefined> {
-  try {
-    await source.close();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof RootedExactResourceHandleError) {
-      return new DurableRegularFileLinkError("close-failure", "$sourceResourcePath");
-    }
-    throw error;
-  }
-}
-
-function sameLinkedNode(
-  before: Readonly<FileNodeSnapshot>,
-  after: Readonly<FileNodeSnapshot>,
-  expectedLinkCount: bigint,
-): boolean {
-  return (
-    sameFileNodeIdentity(before, after) &&
-    before.kind === "file" &&
-    after.kind === "file" &&
-    before.rawMode === after.rawMode &&
-    before.permissionBits === after.permissionBits &&
-    after.linkCount === expectedLinkCount &&
-    before.userId === after.userId &&
-    before.groupId === after.groupId &&
-    before.specialDeviceId === after.specialDeviceId &&
-    before.byteCount === after.byteCount &&
-    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
+  return translateExactResourceHandleError(
+    () =>
+      RootedExactResourceHandle.openRegularFile(
+        root,
+        resourcePath,
+        expected,
+        "$sourceResourcePath",
+      ),
+    mapExactSourceOpenError,
   );
 }
 
@@ -442,7 +200,7 @@ async function inspectLinkedPair(
   }
   const opened = await inspectCommittedSource(source);
   if (
-    !sameLinkedNode(source.initialNodeSnapshot, opened, linkedPairLinkCount) ||
+    !sameFileAfterLinkChange(source.initialNodeSnapshot, opened, linkedPairLinkCount) ||
     !sameFileNodeSnapshot(opened, sourceNode) ||
     !sameFileNodeSnapshot(opened, destinationNode)
   ) {

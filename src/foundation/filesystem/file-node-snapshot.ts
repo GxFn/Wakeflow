@@ -1,4 +1,5 @@
 import { constants as fileSystemConstants } from "node:fs";
+import { types } from "node:util";
 
 import {
   PassiveOwnDataError,
@@ -22,6 +23,9 @@ import {
  *
  * 访问时间会因读取而变化，创建时间的跨平台语义也不适合作为 Wakeflow 稳定性边界，
  * 因此二者不进入快照；`mtimeNs` 与 `ctimeNs` 继续保留精确的 `bigint` 值。
+ *
+ * 各耐久原语共用的两件事也写在这里（写一次，1.4.5）：调用方给出的节点预期的准入，与跨一次
+ * 硬链接变化的比较。要哪个链接数、预期不合格时报哪个错误，仍由调用方说。
  */
 
 /** Wakeflow 需要显式观察的本地文件系统节点类型。 */
@@ -341,5 +345,54 @@ export function sameFileNodeSnapshot(left: FileNodeSnapshot, right: FileNodeSnap
     admittedLeft.byteCount === admittedRight.byteCount &&
     admittedLeft.modifiedAtNanoseconds === admittedRight.modifiedAtNanoseconds &&
     admittedLeft.changedAtNanoseconds === admittedRight.changedAtNanoseconds
+  );
+}
+
+/**
+ * 准入调用方给的节点预期：冻结、不是 Proxy、与自身逐项相同的完整快照。不满足时调用 `reject`
+ * 抛调用方自己的输入错误；快照比较本身拒绝它时，比较的错误作为 `reject` 的 `cause`。
+ */
+export function admitFrozenFileNodeSnapshot(
+  value: unknown,
+  reject: (cause?: FileNodeSnapshotError) => never,
+): Readonly<FileNodeSnapshot> {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    types.isProxy(value) ||
+    !Object.isFrozen(value)
+  ) {
+    reject();
+  }
+  try {
+    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) reject();
+  } catch (error: unknown) {
+    if (error instanceof FileNodeSnapshotError) reject(error);
+    throw error;
+  }
+  return value as Readonly<FileNodeSnapshot>;
+}
+
+/**
+ * 跨一次硬链接变化（多链接一个名字或删掉一个名字）仍是同一个普通文件：身份、权限、属主、大小与
+ * 修改时间都未变，链接数变成 `linkCount`。状态变更时间随链接数变化，不比较。
+ */
+export function sameFileAfterLinkChange(
+  before: FileNodeSnapshot,
+  after: FileNodeSnapshot,
+  linkCount: bigint,
+): boolean {
+  return (
+    sameFileNodeIdentity(before, after) &&
+    before.kind === "file" &&
+    after.kind === "file" &&
+    before.rawMode === after.rawMode &&
+    before.permissionBits === after.permissionBits &&
+    after.linkCount === linkCount &&
+    before.userId === after.userId &&
+    before.groupId === after.groupId &&
+    before.specialDeviceId === after.specialDeviceId &&
+    before.byteCount === after.byteCount &&
+    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
   );
 }

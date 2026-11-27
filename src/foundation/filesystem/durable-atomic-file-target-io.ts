@@ -16,8 +16,11 @@ import {
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import {
+  closeParentHandle,
+  parentOpenRefusal,
   RootedResourceParentHandle,
-  RootedResourceParentHandleError,
+  type RootedResourceParentHandleError,
+  translateParentHandleError,
 } from "./rooted-resource-parent-handle.js";
 import { readStableFileDigest, StableFileReadError } from "./stable-file-read.js";
 
@@ -33,63 +36,37 @@ function mapParentHandleError(
   if (operation === "inspect" && error.reason === "target-inspection-failure") {
     fail("target-inspection-failure", "$resourcePath");
   }
-  if (operation === "open") {
-    if (error.reason === "input") fail("input", "$resourcePath");
-    if (error.reason === "root-scope") fail("root-scope", "$resourcePath");
-    if (error.reason === "parent-not-found") {
-      fail("parent-not-found", "$resourcePath");
-    }
-    if (error.reason === "parent-symlink") {
-      fail("parent-symlink", "$resourcePath");
-    }
-    if (error.reason === "parent-not-directory") {
-      fail("parent-not-directory", "$resourcePath");
-    }
-    if (error.reason === "parent-open-failure") {
-      fail("parent-open-failure", "$resourcePath");
-    }
-  }
+  const refusal = operation === "open" ? parentOpenRefusal(error) : undefined;
+  if (refusal !== undefined) fail(refusal, "$resourcePath");
   fail("parent-changed", "$resourcePath");
 }
 
-export async function openDurableAtomicFileTargetParent(
+export function openDurableAtomicFileTargetParent(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
-  try {
-    return await RootedResourceParentHandle.open(root, resourcePath, "$resourcePath");
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "open");
-    }
-    throw error;
-  }
+  return translateParentHandleError(
+    () => RootedResourceParentHandle.open(root, resourcePath, "$resourcePath"),
+    (error) => mapParentHandleError(error, "open"),
+  );
 }
 
 export async function assertDurableAtomicFileTargetParentCurrent(
   parent: RootedResourceParentHandle,
 ): Promise<void> {
-  try {
-    await parent.assertCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "current");
-    }
-    throw error;
-  }
+  await translateParentHandleError(
+    () => parent.assertCurrent(),
+    (error) => mapParentHandleError(error, "current"),
+  );
 }
 
-async function inspectDurableAtomicFileTarget(
+function inspectDurableAtomicFileTarget(
   parent: RootedResourceParentHandle,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
-  try {
-    return await parent.inspectTarget();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "inspect");
-    }
-    throw error;
-  }
+  return translateParentHandleError(
+    () => parent.inspectTarget(),
+    (error) => mapParentHandleError(error, "inspect"),
+  );
 }
 
 export async function assertDurableAtomicFileTargetAbsent(
@@ -103,31 +80,23 @@ export async function assertDurableAtomicFileTargetAbsent(
 export async function syncDurableAtomicFileTargetParent(
   parent: RootedResourceParentHandle,
 ): Promise<void> {
-  try {
-    await parent.sync();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      mapParentHandleError(error, "sync");
-    }
-    throw error;
-  }
+  await translateParentHandleError(
+    () => parent.sync(),
+    (error) => mapParentHandleError(error, "sync"),
+  );
 }
 
-export async function closeDurableAtomicFileTargetParent(
+export function closeDurableAtomicFileTargetParent(
   parent: RootedResourceParentHandle,
 ): Promise<DurableAtomicFileWriteError | undefined> {
-  try {
-    await parent.close();
-    return undefined;
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      return new DurableAtomicFileWriteError(
+  return closeParentHandle(
+    parent,
+    (error) =>
+      new DurableAtomicFileWriteError(
         error.reason === "close-failure" ? "close-failure" : "parent-changed",
         "$resourcePath",
-      );
-    }
-    throw error;
-  }
+      ),
+  );
 }
 
 export async function assertExpectedDurableAtomicFileTarget(

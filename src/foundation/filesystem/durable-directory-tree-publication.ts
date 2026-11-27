@@ -10,8 +10,8 @@ import {
 } from "./durable-directory-tree-candidate.js";
 import { DurableResourceRenameError, renameResourceDurably } from "./durable-resource-rename.js";
 import {
+  admitFrozenFileNodeSnapshot,
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import {
@@ -135,25 +135,9 @@ function parseOptions(value: unknown): Readonly<ParsedOptions> {
 }
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$candidate/rootNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$candidate/rootNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$candidate/rootNode", error);
-    }
-    throw error;
-  }
-  const node = value as Readonly<FileNodeSnapshot>;
+  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
+    fail("input", "$candidate/rootNode", cause),
+  );
   if (node.kind !== "directory") fail("input", "$candidate/rootNode");
   return node;
 }

@@ -22,7 +22,7 @@ import {
 } from "./durable-file-copy-candidate-contract.js";
 import {
   type FileNodeSnapshot,
-  sameFileNodeIdentity,
+  sameFileAfterLinkChange,
   sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
@@ -34,7 +34,8 @@ import {
 } from "./rooted-directory.js";
 import {
   RootedResourceParentHandle,
-  RootedResourceParentHandleError,
+  type RootedResourceParentHandleError,
+  translateParentHandleError,
 } from "./rooted-resource-parent-handle.js";
 
 const DURABLE_FILE_COPY_CANDIDATE_CHUNK_BYTES = 512 * 1024;
@@ -157,69 +158,56 @@ async function openSource(source: Readonly<RootedResourceSnapshot>): Promise<Fil
   }
 }
 
-async function openDestinationParent(
+function openDestinationParent(
   root: RootedDirectory,
   resourcePath: PortableResourcePath,
 ): Promise<RootedResourceParentHandle> {
-  try {
-    return await RootedResourceParentHandle.open(root, resourcePath, "$candidateResourcePath");
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
+  return translateParentHandleError(
+    () => RootedResourceParentHandle.open(root, resourcePath, "$candidateResourcePath"),
+    (error) => {
       if (error.reason === "input") fail("input", "$candidateResourcePath", error);
       if (error.reason === "root-scope") {
         fail("destination-root-scope", "$destinationRoot", error);
       }
       fail("destination-parent", "$candidateResourcePath", error);
-    }
-    throw error;
-  }
+    },
+  );
 }
 
-async function assertDestinationParentCurrent(
+function failDestinationParent(
+  error: RootedResourceParentHandleError,
+  reason: "destination-parent" | "candidate-changed",
+): never {
+  fail(reason, reason === "destination-parent" ? "$candidateResourcePath" : "$candidate", error);
+}
+
+function assertDestinationParentCurrent(
   parent: RootedResourceParentHandle,
   reason: "destination-parent" | "candidate-changed",
-): Promise<void> {
-  try {
-    await parent.assertCurrent();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      fail(
-        reason,
-        reason === "destination-parent" ? "$candidateResourcePath" : "$candidate",
-        error,
-      );
-    }
-    throw error;
-  }
+): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.assertCurrent(),
+    (error) => failDestinationParent(error, reason),
+  );
 }
 
-async function inspectDestinationTarget(
+function inspectDestinationTarget(
   parent: RootedResourceParentHandle,
   reason: "destination-parent" | "candidate-changed",
 ): Promise<Readonly<FileNodeSnapshot> | null> {
-  try {
-    return await parent.inspectTarget();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      fail(
-        reason,
-        reason === "destination-parent" ? "$candidateResourcePath" : "$candidate",
-        error,
-      );
-    }
-    throw error;
-  }
+  return translateParentHandleError(
+    () => parent.inspectTarget(),
+    (error) => failDestinationParent(error, reason),
+  );
 }
 
-async function syncDestinationParent(parent: RootedResourceParentHandle): Promise<void> {
-  try {
-    await parent.sync();
-  } catch (error: unknown) {
-    if (error instanceof RootedResourceParentHandleError) {
-      fail("durability-failure", "$candidate", error);
-    }
-    throw error;
-  }
+function syncDestinationParent(
+  parent: RootedResourceParentHandle,
+): Promise<Readonly<FileNodeSnapshot>> {
+  return translateParentHandleError(
+    () => parent.sync(),
+    (error) => fail("durability-failure", "$candidate", error),
+  );
 }
 
 async function writeChunk(
@@ -420,26 +408,6 @@ async function closeParent(
   }
 }
 
-function sameRetiredCandidateNode(
-  before: Readonly<FileNodeSnapshot>,
-  after: Readonly<FileNodeSnapshot>,
-): boolean {
-  return (
-    sameFileNodeIdentity(before, after) &&
-    before.kind === "file" &&
-    after.kind === "file" &&
-    before.rawMode === after.rawMode &&
-    before.permissionBits === after.permissionBits &&
-    before.linkCount === 1n &&
-    after.linkCount === 0n &&
-    before.userId === after.userId &&
-    before.groupId === after.groupId &&
-    before.specialDeviceId === after.specialDeviceId &&
-    before.byteCount === after.byteCount &&
-    before.modifiedAtNanoseconds === after.modifiedAtNanoseconds
-  );
-}
-
 /**
  * 按内容预期把一个来源普通文件流式复制为目标根内具名、非权威、已同步的候选文件。
  */
@@ -604,7 +572,7 @@ export async function copyFileToCandidateDurably(
       }
       await filesystemMutation.unlink(parent.resourceAbsolutePath);
       const retired = await snapshotHandle(candidateHandle, "cleanup-failure", "$candidate");
-      if (!sameRetiredCandidateNode(opened, retired)) {
+      if (!sameFileAfterLinkChange(opened, retired, 0n) || opened.linkCount !== 1n) {
         fail("cleanup-failure", "$candidate");
       }
       await parent.sync();

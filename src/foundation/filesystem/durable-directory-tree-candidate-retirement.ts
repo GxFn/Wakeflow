@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
@@ -24,10 +22,9 @@ import {
   unlinkRegularFileExactly,
 } from "./exact-regular-file-unlink.js";
 import {
+  admitFrozenFileNodeSnapshot,
   type FileNodeSnapshot,
-  FileNodeSnapshotError,
   sameFileNodeIdentity,
-  sameFileNodeSnapshot,
 } from "./file-node-snapshot.js";
 import { filesystemMutation } from "./filesystem-mutation.js";
 import {
@@ -184,25 +181,9 @@ function parsePath(value: unknown): PortableResourcePath {
 }
 
 function parseRootNode(value: unknown): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    fail("input", "$candidate/rootNode");
-  }
-  try {
-    if (!sameFileNodeSnapshot(value as FileNodeSnapshot, value as FileNodeSnapshot)) {
-      fail("input", "$candidate/rootNode");
-    }
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) {
-      fail("input", "$candidate/rootNode", error);
-    }
-    throw error;
-  }
-  const node = value as Readonly<FileNodeSnapshot>;
+  const node = admitFrozenFileNodeSnapshot(value, (cause) =>
+    fail("input", "$candidate/rootNode", cause),
+  );
   if (node.kind !== "directory") fail("input", "$candidate/rootNode");
   return node;
 }

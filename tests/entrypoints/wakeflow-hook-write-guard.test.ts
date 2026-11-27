@@ -4,6 +4,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   renderWriteGuardDenial,
@@ -20,6 +21,7 @@ import { CLAUDE_CODE_MANAGED_WRITE_DENY } from "../../src/hosts/claude-code/clau
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 import { disposableRoot } from "../support/temp-root.js";
 
@@ -34,10 +36,11 @@ import { disposableRoot } from "../support/temp-root.js";
 
 type HostId = "codex" | "claude-code";
 
-const PROFILES: Readonly<Record<HostId, unknown>> = Object.freeze({
-  codex: codexWorkspaceHostResourceProfile,
-  "claude-code": claudeCodeWorkspaceHostResourceProfile,
-});
+const PROFILES: Readonly<Record<HostId, Readonly<WakeflowWorkspaceHostResourceProfile>>> =
+  Object.freeze({
+    codex: codexWorkspaceHostResourceProfile,
+    "claude-code": claudeCodeWorkspaceHostResourceProfile,
+  });
 const SESSION_ID = "c1a0de00-1111-4222-8333-444455556666";
 /** 最小配置里四个窗口的标识（`wakeflow-config.fixture.ts`）。 */
 const WINDOWS = Object.freeze({
@@ -54,9 +57,11 @@ interface Fixture {
 }
 
 function writeConfig(workspace: string, config: Record<string, unknown>): void {
-  writeFileSync(path.join(workspace, "wakeflow.config.json"), renderWakeflowConfig(config), {
-    mode: 0o644,
-  });
+  writeFileSync(
+    path.join(workspace, "wakeflow.config.json"),
+    renderWakeflowConfig(parseWakeflowConfig(config)),
+    { mode: 0o644 },
+  );
 }
 
 /** 配置校验器不收的文档（守卫只做结构化读取，认不出的地方要放行）：绕过渲染器原样写出。 */

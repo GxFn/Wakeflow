@@ -13,6 +13,7 @@ import {
   WAKEFLOW_TARGET_RESULT_IMPORT_PUBLIC_TOOL_NAME,
   WAKEFLOW_TARGET_RESULT_REVIEW_INSPECTION_PUBLIC_TOOL_NAME,
 } from "../../src/capabilities/result-review/contract.js";
+import { parseWakeflowDurableIdOfKind } from "../../src/contracts/identity/wakeflow-durable-id.js";
 import { createCodexWakeflowMcpServer } from "../../src/entrypoints/codex-wakeflow-mcp.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
@@ -59,7 +60,9 @@ async function taskPackageForDelivery(
   );
   try {
     const repository = new DemandEventSourcingRepository(demandRoot);
-    const prepared = await repository.findDeliveryPreparedEvent(deliveryId);
+    const prepared = await repository.findDeliveryPreparedEvent(
+      parseWakeflowDurableIdOfKind(deliveryId, "target-delivery"),
+    );
     if (prepared === null) throw new Error("Expected Delivery Prepared Event.");
     const planned = await repository.findTargetTaskPlannedEvent(
       prepared.event.data.envelope.target.taskPackageId,

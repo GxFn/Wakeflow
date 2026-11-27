@@ -11,7 +11,6 @@ import {
 import { canonicalizeJson } from "../foundation/data/canonical-json.js";
 import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
 import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 import type { DemandEventStreamCommitWriter } from "../governance/demand/event-sourcing/demand-event-stream-commit.js";
 import { fail, toWakeflowError, type WakeflowError } from "../kernel/error.js";
 import { createIncidentId, recordIncident } from "../kernel/incident.js";
@@ -25,8 +24,9 @@ import type { WakeflowCallAuthorizer } from "./wakeflow-caller-role-gate.js";
  *
  * 官方 SDK 拥有协议与工具调用生命周期；这里只做三件事：按登记表注册工具、把
  * executor 结果投影为 canonical JSON 并做脱敏与上限检查、把错误收敛为稳定的
- * 错误信封。请求校验用 Wakeflow 自己的运行时校验器（惰性编译），与服务端解析
- * 同一份 Schema、同一套规则。
+ * 错误信封。请求准入不在这里也不在 SDK 里：SDK 原样交出参数，命令外壳做被动 JSON
+ * 解析，切片合同跑唯一一次请求 Schema，失败是结构化的 `invalid-request`（R13，
+ * 2026-11-27 裁定）。
  */
 
 /** 进程级脱敏边界：用户 home 路径永不进入任何公共结果，与各 owner 的根扫描叠加。 */
@@ -42,7 +42,10 @@ export interface WakeflowPublicMcpExecutionContext {
   readonly writer: Readonly<DemandEventStreamCommitWriter> | null;
 }
 
-/** 公共 executor 接收已解析的 wire 值和请求取消信号，返回领域公共结果。 */
+/**
+ * 公共 executor 接收 SDK 原样交出的参数（尚未经 Wakeflow 准入）和请求取消信号，返回领域公共结果；
+ * 被动 JSON 解析与请求 Schema 都在它下面（命令外壳与切片合同；快速 Demand 是它自己的合同）。
+ */
 export type WakeflowPublicMcpExecutor<Result> = (
   value: unknown,
   context: Readonly<WakeflowPublicMcpExecutionContext>,
@@ -195,13 +198,14 @@ async function failedToolResult(
 
 /**
  * 把领域层的无原型JSON快照转换为MCP SDK可移植的标准JSON对象。
- * 文本与structuredContent共享同一Canonical JSON事实，避免两份独立投影漂移。
+ * 文本与structuredContent共享同一Canonical JSON事实，避免两份独立投影漂移；进程脱敏扫的也是这份
+ * 事实（规范化本身已经完成 JSON 准入，不再另走一遍）。
  */
 function successfulToolResult(value: unknown): CallToolResult {
   const text = canonicalizeJson(value, "$result");
   assertCanonicalTextWithinLimit(text, "publicResultBytes", "$result");
-  assertPublicJson(parseJsonValue(value, "$result"), PROCESS_REDACTION_BOUNDARY, "$result");
-  const structuredContent: unknown = JSON.parse(text);
+  const structuredContent: JsonValue = JSON.parse(text);
+  assertPublicJson(structuredContent, PROCESS_REDACTION_BOUNDARY, "$result");
   if (
     structuredContent === null ||
     Array.isArray(structuredContent) ||
@@ -216,34 +220,32 @@ function successfulToolResult(value: unknown): CallToolResult {
 }
 
 /**
- * 给 SDK 的请求校验器提供者：Schema 在注册时准入，Ajv 编译推迟到该工具第一次
- * 被调用，因此注册二十余个工具不再支付编译成本。
+ * 给 SDK 的请求校验器提供者：一律放行，参数原样交给工具回调（`fromJsonSchema` 的第二个参数就是 SDK 留给
+ * 自定义校验的位置）。SDK 校验失败只会回一行纯文本工具错误（"Input validation error: …"），切片合同的
+ * 结构化拒绝（`invalid-request`，`path` 与 `details.schema`，判别联合报选中的那一支，W39）就永远到不了
+ * Agent；所以请求只在 Wakeflow 自己那里准入一次（R13）。`tools/list` 不经校验器：SDK 从同一份 Schema 的
+ * `jsonSchema.input()` 生成目录，字节不变。
  */
-const WAKEFLOW_JSON_SCHEMA_VALIDATOR: jsonSchemaValidator = Object.freeze({
-  getValidator<T>(schema: JsonSchemaType): JsonSchemaValidator<T> {
-    const validate = createRuntimeJsonSchemaValidator<T>(schema);
-    return (input: unknown) => {
-      let json: JsonValue;
-      try {
-        json = parseJsonValue(input, "$request");
-      } catch {
-        return {
-          valid: false,
-          data: undefined,
-          errorMessage: "Wakeflow tool input must be passive JSON.",
-        };
-      }
-      const result = validate(json);
-      return result.ok
-        ? { valid: true, data: result.value, errorMessage: undefined }
-        : {
-            valid: false,
-            data: undefined,
-            errorMessage: `Wakeflow tool input is invalid at ${result.path} (${result.detail}).`,
-          };
-    };
+const WAKEFLOW_PASS_THROUGH_VALIDATOR: jsonSchemaValidator = Object.freeze({
+  getValidator<T>(_schema: JsonSchemaType): JsonSchemaValidator<T> {
+    return (input: unknown) => ({ valid: true, data: input as T, errorMessage: undefined });
   },
 });
+
+/**
+ * 这次调用会不会写：入口唯一的"是否变更"判断，过期制品门（`beforeMutation`）凭它在角色门之后、任何能力
+ * 代码与工作区根之前拒绝。只读工具不写；`mode: "preview"` 与 `operation: "inspect"` 是切片约定的零写形态
+ * （切片的 `scope` 在同样的成员上挑锁，`read` 与这里的"不写"一致）。读的是 SDK 交来的参数的顶层成员；
+ * 请求随后才被准入，Schema 不认的请求即使在这里判错，也只是多走或少走一次过期检查，不会写任何东西。
+ */
+function mayMutate(readOnly: boolean, request: unknown): boolean {
+  if (readOnly) return false;
+  if (request === null || typeof request !== "object") return true;
+  const inspected =
+    ("mode" in request && request.mode === "preview") ||
+    ("operation" in request && request.operation === "inspect");
+  return !inspected;
+}
 
 /**
  * 按登记表向一个官方 MCP Server 注册全部公共工具。
@@ -275,21 +277,15 @@ export function registerWakeflowPublicMcpCatalog(
         description: definition.description,
         inputSchema: fromJsonSchema<unknown>(
           definition.inputSchema as JsonSchemaType,
-          WAKEFLOW_JSON_SCHEMA_VALIDATOR,
+          WAKEFLOW_PASS_THROUGH_VALIDATOR,
         ),
         annotations: definition.annotations,
       },
       async (request: unknown, context) => {
         try {
-          const input = parseJsonValue(request, "$request");
           // 按窗口角色的归属表（ADR-0020 决定 3）：认得出调用方角色而工具不归它时，在任何读写之前拒绝。
-          await authorizeCall?.(definition.name, input, context.mcpReq.signal);
-          const inspected =
-            input !== null &&
-            typeof input === "object" &&
-            (("mode" in input && input.mode === "preview") ||
-              ("operation" in input && input.operation === "inspect"));
-          if (definition.annotations.readOnlyHint !== true && !inspected) beforeMutation?.();
+          await authorizeCall?.(definition.name, request, context.mcpReq.signal);
+          if (mayMutate(definition.annotations.readOnlyHint === true, request)) beforeMutation?.();
           return successfulToolResult(
             await execute(request, Object.freeze({ signal: context.mcpReq.signal, writer })),
           );

@@ -12,9 +12,9 @@ import {
 /**
  * Wakeflow公共MCP的唯一组合根。
  *
- * 官方SDK拥有协议、Schema准入和工具调用生命周期；目录由登记表生成，宿主组合根
- * 只提供固定的 executor 集合。本文件不保存动态registry、不选择下一业务步骤，
- * 也不执行宿主效果。
+ * 官方SDK拥有协议和工具调用生命周期；请求准入归 Wakeflow 自己（SDK 校验器放行，见
+ * `wakeflow-public-mcp-tool.ts`）。目录由登记表生成，宿主组合根只提供固定的 executor 集合。
+ * 本文件不保存动态registry、不选择下一业务步骤，也不执行宿主效果。
  */
 export function createWakeflowPublicMcpServer(
   options: Readonly<CreateWakeflowPublicMcpServerOptions>,

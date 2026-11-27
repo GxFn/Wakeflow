@@ -24,6 +24,9 @@ import {
  * 一次调用固定经过：请求解析、字节上限、去掉 `root` 的请求摘要与隐私扫描、
  * 打开工作区根、建立脱敏边界、由切片打开上下文、执行形状特有的主体、
  * 对结果做脱敏与上限检查、关闭上下文与根。追加形状与效果形状各自只提供主体。
+ *
+ * 公共 MCP 请求在这里第一次被准入（R13）：SDK 的校验器放行、入口不再解析，这里的被动 JSON 解析
+ * 失败即 `invalid-request/not-json`；随后切片的 `parseRequest` 跑唯一一次请求 Schema。
  */
 
 export interface CommandShellSpec<Envelope extends { readonly root: string }, Input, Context> {
@@ -32,9 +35,12 @@ export interface CommandShellSpec<Envelope extends { readonly root: string }, In
   readonly scope: (
     binding: Readonly<CommandShellBinding<Envelope, Input>>,
   ) => "read" | "shared" | "exclusive" | "maintenance";
-  /** 用切片自己的 Schema 解析请求；返回信封与切片输入。 */
+  /**
+   * 用切片自己的 Schema 解析请求；返回信封与切片输入。拿到的是外壳已经被动解析过的 JSON，
+   * 切片不必再解析一遍。
+   */
   readonly parseRequest: (
-    value: unknown,
+    value: JsonValue,
   ) => Readonly<{ readonly envelope: Envelope; readonly input: Input }>;
   /** 打开本次命令需要的上下文（配置、权威、Demand 根、宿主 facade 等）。 */
   readonly open: (workspaceRoot: RootedDirectory, envelope: Readonly<Envelope>) => Promise<Context>;

@@ -16,6 +16,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import {
   type HookObserverCode,
@@ -46,6 +47,7 @@ import {
 } from "../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef } from "../../src/kernel/layout.js";
 import { wakeflowWindowHostBindingRootRef } from "../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import { runGit } from "../support/git-fixture.js";
@@ -76,10 +78,11 @@ const SESSION_IDS: Readonly<Record<HostId, string>> = Object.freeze({
   codex: "019924aa-0000-7000-8000-00000000c0de",
   "claude-code": "c1a0de00-1111-4222-8333-444455556666",
 });
-const PROFILES: Readonly<Record<HostId, unknown>> = Object.freeze({
-  codex: codexWorkspaceHostResourceProfile,
-  "claude-code": claudeCodeWorkspaceHostResourceProfile,
-});
+const PROFILES: Readonly<Record<HostId, Readonly<WakeflowWorkspaceHostResourceProfile>>> =
+  Object.freeze({
+    codex: codexWorkspaceHostResourceProfile,
+    "claude-code": claudeCodeWorkspaceHostResourceProfile,
+  });
 const RECORD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MILLISECOND_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
@@ -99,7 +102,7 @@ function createWorkspace(base: string, name: string): string {
   mkdirSync(path.join(workspace, "Test"), { recursive: true });
   writeFileSync(
     path.join(workspace, "wakeflow.config.json"),
-    renderWakeflowConfig(createMinimalWakeflowConfig()),
+    renderWakeflowConfig(parseWakeflowConfig(createMinimalWakeflowConfig())),
     { mode: 0o644 },
   );
   return workspace;

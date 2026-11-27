@@ -74,6 +74,8 @@ export class DurableDirectoryTreePublicationError extends Error {
   readonly code = "wakeflow-durable-directory-tree-publication" as const;
   readonly reason: DurableDirectoryTreePublicationErrorReason;
   readonly path: string;
+  /** 重命名提交之后的失败：目录树可能已经发布，也可能没有。 */
+  readonly commitUncertain: boolean;
 
   constructor(
     reason: DurableDirectoryTreePublicationErrorReason,
@@ -83,6 +85,7 @@ export class DurableDirectoryTreePublicationError extends Error {
     super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
+    this.commitUncertain = reason === "commit-uncertain" || reason === "durability-failure";
   }
 }
 

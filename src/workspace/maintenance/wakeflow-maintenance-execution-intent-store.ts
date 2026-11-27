@@ -438,14 +438,7 @@ export async function publishWakeflowMaintenanceExecutionIntent(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$intent", error);
       }
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "stage-cleanup-failure" ||
-        error.reason === "close-failure"
-      ) {
-        fail("commit-uncertain", "$intent", error);
-      }
+      if (error.commitUncertain) fail("commit-uncertain", "$intent", error);
       fail("effect-failure", "$intent", error);
     }
     throw error;
@@ -526,14 +519,7 @@ export async function checkpointWakeflowMaintenanceExecutionIntent(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$intent", error);
       }
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "stage-cleanup-failure" ||
-        error.reason === "close-failure"
-      ) {
-        fail("commit-uncertain", "$intent", error);
-      }
+      if (error.commitUncertain) fail("commit-uncertain", "$intent", error);
       fail("effect-failure", "$intent", error);
     }
     throw error;
@@ -587,13 +573,7 @@ export async function retireWakeflowMaintenanceExecutionIntent(
       if (error.reason === "source-changed" || error.reason === "source-not-found") {
         fail("conflict", "$intent", error);
       }
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "close-failure"
-      ) {
-        fail("commit-uncertain", "$intent", error);
-      }
+      if (error.commitUncertain) fail("commit-uncertain", "$intent", error);
       fail("effect-failure", "$intent", error);
     }
     throw error;

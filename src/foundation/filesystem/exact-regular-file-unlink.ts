@@ -103,11 +103,17 @@ export class ExactRegularFileUnlinkError extends Error {
   readonly code = "wakeflow-exact-regular-file-unlink" as const;
   readonly reason: ExactRegularFileUnlinkErrorReason;
   readonly path: string;
+  /** `unlink` 调用之后的失败：路径名可能已经删掉，也可能没有。 */
+  readonly commitUncertain: boolean;
 
   constructor(reason: ExactRegularFileUnlinkErrorReason, path: string, options?: ErrorOptions) {
     super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
+    this.commitUncertain =
+      reason === "commit-uncertain" ||
+      reason === "durability-failure" ||
+      reason === "close-failure";
   }
 }
 

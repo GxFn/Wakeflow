@@ -260,13 +260,7 @@ function mapDirectoryError(
   ) {
     fail("stage-conflict", path);
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("recovery-required", path);
-  }
+  if (error.commitUncertain) fail("recovery-required", path);
   fail("operation-failure", path, error);
 }
 
@@ -438,13 +432,7 @@ function mapManifestWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "root-scope") {
     fail("destination-root-scope", "$demandRoot");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "stage-recovery-required" ||
-    error.reason === "close-failure"
-  ) {
+  if (error.commitUncertain || error.reason === "stage-recovery-required") {
     fail("recovery-required", "$manifest");
   }
   fail("operation-failure", "$manifest", error);

@@ -435,13 +435,7 @@ async function createMissingProjections(
       if (error instanceof DurableAtomicFileWriteError) {
         if (error.reason === "capacity") fail("capacity", "$projectionWrite", error);
         if (error.reason === "root-scope") fail("root-scope", "$root", error);
-        if (
-          error.reason === "commit-uncertain" ||
-          error.reason === "durability-failure" ||
-          error.reason === "stage-cleanup-failure" ||
-          error.reason === "stage-recovery-required" ||
-          error.reason === "close-failure"
-        ) {
+        if (error.commitUncertain || error.reason === "stage-recovery-required") {
           fail("recovery-required", "$projectionWrite", error);
         }
         fail("operation-failure", "$projectionWrite", error);

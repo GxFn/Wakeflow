@@ -504,13 +504,7 @@ export async function createWakeflowWindowHostBindingInStore(
       if (error.reason === "stage-recovery-required") {
         fail("recovery-required", "$binding");
       }
-      if (
-        error.reason === "target-exists" ||
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "stage-cleanup-failure" ||
-        error.reason === "close-failure"
-      ) {
+      if (error.reason === "target-exists" || error.commitUncertain) {
         fail("write", "$binding", "unknown");
       }
       fail("write", "$binding");

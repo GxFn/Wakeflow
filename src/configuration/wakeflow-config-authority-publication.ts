@@ -203,14 +203,7 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "root-scope" || error.reason === "parent-changed") {
     fail("root-scope", "$root");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$resourcePath");
-  }
+  if (error.commitUncertain) fail("commit-uncertain", "$resourcePath");
   fail("publication-failure", "$resourcePath");
 }
 

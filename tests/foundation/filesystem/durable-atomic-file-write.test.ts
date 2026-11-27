@@ -1608,3 +1608,39 @@ test("叶子失败把捕到的系统错误留作 cause（open-items G3）：写�
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("commitUncertain 恰好对结果不确定的四个原因为真；stage-recovery-required 报在写入之前，为假", () => {
+  // 表必须列全原因联合：新加一个原因而不在这里决定它，类型检查就不通过。
+  const expected = {
+    input: false,
+    "root-scope": false,
+    "parent-not-found": false,
+    "parent-symlink": false,
+    "parent-not-directory": false,
+    "parent-open-failure": false,
+    "parent-changed": false,
+    "target-exists": false,
+    "target-inspection-failure": false,
+    "expectation-changed": false,
+    "expectation-read-failure": false,
+    "hash-failure": false,
+    capacity: false,
+    "stage-create-failure": false,
+    "stage-write-failure": false,
+    "stage-sync-failure": false,
+    "stage-changed": false,
+    "publish-failure": false,
+    "commit-uncertain": true,
+    "durability-failure": true,
+    "stage-cleanup-failure": true,
+    "stage-recovery-required": false,
+    "close-failure": true,
+  } as const satisfies Readonly<Record<DurableAtomicFileWriteErrorReason, boolean>>;
+  for (const reason of Object.keys(expected) as DurableAtomicFileWriteErrorReason[]) {
+    equal(
+      new DurableAtomicFileWriteError(reason, "$test").commitUncertain,
+      expected[reason],
+      reason,
+    );
+  }
+});

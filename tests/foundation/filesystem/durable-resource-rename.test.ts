@@ -327,3 +327,35 @@ test("options, paths, and AbortSignal are closed and passively admitted", async 
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("commitUncertain is true exactly for the reasons raised after the rename call", () => {
+  // The table lists the whole reason union: a new reason that is not decided here fails the typecheck.
+  const expected = {
+    input: false,
+    "root-scope": false,
+    "parent-not-found": false,
+    "parent-symlink": false,
+    "parent-not-directory": false,
+    "parent-open-failure": false,
+    "parent-changed": false,
+    "source-not-found": false,
+    "source-symlink": false,
+    "source-not-supported": false,
+    "source-open-failure": false,
+    "source-changed": false,
+    "destination-exists": false,
+    "destination-inspection-failure": false,
+    "cross-device": false,
+    "rename-failure": false,
+    "commit-uncertain": true,
+    "durability-failure": true,
+    "close-failure": true,
+  } as const satisfies Readonly<Record<DurableResourceRenameErrorReason, boolean>>;
+  for (const reason of Object.keys(expected) as DurableResourceRenameErrorReason[]) {
+    equal(
+      new DurableResourceRenameError(reason, "$test").commitUncertain,
+      expected[reason],
+      reason,
+    );
+  }
+});

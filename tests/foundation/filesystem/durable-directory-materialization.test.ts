@@ -595,3 +595,32 @@ test("under umask 077 a failed sync of a standalone new directory's own handle i
   deepEqual(attempted, [Number(lstatSync(path.join(rootPath, "shared")).ino)]);
   equal(statSync(path.join(rootPath, "shared")).isDirectory(), true);
 });
+
+test("commitUncertain is true exactly for the reasons raised after mkdir", () => {
+  // The table lists the whole reason union: a new reason that is not decided here fails the typecheck.
+  const expected = {
+    input: false,
+    "root-scope": false,
+    "parent-not-found": false,
+    "parent-symlink": false,
+    "parent-not-directory": false,
+    "parent-open-failure": false,
+    "parent-changed": false,
+    "target-exists": false,
+    "target-symlink": false,
+    "target-not-directory": false,
+    "target-inspection-failure": false,
+    "create-failure": false,
+    "commit-uncertain": true,
+    "durability-failure": true,
+    "path-changed": false,
+    "close-failure": true,
+  } as const satisfies Readonly<Record<DurableDirectoryMaterializationErrorReason, boolean>>;
+  for (const reason of Object.keys(expected) as DurableDirectoryMaterializationErrorReason[]) {
+    equal(
+      new DurableDirectoryMaterializationError(reason, "$test").commitUncertain,
+      expected[reason],
+      reason,
+    );
+  }
+});

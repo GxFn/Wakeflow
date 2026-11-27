@@ -132,11 +132,21 @@ export class DurableAtomicFileWriteError extends Error {
   readonly code = "wakeflow-durable-atomic-file-write" as const;
   readonly reason: DurableAtomicFileWriteErrorReason;
   readonly path: string;
+  /**
+   * 结果不确定的失败：目标可能已经发布，也可能没有，调用方不能读作“没写”。
+   * `stage-recovery-required` 报在写入开始之前，不在其列。
+   */
+  readonly commitUncertain: boolean;
 
   constructor(reason: DurableAtomicFileWriteErrorReason, path: string, options?: ErrorOptions) {
     super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
+    this.commitUncertain =
+      reason === "commit-uncertain" ||
+      reason === "durability-failure" ||
+      reason === "stage-cleanup-failure" ||
+      reason === "close-failure";
   }
 }
 

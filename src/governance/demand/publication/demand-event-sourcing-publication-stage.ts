@@ -239,13 +239,7 @@ export async function publishDemandStage(
     });
   } catch (error: unknown) {
     if (error instanceof DurableResourceRenameError) {
-      if (
-        error.reason === "commit-uncertain" ||
-        error.reason === "durability-failure" ||
-        error.reason === "close-failure"
-      ) {
-        fail("recovery-required", "$stage");
-      }
+      if (error.commitUncertain) fail("recovery-required", "$stage");
       fail("conflict", "$stage");
     }
     throw error;

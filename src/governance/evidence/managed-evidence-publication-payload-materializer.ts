@@ -238,13 +238,7 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
   ) {
     fail("stage-conflict", "$payload");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("recovery-required", "$payload");
-  }
+  if (error.commitUncertain) fail("recovery-required", "$payload");
   fail("operation-failure", "$payload", error);
 }
 
@@ -349,13 +343,7 @@ function mapProjectionWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "capacity") fail("capacity", "$payload");
   if (error.reason === "root-scope") fail("destination-root-scope", "$demandRoot");
   if (error.reason === "target-exists") fail("stage-conflict", "$payload");
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "stage-recovery-required" ||
-    error.reason === "close-failure"
-  ) {
+  if (error.commitUncertain || error.reason === "stage-recovery-required") {
     fail("recovery-required", "$payload");
   }
   fail("operation-failure", "$payload", error);

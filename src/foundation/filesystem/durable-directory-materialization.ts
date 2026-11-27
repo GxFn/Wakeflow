@@ -147,6 +147,8 @@ export class DurableDirectoryMaterializationError extends Error {
   readonly code = "wakeflow-durable-directory-materialization" as const;
   readonly reason: DurableDirectoryMaterializationErrorReason;
   readonly path: string;
+  /** `mkdir` 之后的失败：目录可能已经建好，也可能没有。 */
+  readonly commitUncertain: boolean;
 
   constructor(
     reason: DurableDirectoryMaterializationErrorReason,
@@ -156,6 +158,10 @@ export class DurableDirectoryMaterializationError extends Error {
     super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
+    this.commitUncertain =
+      reason === "commit-uncertain" ||
+      reason === "durability-failure" ||
+      reason === "close-failure";
   }
 }
 

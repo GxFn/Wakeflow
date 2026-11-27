@@ -181,3 +181,24 @@ test("publication reports a malformed candidate plan as publication input", asyn
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("commitUncertain is true exactly for the reasons raised after the commit rename", () => {
+  // The table lists the whole reason union: a new reason that is not decided here fails the typecheck.
+  const expected = {
+    input: false,
+    "source-changed": false,
+    "source-conflict": false,
+    "destination-exists": false,
+    "cross-device": false,
+    "commit-uncertain": true,
+    "durability-failure": true,
+    "operation-failure": false,
+  } as const satisfies Readonly<Record<DurableDirectoryTreePublicationErrorReason, boolean>>;
+  for (const reason of Object.keys(expected) as DurableDirectoryTreePublicationErrorReason[]) {
+    equal(
+      new DurableDirectoryTreePublicationError(reason, "$test").commitUncertain,
+      expected[reason],
+      reason,
+    );
+  }
+});

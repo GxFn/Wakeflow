@@ -276,13 +276,7 @@ export async function ensureExactPublicationTextFile(
       } else if (error instanceof DurableAtomicFileWriteError) {
         if (error.reason === "capacity") fail("capacity", "$write");
         if (error.reason === "root-scope") fail("root-scope", "$root");
-        if (
-          error.reason === "commit-uncertain" ||
-          error.reason === "durability-failure" ||
-          error.reason === "stage-cleanup-failure" ||
-          error.reason === "stage-recovery-required" ||
-          error.reason === "close-failure"
-        ) {
+        if (error.commitUncertain || error.reason === "stage-recovery-required") {
           fail("recovery-required", "$write");
         }
         fail("operation-failure", "$write", "unknown", error);

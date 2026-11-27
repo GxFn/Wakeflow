@@ -436,3 +436,32 @@ test("options, path, and AbortSignal are closed and passively admitted", async (
     rmSync(rootPath, { recursive: true, force: true });
   }
 });
+
+test("commitUncertain is true exactly for the reasons raised after the unlink call", () => {
+  // The table lists the whole reason union: a new reason that is not decided here fails the typecheck.
+  const expected = {
+    input: false,
+    "root-scope": false,
+    "parent-not-found": false,
+    "parent-symlink": false,
+    "parent-not-directory": false,
+    "parent-open-failure": false,
+    "parent-changed": false,
+    "source-not-found": false,
+    "source-symlink": false,
+    "source-not-file": false,
+    "source-open-failure": false,
+    "source-changed": false,
+    "unlink-failure": false,
+    "commit-uncertain": true,
+    "durability-failure": true,
+    "close-failure": true,
+  } as const satisfies Readonly<Record<ExactRegularFileUnlinkErrorReason, boolean>>;
+  for (const reason of Object.keys(expected) as ExactRegularFileUnlinkErrorReason[]) {
+    equal(
+      new ExactRegularFileUnlinkError(reason, "$test").commitUncertain,
+      expected[reason],
+      reason,
+    );
+  }
+});

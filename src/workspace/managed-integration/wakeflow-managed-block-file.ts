@@ -362,14 +362,7 @@ function mapAtomicError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "stage-recovery-required") {
     fail("recovery-required", "$resourcePath");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$resourcePath");
-  }
+  if (error.commitUncertain) fail("commit-uncertain", "$resourcePath");
   fail("effect-failure", "$resourcePath");
 }
 
@@ -690,13 +683,7 @@ function mapUnlinkError(error: ExactRegularFileUnlinkError): never {
   if (error.reason === "source-changed" || error.reason === "source-not-found") {
     fail("conflict", "$source");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$resourcePath");
-  }
+  if (error.commitUncertain) fail("commit-uncertain", "$resourcePath");
   fail("effect-failure", "$resourcePath");
 }
 

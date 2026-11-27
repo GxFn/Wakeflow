@@ -108,11 +108,17 @@ export class DurableResourceRenameError extends Error {
   readonly code = "wakeflow-durable-resource-rename" as const;
   readonly reason: DurableResourceRenameErrorReason;
   readonly path: string;
+  /** 重命名调用之后的失败：资源可能已经移到目标，也可能没有。 */
+  readonly commitUncertain: boolean;
 
   constructor(reason: DurableResourceRenameErrorReason, path: string, options?: ErrorOptions) {
     super(ERROR_MESSAGES[reason], options);
     this.reason = reason;
     this.path = path;
+    this.commitUncertain =
+      reason === "commit-uncertain" ||
+      reason === "durability-failure" ||
+      reason === "close-failure";
   }
 }
 

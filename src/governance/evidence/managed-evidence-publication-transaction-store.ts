@@ -325,13 +325,7 @@ function mapCreateError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "target-exists") {
     fail("transaction-exists", "$transaction");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "stage-recovery-required" ||
-    error.reason === "close-failure"
-  ) {
+  if (error.commitUncertain || error.reason === "stage-recovery-required") {
     fail("recovery-required", "$transaction");
   }
   fail("operation-failure", "$transaction", error);

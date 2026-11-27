@@ -386,13 +386,7 @@ function mapDirectoryError(error: DurableDirectoryMaterializationError): never {
   if (error.reason === "target-symlink" || error.reason === "target-not-directory") {
     fail("node-policy", "$projectionRoot");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$projectionRoot");
-  }
+  if (error.commitUncertain) fail("commit-uncertain", "$projectionRoot");
   fail("operation-failure", "$projectionRoot", error);
 }
 
@@ -404,14 +398,7 @@ function mapAtomicWriteError(error: DurableAtomicFileWriteError): never {
   if (error.reason === "stage-recovery-required") {
     fail("recovery-required", "$projection");
   }
-  if (
-    error.reason === "commit-uncertain" ||
-    error.reason === "durability-failure" ||
-    error.reason === "stage-cleanup-failure" ||
-    error.reason === "close-failure"
-  ) {
-    fail("commit-uncertain", "$projection");
-  }
+  if (error.commitUncertain) fail("commit-uncertain", "$projection");
   fail("operation-failure", "$projection", error);
 }
 

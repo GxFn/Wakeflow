@@ -187,9 +187,7 @@ export async function publishLedgerRecordStage(
   } catch (error: unknown) {
     if (error instanceof DurableDirectoryTreePublicationError) {
       if (error.reason === "cross-device") fail("root-scope", "$stage", error);
-      if (error.reason === "commit-uncertain" || error.reason === "durability-failure") {
-        fail("recovery-required", "$stage", error);
-      }
+      if (error.commitUncertain) fail("recovery-required", "$stage", error);
       fail("conflict", "$stage", error);
     }
     throw error;

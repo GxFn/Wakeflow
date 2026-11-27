@@ -2,6 +2,7 @@ import type { WakeflowDemandAggregateState as DemandAggregateStateWire } from ".
 import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
 import type { EvidenceKind } from "../../../contracts/vocabulary/evidence-kinds.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import type { UtcInstant } from "../../../foundation/time/utc-instant.js";
 import type { WakeflowWindowHostBindingId } from "../../../workspace/window-runtime/wakeflow-window-host-binding-id.js";
 import type { WakeflowWorkspaceHostId } from "../../../workspace/workspace-host-resource-profile.js";
@@ -447,45 +448,8 @@ export type DemandAggregateStateErrorReason =
   | "relation"
   | "transition";
 
-const ERROR_MESSAGES = {
-  json: "Demand aggregate state is not passive JSON data.",
-  schema: "Demand aggregate state does not satisfy its portable Schema.",
-  identifier: "Demand aggregate state contains an invalid Demand identity.",
-  digest: "Demand aggregate state contains an invalid digest.",
-  "task-package": "Demand aggregate state transition contains an invalid TaskPackage.",
-  "delivery-envelope": "Demand aggregate state transition contains an invalid Delivery Envelope.",
-  "delivery-outcome": "Demand aggregate state transition contains an invalid Delivery Outcome.",
-  "delivery-rearm": "Demand aggregate state transition contains an invalid Delivery Rearm.",
-  "target-result": "Demand aggregate state transition contains an invalid TargetResult.",
-  "controller-review-decision":
-    "Demand aggregate state transition contains an invalid Controller Review Decision.",
-  "controller-product-defect-remediation-authorization":
-    "Demand aggregate state transition contains an invalid Controller Product Defect Remediation Authorization.",
-  "target-result-callback":
-    "Demand aggregate state transition contains an invalid Target Result callback record.",
-  "managed-evidence-manifest":
-    "Demand aggregate state transition contains an invalid Managed Evidence Manifest.",
-  relation: "Demand aggregate target task summaries are inconsistent.",
-  transition: "Demand aggregate lifecycle transition is not admitted.",
-} as const satisfies Readonly<Record<DemandAggregateStateErrorReason, string>>;
-
-export class DemandAggregateStateError extends Error {
-  override readonly name = "DemandAggregateStateError";
-  readonly code = "wakeflow-demand-aggregate-state" as const;
-  readonly reason: DemandAggregateStateErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandAggregateStateErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandAggregateStateError extends ModuleError<DemandAggregateStateErrorReason> {
+  static override readonly code = "wakeflow-demand-aggregate-state";
 }
 
-export function fail(
-  reason: DemandAggregateStateErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandAggregateStateError(reason, path, cause === undefined ? undefined : { cause });
-}
+export const fail: Fail<DemandAggregateStateErrorReason> = failWith(DemandAggregateStateError);

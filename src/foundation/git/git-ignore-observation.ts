@@ -6,6 +6,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -67,28 +68,9 @@ export type GitIgnoreObservationErrorReason =
   | "output-limit"
   | "protocol";
 
-const ERROR_MESSAGES = {
-  input: "Git ignore observation input is invalid.",
-  "root-scope": "Git ignore observation could not establish its rooted scope.",
-  "git-unavailable": "Git ignore observation could not start Git.",
-  "query-failure": "Git ignore observation query failed.",
-  timeout: "Git ignore observation exceeded its execution deadline.",
-  "output-limit": "Git ignore observation exceeded its output budget.",
-  protocol: "Git ignore observation returned an invalid machine record.",
-} as const satisfies Readonly<Record<GitIgnoreObservationErrorReason, string>>;
-
 /** Git ignore 观察失败的稳定、脱敏错误。 */
-export class GitIgnoreObservationError extends Error {
-  override readonly name = "GitIgnoreObservationError";
-  readonly code = "wakeflow-git-ignore-observation" as const;
-  readonly reason: GitIgnoreObservationErrorReason;
-  readonly path: string;
-
-  constructor(reason: GitIgnoreObservationErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class GitIgnoreObservationError extends ModuleError<GitIgnoreObservationErrorReason> {
+  static override readonly code = "wakeflow-git-ignore-observation";
 }
 
 interface ParsedGitIgnoreObservationOptions {
@@ -100,9 +82,7 @@ interface GitCheckIgnoreResult {
   readonly stdout: Buffer;
 }
 
-function fail(reason: GitIgnoreObservationErrorReason, path: string, cause?: unknown): never {
-  throw new GitIgnoreObservationError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<GitIgnoreObservationErrorReason> = failWith(GitIgnoreObservationError);
 
 function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
   if (

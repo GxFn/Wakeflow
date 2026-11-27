@@ -7,6 +7,7 @@ import {
   type Sha256Digest,
   Sha256Error,
 } from "../crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { observePidOwnerSync, type PidOwnedNodeEvidence } from "../node/process-instance.js";
 import { encodeUtf8 } from "../text/utf8.js";
@@ -46,28 +47,8 @@ export type DurableAtomicFileStageAddressErrorReason =
   | "identifier"
   | "not-issued";
 
-const ERROR_MESSAGES = {
-  input: "Durable atomic file stage address input is invalid.",
-  digest: "Durable atomic file stage address digest is invalid.",
-  identifier: "Durable atomic file stage owner identity is invalid.",
-  "not-issued": "Durable atomic file stage address was not issued by this process.",
-} as const satisfies Readonly<Record<DurableAtomicFileStageAddressErrorReason, string>>;
-
-export class DurableAtomicFileStageAddressError extends Error {
-  override readonly name = "DurableAtomicFileStageAddressError";
-  readonly code = "wakeflow-durable-atomic-file-stage-address" as const;
-  readonly reason: DurableAtomicFileStageAddressErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DurableAtomicFileStageAddressErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableAtomicFileStageAddressError extends ModuleError<DurableAtomicFileStageAddressErrorReason> {
+  static override readonly code = "wakeflow-durable-atomic-file-stage-address";
 }
 
 const STAGE_PREFIX = ".wakeflow-atomic-";
@@ -78,17 +59,9 @@ const STAGE_PATTERN =
 const ACTIVE_STAGE_TOKENS = new Set<string>();
 const ISSUED_STAGE_ADDRESSES = new WeakSet<object>();
 
-function fail(
-  reason: DurableAtomicFileStageAddressErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableAtomicFileStageAddressError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableAtomicFileStageAddressErrorReason> = failWith(
+  DurableAtomicFileStageAddressError,
+);
 
 function parseOperation(value: unknown): DurableAtomicFileStageOperation {
   if (value !== "create" && value !== "replace") {

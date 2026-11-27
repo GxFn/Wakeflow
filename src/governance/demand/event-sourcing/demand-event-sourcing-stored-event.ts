@@ -1,4 +1,5 @@
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   computeDemandAggregateStateDigest,
   type DemandAggregateState,
@@ -49,44 +50,13 @@ export type DemandEventSourcingStoredEventErrorReason =
   | "state-version"
   | "state";
 
-const ERROR_MESSAGES = {
-  json: "Demand Event Sourcing stored event is not passive JSON data.",
-  schema: "Demand Event Sourcing stored event envelope is invalid.",
-  event: "Demand Event Sourcing current event is invalid.",
-  revision: "Demand Event Sourcing stored event revision is invalid.",
-  digest: "Demand Event Sourcing stored event digest is invalid.",
-  "state-version": "Demand Event Sourcing stored event state-model version is invalid.",
-  state: "Demand Event Sourcing stored event requires a valid resulting state.",
-} as const satisfies Readonly<Record<DemandEventSourcingStoredEventErrorReason, string>>;
-
-export class DemandEventSourcingStoredEventError extends Error {
-  override readonly name = "DemandEventSourcingStoredEventError";
-  readonly code = "wakeflow-demand-event-sourcing-stored-event" as const;
-  readonly reason: DemandEventSourcingStoredEventErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingStoredEventErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingStoredEventError extends ModuleError<DemandEventSourcingStoredEventErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-stored-event";
 }
 
-function fail(
-  reason: DemandEventSourcingStoredEventErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingStoredEventError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DemandEventSourcingStoredEventErrorReason> = failWith(
+  DemandEventSourcingStoredEventError,
+);
 
 function mapEnvelopeError(error: DemandEventSourcingPersistedEventEnvelopeError): never {
   if (error.reason === "json") fail("json", error.path);

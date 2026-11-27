@@ -5,6 +5,7 @@ import {
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
 import {
@@ -44,43 +45,14 @@ export type WakeflowMaintenanceExecutionPreviewErrorReason =
   | "capability"
   | "contribution";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance execution preview input is invalid.",
-  "shared-preview": "Wakeflow maintenance shared preview is unavailable.",
-  "source-config": "Wakeflow maintenance execution preview source Config is unavailable.",
-  capability: "Wakeflow maintenance execution preview host capability is invalid.",
-  contribution: "Wakeflow maintenance execution preview host contribution is invalid.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionPreviewErrorReason, string>>;
-
 /** 聚合维护 preview 失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceExecutionPreviewError extends Error {
-  override readonly name = "WakeflowMaintenanceExecutionPreviewError";
-  readonly code = "wakeflow-maintenance-execution-preview" as const;
-  readonly reason: WakeflowMaintenanceExecutionPreviewErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowMaintenanceExecutionPreviewErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceExecutionPreviewError extends ModuleError<WakeflowMaintenanceExecutionPreviewErrorReason> {
+  static override readonly code = "wakeflow-maintenance-execution-preview";
 }
 
-function fail(
-  reason: WakeflowMaintenanceExecutionPreviewErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowMaintenanceExecutionPreviewError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowMaintenanceExecutionPreviewErrorReason> = failWith(
+  WakeflowMaintenanceExecutionPreviewError,
+);
 
 /**
  * 宿主贡献拿到的 Config：退出路径一律是当前 Config——要清理的就是它声明的托管面（ADR-0024），

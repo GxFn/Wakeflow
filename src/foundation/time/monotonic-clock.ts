@@ -1,5 +1,7 @@
 import { hrtime } from "node:process";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
+
 /**
  * Wakeflow Foundation / Time：进程内单调时钟来源。
  *
@@ -25,34 +27,17 @@ export type MonotonicMoment = bigint & {
 /** monotonic clock 来源失败的稳定分类。 */
 export type MonotonicClockErrorReason = "clock-type" | "clock-failure" | "clock-result";
 
-const ERROR_MESSAGES = {
-  "clock-type": "Monotonic clock must be a function.",
-  "clock-failure": "Monotonic clock failed while reading a moment.",
-  "clock-result": "Monotonic clock must return non-negative nanoseconds as bigint.",
-} as const satisfies Readonly<Record<MonotonicClockErrorReason, string>>;
-
 /**
  * monotonic clock 来源或结果失败的稳定错误。
  *
  * 错误不会透传注入函数的消息、调用栈、原因链或返回值，也不会把任意原点
  * 数值写入诊断文本。
  */
-export class MonotonicClockError extends Error {
-  override readonly name = "MonotonicClockError";
-  readonly code = "wakeflow-monotonic-clock" as const;
-  readonly reason: MonotonicClockErrorReason;
-  readonly path: string;
-
-  constructor(reason: MonotonicClockErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class MonotonicClockError extends ModuleError<MonotonicClockErrorReason> {
+  static override readonly code = "wakeflow-monotonic-clock";
 }
 
-function fail(reason: MonotonicClockErrorReason, path: string): never {
-  throw new MonotonicClockError(reason, path);
-}
+const fail: Fail<MonotonicClockErrorReason> = failWith(MonotonicClockError);
 
 /**
  * Node.js 默认单调时钟来源，其精度和原点由 `process.hrtime.bigint()` 决定。

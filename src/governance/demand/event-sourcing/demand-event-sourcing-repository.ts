@@ -9,6 +9,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import { computeTaskPackageDigest, type TaskPackage } from "../../tasking/task-package.js";
 import type { DemandTargetTaskState } from "../model/demand-aggregate-state.js";
@@ -201,42 +202,13 @@ export type DemandEventSourcingRepositoryErrorReason =
   | "snapshot"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing Repository input is invalid.",
-  "not-found": "Demand Event Sourcing stream does not exist.",
-  stream: "Demand Event Sourcing stream cannot be rehydrated.",
-  snapshot: "Demand Event Sourcing snapshot cannot be published.",
-  "operation-failure": "Demand Event Sourcing Repository operation failed.",
-} as const satisfies Readonly<Record<DemandEventSourcingRepositoryErrorReason, string>>;
-
-export class DemandEventSourcingRepositoryError extends Error {
-  override readonly name = "DemandEventSourcingRepositoryError";
-  readonly code = "wakeflow-demand-event-sourcing-repository" as const;
-  readonly reason: DemandEventSourcingRepositoryErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingRepositoryErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingRepositoryError extends ModuleError<DemandEventSourcingRepositoryErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-repository";
 }
 
-function fail(
-  reason: DemandEventSourcingRepositoryErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingRepositoryError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DemandEventSourcingRepositoryErrorReason> = failWith(
+  DemandEventSourcingRepositoryError,
+);
 
 function parseSignal(value: unknown): AbortSignal | undefined {
   let record: Readonly<Record<string, unknown>>;

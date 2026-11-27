@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
@@ -87,35 +88,9 @@ export type DurableDirectoryTreeCandidateRetirementErrorReason =
   | "durability-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Directory tree candidate retirement input is invalid.",
-  "root-scope": "Directory tree candidate retirement lost its root scope.",
-  "candidate-conflict":
-    "Directory tree candidate retirement found a non-closed or unknown resource.",
-  "source-changed": "Directory tree candidate retirement source changed before removal.",
-  "retirement-failure": "Directory tree candidate retirement could not remove an exact member.",
-  "commit-uncertain": "Directory tree candidate retirement result could not be proven exact.",
-  "durability-failure":
-    "Directory tree candidate retirement could not synchronize its directory entries.",
-  "close-failure": "Directory tree candidate retirement could not close an exact handle.",
-} as const satisfies Readonly<Record<DurableDirectoryTreeCandidateRetirementErrorReason, string>>;
-
 /** 目录树candidate退休失败时的稳定、脱敏错误。 */
-export class DurableDirectoryTreeCandidateRetirementError extends Error {
-  override readonly name = "DurableDirectoryTreeCandidateRetirementError";
-  readonly code = "wakeflow-durable-directory-tree-candidate-retirement" as const;
-  readonly reason: DurableDirectoryTreeCandidateRetirementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DurableDirectoryTreeCandidateRetirementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableDirectoryTreeCandidateRetirementError extends ModuleError<DurableDirectoryTreeCandidateRetirementErrorReason> {
+  static override readonly code = "wakeflow-durable-directory-tree-candidate-retirement";
 }
 
 interface ParsedOptions {
@@ -136,17 +111,9 @@ interface CapturedCandidateMembers {
   readonly missingFiles: readonly PortableResourcePath[];
 }
 
-function fail(
-  reason: DurableDirectoryTreeCandidateRetirementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableDirectoryTreeCandidateRetirementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableDirectoryTreeCandidateRetirementErrorReason> = failWith(
+  DurableDirectoryTreeCandidateRetirementError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

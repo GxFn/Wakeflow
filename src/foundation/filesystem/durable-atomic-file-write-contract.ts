@@ -7,6 +7,7 @@ import {
   Sha256Error,
 } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { isAbortSignal } from "../node/abort-signal.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import { admitFrozenFileNodeSnapshot, type FileNodeSnapshot } from "./file-node-snapshot.js";
@@ -96,38 +97,9 @@ export type DurableAtomicFileWriteErrorReason =
   | "stage-recovery-required"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable atomic file write input is invalid.",
-  "root-scope": "Atomic file target could not establish its rooted scope.",
-  "parent-not-found": "Atomic file target parent directory does not exist.",
-  "parent-symlink": "Atomic file target parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Atomic file target parent must be a directory.",
-  "parent-open-failure": "Atomic file target parent could not be opened safely.",
-  "parent-changed": "Atomic file target parent changed during the operation.",
-  "target-exists": "Atomic file create target already exists.",
-  "target-inspection-failure": "Atomic file target could not be inspected safely.",
-  "expectation-changed": "Atomic file replace expectation no longer matches the target.",
-  "expectation-read-failure": "Atomic file replace target could not be re-read safely.",
-  "hash-failure": "Atomic file input digest could not be computed safely.",
-  capacity: "Atomic file input exceeds the recoverable stage capacity.",
-  "stage-create-failure": "Private atomic file stage could not be created safely.",
-  "stage-write-failure": "Private atomic file stage could not be written exactly.",
-  "stage-sync-failure": "Private atomic file stage could not be synchronized safely.",
-  "stage-changed": "Private atomic file stage changed before publication.",
-  "publish-failure": "Private atomic file stage could not be published safely.",
-  "commit-uncertain": "Published atomic file target could not be proven exact.",
-  "durability-failure": "Published atomic file directory entry could not be synchronized.",
-  "stage-cleanup-failure": "Private atomic file stage could not be retired safely.",
-  "stage-recovery-required": "Private atomic file stage recovery requires explicit intervention.",
-  "close-failure": "An atomic file write handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableAtomicFileWriteErrorReason, string>>;
-
 /** 耐久单文件写入的稳定、脱敏错误。 */
-export class DurableAtomicFileWriteError extends Error {
-  override readonly name = "DurableAtomicFileWriteError";
-  readonly code = "wakeflow-durable-atomic-file-write" as const;
-  readonly reason: DurableAtomicFileWriteErrorReason;
-  readonly path: string;
+export class DurableAtomicFileWriteError extends ModuleError<DurableAtomicFileWriteErrorReason> {
+  static override readonly code = "wakeflow-durable-atomic-file-write";
   /**
    * 结果不确定的失败：目标可能已经发布，也可能没有，调用方不能读作“没写”。
    * `stage-recovery-required` 报在写入开始之前，不在其列。
@@ -135,9 +107,7 @@ export class DurableAtomicFileWriteError extends Error {
   readonly commitUncertain: boolean;
 
   constructor(reason: DurableAtomicFileWriteErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.commitUncertain =
       reason === "commit-uncertain" ||
       reason === "durability-failure" ||
@@ -170,13 +140,9 @@ export interface DurableAtomicFileInputBytes {
   readonly digest: Sha256Digest;
 }
 
-export function failDurableAtomicFileWrite(
-  reason: DurableAtomicFileWriteErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableAtomicFileWriteError(reason, path, cause === undefined ? undefined : { cause });
-}
+export const failDurableAtomicFileWrite: Fail<DurableAtomicFileWriteErrorReason> = failWith(
+  DurableAtomicFileWriteError,
+);
 
 export function assertDurableAtomicFileRoot(value: unknown): asserts value is RootedDirectory {
   if (

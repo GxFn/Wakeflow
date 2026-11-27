@@ -13,6 +13,7 @@ import {
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
@@ -156,29 +157,9 @@ export type WakeflowMaintenanceExecutionTransactionErrorReason =
   | "recovery-required"
   | "artifact-mismatch";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance execution transaction input is invalid.",
-  "plan-blocked": "Wakeflow maintenance execution plan is blocked.",
-  "plan-stale": "Wakeflow maintenance execution plan is stale.",
-  "source-config": "Wakeflow maintenance execution source Config is invalid.",
-  capability: "Wakeflow maintenance execution host capability is invalid.",
-  gate: "Wakeflow maintenance execution gate failed.",
-  intent: "Wakeflow maintenance execution recovery intent failed.",
-  transaction: "Wakeflow maintenance execution transaction resources have an invalid shape.",
-  step: "Wakeflow maintenance execution step failed.",
-  "terminal-closure": "Wakeflow maintenance execution terminal closure failed.",
-  aborted: "Wakeflow maintenance execution was aborted.",
-  "recovery-required": "Wakeflow maintenance execution requires recovery.",
-  "artifact-mismatch":
-    "Wakeflow maintenance execution was interrupted under another plugin build; recover it with that build.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionTransactionErrorReason, string>>;
-
 /** 聚合 maintenance transaction 失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceExecutionTransactionError extends Error {
-  override readonly name = "WakeflowMaintenanceExecutionTransactionError";
-  readonly code = "wakeflow-maintenance-execution-transaction" as const;
-  readonly reason: WakeflowMaintenanceExecutionTransactionErrorReason;
-  readonly path: string;
+export class WakeflowMaintenanceExecutionTransactionError extends ModuleError<WakeflowMaintenanceExecutionTransactionErrorReason> {
+  static override readonly code = "wakeflow-maintenance-execution-transaction";
   readonly operationId: WakeflowMaintenanceOperationId | null;
   /** `artifact-mismatch` 时写下被中断事务的那一版制品；其余原因为 null。 */
   readonly writerVersion: string | null;
@@ -189,9 +170,7 @@ export class WakeflowMaintenanceExecutionTransactionError extends Error {
     operationId: WakeflowMaintenanceOperationId | null,
     writerVersion: string | null = null,
   ) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path);
     this.operationId = operationId;
     this.writerVersion = writerVersion;
   }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { computeSha256Hex } from "../crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { encodeUtf8 } from "../text/utf8.js";
 
 /**
@@ -41,41 +42,21 @@ export type UuidV4ErrorReason =
   | "factory-result"
   | "derivation-input";
 
-const ERROR_MESSAGES = {
-  format: "UUID v4 must be a canonical lowercase RFC 9562 UUID version 4 string.",
-  "factory-type": "The UUID v4 factory must be a function.",
-  "factory-failure": "The UUID v4 factory failed.",
-  "factory-result":
-    "The UUID v4 factory must return one canonical lowercase RFC 9562 UUID version 4 string.",
-  "derivation-input": "UUID v4 derivation needs a non-empty namespace and NUL-free parts.",
-} as const satisfies Readonly<Record<UuidV4ErrorReason, string>>;
-
 /**
  * UUIDv4 词法与生成失败的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方结构路径；不会回显候选 UUID、生成源
  * 异常、调用栈或原因链。
  */
-export class UuidV4Error extends Error {
-  override readonly name = "UuidV4Error";
-  readonly code = "wakeflow-uuid-v4" as const;
-  readonly reason: UuidV4ErrorReason;
-  readonly path: string;
-
-  constructor(reason: UuidV4ErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class UuidV4Error extends ModuleError<UuidV4ErrorReason> {
+  static override readonly code = "wakeflow-uuid-v4";
 }
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(reason: UuidV4ErrorReason, path: string): never {
-  throw new UuidV4Error(reason, path);
-}
+const fail: Fail<UuidV4ErrorReason> = failWith(UuidV4Error);
 
 function isCanonicalUuidV4(value: unknown): value is string {
   return (

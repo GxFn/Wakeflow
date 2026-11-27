@@ -14,6 +14,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -155,36 +156,13 @@ export type ManagedEvidenceSourceSelectionErrorReason =
   | "time"
   | "content-review";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence source selection input is invalid.",
-  identifier: "Managed evidence source selection contains an invalid typed identity.",
-  path: "Managed evidence source selection contains an invalid portable path.",
-  kind: "Managed evidence kind does not match its source.",
-  source: "Managed evidence source selection must identify one admitted source.",
-  record: "Managed evidence observation source contains an invalid record projection.",
-  url: "Managed evidence link source must be one https URL without credentials.",
-  commit: "Managed evidence commit source contains an invalid object id.",
-  digest: "Managed evidence source contains an invalid digest.",
-  time: "Managed evidence source contains an invalid time.",
-  "content-review": "Managed evidence source selection content review policy is invalid.",
-} as const satisfies Readonly<Record<ManagedEvidenceSourceSelectionErrorReason, string>>;
-
-export class ManagedEvidenceSourceSelectionError extends Error {
-  override readonly name = "ManagedEvidenceSourceSelectionError";
-  readonly code = "wakeflow-managed-evidence-source-selection" as const;
-  readonly reason: ManagedEvidenceSourceSelectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidenceSourceSelectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceSourceSelectionError extends ModuleError<ManagedEvidenceSourceSelectionErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-source-selection";
 }
+
+const fail: Fail<ManagedEvidenceSourceSelectionErrorReason> = failWith(
+  ManagedEvidenceSourceSelectionError,
+);
 
 const SELECTION_FIELDS = Object.freeze(["contentReview", "kind", "source"] as const);
 const MANAGED_PATH_FIELDS = Object.freeze(["kind", "path", "resourceType", "root"] as const);
@@ -246,18 +224,6 @@ const KINDS_BY_SOURCE: Readonly<Record<ManagedEvidenceSource["kind"], readonly E
     link: Object.freeze(["link"] as const),
     commit: Object.freeze(["commit"] as const),
   });
-
-function fail(
-  reason: ManagedEvidenceSourceSelectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidenceSourceSelectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

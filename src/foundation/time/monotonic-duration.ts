@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import type { MonotonicMoment } from "./monotonic-clock.js";
 
 /**
@@ -23,33 +24,16 @@ export type MonotonicDuration = bigint & {
 /** monotonic duration 失败的稳定分类。 */
 export type MonotonicDurationErrorReason = "moment-type" | "moment-order" | "milliseconds";
 
-const ERROR_MESSAGES = {
-  "moment-type": "Monotonic moment must be non-negative nanoseconds as bigint.",
-  "moment-order": "Monotonic end moment must not precede the start moment.",
-  milliseconds: "Monotonic milliseconds must be a non-negative safe integer.",
-} as const satisfies Readonly<Record<MonotonicDurationErrorReason, string>>;
-
 /**
  * 单调时刻差值或时长转换失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和参数路径，不回显时刻、时长或毫秒值。
  */
-export class MonotonicDurationError extends Error {
-  override readonly name = "MonotonicDurationError";
-  readonly code = "wakeflow-monotonic-duration" as const;
-  readonly reason: MonotonicDurationErrorReason;
-  readonly path: string;
-
-  constructor(reason: MonotonicDurationErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class MonotonicDurationError extends ModuleError<MonotonicDurationErrorReason> {
+  static override readonly code = "wakeflow-monotonic-duration";
 }
 
-function fail(reason: MonotonicDurationErrorReason, path: string): never {
-  throw new MonotonicDurationError(reason, path);
-}
+const fail: Fail<MonotonicDurationErrorReason> = failWith(MonotonicDurationError);
 
 function parseMoment(value: unknown, path: string): bigint {
   if (typeof value !== "bigint" || value < 0n) {

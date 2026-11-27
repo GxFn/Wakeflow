@@ -4,6 +4,7 @@ import {
   WakeflowDurableIdError,
 } from "../contracts/identity/wakeflow-durable-id.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -182,37 +183,14 @@ export type WakeflowWorkspaceResourceDeclarationErrorReason =
   | "processing"
   | "compatibility";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow workspace resource declaration is not passive data.",
-  shape: "Wakeflow workspace resource declaration has an invalid shape.",
-  identity: "Wakeflow workspace resource declaration identity is invalid.",
-  family: "Wakeflow workspace resource family is invalid.",
-  owner: "Wakeflow workspace resource owner is invalid.",
-  scope: "Wakeflow workspace resource scope is invalid.",
-  placement: "Wakeflow workspace resource placement is invalid.",
-  tracking: "Wakeflow workspace resource tracking is invalid.",
-  "node-policy": "Wakeflow workspace resource node policy is invalid.",
-  processing: "Wakeflow workspace resource processing contract is invalid.",
-  compatibility: "Wakeflow workspace resource declaration facts conflict.",
-} as const satisfies Readonly<Record<WakeflowWorkspaceResourceDeclarationErrorReason, string>>;
-
 /** Workspace 资源声明准入失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceResourceDeclarationError extends Error {
-  override readonly name = "WakeflowWorkspaceResourceDeclarationError";
-  readonly code = "wakeflow-workspace-resource-declaration" as const;
-  readonly reason: WakeflowWorkspaceResourceDeclarationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWorkspaceResourceDeclarationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWorkspaceResourceDeclarationError extends ModuleError<WakeflowWorkspaceResourceDeclarationErrorReason> {
+  static override readonly code = "wakeflow-workspace-resource-declaration";
 }
+
+const fail: Fail<WakeflowWorkspaceResourceDeclarationErrorReason> = failWith(
+  WakeflowWorkspaceResourceDeclarationError,
+);
 
 const FAMILY_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES);
 const SCOPE_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_SCOPES);
@@ -246,18 +224,6 @@ const DIRECTORY_NODE_POLICY_FIELDS = new Set([
   "existingModePolicy",
 ]);
 const TREE_NODE_POLICY_FIELDS = new Set(["kind", "rootMode", "symlinkPolicy", "executablePolicy"]);
-
-function fail(
-  reason: WakeflowWorkspaceResourceDeclarationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWorkspaceResourceDeclarationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function propertyPath(base: string, key: string): string {
   const escaped = key.replaceAll("~", "~0").replaceAll("/", "~1");

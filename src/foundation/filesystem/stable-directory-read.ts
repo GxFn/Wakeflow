@@ -4,6 +4,7 @@ import nodePath from "node:path";
 import pLimit from "p-limit";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
@@ -80,38 +81,14 @@ export type StableDirectoryReadErrorReason =
   | "source-changed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Stable directory read input is invalid.",
-  "unsupported-platform": "Stable directory read requires Node no-follow directory handles.",
-  "root-scope": "Stable directory read could not establish its rooted scope.",
-  "not-found": "Stable directory read target does not exist.",
-  symlink: "Stable directory read target cannot be a symbolic link.",
-  "not-directory": "Stable directory read target must be a directory.",
-  "expectation-changed": "Stable directory read target no longer matches its expected node.",
-  "too-many-entries": "Directory contains more entries than the caller limit.",
-  "entry-path": "Directory entry cannot form a portable rooted resource path.",
-  "io-failure": "Directory target and entry facts could not be observed safely.",
-  "source-changed": "Directory or one of its entries changed during the read.",
-  "close-failure": "A directory read handle could not be closed safely.",
-} as const satisfies Readonly<Record<StableDirectoryReadErrorReason, string>>;
-
 /**
  * 稳定目录读取的公共错误。
  *
  * 错误不回显物理路径、资源引用、目录项名称、节点元数据、限制值、系统调用、
  * 取消原因或 Node.js 底层原因。
  */
-export class StableDirectoryReadError extends Error {
-  override readonly name = "StableDirectoryReadError";
-  readonly code = "wakeflow-stable-directory-read" as const;
-  readonly reason: StableDirectoryReadErrorReason;
-  readonly path: string;
-
-  constructor(reason: StableDirectoryReadErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class StableDirectoryReadError extends ModuleError<StableDirectoryReadErrorReason> {
+  static override readonly code = "wakeflow-stable-directory-read";
 }
 
 interface ParsedStableDirectoryReadOptions {
@@ -150,9 +127,7 @@ const openRawNameDirectory = opendir as unknown as (
 /** 单次目录项 `lstat` 使用的内部固定并发上限，不属于公开 API。 */
 const STABLE_DIRECTORY_LSTAT_CONCURRENCY = 8;
 
-function fail(reason: StableDirectoryReadErrorReason, path: string, cause?: unknown): never {
-  throw new StableDirectoryReadError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<StableDirectoryReadErrorReason> = failWith(StableDirectoryReadError);
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;

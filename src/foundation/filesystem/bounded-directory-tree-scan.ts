@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import type { FileNodeSnapshot } from "./file-node-snapshot.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import { type RootedDirectory, isRootedDirectory } from "./rooted-directory.js";
@@ -74,37 +75,14 @@ export type BoundedDirectoryTreeScanErrorReason =
   | "source-changed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Bounded directory tree scan input is invalid.",
-  "root-scope": "Directory tree scan could not establish its rooted scope.",
-  "not-found": "Directory tree scan target does not exist.",
-  symlink: "Directory tree scan target cannot be a symbolic link.",
-  "not-directory": "Directory tree scan target must be a directory.",
-  "entry-limit": "Directory tree exceeds the caller total-entry limit.",
-  "depth-limit": "Directory tree exceeds the caller relative-depth limit.",
-  "entry-path": "Directory tree contains a non-portable resource path.",
-  "inspection-failure": "Directory tree node facts could not be inspected safely.",
-  "source-changed": "Directory tree changed while it was being traversed.",
-  "close-failure": "A directory tree scan handle could not be closed safely.",
-} as const satisfies Readonly<Record<BoundedDirectoryTreeScanErrorReason, string>>;
-
 /**
  * 通用目录树扫描的稳定错误。
  *
  * 错误不回显物理根目录、资源引用、目录项名称、节点元数据、限制值、取消原因
  * 或 Node.js/底层原因。
  */
-export class BoundedDirectoryTreeScanError extends Error {
-  override readonly name = "BoundedDirectoryTreeScanError";
-  readonly code = "wakeflow-bounded-directory-tree-scan" as const;
-  readonly reason: BoundedDirectoryTreeScanErrorReason;
-  readonly path: string;
-
-  constructor(reason: BoundedDirectoryTreeScanErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class BoundedDirectoryTreeScanError extends ModuleError<BoundedDirectoryTreeScanErrorReason> {
+  static override readonly code = "wakeflow-bounded-directory-tree-scan";
 }
 
 interface ParsedBoundedDirectoryTreeScanOptions {
@@ -139,13 +117,7 @@ const LOWER_REASON_MAP = {
   >
 >;
 
-function fail(reason: BoundedDirectoryTreeScanErrorReason, path: string, cause?: unknown): never {
-  throw new BoundedDirectoryTreeScanError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<BoundedDirectoryTreeScanErrorReason> = failWith(BoundedDirectoryTreeScanError);
 
 function parseLimit(
   value: unknown,

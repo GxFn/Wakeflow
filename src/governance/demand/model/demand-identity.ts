@@ -26,6 +26,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -84,29 +85,11 @@ export type DemandIdentityErrorReason =
   | "source"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Demand identity input is invalid.",
-  json: "Demand identity is not passive JSON data.",
-  schema: "Demand identity does not satisfy its portable Schema.",
-  identifier: "Demand identity contains an invalid typed identity.",
-  time: "Demand identity contains an invalid creation time.",
-  text: "Demand identity contains non-canonical text.",
-  source: "Demand identity requirement lineage is invalid.",
-  representation: "Demand identity bytes are not its deterministic domain representation.",
-} as const satisfies Readonly<Record<DemandIdentityErrorReason, string>>;
-
-export class DemandIdentityError extends Error {
-  override readonly name = "DemandIdentityError";
-  readonly code = "wakeflow-demand-identity" as const;
-  readonly reason: DemandIdentityErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandIdentityErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandIdentityError extends ModuleError<DemandIdentityErrorReason> {
+  static override readonly code = "wakeflow-demand-identity";
 }
+
+const fail: Fail<DemandIdentityErrorReason> = failWith(DemandIdentityError);
 
 const validateWire = createRuntimeJsonSchemaValidator<DemandIdentityWire>(
   WAKEFLOW_DEMAND_IDENTITY_SCHEMA,
@@ -134,10 +117,6 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
 );
-
-function fail(reason: DemandIdentityErrorReason, path: string, cause?: unknown): never {
-  throw new DemandIdentityError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function parseCanonicalText(value: string, path: string): string {
   if (

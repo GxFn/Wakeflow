@@ -8,6 +8,7 @@ import {
   parseJsonValue,
 } from "../data/json-value.js";
 import { PassiveOwnDataError, parseDenseArray } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 
 /**
  * Wakeflow Foundation / Schema：受信任本地 JSON Schema 的一次编译、多次验证入口。
@@ -47,29 +48,12 @@ export type RuntimeJsonSchemaValidator<Value> = (
 
 export type RuntimeJsonSchemaErrorReason = "schema-input" | "schema-dependency" | "schema-compile";
 
-const ERROR_MESSAGES = {
-  "schema-input": "Runtime JSON Schema input is invalid.",
-  "schema-dependency": "Runtime JSON Schema dependency catalog is invalid.",
-  "schema-compile": "Runtime JSON Schema catalog could not be compiled strictly.",
-} as const satisfies Readonly<Record<RuntimeJsonSchemaErrorReason, string>>;
-
 /** 运行时 Schema 目录构建或编译失败时返回的稳定、脱敏错误。 */
-export class RuntimeJsonSchemaError extends Error {
-  override readonly name = "RuntimeJsonSchemaError";
-  readonly code = "wakeflow-runtime-json-schema" as const;
-  readonly reason: RuntimeJsonSchemaErrorReason;
-  readonly path: string;
-
-  constructor(reason: RuntimeJsonSchemaErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class RuntimeJsonSchemaError extends ModuleError<RuntimeJsonSchemaErrorReason> {
+  static override readonly code = "wakeflow-runtime-json-schema";
 }
 
-function fail(reason: RuntimeJsonSchemaErrorReason, path: string): never {
-  throw new RuntimeJsonSchemaError(reason, path);
-}
+const fail: Fail<RuntimeJsonSchemaErrorReason> = failWith(RuntimeJsonSchemaError);
 
 function schemaObject(
   value: unknown,

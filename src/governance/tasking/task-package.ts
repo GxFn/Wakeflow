@@ -27,6 +27,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -222,32 +223,12 @@ export type TaskPackageErrorReason =
   | "relation"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Task package input is invalid.",
-  json: "Task package is not passive JSON data.",
-  schema: "Task package does not satisfy its portable Schema.",
-  identifier: "Task package contains an invalid typed identity.",
-  digest: "Task package contains an invalid authority digest.",
-  time: "Task package contains an invalid creation time.",
-  text: "Task package contains non-canonical text.",
-  reference: "Task package contains an invalid Ledger authority reference.",
-  relation: "Task package contains inconsistent local relationships.",
-  representation: "Task package bytes are not its deterministic domain representation.",
-} as const satisfies Readonly<Record<TaskPackageErrorReason, string>>;
-
 /** TaskPackage 准入或确定性表示失败时返回的稳定、脱敏错误。 */
-export class TaskPackageError extends Error {
-  override readonly name = "TaskPackageError";
-  readonly code = "wakeflow-task-package" as const;
-  readonly reason: TaskPackageErrorReason;
-  readonly path: string;
-
-  constructor(reason: TaskPackageErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TaskPackageError extends ModuleError<TaskPackageErrorReason> {
+  static override readonly code = "wakeflow-task-package";
 }
+
+const fail: Fail<TaskPackageErrorReason> = failWith(TaskPackageError);
 
 const validateWire = createRuntimeJsonSchemaValidator<TaskPackageWire>(
   WAKEFLOW_TASK_PACKAGE_SCHEMA,
@@ -305,10 +286,6 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
 );
-
-function fail(reason: TaskPackageErrorReason, path: string, cause?: unknown): never {
-  throw new TaskPackageError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function parseCanonicalText(value: string, path: string): string {
   if (

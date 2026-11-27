@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createFileAtomically,
   type DurableAtomicFileReplaceResult,
@@ -110,37 +111,12 @@ export type WakeflowManagedBlockFileErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow managed block file input is invalid.",
-  "unsupported-platform": "Wakeflow managed block file requires POSIX ownership facts.",
-  "root-scope": "Wakeflow managed block file lost its root scope.",
-  "root-policy": "Wakeflow managed block file requires a current-user root.",
-  source: "Wakeflow managed block file source cannot be read stably.",
-  "source-capacity": "Wakeflow managed block file source exceeds its byte budget.",
-  "source-policy": "Wakeflow managed block file source violates its node policy.",
-  envelope: "Wakeflow managed block file envelope is invalid.",
-  "unknown-managed-body": "Wakeflow managed block file body is not an admitted render.",
-  "target-capacity": "Wakeflow managed block file candidate exceeds its byte budget.",
-  conflict: "Wakeflow managed block file source changed before atomic publication.",
-  "recovery-required":
-    "Wakeflow managed block file target has stage residue that requires explicit recovery.",
-  "effect-failure": "Wakeflow managed block file effect failed.",
-  "commit-uncertain": "Wakeflow managed block file commit outcome is uncertain.",
-} as const satisfies Readonly<Record<WakeflowManagedBlockFileErrorReason, string>>;
-
 /** 托管块文件检查或重组失败的稳定、脱敏错误。 */
-export class WakeflowManagedBlockFileError extends Error {
-  override readonly name = "WakeflowManagedBlockFileError";
-  readonly code = "wakeflow-managed-block-file" as const;
-  readonly reason: WakeflowManagedBlockFileErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowManagedBlockFileErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowManagedBlockFileError extends ModuleError<WakeflowManagedBlockFileErrorReason> {
+  static override readonly code = "wakeflow-managed-block-file";
 }
+
+const fail: Fail<WakeflowManagedBlockFileErrorReason> = failWith(WakeflowManagedBlockFileError);
 
 const DEFAULT_MAXIMUM_BYTES = parseByteCount(1024 * 1024, "$managedBlockFile.maximumBytes");
 
@@ -154,14 +130,6 @@ interface SourceReadRequest {
 interface ParsedRequest extends SourceReadRequest {
   readonly currentTargets: readonly Readonly<WakeflowManagedTextEnvelopeTarget>[];
   readonly desiredTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
-}
-
-function fail(reason: WakeflowManagedBlockFileErrorReason, path: string, cause?: unknown): never {
-  throw new WakeflowManagedBlockFileError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {

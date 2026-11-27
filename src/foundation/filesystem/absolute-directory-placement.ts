@@ -2,6 +2,7 @@ import type { BigIntStats } from "node:fs";
 import { lstat } from "node:fs/promises";
 import nodePath from "node:path";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -47,37 +48,15 @@ export type AbsoluteDirectoryPlacementErrorReason =
   | "not-directory"
   | "inspection-failure";
 
-const ERROR_MESSAGES = {
-  input: "Absolute directory placement input is invalid.",
-  symlink: "Absolute directory placement contains a symbolic link.",
-  "not-directory": "Absolute directory placement contains a non-directory node.",
-  "inspection-failure": "Absolute directory placement could not be inspected safely.",
-} as const satisfies Readonly<Record<AbsoluteDirectoryPlacementErrorReason, string>>;
-
 /** 绝对目录位置观察失败时返回的稳定、脱敏错误。 */
-export class AbsoluteDirectoryPlacementError extends Error {
-  override readonly name = "AbsoluteDirectoryPlacementError";
-  readonly code = "wakeflow-absolute-directory-placement" as const;
-  readonly reason: AbsoluteDirectoryPlacementErrorReason;
-  readonly path: string;
-
-  constructor(reason: AbsoluteDirectoryPlacementErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class AbsoluteDirectoryPlacementError extends ModuleError<AbsoluteDirectoryPlacementErrorReason> {
+  static override readonly code = "wakeflow-absolute-directory-placement";
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 
-function fail(reason: AbsoluteDirectoryPlacementErrorReason, path: string, cause?: unknown): never {
-  throw new AbsoluteDirectoryPlacementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<AbsoluteDirectoryPlacementErrorReason> = failWith(AbsoluteDirectoryPlacementError);
 
 function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$directory";

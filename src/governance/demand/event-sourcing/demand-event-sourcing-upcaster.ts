@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { EventSourcingVersionEvolutionError } from "../../../foundation/event-sourcing/event-sourcing-version-evolution.js";
 import {
   DemandEventSourcingEventError,
@@ -25,43 +26,13 @@ export type DemandEventSourcingUpcasterErrorReason =
   | "upcast"
   | "event";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing upcaster input is invalid.",
-  "unsupported-event-type": "Demand Event Sourcing event type is unsupported.",
-  "unsupported-version": "Demand Event Sourcing event version is unsupported.",
-  codec: "Demand Event Sourcing persisted event payload is invalid.",
-  upcast: "Demand Event Sourcing event version evolution failed.",
-  event: "Demand Event Sourcing persisted event cannot become a current event.",
-} as const satisfies Readonly<Record<DemandEventSourcingUpcasterErrorReason, string>>;
-
-export class DemandEventSourcingUpcasterError extends Error {
-  override readonly name = "DemandEventSourcingUpcasterError";
-  readonly code = "wakeflow-demand-event-sourcing-upcaster" as const;
-  readonly reason: DemandEventSourcingUpcasterErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingUpcasterErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingUpcasterError extends ModuleError<DemandEventSourcingUpcasterErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-upcaster";
 }
 
-function fail(
-  reason: DemandEventSourcingUpcasterErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingUpcasterError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DemandEventSourcingUpcasterErrorReason> = failWith(
+  DemandEventSourcingUpcasterError,
+);
 
 /** 版本演进失败按位置与原因归类：事件类型不认、版本不认、编解码失败，其余是升级本身失败。 */
 function failVersionEvolution(error: EventSourcingVersionEvolutionError): never {

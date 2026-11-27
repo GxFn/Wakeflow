@@ -19,6 +19,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -70,49 +71,18 @@ export type DemandEventSourcingPersistedEventEnvelopeErrorReason =
   | "digest"
   | "state-version";
 
-const ERROR_MESSAGES = {
-  json: "Demand Event Sourcing persisted event is not passive JSON data.",
-  schema: "Demand Event Sourcing persisted event envelope does not satisfy its Schema.",
-  identifier: "Demand Event Sourcing persisted event identity is invalid.",
-  time: "Demand Event Sourcing persisted event time is invalid.",
-  revision: "Demand Event Sourcing persisted event revision is invalid.",
-  digest: "Demand Event Sourcing persisted event state digest is invalid.",
-  "state-version": "Demand Event Sourcing persisted event state-model version is invalid.",
-} as const satisfies Readonly<Record<DemandEventSourcingPersistedEventEnvelopeErrorReason, string>>;
-
-export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
-  override readonly name = "DemandEventSourcingPersistedEventEnvelopeError";
-  readonly code = "wakeflow-demand-event-sourcing-persisted-event-envelope" as const;
-  readonly reason: DemandEventSourcingPersistedEventEnvelopeErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingPersistedEventEnvelopeError extends ModuleError<DemandEventSourcingPersistedEventEnvelopeErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-persisted-event-envelope";
 }
+
+const fail: Fail<DemandEventSourcingPersistedEventEnvelopeErrorReason> = failWith(
+  DemandEventSourcingPersistedEventEnvelopeError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<PersistedEventWire>(
   WAKEFLOW_DEMAND_EVENT_SOURCING_STORED_EVENT_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
-
-function fail(
-  reason: DemandEventSourcingPersistedEventEnvelopeErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingPersistedEventEnvelopeError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseId<Kind extends "demand" | "demand-event">(
   value: unknown,

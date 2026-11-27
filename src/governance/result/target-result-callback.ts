@@ -9,6 +9,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -84,28 +85,11 @@ export type TargetResultCallbackErrorReason =
   | "text"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Target Result callback record input is invalid.",
-  identifier: "Target Result callback record contains an invalid identity.",
-  digest: "Target Result callback record contains an invalid digest.",
-  path: "Target Result evidence resolution contains an invalid portable path.",
-  time: "Target Result callback record contains an invalid time.",
-  text: "Target Result callback record contains an invalid prompt.",
-  relation: "Target Result callback record facts are inconsistent.",
-} as const satisfies Readonly<Record<TargetResultCallbackErrorReason, string>>;
-
-export class TargetResultCallbackError extends Error {
-  override readonly name = "TargetResultCallbackError";
-  readonly code = "wakeflow-target-result-callback" as const;
-  readonly reason: TargetResultCallbackErrorReason;
-  readonly path: string;
-
-  constructor(reason: TargetResultCallbackErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TargetResultCallbackError extends ModuleError<TargetResultCallbackErrorReason> {
+  static override readonly code = "wakeflow-target-result-callback";
 }
+
+const fail: Fail<TargetResultCallbackErrorReason> = failWith(TargetResultCallbackError);
 
 const CALLBACK_FIELDS = Object.freeze([
   "bindingDigest",
@@ -130,10 +114,6 @@ const REISSUE_FIELDS = Object.freeze([
 ] as const);
 const RESOLUTION_FIELDS = Object.freeze(["bytes", "digest", "evidenceId", "ref"] as const);
 const MAXIMUM_EVIDENCE_RESOLUTIONS = 64;
-
-function fail(reason: TargetResultCallbackErrorReason, path: string, cause?: unknown): never {
-  throw new TargetResultCallbackError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function exactRecord(
   value: unknown,

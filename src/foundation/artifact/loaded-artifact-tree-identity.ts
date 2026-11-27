@@ -12,6 +12,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -115,37 +116,8 @@ export type LoadedArtifactTreeIdentityErrorReason =
   | "manifest-order"
   | "manifest-totals";
 
-const ERROR_MESSAGES = {
-  input: "Loaded artifact tree identity input is invalid.",
-  "root-scope": "Loaded artifact tree could not establish its root scope.",
-  "entry-limit": "Loaded artifact tree exceeds its physical entry budget.",
-  "depth-limit": "Loaded artifact tree exceeds its relative depth budget.",
-  "file-count": "Loaded artifact tree exceeds its regular-file budget.",
-  "file-bytes": "A loaded artifact file exceeds its byte budget.",
-  "total-bytes": "Loaded artifact tree exceeds its total byte budget.",
-  "ref-bytes": "A loaded artifact ref exceeds its UTF-8 byte budget.",
-  "ref-collision": "Loaded artifact refs collide under portable comparison.",
-  symlink: "Loaded artifact tree cannot contain symbolic links.",
-  "special-node": "Loaded artifact tree can contain only directories and regular files.",
-  "empty-tree": "Loaded artifact tree must contain at least one regular file.",
-  "source-changed": "Loaded artifact tree changed while it was inspected.",
-  "inspection-failure": "Loaded artifact tree could not be inspected safely.",
-  "manifest-shape": "Loaded artifact tree manifest shape is invalid.",
-  "manifest-order": "Loaded artifact tree manifest refs are not canonical.",
-  "manifest-totals": "Loaded artifact tree manifest totals are inconsistent.",
-} as const satisfies Readonly<Record<LoadedArtifactTreeIdentityErrorReason, string>>;
-
-export class LoadedArtifactTreeIdentityError extends Error {
-  override readonly name = "LoadedArtifactTreeIdentityError";
-  readonly code = "wakeflow-loaded-artifact-tree-identity" as const;
-  readonly reason: LoadedArtifactTreeIdentityErrorReason;
-  readonly path: string;
-
-  constructor(reason: LoadedArtifactTreeIdentityErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class LoadedArtifactTreeIdentityError extends ModuleError<LoadedArtifactTreeIdentityErrorReason> {
+  static override readonly code = "wakeflow-loaded-artifact-tree-identity";
 }
 
 interface ParsedIdentityOptions {
@@ -172,13 +144,7 @@ const MANIFEST_FIELDS = Object.freeze([
 
 const FILE_FIELDS = Object.freeze(["bytes", "digest", "executable", "ref"] as const);
 
-function fail(reason: LoadedArtifactTreeIdentityErrorReason, path: string, cause?: unknown): never {
-  throw new LoadedArtifactTreeIdentityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<LoadedArtifactTreeIdentityErrorReason> = failWith(LoadedArtifactTreeIdentityError);
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

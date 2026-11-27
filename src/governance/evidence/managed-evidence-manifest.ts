@@ -34,6 +34,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -172,34 +173,11 @@ export type ManagedEvidenceManifestErrorReason =
   | "ordering"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence manifest input is invalid.",
-  json: "Managed evidence manifest is not passive JSON data.",
-  capacity: "Managed evidence manifest exceeds its metadata capacity.",
-  schema: "Managed evidence manifest does not satisfy its portable Schema.",
-  identifier: "Managed evidence manifest contains an invalid typed identity.",
-  digest: "Managed evidence manifest contains an invalid digest.",
-  time: "Managed evidence manifest contains an invalid capture time.",
-  source: "Managed evidence manifest contains an invalid source.",
-  kind: "Managed evidence manifest kind does not match its source.",
-  payload: "Managed evidence manifest payload identity is inconsistent.",
-  "content-review": "Managed evidence manifest content review is inconsistent.",
-  ordering: "Managed evidence manifest paths are not in canonical order.",
-  representation: "Managed evidence manifest bytes are not its deterministic representation.",
-} as const satisfies Readonly<Record<ManagedEvidenceManifestErrorReason, string>>;
-
-export class ManagedEvidenceManifestError extends Error {
-  override readonly name = "ManagedEvidenceManifestError";
-  readonly code = "wakeflow-managed-evidence-manifest" as const;
-  readonly reason: ManagedEvidenceManifestErrorReason;
-  readonly path: string;
-
-  constructor(reason: ManagedEvidenceManifestErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceManifestError extends ModuleError<ManagedEvidenceManifestErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-manifest";
 }
+
+const fail: Fail<ManagedEvidenceManifestErrorReason> = failWith(ManagedEvidenceManifestError);
 
 type ManifestBasis = Omit<ManagedEvidenceManifest, "manifestDigest">;
 
@@ -225,10 +203,6 @@ const validateWire = createRuntimeJsonSchemaValidator<ManagedEvidenceManifestWir
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(reason: ManagedEvidenceManifestErrorReason, path: string, cause?: unknown): never {
-  throw new ManagedEvidenceManifestError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

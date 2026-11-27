@@ -5,6 +5,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import {
   isPrivateDirectory,
@@ -83,51 +84,15 @@ export type DemandFileEventStoreErrorReason =
   | "cleanup-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Demand File Event Store input is invalid.",
-  "root-scope": "Demand File Event Store root changed during the operation.",
-  "not-initialized": "Demand File Event Store directories are not initialized.",
-  "node-policy": "Demand File Event Store resource violates its private node policy.",
-  capacity: "Demand File Event Store exceeds its bounded capacity.",
-  "stream-invalid": "Demand File Event Store commit stream is invalid.",
-  "stream-changed": "Demand File Event Store commit stream changed during observation.",
-  "candidate-conflict":
-    "Demand File Event Store append candidate differs from the requested commit.",
-  "candidate-busy": "Demand File Event Store append candidate is already in progress.",
-  "concurrency-conflict": "Demand File Event Store expected stream cursor is stale.",
-  "append-identity-conflict":
-    "Demand File Event Store append reuses an immutable commit or event identity.",
-  "append-provenance-conflict":
-    "Demand File Event Store prepared aggregate does not match the persisted stream tail.",
-  "commit-uncertain": "Demand File Event Store commit point cannot be proven exact.",
-  "cleanup-required":
-    "Demand File Event Store committed but candidate retirement requires recovery.",
-  "operation-failure": "Demand File Event Store operation failed.",
-} as const satisfies Readonly<Record<DemandFileEventStoreErrorReason, string>>;
-
-export class DemandFileEventStoreError extends Error {
-  override readonly name = "DemandFileEventStoreError";
-  readonly code = "wakeflow-demand-file-event-store" as const;
-  readonly reason: DemandFileEventStoreErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandFileEventStoreErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandFileEventStoreError extends ModuleError<DemandFileEventStoreErrorReason> {
+  static override readonly code = "wakeflow-demand-file-event-store";
 }
+
+export const failDemandFileEventStore: Fail<DemandFileEventStoreErrorReason> =
+  failWith(DemandFileEventStoreError);
 
 interface DemandFileEventStoreOptions {
   readonly signal: AbortSignal | undefined;
-}
-
-export function failDemandFileEventStore(
-  reason: DemandFileEventStoreErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandFileEventStoreError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 export function parseDemandFileEventStoreOptions(

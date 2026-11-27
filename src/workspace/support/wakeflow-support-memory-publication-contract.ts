@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -43,45 +44,13 @@ export type WakeflowSupportMemoryPublicationErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow support memory publication input is invalid.",
-  "source-invalid": "Wakeflow support memory source cannot be published safely.",
-  capacity: "Wakeflow support memory publication exceeds its byte budget.",
-  conflict: "Wakeflow support memory source changed before atomic publication.",
-  "recovery-required": "Wakeflow support memory publication requires explicit recovery.",
-  "effect-failure": "Wakeflow support memory could not be published safely.",
-  "commit-uncertain": "Published Wakeflow support memory could not be proven exact.",
-} as const satisfies Readonly<Record<WakeflowSupportMemoryPublicationErrorReason, string>>;
-
 /** Support memory 发布与恢复失败的稳定、脱敏错误。 */
-export class WakeflowSupportMemoryPublicationError extends Error {
-  override readonly name = "WakeflowSupportMemoryPublicationError";
-  readonly code = "wakeflow-support-memory-publication" as const;
-  readonly reason: WakeflowSupportMemoryPublicationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowSupportMemoryPublicationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowSupportMemoryPublicationError extends ModuleError<WakeflowSupportMemoryPublicationErrorReason> {
+  static override readonly code = "wakeflow-support-memory-publication";
 }
 
-export function failWakeflowSupportMemoryPublication(
-  reason: WakeflowSupportMemoryPublicationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowSupportMemoryPublicationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failWakeflowSupportMemoryPublication: Fail<WakeflowSupportMemoryPublicationErrorReason> =
+  failWith(WakeflowSupportMemoryPublicationError);
 
 export function parseWakeflowSupportMemoryPublicationRequest(
   value: unknown,

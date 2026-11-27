@@ -4,6 +4,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 
 /**
  * Wakeflow Workspace / Maintenance：维护意图与日志的可选写者戳（C11，计划 §3.6）。
@@ -19,15 +20,11 @@ export interface WakeflowMaintenanceWriter {
 }
 
 /** 写者戳准入失败的稳定、脱敏错误；消费者映射成自己的 `input`。 */
-export class WakeflowMaintenanceWriterError extends Error {
-  override readonly name = "WakeflowMaintenanceWriterError";
-  readonly code = "wakeflow-maintenance-writer" as const;
-  readonly reason = "input" as const;
-  readonly path: string;
+export class WakeflowMaintenanceWriterError extends ModuleError<"input"> {
+  static override readonly code = "wakeflow-maintenance-writer";
 
   constructor(path: string) {
-    super("Wakeflow maintenance writer stamp is invalid.");
-    this.path = path;
+    super("input", path);
   }
 }
 

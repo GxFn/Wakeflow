@@ -1,4 +1,5 @@
 import { WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -27,40 +28,14 @@ export type WakeflowMaintenanceOperationId = string & {
 
 export type WakeflowMaintenanceOperationIdErrorReason = "format" | "factory";
 
-const ERROR_MESSAGES = {
-  format: "Wakeflow maintenance operation ID is invalid.",
-  factory: "Wakeflow maintenance operation ID could not be generated.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceOperationIdErrorReason, string>>;
-
 /** Maintenance operation ID 解析或创建失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceOperationIdError extends Error {
-  override readonly name = "WakeflowMaintenanceOperationIdError";
-  readonly code = "wakeflow-maintenance-operation-id" as const;
-  readonly reason: WakeflowMaintenanceOperationIdErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowMaintenanceOperationIdErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceOperationIdError extends ModuleError<WakeflowMaintenanceOperationIdErrorReason> {
+  static override readonly code = "wakeflow-maintenance-operation-id";
 }
 
-function fail(
-  reason: WakeflowMaintenanceOperationIdErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowMaintenanceOperationIdError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowMaintenanceOperationIdErrorReason> = failWith(
+  WakeflowMaintenanceOperationIdError,
+);
 
 /** 严格解析一个 maintenance operation ID。 */
 export function parseWakeflowMaintenanceOperationId(

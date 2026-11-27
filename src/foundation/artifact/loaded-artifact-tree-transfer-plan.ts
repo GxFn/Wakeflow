@@ -5,6 +5,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import {
   type DirectoryTreeCandidatePlan,
@@ -67,30 +68,9 @@ export type LoadedArtifactTreeTransferPlanErrorReason =
   | "capacity"
   | "plan";
 
-const ERROR_MESSAGES = {
-  input: "Loaded artifact tree transfer plan input is invalid.",
-  manifest: "Loaded artifact tree transfer manifest is invalid.",
-  mode: "Loaded artifact tree transfer modes do not preserve executable semantics.",
-  capacity: "Loaded artifact tree transfer exceeds its admitted capacity.",
-  plan: "Loaded artifact tree transfer could not form one closed candidate plan.",
-} as const satisfies Readonly<Record<LoadedArtifactTreeTransferPlanErrorReason, string>>;
-
 /** Loaded Artifact Tree transfer 计划失败的稳定、脱敏错误。 */
-export class LoadedArtifactTreeTransferPlanError extends Error {
-  override readonly name = "LoadedArtifactTreeTransferPlanError";
-  readonly code = "wakeflow-loaded-artifact-tree-transfer-plan" as const;
-  readonly reason: LoadedArtifactTreeTransferPlanErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: LoadedArtifactTreeTransferPlanErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class LoadedArtifactTreeTransferPlanError extends ModuleError<LoadedArtifactTreeTransferPlanErrorReason> {
+  static override readonly code = "wakeflow-loaded-artifact-tree-transfer-plan";
 }
 
 interface ParsedModes {
@@ -99,17 +79,9 @@ interface ParsedModes {
   readonly regularFileMode: number;
 }
 
-function fail(
-  reason: LoadedArtifactTreeTransferPlanErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new LoadedArtifactTreeTransferPlanError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<LoadedArtifactTreeTransferPlanErrorReason> = failWith(
+  LoadedArtifactTreeTransferPlanError,
+);
 
 function parseMode(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0o777) {

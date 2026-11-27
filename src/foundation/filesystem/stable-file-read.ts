@@ -5,6 +5,7 @@ import { join as joinPath } from "node:path";
 import type { Sha256Digest } from "../crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../crypto/sha256-hasher.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
@@ -79,36 +80,13 @@ export type StableFileReadErrorReason =
   | "source-changed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Stable file read input is invalid.",
-  "unsupported-platform": "Stable file read requires Node no-follow file handles.",
-  "root-scope": "Stable file read could not establish its rooted resource scope.",
-  "not-found": "Stable file read target does not exist.",
-  symlink: "Stable file read target cannot be a symbolic link.",
-  "not-file": "Stable file read target must be a regular file.",
-  "expectation-changed": "Stable file read target no longer matches its expected node.",
-  "too-large": "Stable file read target exceeds the caller or runtime byte limit.",
-  "io-failure": "Stable file bytes could not be read and hashed safely.",
-  "source-changed": "Stable file target changed while it was being read.",
-  "close-failure": "Stable file handle could not be closed safely.",
-} as const satisfies Readonly<Record<StableFileReadErrorReason, string>>;
-
 /**
  * 稳定文件读取的公共、脱敏错误。
  *
  * 错误不回显物理路径、资源引用、文件字节、容量、摘要、取消原因或底层原因链。
  */
-export class StableFileReadError extends Error {
-  override readonly name = "StableFileReadError";
-  readonly code = "wakeflow-stable-file-read" as const;
-  readonly reason: StableFileReadErrorReason;
-  readonly path: string;
-
-  constructor(reason: StableFileReadErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class StableFileReadError extends ModuleError<StableFileReadErrorReason> {
+  static override readonly code = "wakeflow-stable-file-read";
 }
 
 interface ParsedStableFileReadOptions {
@@ -124,9 +102,7 @@ interface InternalStableFileReadResult extends StableFileSource {
   readonly bytes: Uint8Array | null;
 }
 
-function fail(reason: StableFileReadErrorReason, path: string, cause?: unknown): never {
-  throw new StableFileReadError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<StableFileReadErrorReason> = failWith(StableFileReadError);
 
 function parseExpectedNode(value: unknown): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;

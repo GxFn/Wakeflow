@@ -2,6 +2,7 @@ import type { BigIntStats } from "node:fs";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import nodePath from "node:path";
 
+import { ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -25,23 +26,12 @@ export type AbsoluteNodeObservation =
 
 export type AbsoluteNodeObservationErrorReason = "input" | "inspection-failure" | "read-failure";
 
-const ERROR_MESSAGES = {
-  input: "Absolute node observation input is invalid.",
-  "inspection-failure": "Absolute node could not be inspected safely.",
-  "read-failure": "Absolute regular file could not be read safely.",
-} as const satisfies Readonly<Record<AbsoluteNodeObservationErrorReason, string>>;
-
 /** 绝对路径节点观察失败时返回的稳定、脱敏错误；原始异常只留在 `cause` 上。 */
-export class AbsoluteNodeObservationError extends Error {
-  override readonly name = "AbsoluteNodeObservationError";
-  readonly code = "wakeflow-absolute-node-observation" as const;
-  readonly reason: AbsoluteNodeObservationErrorReason;
-  readonly path: string;
+export class AbsoluteNodeObservationError extends ModuleError<AbsoluteNodeObservationErrorReason> {
+  static override readonly code = "wakeflow-absolute-node-observation";
 
   constructor(reason: AbsoluteNodeObservationErrorReason, path: string, cause?: unknown) {
-    super(ERROR_MESSAGES[reason], cause === undefined ? undefined : { cause });
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, cause === undefined ? undefined : { cause });
   }
 }
 

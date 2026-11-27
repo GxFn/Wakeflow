@@ -19,6 +19,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
@@ -115,31 +116,12 @@ export type DemandCompletionErrorReason =
   | "route"
   | "package";
 
-const ERROR_MESSAGES = {
-  json: "Demand Completion is not passive JSON data.",
-  schema: "Demand Completion does not satisfy its Schema.",
-  identifier: "Demand Completion contains an invalid typed identity.",
-  digest: "Demand Completion contains an invalid or inconsistent digest.",
-  path: "Demand Completion contains an invalid requirement package reference.",
-  position: "Demand Completion contains an invalid revision.",
-  time: "Demand Completion contains an invalid completion time.",
-  route: "Demand Completion requires a valid completion-preflight route.",
-  package: "Demand Completion requirement package source is invalid.",
-} as const satisfies Readonly<Record<DemandCompletionErrorReason, string>>;
-
 /** Demand成功终态记录准入、创建或来源闭合失败时的稳定错误。 */
-export class DemandCompletionError extends Error {
-  override readonly name = "DemandCompletionError";
-  readonly code = "wakeflow-demand-completion" as const;
-  readonly reason: DemandCompletionErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandCompletionErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandCompletionError extends ModuleError<DemandCompletionErrorReason> {
+  static override readonly code = "wakeflow-demand-completion";
 }
+
+const fail: Fail<DemandCompletionErrorReason> = failWith(DemandCompletionError);
 
 const validateWire = createRuntimeJsonSchemaValidator<DemandCompletionWire>(
   WAKEFLOW_DEMAND_COMPLETION_SCHEMA,
@@ -149,10 +131,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandCompletionWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(reason: DemandCompletionErrorReason, path: string, cause?: unknown): never {
-  throw new DemandCompletionError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function id<Kind extends "program" | "demand" | "window" | "demand-event">(
   value: unknown,

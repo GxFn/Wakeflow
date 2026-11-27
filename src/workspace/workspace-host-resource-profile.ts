@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -172,33 +173,14 @@ export type WakeflowWorkspaceHostResourceProfileErrorReason =
   | "surface"
   | "contradiction";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow workspace host resource profile is not passive data.",
-  shape: "Wakeflow workspace host resource profile has an invalid shape.",
-  host: "Wakeflow workspace host identity is invalid.",
-  component: "Wakeflow workspace host resource component is invalid.",
-  path: "Wakeflow workspace host resource path is invalid.",
-  surface: "Wakeflow workspace host resource surface is invalid.",
-  contradiction: "Wakeflow workspace host resource facts conflict.",
-} as const satisfies Readonly<Record<WakeflowWorkspaceHostResourceProfileErrorReason, string>>;
-
 /** Host Resource Profile 准入失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceHostResourceProfileError extends Error {
-  override readonly name = "WakeflowWorkspaceHostResourceProfileError";
-  readonly code = "wakeflow-workspace-host-resource-profile" as const;
-  readonly reason: WakeflowWorkspaceHostResourceProfileErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWorkspaceHostResourceProfileErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWorkspaceHostResourceProfileError extends ModuleError<WakeflowWorkspaceHostResourceProfileErrorReason> {
+  static override readonly code = "wakeflow-workspace-host-resource-profile";
 }
+
+const fail: Fail<WakeflowWorkspaceHostResourceProfileErrorReason> = failWith(
+  WakeflowWorkspaceHostResourceProfileError,
+);
 
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const PROFILE_FIELDS = new Set([
@@ -232,18 +214,6 @@ const ATTACHED_DIRECTORY_MODE_SET = new Set<string>(
   WAKEFLOW_WORKSPACE_HOST_ATTACHED_DIRECTORY_MODES,
 );
 const STATUSLINE_ASSET_FIELDS = new Set(["fileName"]);
-
-function fail(
-  reason: WakeflowWorkspaceHostResourceProfileErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWorkspaceHostResourceProfileError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function propertyPath(base: string, key: string): string {
   const escaped = key.replaceAll("~", "~0").replaceAll("/", "~1");

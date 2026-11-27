@@ -16,6 +16,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createWakeflowGitignoreBodyAuthority,
   WakeflowGitignoreBodyAuthorityError,
@@ -132,30 +133,9 @@ export type WakeflowStaticMaterializationPreviewErrorReason =
   | "root-scope"
   | "inspection";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow static materialization preview input is invalid.",
-  config: "Wakeflow static materialization preview config is invalid.",
-  profile: "Wakeflow static materialization preview host profiles are invalid.",
-  "root-scope": "Wakeflow static materialization preview lost workspace scope.",
-  inspection: "Wakeflow static materialization preview could not inspect workspace facts.",
-} as const satisfies Readonly<Record<WakeflowStaticMaterializationPreviewErrorReason, string>>;
-
 /** 静态物化 preview 构建失败的稳定、脱敏错误。 */
-export class WakeflowStaticMaterializationPreviewError extends Error {
-  override readonly name = "WakeflowStaticMaterializationPreviewError";
-  readonly code = "wakeflow-static-materialization-preview" as const;
-  readonly reason: WakeflowStaticMaterializationPreviewErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowStaticMaterializationPreviewErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowStaticMaterializationPreviewError extends ModuleError<WakeflowStaticMaterializationPreviewErrorReason> {
+  static override readonly code = "wakeflow-static-materialization-preview";
 }
 
 export interface ParsedWakeflowStaticMaterializationPreviewRequest {
@@ -166,17 +146,8 @@ export interface ParsedWakeflowStaticMaterializationPreviewRequest {
   readonly signal: AbortSignal | undefined;
 }
 
-export function failWakeflowStaticMaterializationPreview(
-  reason: WakeflowStaticMaterializationPreviewErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowStaticMaterializationPreviewError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failWakeflowStaticMaterializationPreview: Fail<WakeflowStaticMaterializationPreviewErrorReason> =
+  failWith(WakeflowStaticMaterializationPreviewError);
 
 /** 验证 action-specific desired Config 与完整 Host Profile 集合。 */
 export function parseWakeflowStaticMaterializationPreviewRequest(

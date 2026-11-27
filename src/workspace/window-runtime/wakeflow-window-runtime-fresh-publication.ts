@@ -3,6 +3,7 @@ import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
   createFileAtomically,
@@ -104,34 +105,14 @@ type WakeflowFreshWindowRuntimePublicationErrorReason =
   | "root-scope"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Fresh Window Runtime publication input is invalid.",
-  authority: "Fresh Window Runtime publication authority is invalid.",
-  "strict-absent": "Fresh Window Runtime host root already exists.",
-  "prefix-conflict": "Fresh Window Runtime recovery prefix is not exact.",
-  capacity: "Fresh Window Runtime projection exceeds its byte budget.",
-  "recovery-required": "Fresh Window Runtime projection stage requires recovery.",
-  "root-scope": "Fresh Window Runtime publication lost workspace scope.",
-  "operation-failure": "Fresh Window Runtime publication failed.",
-} as const satisfies Readonly<Record<WakeflowFreshWindowRuntimePublicationErrorReason, string>>;
-
 /** Fresh Window Runtime 发布失败的稳定、脱敏错误。 */
-export class WakeflowFreshWindowRuntimePublicationError extends Error {
-  override readonly name = "WakeflowFreshWindowRuntimePublicationError";
-  readonly code = "wakeflow-fresh-window-runtime-publication" as const;
-  readonly reason: WakeflowFreshWindowRuntimePublicationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowFreshWindowRuntimePublicationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowFreshWindowRuntimePublicationError extends ModuleError<WakeflowFreshWindowRuntimePublicationErrorReason> {
+  static override readonly code = "wakeflow-fresh-window-runtime-publication";
 }
+
+const fail: Fail<WakeflowFreshWindowRuntimePublicationErrorReason> = failWith(
+  WakeflowFreshWindowRuntimePublicationError,
+);
 
 interface ParsedOptions {
   readonly recoveringFreshPublication: boolean;
@@ -142,18 +123,6 @@ interface DirectoryEffect {
   readonly resourcePath: PortableResourcePath;
   readonly disposition: "created" | "current";
   readonly node: Readonly<FileNodeSnapshot>;
-}
-
-function fail(
-  reason: WakeflowFreshWindowRuntimePublicationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowFreshWindowRuntimePublicationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function admitAuthorityOperations(authority: Readonly<WakeflowFreshWindowRuntimeAuthority>): void {

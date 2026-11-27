@@ -2,6 +2,7 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -106,58 +107,20 @@ export type WakeflowGitignoreInspectionErrorReason =
   | "git-repository"
   | "git";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Gitignore inspection input is invalid.",
-  context: "Wakeflow Gitignore operation context is invalid.",
-  authority: "Wakeflow Gitignore body authority is invalid.",
-  source: "Wakeflow Gitignore source cannot be read stably.",
-  "source-policy": "Wakeflow Gitignore source violates its node policy.",
-  envelope: "Wakeflow Gitignore managed envelope is invalid.",
-  "outside-conflict": "Wakeflow Gitignore outside rules conflict with managed rules.",
-  "unknown-managed-body": "Wakeflow Gitignore managed body is not an admitted render.",
-  "target-capacity": "Wakeflow Gitignore candidate exceeds its byte budget.",
-  "candidate-semantics":
-    "Wakeflow Gitignore candidate does not provide its required Git semantics.",
-  "git-repository":
-    "Wakeflow workspace root is not a Git repository; the managed .gitignore block is verified through Git, so run `git init` there first.",
-  git: "Wakeflow Gitignore semantics could not be verified by Git.",
-} as const satisfies Readonly<Record<WakeflowGitignoreInspectionErrorReason, string>>;
-
 /** Gitignore 只读检查失败的稳定、脱敏错误。 */
-export class WakeflowGitignoreInspectionError extends Error {
-  override readonly name = "WakeflowGitignoreInspectionError";
-  readonly code = "wakeflow-gitignore-inspection" as const;
-  readonly reason: WakeflowGitignoreInspectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowGitignoreInspectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowGitignoreInspectionError extends ModuleError<WakeflowGitignoreInspectionErrorReason> {
+  static override readonly code = "wakeflow-gitignore-inspection";
 }
+
+const fail: Fail<WakeflowGitignoreInspectionErrorReason> = failWith(
+  WakeflowGitignoreInspectionError,
+);
 
 interface ParsedRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
   readonly expectedMatrixDigest: Sha256Digest;
   readonly hostProfiles: readonly unknown[];
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: WakeflowGitignoreInspectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowGitignoreInspectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {

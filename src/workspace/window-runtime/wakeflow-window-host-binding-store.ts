@@ -4,6 +4,7 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { canonicalizeJson } from "../../foundation/data/canonical-json.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
@@ -115,23 +116,9 @@ type WakeflowWindowHostBindingStoreErrorReason =
   | "binding-id"
   | "write";
 
-const ERROR_MESSAGES = {
-  input: "Window Host Binding store input is invalid.",
-  layout: "Window Host Binding private layout is unavailable or unsafe.",
-  inventory: "Window Host Binding inventory is invalid or changed.",
-  lock: "Window Host Binding store lock could not be acquired safely.",
-  "recovery-required": "Window Host Binding store requires explicit recovery.",
-  time: "Window Host Binding store clock could not be read safely.",
-  "binding-id": "Window Host Binding ID could not be allocated safely.",
-  write: "Window Host Binding authority could not be published safely.",
-} as const satisfies Readonly<Record<WakeflowWindowHostBindingStoreErrorReason, string>>;
-
 /** Binding store 物理操作失败的稳定、脱敏错误。 */
-export class WakeflowWindowHostBindingStoreError extends Error {
-  override readonly name = "WakeflowWindowHostBindingStoreError";
-  readonly code = "wakeflow-window-host-binding-store" as const;
-  readonly reason: WakeflowWindowHostBindingStoreErrorReason;
-  readonly path: string;
+export class WakeflowWindowHostBindingStoreError extends ModuleError<WakeflowWindowHostBindingStoreErrorReason> {
+  static override readonly code = "wakeflow-window-host-binding-store";
   readonly bindingAuthority: "unchanged" | "unknown";
 
   constructor(
@@ -139,9 +126,7 @@ export class WakeflowWindowHostBindingStoreError extends Error {
     path: string,
     bindingAuthority: "unchanged" | "unknown" = "unchanged",
   ) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path);
     this.bindingAuthority = bindingAuthority;
   }
 }

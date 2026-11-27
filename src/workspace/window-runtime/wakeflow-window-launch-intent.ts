@@ -12,6 +12,7 @@ import {
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostId,
@@ -101,34 +102,12 @@ export interface WakeflowWindowLaunchIntentSet {
 
 type WakeflowWindowLaunchIntentErrorReason = "config" | "profile" | "capacity" | "relation";
 
-const ERROR_MESSAGES = {
-  config: "Wakeflow window launch intent Config is invalid.",
-  profile: "Wakeflow window launch intent Host Profile is invalid.",
-  capacity: "Wakeflow window launch intent exceeds its static window budget.",
-  relation: "Wakeflow window launch intent root cannot be resolved.",
-} as const satisfies Readonly<Record<WakeflowWindowLaunchIntentErrorReason, string>>;
-
 /** Window launch intent 编译失败的稳定、脱敏错误。 */
-export class WakeflowWindowLaunchIntentError extends Error {
-  override readonly name = "WakeflowWindowLaunchIntentError";
-  readonly code = "wakeflow-window-launch-intent" as const;
-  readonly reason: WakeflowWindowLaunchIntentErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowWindowLaunchIntentErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowLaunchIntentError extends ModuleError<WakeflowWindowLaunchIntentErrorReason> {
+  static override readonly code = "wakeflow-window-launch-intent";
 }
 
-function fail(reason: WakeflowWindowLaunchIntentErrorReason, path: string, cause?: unknown): never {
-  throw new WakeflowWindowLaunchIntentError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowWindowLaunchIntentErrorReason> = failWith(WakeflowWindowLaunchIntentError);
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {

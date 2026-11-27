@@ -22,6 +22,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   AbsoluteDirectoryMaterializationError,
   materializeAbsoluteDirectoryPlacement,
@@ -120,34 +121,14 @@ export type WakeflowManagedSupportRootMaterializationErrorReason =
   | "root-policy"
   | "effect";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow managed support root materialization input is invalid.",
-  config: "Wakeflow managed support root config is invalid.",
-  profile: "Wakeflow managed support root host profile is invalid.",
-  catalog: "Wakeflow managed support root catalog expectation is invalid.",
-  surface: "Wakeflow managed support root surface is unavailable.",
-  placement: "Wakeflow managed support root placement is unsafe.",
-  "root-policy": "Wakeflow managed support root violates its node policy.",
-  effect: "Wakeflow managed support root could not be materialized safely.",
-} as const satisfies Readonly<Record<WakeflowManagedSupportRootMaterializationErrorReason, string>>;
-
 /** 受管 Support 根物化失败的稳定、脱敏错误。 */
-export class WakeflowManagedSupportRootMaterializationError extends Error {
-  override readonly name = "WakeflowManagedSupportRootMaterializationError";
-  readonly code = "wakeflow-managed-support-root-materialization" as const;
-  readonly reason: WakeflowManagedSupportRootMaterializationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowManagedSupportRootMaterializationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowManagedSupportRootMaterializationError extends ModuleError<WakeflowManagedSupportRootMaterializationErrorReason> {
+  static override readonly code = "wakeflow-managed-support-root-materialization";
 }
+
+const fail: Fail<WakeflowManagedSupportRootMaterializationErrorReason> = failWith(
+  WakeflowManagedSupportRootMaterializationError,
+);
 
 interface ParsedRequest {
   readonly config: WakeflowConfigModel;
@@ -157,18 +138,6 @@ interface ParsedRequest {
   readonly catalogDigest: Sha256Digest;
   readonly surfaceId: WakeflowDurableId<"surface">;
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: WakeflowManagedSupportRootMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowManagedSupportRootMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {

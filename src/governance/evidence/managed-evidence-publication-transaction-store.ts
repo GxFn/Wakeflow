@@ -3,6 +3,7 @@ import { types } from "node:util";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DeterministicJsonFileResult,
   readDeterministicJsonFile,
@@ -85,36 +86,14 @@ export type ManagedEvidencePublicationTransactionStoreErrorReason =
   | "recovery-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence publication transaction store input is invalid.",
-  "root-scope": "Managed evidence publication transaction store escaped its Demand root.",
-  "transaction-exists": "Managed evidence publication transaction journal already exists.",
-  conflict: "Managed evidence publication transaction journal is invalid or changed.",
-  capacity: "Managed evidence publication transaction journal exceeds its capacity.",
-  "recovery-required":
-    "Managed evidence publication transaction journal requires explicit recovery.",
-  "operation-failure": "Managed evidence publication transaction store operation failed.",
-} as const satisfies Readonly<
-  Record<ManagedEvidencePublicationTransactionStoreErrorReason, string>
->;
-
 /** Journal生命周期无法安全证明时的稳定、脱敏错误。 */
-export class ManagedEvidencePublicationTransactionStoreError extends Error {
-  override readonly name = "ManagedEvidencePublicationTransactionStoreError";
-  readonly code = "wakeflow-managed-evidence-publication-transaction-store" as const;
-  readonly reason: ManagedEvidencePublicationTransactionStoreErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidencePublicationTransactionStoreErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidencePublicationTransactionStoreError extends ModuleError<ManagedEvidencePublicationTransactionStoreErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-publication-transaction-store";
 }
+
+const fail: Fail<ManagedEvidencePublicationTransactionStoreErrorReason> = failWith(
+  ManagedEvidencePublicationTransactionStoreError,
+);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
@@ -124,18 +103,6 @@ const ISSUED_STORED_TRANSACTIONS = new WeakSet<object>();
 const TRANSACTION_MAXIMUM_BYTES = parseByteCount(
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
 );
-
-function fail(
-  reason: ManagedEvidencePublicationTransactionStoreErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidencePublicationTransactionStoreError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

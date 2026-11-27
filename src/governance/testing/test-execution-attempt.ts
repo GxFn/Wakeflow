@@ -16,6 +16,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   computeTaskPackageDigest,
@@ -106,37 +107,17 @@ export type TestExecutionAttemptErrorReason =
   | "task-package"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Test execution attempt is not passive JSON data.",
-  schema: "Test execution attempt does not satisfy its Schema.",
-  identifier: "Test execution attempt contains an invalid typed identity.",
-  digest: "Test execution attempt contains an invalid digest.",
-  "task-package": "Test execution attempt requires a valid test TaskPackage.",
-  relation: "Test execution attempt does not match its test TaskPackage.",
-} as const satisfies Readonly<Record<TestExecutionAttemptErrorReason, string>>;
-
 /** Test execution attempt准入或来源闭合失败时的稳定错误。 */
-export class TestExecutionAttemptError extends Error {
-  override readonly name = "TestExecutionAttemptError";
-  readonly code = "wakeflow-test-execution-attempt" as const;
-  readonly reason: TestExecutionAttemptErrorReason;
-  readonly path: string;
-
-  constructor(reason: TestExecutionAttemptErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TestExecutionAttemptError extends ModuleError<TestExecutionAttemptErrorReason> {
+  static override readonly code = "wakeflow-test-execution-attempt";
 }
+
+const fail: Fail<TestExecutionAttemptErrorReason> = failWith(TestExecutionAttemptError);
 
 const validateWire = createRuntimeJsonSchemaValidator<TestExecutionAttemptWire>(
   WAKEFLOW_TEST_EXECUTION_ATTEMPT_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
-
-function fail(reason: TestExecutionAttemptErrorReason, path: string, cause?: unknown): never {
-  throw new TestExecutionAttemptError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function id<
   Kind extends

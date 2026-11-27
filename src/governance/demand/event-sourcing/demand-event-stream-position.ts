@@ -1,3 +1,5 @@
+import { ModuleError } from "../../../foundation/error/module-error.js";
+
 /**
  * Wakeflow Governance / Demand Event Sourcing：逻辑事件流修订号词汇。
  *
@@ -17,22 +19,8 @@ export type DemandEventCommitSequence = number & {
 
 export type DemandEventStreamPositionErrorReason = "stream-revision" | "commit-sequence";
 
-const ERROR_MESSAGES = {
-  "stream-revision": "Demand event stream revision must be a positive safe integer.",
-  "commit-sequence": "Demand event commit sequence must be a positive safe integer.",
-} as const satisfies Readonly<Record<DemandEventStreamPositionErrorReason, string>>;
-
-export class DemandEventStreamPositionError extends Error {
-  override readonly name = "DemandEventStreamPositionError";
-  readonly code = "wakeflow-demand-event-stream-position" as const;
-  readonly reason: DemandEventStreamPositionErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandEventStreamPositionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventStreamPositionError extends ModuleError<DemandEventStreamPositionErrorReason> {
+  static override readonly code = "wakeflow-demand-event-stream-position";
 }
 
 function parsePositivePosition(

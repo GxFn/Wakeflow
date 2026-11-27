@@ -1,3 +1,5 @@
+import { ModuleError } from "../error/module-error.js";
+
 /**
  * Wakeflow Foundation / Text：把外部文本渲染为 Markdown 内的 JSON 字符串字面量。
  *
@@ -13,23 +15,9 @@
 
 export type MarkdownJsonStringLiteralErrorReason = "input" | "unicode";
 
-const ERROR_MESSAGES = {
-  input: "Markdown JSON string literal input must be a primitive string.",
-  unicode: "Markdown JSON string literal input must be well-formed NFC Unicode.",
-} as const satisfies Readonly<Record<MarkdownJsonStringLiteralErrorReason, string>>;
-
 /** Markdown JSON 数据字面量准入失败的稳定、脱敏错误。 */
-export class MarkdownJsonStringLiteralError extends Error {
-  override readonly name = "MarkdownJsonStringLiteralError";
-  readonly code = "wakeflow-markdown-json-string-literal" as const;
-  readonly reason: MarkdownJsonStringLiteralErrorReason;
-  readonly path: string;
-
-  constructor(reason: MarkdownJsonStringLiteralErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class MarkdownJsonStringLiteralError extends ModuleError<MarkdownJsonStringLiteralErrorReason> {
+  static override readonly code = "wakeflow-markdown-json-string-literal";
 }
 
 /** `JSON.stringify` 已处理 C0、引号和反斜杠；这里只补充 Markdown 与显示边界。 */

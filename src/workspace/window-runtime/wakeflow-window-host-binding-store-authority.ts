@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
@@ -29,41 +30,14 @@ import { wakeflowWindowHostBindingRootRef } from "./wakeflow-window-runtime-path
 
 type WakeflowWindowHostBindingStoreAuthorityErrorReason = "profile" | "topology" | "resource";
 
-const ERROR_MESSAGES = {
-  profile: "Window Host Binding Store authority profiles are inconsistent.",
-  topology: "Window Host Binding Store authority topology is invalid.",
-  resource: "Window Host Binding Store authority resource catalog is invalid.",
-} as const satisfies Readonly<Record<WakeflowWindowHostBindingStoreAuthorityErrorReason, string>>;
-
 /** Binding Store读取权威无法从当前静态来源闭合时的稳定错误。 */
-export class WakeflowWindowHostBindingStoreAuthorityError extends Error {
-  override readonly name = "WakeflowWindowHostBindingStoreAuthorityError";
-  readonly code = "wakeflow-window-host-binding-store-authority" as const;
-  readonly reason: WakeflowWindowHostBindingStoreAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowHostBindingStoreAuthorityError extends ModuleError<WakeflowWindowHostBindingStoreAuthorityErrorReason> {
+  static override readonly code = "wakeflow-window-host-binding-store-authority";
 }
 
-function fail(
-  reason: WakeflowWindowHostBindingStoreAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowHostBindingStoreAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowWindowHostBindingStoreAuthorityErrorReason> = failWith(
+  WakeflowWindowHostBindingStoreAuthorityError,
+);
 
 /** 从当前Config与Host profiles编译完整、零I/O的Binding Store读取权威。 */
 export function compileWakeflowWindowHostBindingStoreAuthority(

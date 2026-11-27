@@ -10,6 +10,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type RootedDirectory,
   isRootedDirectory,
@@ -92,36 +93,14 @@ export type WakeflowExternalInstructionInspectionErrorReason =
   | "unknown-managed-body"
   | "target-capacity";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow external instruction inspection input is invalid.",
-  "unsupported-platform":
-    "Wakeflow external instruction inspection requires POSIX ownership facts.",
-  authority: "Wakeflow external instruction content authority is invalid.",
-  source: "Wakeflow external instruction source cannot be read stably.",
-  "source-capacity": "Wakeflow external instruction source exceeds its byte budget.",
-  "source-policy": "Wakeflow external instruction source violates its node policy.",
-  envelope: "Wakeflow external instruction managed envelope is invalid.",
-  "unknown-managed-body": "Wakeflow external instruction managed body is not an admitted render.",
-  "target-capacity": "Wakeflow external instruction candidate exceeds its byte budget.",
-} as const satisfies Readonly<Record<WakeflowExternalInstructionInspectionErrorReason, string>>;
-
 /** 外部指令只读检查失败的稳定、脱敏错误。 */
-export class WakeflowExternalInstructionInspectionError extends Error {
-  override readonly name = "WakeflowExternalInstructionInspectionError";
-  readonly code = "wakeflow-external-instruction-inspection" as const;
-  readonly reason: WakeflowExternalInstructionInspectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowExternalInstructionInspectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowExternalInstructionInspectionError extends ModuleError<WakeflowExternalInstructionInspectionErrorReason> {
+  static override readonly code = "wakeflow-external-instruction-inspection";
 }
+
+const fail: Fail<WakeflowExternalInstructionInspectionErrorReason> = failWith(
+  WakeflowExternalInstructionInspectionError,
+);
 
 export interface ParsedWakeflowExternalInstructionInspectionRequest {
   readonly profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
@@ -137,18 +116,6 @@ export interface ParsedWakeflowExternalInstructionInspectionRequest {
 export interface WakeflowExternalInstructionAuthorities {
   readonly currentAuthority: Readonly<WakeflowExternalInstructionBodyAuthority> | null;
   readonly desiredAuthority: Readonly<WakeflowExternalInstructionBodyAuthority>;
-}
-
-function fail(
-  reason: WakeflowExternalInstructionInspectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowExternalInstructionInspectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {

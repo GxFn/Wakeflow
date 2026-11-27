@@ -27,6 +27,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandEventSourcingCommandDigest,
@@ -106,39 +107,14 @@ export type ManagedEvidencePublicationTransactionErrorReason =
   | "relation"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence publication transaction input is invalid.",
-  json: "Managed evidence publication transaction is not passive JSON data.",
-  schema: "Managed evidence publication transaction does not satisfy its Schema.",
-  identifier: "Managed evidence publication transaction contains an invalid identity.",
-  position: "Managed evidence publication transaction contains an invalid stream position.",
-  digest: "Managed evidence publication transaction contains an invalid digest.",
-  "capture-plan": "Managed evidence publication transaction contains an invalid capture plan.",
-  manifest: "Managed evidence publication transaction contains an invalid Manifest.",
-  "record-plan": "Managed evidence publication transaction cannot derive its record tree plan.",
-  "event-sourcing":
-    "Managed evidence publication transaction contains an invalid Event Sourcing append.",
-  relation: "Managed evidence publication transaction fields do not describe one publication.",
-  representation: "Managed evidence publication transaction bytes are not deterministic.",
-} as const satisfies Readonly<Record<ManagedEvidencePublicationTransactionErrorReason, string>>;
-
 /** Publication transaction准入或关系重建失败时的稳定、脱敏错误。 */
-export class ManagedEvidencePublicationTransactionError extends Error {
-  override readonly name = "ManagedEvidencePublicationTransactionError";
-  readonly code = "wakeflow-managed-evidence-publication-transaction" as const;
-  readonly reason: ManagedEvidencePublicationTransactionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidencePublicationTransactionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidencePublicationTransactionError extends ModuleError<ManagedEvidencePublicationTransactionErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-publication-transaction";
 }
+
+const fail: Fail<ManagedEvidencePublicationTransactionErrorReason> = failWith(
+  ManagedEvidencePublicationTransactionError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
   WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA,
@@ -151,18 +127,6 @@ const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
   ],
 );
 const CREATE_FIELDS = Object.freeze(["capturePlan", "commitId", "eventId"] as const);
-
-function fail(
-  reason: ManagedEvidencePublicationTransactionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidencePublicationTransactionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {

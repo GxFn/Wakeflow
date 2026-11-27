@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createHash, type Hash } from "node:crypto";
 import path from "node:path";
 
+import { ModuleError } from "../error/module-error.js";
 import { OperationAbortedError } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 
@@ -30,13 +31,6 @@ export type GitReadOnlyFailureReason =
 /** 进程结局的失败分类：中止另抛 `OperationAbortedError`。 */
 type RunFailure = GitReadOnlyFailureReason | "aborted";
 
-const ERROR_MESSAGES = {
-  "git-unavailable": "The read-only Git query could not start Git.",
-  "query-failure": "The read-only Git query failed.",
-  timeout: "The read-only Git query exceeded its execution deadline.",
-  "output-limit": "The read-only Git query exceeded its output budget.",
-} as const satisfies Readonly<Record<GitReadOnlyFailureReason, string>>;
-
 const FAILURE_PATHS = {
   "git-unavailable": "$git",
   "query-failure": "$git",
@@ -45,16 +39,11 @@ const FAILURE_PATHS = {
 } as const satisfies Readonly<Record<GitReadOnlyFailureReason, string>>;
 
 /** 只读 Git 查询失败的稳定、脱敏错误。 */
-export class GitReadOnlyProcessError extends Error {
-  override readonly name = "GitReadOnlyProcessError";
-  readonly code = "wakeflow-git-read-only-process" as const;
-  readonly reason: GitReadOnlyFailureReason;
-  readonly path: string;
+export class GitReadOnlyProcessError extends ModuleError<GitReadOnlyFailureReason> {
+  static override readonly code = "wakeflow-git-read-only-process";
 
   constructor(reason: GitReadOnlyFailureReason) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = FAILURE_PATHS[reason];
+    super(reason, FAILURE_PATHS[reason]);
   }
 }
 

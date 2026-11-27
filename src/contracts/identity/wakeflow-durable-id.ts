@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -62,38 +63,20 @@ export type WakeflowDurableIdErrorReason =
   | "uuid-format"
   | "kind-mismatch";
 
-const ERROR_MESSAGES = {
-  format: "Wakeflow durable ID must match <known kind>_<canonical lowercase UUID v4>.",
-  "kind-unknown": "Wakeflow durable ID kind is not part of the closed durable identity vocabulary.",
-  "uuid-format": "Wakeflow durable ID contains an invalid UUID v4 component.",
-  "kind-mismatch": "Wakeflow durable ID kind does not match the expected kind.",
-} as const satisfies Readonly<Record<WakeflowDurableIdErrorReason, string>>;
-
 /**
  * Wakeflow 持久身份词法失败的稳定错误。
  *
  * 错误不回显 ID、UUID 或未知类别。底层随机源失败仍保持 `UuidV4Error`，不会被
  * 伪装成本层的格式错误。
  */
-export class WakeflowDurableIdError extends Error {
-  override readonly name = "WakeflowDurableIdError";
-  readonly code = "wakeflow-durable-id" as const;
-  readonly reason: WakeflowDurableIdErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowDurableIdErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowDurableIdError extends ModuleError<WakeflowDurableIdErrorReason> {
+  static override readonly code = "wakeflow-durable-id";
 }
+
+const fail: Fail<WakeflowDurableIdErrorReason> = failWith(WakeflowDurableIdError);
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
-}
-
-function fail(reason: WakeflowDurableIdErrorReason, path: string): never {
-  throw new WakeflowDurableIdError(reason, path);
 }
 
 function isWakeflowDurableIdKind(value: unknown): value is WakeflowDurableIdKind {

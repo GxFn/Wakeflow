@@ -1,5 +1,7 @@
 import { types } from "node:util";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
+
 /**
  * Wakeflow Foundation / Data：无副作用地读取自有数据属性。
  *
@@ -24,42 +26,17 @@ export type PassiveOwnDataErrorReason =
   | "array-slot"
   | "array-extra-property";
 
-const ERROR_MESSAGES = {
-  proxy: "Proxy values are not accepted by passive data readers.",
-  "value-type": "The value is not an accepted data container.",
-  "record-prototype": "The record does not have an accepted prototype.",
-  "symbol-key": "Symbol-keyed properties are not accepted.",
-  "non-enumerable-property": "Non-enumerable data properties are not accepted.",
-  "accessor-property": "Accessor properties are not accepted.",
-  "property-selection": "The property selection is not passive and well formed.",
-  "array-prototype": "The array does not have the standard Array prototype.",
-  "array-length": "The array length or configured length bound is invalid.",
-  "array-slot": "The array contains a missing or invalid indexed slot.",
-  "array-extra-property": "The array contains a non-indexed own property.",
-} as const satisfies Readonly<Record<PassiveOwnDataErrorReason, string>>;
-
 /**
  * 自有数据属性读取失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和结构路径，不把成员值写入消息，避免错误日志
  * 意外携带令牌、提示词或其他业务数据。
  */
-export class PassiveOwnDataError extends Error {
-  override readonly name = "PassiveOwnDataError";
-  readonly code = "wakeflow-passive-own-data" as const;
-  readonly reason: PassiveOwnDataErrorReason;
-  readonly path: string;
-
-  constructor(reason: PassiveOwnDataErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class PassiveOwnDataError extends ModuleError<PassiveOwnDataErrorReason> {
+  static override readonly code = "wakeflow-passive-own-data";
 }
 
-function fail(reason: PassiveOwnDataErrorReason, path: string): never {
-  throw new PassiveOwnDataError(reason, path);
-}
+const fail: Fail<PassiveOwnDataErrorReason> = failWith(PassiveOwnDataError);
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";

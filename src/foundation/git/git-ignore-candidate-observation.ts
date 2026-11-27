@@ -6,6 +6,7 @@ import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   createFileCandidateDurably,
   DurableFileCandidateError,
@@ -55,32 +56,9 @@ export type GitIgnoreCandidateObservationErrorReason =
   | "observation-failure"
   | "cleanup-failure";
 
-const ERROR_MESSAGES = {
-  input: "Git ignore candidate observation input is invalid.",
-  capacity: "Git ignore candidate exceeds its byte budget.",
-  "hash-failure": "Git ignore candidate bytes could not be hashed.",
-  "root-scope": "Git ignore candidate lost its repository root scope.",
-  "isolation-failure": "Git ignore candidate worktree could not be isolated.",
-  "observation-failure": "Git ignore candidate semantics could not be observed.",
-  "cleanup-failure": "Git ignore candidate worktree could not be removed exactly.",
-} as const satisfies Readonly<Record<GitIgnoreCandidateObservationErrorReason, string>>;
-
 /** Gitignore 候选隔离观察失败的稳定、脱敏错误。 */
-export class GitIgnoreCandidateObservationError extends Error {
-  override readonly name = "GitIgnoreCandidateObservationError";
-  readonly code = "wakeflow-git-ignore-candidate-observation" as const;
-  readonly reason: GitIgnoreCandidateObservationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: GitIgnoreCandidateObservationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class GitIgnoreCandidateObservationError extends ModuleError<GitIgnoreCandidateObservationErrorReason> {
+  static override readonly code = "wakeflow-git-ignore-candidate-observation";
 }
 
 interface CandidateInput {
@@ -93,17 +71,9 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: GitIgnoreCandidateObservationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new GitIgnoreCandidateObservationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<GitIgnoreCandidateObservationErrorReason> = failWith(
+  GitIgnoreCandidateObservationError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (

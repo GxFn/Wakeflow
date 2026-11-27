@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
@@ -77,43 +78,19 @@ export type ExactRegularFileUnlinkErrorReason =
   | "durability-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Exact regular file unlink input is invalid.",
-  "root-scope": "Exact unlink could not establish its rooted scope.",
-  "parent-not-found": "Exact unlink parent directory does not exist.",
-  "parent-symlink": "Exact unlink parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Exact unlink parent must be a directory.",
-  "parent-open-failure": "Exact unlink parent could not be opened safely.",
-  "parent-changed": "Exact unlink parent changed during the operation.",
-  "source-not-found": "Exact unlink source does not exist.",
-  "source-symlink": "Exact unlink source cannot be a symbolic link.",
-  "source-not-file": "Exact unlink source must be a regular file.",
-  "source-open-failure": "Exact unlink source could not be opened safely.",
-  "source-changed": "Exact unlink source no longer matches its expectation.",
-  "unlink-failure": "Exact unlink commit could not be executed safely.",
-  "commit-uncertain": "Exact unlink commit result could not be proven safely.",
-  "durability-failure": "Exact unlink parent directory could not be synchronized.",
-  "close-failure": "An exact unlink handle could not be closed safely.",
-} as const satisfies Readonly<Record<ExactRegularFileUnlinkErrorReason, string>>;
-
 /**
  * 指定普通文件删除失败时返回的稳定错误。
  *
  * 错误不回显物理路径、资源引用、节点元数据、链接数、取消原因、系统调用或底层原因。
  * `unlink` 调用后的错误不得被解释为路径名一定仍然存在。
  */
-export class ExactRegularFileUnlinkError extends Error {
-  override readonly name = "ExactRegularFileUnlinkError";
-  readonly code = "wakeflow-exact-regular-file-unlink" as const;
-  readonly reason: ExactRegularFileUnlinkErrorReason;
-  readonly path: string;
+export class ExactRegularFileUnlinkError extends ModuleError<ExactRegularFileUnlinkErrorReason> {
+  static override readonly code = "wakeflow-exact-regular-file-unlink";
   /** `unlink` 调用之后的失败：路径名可能已经删掉，也可能没有。 */
   readonly commitUncertain: boolean;
 
   constructor(reason: ExactRegularFileUnlinkErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.commitUncertain =
       reason === "commit-uncertain" ||
       reason === "durability-failure" ||
@@ -128,9 +105,7 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(reason: ExactRegularFileUnlinkErrorReason, path: string, cause?: unknown): never {
-  throw new ExactRegularFileUnlinkError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<ExactRegularFileUnlinkErrorReason> = failWith(ExactRegularFileUnlinkError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

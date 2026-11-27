@@ -6,6 +6,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { ownedByAnotherUser } from "../node/current-user.js";
 import {
   computeDurableAtomicFileStageTargetDigest,
@@ -88,35 +89,8 @@ export type DurableAtomicFileStageRecoveryErrorReason =
   | "cleanup-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable atomic file stage recovery input is invalid.",
-  "root-scope": "Atomic file stage recovery lost its rooted scope.",
-  directory: "Atomic file stage recovery parent directory is unavailable.",
-  capacity: "Atomic file stage recovery inventory exceeds its bounded capacity.",
-  inventory: "Atomic file stage recovery found an invalid reserved stage name.",
-  "node-policy": "Atomic file stage recovery found an unsafe stage node.",
-  "target-scope": "Atomic file stage recovery found a stage outside its admitted targets.",
-  "target-conflict": "Atomic file stage recovery cannot prove its published target.",
-  busy: "Atomic file stage recovery inventory changed during observation.",
-  "cleanup-required": "Atomic file stage recovery could not retire an exact stage.",
-  "operation-failure": "Atomic file stage recovery failed.",
-} as const satisfies Readonly<Record<DurableAtomicFileStageRecoveryErrorReason, string>>;
-
-export class DurableAtomicFileStageRecoveryError extends Error {
-  override readonly name = "DurableAtomicFileStageRecoveryError";
-  readonly code = "wakeflow-durable-atomic-file-stage-recovery" as const;
-  readonly reason: DurableAtomicFileStageRecoveryErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DurableAtomicFileStageRecoveryErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableAtomicFileStageRecoveryError extends ModuleError<DurableAtomicFileStageRecoveryErrorReason> {
+  static override readonly code = "wakeflow-durable-atomic-file-stage-recovery";
 }
 
 interface ParsedOptions {
@@ -133,17 +107,9 @@ interface TargetScope {
   readonly targetDigests: ReadonlySet<Sha256Digest>;
 }
 
-function fail(
-  reason: DurableAtomicFileStageRecoveryErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableAtomicFileStageRecoveryError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableAtomicFileStageRecoveryErrorReason> = failWith(
+  DurableAtomicFileStageRecoveryError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

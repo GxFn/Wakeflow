@@ -5,6 +5,7 @@ import pLimit from "p-limit";
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidateProgress,
   DurableDirectoryTreeCandidateError,
@@ -115,35 +116,14 @@ export type ManagedEvidenceRecordSetInventoryErrorReason =
   | "source-changed"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence record-set inventory input is invalid.",
-  "root-scope": "Managed evidence record-set inventory escaped its root scope.",
-  "tree-shape": "Managed evidence record set contains an unknown resource.",
-  "node-policy": "Managed evidence record set violates its private node policy.",
-  transaction: "Managed evidence publication transaction is invalid.",
-  record: "Managed evidence final record is incomplete or inconsistent.",
-  capacity: "Managed evidence record-set inventory exceeds its capacity.",
-  "source-changed": "Managed evidence record set changed during inventory.",
-  "operation-failure": "Managed evidence record-set inventory failed.",
-} as const satisfies Readonly<Record<ManagedEvidenceRecordSetInventoryErrorReason, string>>;
-
 /** Record-set结构、事务或Manifest闭包无法稳定证明时的脱敏错误。 */
-export class ManagedEvidenceRecordSetInventoryError extends Error {
-  override readonly name = "ManagedEvidenceRecordSetInventoryError";
-  readonly code = "wakeflow-managed-evidence-record-set-inventory" as const;
-  readonly reason: ManagedEvidenceRecordSetInventoryErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidenceRecordSetInventoryErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceRecordSetInventoryError extends ModuleError<ManagedEvidenceRecordSetInventoryErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-record-set-inventory";
 }
+
+const fail: Fail<ManagedEvidenceRecordSetInventoryErrorReason> = failWith(
+  ManagedEvidenceRecordSetInventoryError,
+);
 
 interface ParsedOptions {
   readonly expectedRootNode: Readonly<FileNodeSnapshot> | undefined;
@@ -152,18 +132,6 @@ interface ParsedOptions {
 }
 
 const RECORD_INSPECTION_CONCURRENCY = 4;
-
-function fail(
-  reason: ManagedEvidenceRecordSetInventoryErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidenceRecordSetInventoryError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseExpectedNode(value: unknown, path: string): Readonly<FileNodeSnapshot> | undefined {
   if (value === undefined) return undefined;

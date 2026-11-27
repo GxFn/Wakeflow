@@ -10,6 +10,7 @@ import {
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   MarkdownJsonStringLiteralError,
   renderMarkdownJsonStringLiteral,
@@ -59,43 +60,16 @@ export interface WakeflowProgramInstructionBodyAuthority {
 
 export type WakeflowProgramInstructionBodyAuthorityErrorReason = "config" | "profile" | "text";
 
-const ERROR_MESSAGES = {
-  config: "Wakeflow Program Instruction config source is invalid.",
-  profile: "Wakeflow Program Instruction host profile is invalid.",
-  text: "Wakeflow Program Instruction text cannot be represented safely.",
-} as const satisfies Readonly<Record<WakeflowProgramInstructionBodyAuthorityErrorReason, string>>;
-
 /** Program Instruction 正文权威准入失败的稳定、脱敏错误。 */
-export class WakeflowProgramInstructionBodyAuthorityError extends Error {
-  override readonly name = "WakeflowProgramInstructionBodyAuthorityError";
-  readonly code = "wakeflow-program-instruction-body-authority" as const;
-  readonly reason: WakeflowProgramInstructionBodyAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowProgramInstructionBodyAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowProgramInstructionBodyAuthorityError extends ModuleError<WakeflowProgramInstructionBodyAuthorityErrorReason> {
+  static override readonly code = "wakeflow-program-instruction-body-authority";
 }
+
+const fail: Fail<WakeflowProgramInstructionBodyAuthorityErrorReason> = failWith(
+  WakeflowProgramInstructionBodyAuthorityError,
+);
 
 const CONFIG_FILE_REF = "wakeflow.config.json" as const;
-
-function fail(
-  reason: WakeflowProgramInstructionBodyAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowProgramInstructionBodyAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {

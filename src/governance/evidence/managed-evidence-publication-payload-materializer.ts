@@ -9,6 +9,7 @@ import {
   planLoadedArtifactTreeTransfer,
 } from "../../foundation/artifact/loaded-artifact-tree-transfer-plan.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import {
   createFileAtomically,
@@ -72,36 +73,13 @@ export type ManagedEvidencePublicationPayloadMaterializationErrorReason =
   | "recovery-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence publication payload materialization input is invalid.",
-  "source-root-scope": "Managed evidence publication payload escaped its admitted source root.",
-  "source-changed": "Managed evidence publication payload source differs from its Manifest.",
-  "destination-root-scope": "Managed evidence publication payload escaped its Demand root.",
-  "stage-conflict": "Managed evidence publication payload conflicts with its stage plan.",
-  capacity: "Managed evidence publication payload exceeds its admitted capacity.",
-  "recovery-required":
-    "Managed evidence publication payload materialization requires explicit recovery.",
-  "operation-failure": "Managed evidence publication payload could not be materialized safely.",
-} as const satisfies Readonly<
-  Record<ManagedEvidencePublicationPayloadMaterializationErrorReason, string>
->;
-
-export class ManagedEvidencePublicationPayloadMaterializationError extends Error {
-  override readonly name = "ManagedEvidencePublicationPayloadMaterializationError";
-  readonly code = "wakeflow-managed-evidence-publication-payload-materialization" as const;
-  readonly reason: ManagedEvidencePublicationPayloadMaterializationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidencePublicationPayloadMaterializationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidencePublicationPayloadMaterializationError extends ModuleError<ManagedEvidencePublicationPayloadMaterializationErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-publication-payload-materialization";
 }
+
+const fail: Fail<ManagedEvidencePublicationPayloadMaterializationErrorReason> = failWith(
+  ManagedEvidencePublicationPayloadMaterializationError,
+);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
@@ -112,18 +90,6 @@ const CONTENT_REF = parsePortableResourcePath("content");
 const PAYLOAD_CONTENT_REF = parsePortableResourcePath(
   `${MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME}/content`,
 );
-
-function fail(
-  reason: ManagedEvidencePublicationPayloadMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidencePublicationPayloadMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function assertRoot(
   value: unknown,

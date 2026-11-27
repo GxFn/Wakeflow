@@ -29,6 +29,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -67,35 +68,14 @@ type WakeflowWindowRuntimeUnregisteredProjectionErrorReason =
   | "digest"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Window Runtime unregistered projection input is invalid.",
-  schema: "Window Runtime unregistered projection does not satisfy its Schema.",
-  identity: "Window Runtime unregistered projection identity is invalid.",
-  placement: "Window Runtime unregistered projection placement is invalid.",
-  relation: "Window Runtime unregistered projection fields are inconsistent.",
-  digest: "Window Runtime unregistered projection digest is invalid.",
-  representation: "Window Runtime unregistered projection bytes are not deterministic.",
-} as const satisfies Readonly<
-  Record<WakeflowWindowRuntimeUnregisteredProjectionErrorReason, string>
->;
-
 /** 未注册 Window Runtime 投影准入失败的稳定、脱敏错误。 */
-export class WakeflowWindowRuntimeUnregisteredProjectionRecordError extends Error {
-  override readonly name = "WakeflowWindowRuntimeUnregisteredProjectionRecordError";
-  readonly code = "wakeflow-window-runtime-unregistered-projection-record" as const;
-  readonly reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowRuntimeUnregisteredProjectionRecordError extends ModuleError<WakeflowWindowRuntimeUnregisteredProjectionErrorReason> {
+  static override readonly code = "wakeflow-window-runtime-unregistered-projection-record";
 }
+
+const failRecord: Fail<WakeflowWindowRuntimeUnregisteredProjectionErrorReason> = failWith(
+  WakeflowWindowRuntimeUnregisteredProjectionRecordError,
+);
 
 export interface WakeflowWindowRuntimeUnregisteredProjection {
   readonly kind: typeof WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND;
@@ -148,15 +128,11 @@ export interface WakeflowWindowRuntimeUnregisteredProjectionSet {
 }
 
 /** 由同一 Config/Host 编译出的纯 source 发生内部关系漂移。 */
-export class WakeflowWindowRuntimeUnregisteredProjectionError extends Error {
-  override readonly name = "WakeflowWindowRuntimeUnregisteredProjectionError";
-  readonly code = "wakeflow-window-runtime-unregistered-projection" as const;
-  readonly reason = "source" as const;
-  readonly path: string;
+export class WakeflowWindowRuntimeUnregisteredProjectionError extends ModuleError<"source"> {
+  static override readonly code = "wakeflow-window-runtime-unregistered-projection";
 
   constructor(path: string) {
-    super("Window Runtime unregistered projection source is invalid.");
-    this.path = path;
+    super("source", path);
   }
 }
 
@@ -164,18 +140,6 @@ const validateProjectionWire = createRuntimeJsonSchemaValidator<WindowRuntimePro
   WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
-
-function failRecord(
-  reason: WakeflowWindowRuntimeUnregisteredProjectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowRuntimeUnregisteredProjectionRecordError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function typedId<Kind extends "program" | "window" | "surface" | "repository">(
   value: unknown,

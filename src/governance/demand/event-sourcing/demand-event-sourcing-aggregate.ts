@@ -12,6 +12,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   computeDemandAggregateStateDigest,
   type DemandAggregateState,
@@ -68,33 +69,13 @@ export type DemandEventSourcingAggregateErrorReason =
   | "state"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing aggregate input is invalid.",
-  identifier: "Demand Event Sourcing aggregate contains an invalid identity.",
-  position: "Demand Event Sourcing aggregate contains an invalid cursor.",
-  digest: "Demand Event Sourcing aggregate contains an invalid digest.",
-  event: "Demand Event Sourcing aggregate contains an invalid tail event.",
-  version: "Demand Event Sourcing aggregate tail version is unsupported.",
-  state: "Demand Event Sourcing aggregate contains an invalid state.",
-  relation: "Demand Event Sourcing aggregate cursor, tail and state do not close.",
-} as const satisfies Readonly<Record<DemandEventSourcingAggregateErrorReason, string>>;
-
-export class DemandEventSourcingAggregateError extends Error {
-  override readonly name = "DemandEventSourcingAggregateError";
-  readonly code = "wakeflow-demand-event-sourcing-aggregate" as const;
-  readonly reason: DemandEventSourcingAggregateErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingAggregateErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingAggregateError extends ModuleError<DemandEventSourcingAggregateErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-aggregate";
 }
+
+const fail: Fail<DemandEventSourcingAggregateErrorReason> = failWith(
+  DemandEventSourcingAggregateError,
+);
 
 const FIELDS = Object.freeze([
   "commitSequence",
@@ -106,18 +87,6 @@ const FIELDS = Object.freeze([
   "stateDigest",
   "streamRevision",
 ] as const);
-
-function fail(
-  reason: DemandEventSourcingAggregateErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingAggregateError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {

@@ -6,6 +6,7 @@ import {
   parsePlainRecord,
   pickOwnDataProperties,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type ByteCount,
   ByteCountError,
@@ -63,30 +64,13 @@ export type FileNodeSnapshotErrorReason =
   | "snapshot-shape"
   | "snapshot-field";
 
-const ERROR_MESSAGES = {
-  "stat-shape": "File node Stats must expose passive own bigint data fields.",
-  "stat-field": "File node Stats contains an invalid physical field.",
-  "stat-size": "File node size cannot be represented as a safe byte count.",
-  "snapshot-shape": "File node snapshot must match its closed passive data shape.",
-  "snapshot-field": "File node snapshot contains an inconsistent physical field.",
-} as const satisfies Readonly<Record<FileNodeSnapshotErrorReason, string>>;
-
 /**
  * 节点 Stats 准入或快照复验失败的稳定错误。
  *
  * 错误不回显设备号、inode、所有者、权限位、大小或时间值。
  */
-export class FileNodeSnapshotError extends Error {
-  override readonly name = "FileNodeSnapshotError";
-  readonly code = "wakeflow-file-node-snapshot" as const;
-  readonly reason: FileNodeSnapshotErrorReason;
-  readonly path: string;
-
-  constructor(reason: FileNodeSnapshotErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class FileNodeSnapshotError extends ModuleError<FileNodeSnapshotErrorReason> {
+  static override readonly code = "wakeflow-file-node-snapshot";
 }
 
 const STAT_FIELDS = Object.freeze([
@@ -149,9 +133,7 @@ function fieldPath(basePath: string, field: string): string {
   return `${basePath}.${field}`;
 }
 
-function fail(reason: FileNodeSnapshotErrorReason, path: string, cause?: unknown): never {
-  throw new FileNodeSnapshotError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<FileNodeSnapshotErrorReason> = failWith(FileNodeSnapshotError);
 
 function readBigIntField(
   record: Readonly<Record<string, unknown>>,

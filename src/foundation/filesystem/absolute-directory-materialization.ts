@@ -1,6 +1,7 @@
 import nodePath from "node:path";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   AbsoluteDirectoryPlacementError,
   inspectAbsoluteDirectoryPlacement,
@@ -56,34 +57,9 @@ export type AbsoluteDirectoryMaterializationErrorReason =
   | "path-changed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Absolute directory materialization input is invalid.",
-  scope: "Absolute directory materialization requires a non-root safe ancestor.",
-  symlink: "Absolute directory materialization path contains a symbolic link.",
-  "not-directory": "Absolute directory materialization path contains a non-directory node.",
-  alias: "Absolute directory materialization path is not canonically spelled.",
-  "root-open": "Absolute directory materialization root could not be opened.",
-  materialization: "Absolute directory path could not be materialized safely.",
-  "path-changed": "Absolute directory path changed during materialization.",
-  "close-failure": "Absolute directory materialization root could not be closed safely.",
-} as const satisfies Readonly<Record<AbsoluteDirectoryMaterializationErrorReason, string>>;
-
 /** 绝对目录位置物化失败的稳定、脱敏错误。 */
-export class AbsoluteDirectoryMaterializationError extends Error {
-  override readonly name = "AbsoluteDirectoryMaterializationError";
-  readonly code = "wakeflow-absolute-directory-materialization" as const;
-  readonly reason: AbsoluteDirectoryMaterializationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: AbsoluteDirectoryMaterializationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class AbsoluteDirectoryMaterializationError extends ModuleError<AbsoluteDirectoryMaterializationErrorReason> {
+  static override readonly code = "wakeflow-absolute-directory-materialization";
 }
 
 interface ParsedOptions {
@@ -91,17 +67,9 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: AbsoluteDirectoryMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new AbsoluteDirectoryMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<AbsoluteDirectoryMaterializationErrorReason> = failWith(
+  AbsoluteDirectoryMaterializationError,
+);
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
   let record: Readonly<Record<string, unknown>>;

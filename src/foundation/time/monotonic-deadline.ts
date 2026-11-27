@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import type { MonotonicMoment } from "./monotonic-clock.js";
 import type { MonotonicDuration } from "./monotonic-duration.js";
 
@@ -22,33 +23,16 @@ export type MonotonicDeadline = bigint & {
 /** monotonic deadline 失败的稳定分类。 */
 export type MonotonicDeadlineErrorReason = "moment-type" | "duration-type" | "deadline-type";
 
-const ERROR_MESSAGES = {
-  "moment-type": "Monotonic moment must be non-negative nanoseconds as bigint.",
-  "duration-type": "Monotonic duration must be non-negative nanoseconds as bigint.",
-  "deadline-type": "Monotonic deadline must be non-negative nanoseconds as bigint.",
-} as const satisfies Readonly<Record<MonotonicDeadlineErrorReason, string>>;
-
 /**
  * 截止时刻构造或查询输入失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和参数路径，不回显原点、时刻、截止时刻或时长数值。
  */
-export class MonotonicDeadlineError extends Error {
-  override readonly name = "MonotonicDeadlineError";
-  readonly code = "wakeflow-monotonic-deadline" as const;
-  readonly reason: MonotonicDeadlineErrorReason;
-  readonly path: string;
-
-  constructor(reason: MonotonicDeadlineErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class MonotonicDeadlineError extends ModuleError<MonotonicDeadlineErrorReason> {
+  static override readonly code = "wakeflow-monotonic-deadline";
 }
 
-function fail(reason: MonotonicDeadlineErrorReason, path: string): never {
-  throw new MonotonicDeadlineError(reason, path);
-}
+const fail: Fail<MonotonicDeadlineErrorReason> = failWith(MonotonicDeadlineError);
 
 function parseNonNegativeBigint(
   value: unknown,

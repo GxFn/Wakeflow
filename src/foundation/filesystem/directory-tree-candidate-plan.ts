@@ -14,6 +14,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import {
   addByteCounts,
@@ -113,32 +114,8 @@ export type DurableDirectoryTreeCandidateErrorReason =
   | "source-changed"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Directory tree candidate input is invalid.",
-  "file-order": "Directory tree candidate files are not in canonical order.",
-  "path-conflict": "Directory tree candidate paths do not form one closed tree.",
-  capacity: "Directory tree candidate exceeds its declared capacity.",
-  "target-exists": "Directory tree candidate target already exists.",
-  "tree-conflict": "Directory tree candidate does not match its closed plan.",
-  "source-changed": "Directory tree candidate changed during verification.",
-  "operation-failure": "Directory tree candidate could not be created durably.",
-} as const satisfies Readonly<Record<DurableDirectoryTreeCandidateErrorReason, string>>;
-
-export class DurableDirectoryTreeCandidateError extends Error {
-  override readonly name = "DurableDirectoryTreeCandidateError";
-  readonly code = "wakeflow-durable-directory-tree-candidate" as const;
-  readonly reason: DurableDirectoryTreeCandidateErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DurableDirectoryTreeCandidateErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableDirectoryTreeCandidateError extends ModuleError<DurableDirectoryTreeCandidateErrorReason> {
+  static override readonly code = "wakeflow-durable-directory-tree-candidate";
 }
 
 interface ParsedDirectoryTreeCandidateOptions {
@@ -197,17 +174,9 @@ export function throwDirectoryTreeCandidateError(
   return fail(reason, path, cause);
 }
 
-function fail(
-  reason: DurableDirectoryTreeCandidateErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableDirectoryTreeCandidateError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableDirectoryTreeCandidateErrorReason> = failWith(
+  DurableDirectoryTreeCandidateError,
+);
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

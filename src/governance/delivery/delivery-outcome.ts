@@ -23,6 +23,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -99,26 +100,11 @@ export type DeliveryOutcomeDraft = Omit<
 
 export type DeliveryOutcomeErrorReason = "json" | "schema" | "identifier" | "digest" | "time";
 
-const ERROR_MESSAGES = {
-  json: "Delivery Outcome is not passive JSON data.",
-  schema: "Delivery Outcome does not satisfy its Schema.",
-  identifier: "Delivery Outcome contains an invalid identity.",
-  digest: "Delivery Outcome contains an invalid or inconsistent digest.",
-  time: "Delivery Outcome contains an invalid time.",
-} as const satisfies Readonly<Record<DeliveryOutcomeErrorReason, string>>;
-
-export class DeliveryOutcomeError extends Error {
-  override readonly name = "DeliveryOutcomeError";
-  readonly code = "wakeflow-delivery-outcome" as const;
-  readonly reason: DeliveryOutcomeErrorReason;
-  readonly path: string;
-
-  constructor(reason: DeliveryOutcomeErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DeliveryOutcomeError extends ModuleError<DeliveryOutcomeErrorReason> {
+  static override readonly code = "wakeflow-delivery-outcome";
 }
+
+const fail: Fail<DeliveryOutcomeErrorReason> = failWith(DeliveryOutcomeError);
 
 const validateWire = createRuntimeJsonSchemaValidator<DeliveryOutcomeWire>(
   WAKEFLOW_DELIVERY_OUTCOME_SCHEMA,
@@ -130,10 +116,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryOutcomeWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(reason: DeliveryOutcomeErrorReason, path: string, cause?: unknown): never {
-  throw new DeliveryOutcomeError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function id<Kind extends "target-delivery" | "work-claim">(
   value: unknown,

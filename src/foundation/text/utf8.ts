@@ -1,5 +1,7 @@
 import { TextDecoder, TextEncoder } from "node:util";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
+
 /**
  * Wakeflow Foundation / Text：无损、严格 UTF-8 字节边界。
  *
@@ -25,40 +27,21 @@ export type Utf8ErrorReason =
   | "ill-formed-text"
   | "encode-failure";
 
-const ERROR_MESSAGES = {
-  "bytes-type": "UTF-8 input must be a Uint8Array byte sequence.",
-  "decode-failure": "UTF-8 bytes are not a valid fatal UTF-8 sequence.",
-  "text-type": "UTF-8 text input must be a primitive string.",
-  "ill-formed-text": "UTF-8 text must not contain lone Unicode surrogates.",
-  "encode-failure": "UTF-8 text encoding failed.",
-} as const satisfies Readonly<Record<Utf8ErrorReason, string>>;
-
 /**
  * UTF-8 解码或编码失败的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方路径，不回显字节、文本、替换字符或
  * `TextDecoder` 或 `TextEncoder` 的内部异常。
  */
-export class Utf8Error extends Error {
-  override readonly name = "Utf8Error";
-  readonly code = "wakeflow-utf8" as const;
-  readonly reason: Utf8ErrorReason;
-  readonly path: string;
-
-  constructor(reason: Utf8ErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class Utf8Error extends ModuleError<Utf8ErrorReason> {
+  static override readonly code = "wakeflow-utf8";
 }
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(reason: Utf8ErrorReason, path: string): never {
-  throw new Utf8Error(reason, path);
-}
+const fail: Fail<Utf8ErrorReason> = failWith(Utf8Error);
 
 function isUint8Array(value: unknown): value is Uint8Array {
   return ArrayBuffer.isView(value) && value instanceof Uint8Array;

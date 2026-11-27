@@ -3,6 +3,7 @@ import {
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -30,31 +31,11 @@ export interface TaskPackageProjectionAddress {
 
 export type TaskPackageProjectionPathErrorReason = "identifier" | "file-name";
 
-const ERROR_MESSAGES = {
-  identifier: "TaskPackage projection identity is invalid.",
-  "file-name": "TaskPackage projection filename is invalid.",
-} as const satisfies Readonly<Record<TaskPackageProjectionPathErrorReason, string>>;
-
-export class TaskPackageProjectionPathError extends Error {
-  override readonly name = "TaskPackageProjectionPathError";
-  readonly code = "wakeflow-task-package-projection-path" as const;
-  readonly reason: TaskPackageProjectionPathErrorReason;
-  readonly path: string;
-
-  constructor(reason: TaskPackageProjectionPathErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TaskPackageProjectionPathError extends ModuleError<TaskPackageProjectionPathErrorReason> {
+  static override readonly code = "wakeflow-task-package-projection-path";
 }
 
-function fail(reason: TaskPackageProjectionPathErrorReason, path: string, cause?: unknown): never {
-  throw new TaskPackageProjectionPathError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<TaskPackageProjectionPathErrorReason> = failWith(TaskPackageProjectionPathError);
 
 function parseTaskPackageId(value: unknown, path: string): WakeflowDurableId<"task-package"> {
   try {

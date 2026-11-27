@@ -1,5 +1,6 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../workspace-host-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -32,41 +33,14 @@ export interface WakeflowFreshWindowRuntimeAuthority {
 
 type WakeflowFreshWindowRuntimeAuthorityErrorReason = "profile" | "projection" | "catalog";
 
-const ERROR_MESSAGES = {
-  profile: "Fresh Window Runtime requires a host with window identity support.",
-  projection: "Fresh Window Runtime projection authority is invalid.",
-  catalog: "Fresh Window Runtime resource catalog is incomplete.",
-} as const satisfies Readonly<Record<WakeflowFreshWindowRuntimeAuthorityErrorReason, string>>;
-
 /** Fresh Window Runtime authority 编译失败的稳定、脱敏错误。 */
-export class WakeflowFreshWindowRuntimeAuthorityError extends Error {
-  override readonly name = "WakeflowFreshWindowRuntimeAuthorityError";
-  readonly code = "wakeflow-fresh-window-runtime-authority" as const;
-  readonly reason: WakeflowFreshWindowRuntimeAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowFreshWindowRuntimeAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowFreshWindowRuntimeAuthorityError extends ModuleError<WakeflowFreshWindowRuntimeAuthorityErrorReason> {
+  static override readonly code = "wakeflow-fresh-window-runtime-authority";
 }
 
-function fail(
-  reason: WakeflowFreshWindowRuntimeAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowFreshWindowRuntimeAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowFreshWindowRuntimeAuthorityErrorReason> = failWith(
+  WakeflowFreshWindowRuntimeAuthorityError,
+);
 
 /** 为同一 strict Config/Host 编译 Fresh Window Runtime 的完整纯目标。 */
 export function compileWakeflowFreshWindowRuntimeAuthority(

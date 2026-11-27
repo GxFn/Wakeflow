@@ -5,6 +5,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
@@ -78,28 +79,12 @@ export type WakeflowMaintenanceGateErrorReason =
   | "recovery-required"
   | "effect-failure";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance gate input is invalid.",
-  "stale-preview": "Wakeflow maintenance core layout differs from preview.",
-  "bootstrap-conflict": "Wakeflow maintenance bootstrap prefix is unsafe.",
-  busy: "Another Wakeflow maintenance operation holds the gate.",
-  "recovery-required": "Wakeflow maintenance gate requires explicit recovery.",
-  "effect-failure": "Wakeflow maintenance gate could not be established safely.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceGateErrorReason, string>>;
-
 /** Maintenance gate/bootstrap 失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceGateError extends Error {
-  override readonly name = "WakeflowMaintenanceGateError";
-  readonly code = "wakeflow-maintenance-gate" as const;
-  readonly reason: WakeflowMaintenanceGateErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowMaintenanceGateErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceGateError extends ModuleError<WakeflowMaintenanceGateErrorReason> {
+  static override readonly code = "wakeflow-maintenance-gate";
 }
+
+const fail: Fail<WakeflowMaintenanceGateErrorReason> = failWith(WakeflowMaintenanceGateError);
 
 interface ParsedOptions {
   readonly expectedCoreLayoutInspectionDigest: Sha256Digest;
@@ -117,10 +102,6 @@ const CONTEXT_CORE_INSPECTIONS = new WeakMap<
   object,
   Readonly<WakeflowWorkspaceCoreLayoutInspection>
 >();
-
-function fail(reason: WakeflowMaintenanceGateErrorReason, path: string, cause?: unknown): never {
-  throw new WakeflowMaintenanceGateError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function admittedOperationId(value: unknown, path: string): WakeflowMaintenanceOperationId {
   try {

@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type RootedDirectory,
   isRootedDirectory,
@@ -64,50 +65,14 @@ export type WakeflowExternalInstructionRecompositionErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow external instruction recomposition input is invalid.",
-  "unsupported-platform":
-    "Wakeflow external instruction recomposition requires POSIX ownership facts.",
-  "root-scope": "Wakeflow external instruction recomposition lost its root scope.",
-  "root-policy": "Wakeflow external instruction recomposition requires a current-user root.",
-  "source-invalid": "Wakeflow external instruction source cannot be recomposed safely.",
-  capacity: "Wakeflow external instruction recomposition exceeds its byte budget.",
-  conflict: "Wakeflow external instruction source changed before atomic publication.",
-  "recovery-required":
-    "Wakeflow external instruction target has stage residue that requires explicit recovery.",
-  "effect-failure": "Wakeflow external instruction recomposition effect failed.",
-  "commit-uncertain": "Wakeflow external instruction recomposition commit outcome is uncertain.",
-} as const satisfies Readonly<Record<WakeflowExternalInstructionRecompositionErrorReason, string>>;
-
 /** 外部指令重组失败的稳定、脱敏错误。 */
-export class WakeflowExternalInstructionRecompositionError extends Error {
-  override readonly name = "WakeflowExternalInstructionRecompositionError";
-  readonly code = "wakeflow-external-instruction-recomposition" as const;
-  readonly reason: WakeflowExternalInstructionRecompositionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowExternalInstructionRecompositionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowExternalInstructionRecompositionError extends ModuleError<WakeflowExternalInstructionRecompositionErrorReason> {
+  static override readonly code = "wakeflow-external-instruction-recomposition";
 }
 
-function fail(
-  reason: WakeflowExternalInstructionRecompositionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowExternalInstructionRecompositionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowExternalInstructionRecompositionErrorReason> = failWith(
+  WakeflowExternalInstructionRecompositionError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

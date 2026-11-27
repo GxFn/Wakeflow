@@ -8,6 +8,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import { WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG } from "../governance/demand/demand-resource-catalog.js";
 import { WAKEFLOW_LEDGER_STATIC_RESOURCE_CATALOG } from "../governance/ledger/ledger-resource-catalog.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./maintenance/wakeflow-maintenance-resource-catalog.js";
@@ -60,32 +61,14 @@ export type WakeflowWorkspaceStaticResourceMatrixErrorReason =
   | "digest"
   | "query";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow static resource matrix input is invalid.",
-  scope: "Wakeflow static resource declaration has an invalid scope.",
-  "declaration-id-collision": "Wakeflow static resource declaration identity is duplicated.",
-  "placement-collision": "Wakeflow static resources occupy the same logical placement.",
-  digest: "Wakeflow static resource matrix digest is invalid.",
-  query: "Wakeflow static resource matrix query is invalid.",
-} as const satisfies Readonly<Record<WakeflowWorkspaceStaticResourceMatrixErrorReason, string>>;
-
 /** 静态资源矩阵组合或唯一性准入失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceStaticResourceMatrixError extends Error {
-  override readonly name = "WakeflowWorkspaceStaticResourceMatrixError";
-  readonly code = "wakeflow-workspace-static-resource-matrix" as const;
-  readonly reason: WakeflowWorkspaceStaticResourceMatrixErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWorkspaceStaticResourceMatrixError extends ModuleError<WakeflowWorkspaceStaticResourceMatrixErrorReason> {
+  static override readonly code = "wakeflow-workspace-static-resource-matrix";
 }
+
+const fail: Fail<WakeflowWorkspaceStaticResourceMatrixErrorReason> = failWith(
+  WakeflowWorkspaceStaticResourceMatrixError,
+);
 
 const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_CONFIG_RESOURCE_CATALOG,
@@ -117,18 +100,6 @@ function sortedDeclarations(
   declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[],
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
   return Object.freeze([...declarations].sort(compareDeclarationIds));
-}
-
-function fail(
-  reason: WakeflowWorkspaceStaticResourceMatrixErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWorkspaceStaticResourceMatrixError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function logicalRootKey(placement: Readonly<WakeflowWorkspaceResourcePlacement>): string {

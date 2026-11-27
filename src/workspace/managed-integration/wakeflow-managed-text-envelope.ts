@@ -8,6 +8,7 @@ import {
 } from "../../foundation/crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../../foundation/crypto/sha256-hasher.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createFileByteRange,
   type FileByteRange,
@@ -49,36 +50,14 @@ export type WakeflowManagedTextEnvelopeErrorReason =
   | "body-digest"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow managed text envelope input is invalid.",
-  capacity: "Wakeflow managed text envelope exceeds runtime byte capacity.",
-  "hash-failure": "Wakeflow managed text envelope bytes could not be hashed.",
-  utf8: "Wakeflow managed text source is not valid UTF-8.",
-  identity: "Wakeflow managed text component identity is invalid.",
-  "body-profile": "Wakeflow managed text body violates its strict profile.",
-  marker: "Wakeflow managed text marker structure is invalid.",
-  "marker-pair": "Wakeflow managed text marker pair does not close.",
-  "body-digest": "Wakeflow managed text body differs from its marker digest.",
-  relation: "Wakeflow managed text envelope belongs to another component.",
-} as const satisfies Readonly<Record<WakeflowManagedTextEnvelopeErrorReason, string>>;
-
 /** Managed Text envelope 解析或重组失败的稳定、脱敏错误。 */
-export class WakeflowManagedTextEnvelopeError extends Error {
-  override readonly name = "WakeflowManagedTextEnvelopeError";
-  readonly code = "wakeflow-managed-text-envelope" as const;
-  readonly reason: WakeflowManagedTextEnvelopeErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowManagedTextEnvelopeErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowManagedTextEnvelopeError extends ModuleError<WakeflowManagedTextEnvelopeErrorReason> {
+  static override readonly code = "wakeflow-managed-text-envelope";
 }
+
+const fail: Fail<WakeflowManagedTextEnvelopeErrorReason> = failWith(
+  WakeflowManagedTextEnvelopeError,
+);
 
 interface WakeflowManagedTextEnvelopeFacts {
   readonly sourceByteCount: ByteCount;
@@ -143,18 +122,6 @@ interface ParsedMarker {
   readonly separator: "0" | "1";
   readonly start: number;
   readonly lineEnd: number;
-}
-
-function fail(
-  reason: WakeflowManagedTextEnvelopeErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowManagedTextEnvelopeError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function digestBytes(bytes: Uint8Array, path: string): Sha256Digest {

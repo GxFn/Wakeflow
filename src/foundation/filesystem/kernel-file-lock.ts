@@ -5,6 +5,7 @@ import { join as joinPath } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { types } from "node:util";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { isAbortSignal, OperationAbortedError, throwIfAborted } from "../node/abort-signal.js";
 import { advisoryLockFlagsOrNull } from "../node/advisory-lock-flags.js";
 import { ownedByAnotherUser } from "../node/current-user.js";
@@ -66,36 +67,19 @@ export type KernelFileLockErrorReason =
   | "reentered"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Kernel file lock input is invalid.",
-  timeout: "Kernel file lock is held by another owner.",
-  unsupported: "This volume or platform does not provide kernel advisory locks.",
-  "unsafe-lock": "Kernel file lock path is not a regular file owned by the current user.",
-  parent: "Kernel file lock directory does not exist.",
-  reentered: "Kernel file lock is already held by this call chain.",
-  "operation-failure": "Kernel file lock operation failed.",
-} as const satisfies Readonly<Record<KernelFileLockErrorReason, string>>;
-
 /** 内核咨询锁失败的稳定、脱敏错误。 */
-export class KernelFileLockError extends Error {
-  override readonly name = "KernelFileLockError";
-  readonly code = "wakeflow-kernel-file-lock" as const;
-  readonly reason: KernelFileLockErrorReason;
-  readonly path: string;
+export class KernelFileLockError extends ModuleError<KernelFileLockErrorReason> {
+  static override readonly code = "wakeflow-kernel-file-lock";
   /** 只有等不到锁（`timeout`）才值得原样再试；没有被调用方说成自己的拒绝时，边界层据此报成并发冲突。 */
   readonly retryable: boolean;
 
   constructor(reason: KernelFileLockErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.retryable = reason === "timeout";
   }
 }
 
-function fail(reason: KernelFileLockErrorReason, path: string, cause?: unknown): never {
-  throw new KernelFileLockError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<KernelFileLockErrorReason> = failWith(KernelFileLockError);
 
 interface ParsedOptions {
   readonly acquireTimeoutMilliseconds: number;

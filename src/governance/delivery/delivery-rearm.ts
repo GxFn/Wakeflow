@@ -23,6 +23,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -68,27 +69,11 @@ export type DeliveryRearmErrorReason =
   | "time"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Delivery Rearm is not passive JSON data.",
-  schema: "Delivery Rearm does not satisfy its Schema.",
-  identifier: "Delivery Rearm contains an invalid identity.",
-  digest: "Delivery Rearm contains an invalid or inconsistent digest.",
-  time: "Delivery Rearm contains an invalid time.",
-  relation: "Delivery Rearm generations or fences are inconsistent.",
-} as const satisfies Readonly<Record<DeliveryRearmErrorReason, string>>;
-
-export class DeliveryRearmError extends Error {
-  override readonly name = "DeliveryRearmError";
-  readonly code = "wakeflow-delivery-rearm" as const;
-  readonly reason: DeliveryRearmErrorReason;
-  readonly path: string;
-
-  constructor(reason: DeliveryRearmErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DeliveryRearmError extends ModuleError<DeliveryRearmErrorReason> {
+  static override readonly code = "wakeflow-delivery-rearm";
 }
+
+const fail: Fail<DeliveryRearmErrorReason> = failWith(DeliveryRearmError);
 
 const validateWire = createRuntimeJsonSchemaValidator<DeliveryRearmWire>(
   WAKEFLOW_DELIVERY_REARM_SCHEMA,
@@ -100,10 +85,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryRearmWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(reason: DeliveryRearmErrorReason, path: string, cause?: unknown): never {
-  throw new DeliveryRearmError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function id<Kind extends "target-delivery" | "work-claim">(
   value: unknown,

@@ -7,6 +7,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -115,47 +116,13 @@ export type DemandFileEventSnapshotStoreErrorReason =
   | "recovery-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing Snapshot Store input is invalid.",
-  "root-scope": "Demand Event Sourcing Snapshot Store root changed.",
-  "not-initialized": "Demand Event Sourcing snapshots directory is not initialized.",
-  "node-policy": "Demand Event Sourcing snapshot resource violates private node policy.",
-  capacity: "Demand Event Sourcing snapshot inventory exceeds its capacity.",
-  inventory: "Demand Event Sourcing snapshot inventory contains an unknown resource.",
-  "stream-changed": "Demand Event Sourcing snapshot inventory changed during observation.",
-  conflict: "Demand Event Sourcing snapshot sequence already contains different bytes.",
-  "recovery-required": "Demand Event Sourcing snapshot publication stage requires recovery.",
-  "operation-failure": "Demand Event Sourcing snapshot operation failed.",
-} as const satisfies Readonly<Record<DemandFileEventSnapshotStoreErrorReason, string>>;
-
-export class DemandFileEventSnapshotStoreError extends Error {
-  override readonly name = "DemandFileEventSnapshotStoreError";
-  readonly code = "wakeflow-demand-file-event-snapshot-store" as const;
-  readonly reason: DemandFileEventSnapshotStoreErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandFileEventSnapshotStoreErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandFileEventSnapshotStoreError extends ModuleError<DemandFileEventSnapshotStoreErrorReason> {
+  static override readonly code = "wakeflow-demand-file-event-snapshot-store";
 }
 
-function fail(
-  reason: DemandFileEventSnapshotStoreErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandFileEventSnapshotStoreError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DemandFileEventSnapshotStoreErrorReason> = failWith(
+  DemandFileEventSnapshotStoreError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

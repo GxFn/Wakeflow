@@ -12,6 +12,7 @@ import {
 } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DeterministicJsonFileResult,
   readDeterministicJsonFile,
@@ -117,20 +118,6 @@ export type TaskPackageProjectionStoreErrorReason =
   | "root-scope"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "TaskPackage projection store input is invalid.",
-  "projection-not-found": "TaskPackage projection does not exist.",
-  "authority-not-found": "TaskPackage planning event does not exist.",
-  authority: "TaskPackage projection source event stream is invalid.",
-  conflict: "TaskPackage projection conflicts with its source event.",
-  "node-policy": "TaskPackage projection resource violates private node policy.",
-  capacity: "TaskPackage projection exceeds its capacity.",
-  "recovery-required": "TaskPackage projection publication requires recovery.",
-  "commit-uncertain": "TaskPackage projection publication cannot prove its commit.",
-  "root-scope": "TaskPackage projection store lost its rooted scope.",
-  "operation-failure": "TaskPackage projection operation failed.",
-} as const satisfies Readonly<Record<TaskPackageProjectionStoreErrorReason, string>>;
-
 /** 并发 create 的胜者在 stage 退休前让目标短暂拥有两个硬链接；败者有界重读而不是失败。 */
 const CONCURRENT_PUBLICATION_RETRY_DELAYS_MS = Object.freeze([1, 2, 4, 8, 16, 32, 64, 128, 256]);
 
@@ -159,26 +146,11 @@ async function loadCurrentProjection(
   return loadProjection(root, taskPackageId, taskPackageDigest, signal);
 }
 
-export class TaskPackageProjectionStoreError extends Error {
-  override readonly name = "TaskPackageProjectionStoreError";
-  readonly code = "wakeflow-task-package-projection-store" as const;
-  readonly reason: TaskPackageProjectionStoreErrorReason;
-  readonly path: string;
-
-  constructor(reason: TaskPackageProjectionStoreErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TaskPackageProjectionStoreError extends ModuleError<TaskPackageProjectionStoreErrorReason> {
+  static override readonly code = "wakeflow-task-package-projection-store";
 }
 
-function fail(reason: TaskPackageProjectionStoreErrorReason, path: string, cause?: unknown): never {
-  throw new TaskPackageProjectionStoreError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<TaskPackageProjectionStoreErrorReason> = failWith(TaskPackageProjectionStoreError);
 
 function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
   try {

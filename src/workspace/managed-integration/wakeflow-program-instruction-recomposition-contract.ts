@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -66,39 +67,9 @@ export type WakeflowProgramInstructionRecompositionErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Program Instruction recomposition input is invalid.",
-  "unsupported-platform":
-    "Wakeflow Program Instruction recomposition requires POSIX ownership facts.",
-  "root-scope": "Wakeflow Program Instruction recomposition lost its workspace root scope.",
-  "root-policy":
-    "Wakeflow Program Instruction recomposition requires a current-user workspace root.",
-  "source-invalid": "Wakeflow Program Instruction source cannot be recomposed safely.",
-  capacity: "Wakeflow Program Instruction recomposition exceeds its byte budget.",
-  conflict: "Wakeflow Program Instruction source changed before atomic publication.",
-  "lock-timeout": "Wakeflow Program Instruction recomposition lock acquisition timed out.",
-  "lock-unsafe": "Wakeflow Program Instruction recomposition lock is unsafe.",
-  "recovery-required": "Wakeflow Program Instruction recomposition requires explicit recovery.",
-  "effect-failure": "Wakeflow Program Instruction candidate could not be published safely.",
-  "commit-uncertain": "Published Wakeflow Program Instruction could not be proven exact.",
-} as const satisfies Readonly<Record<WakeflowProgramInstructionRecompositionErrorReason, string>>;
-
 /** Program Instruction 重组与恢复失败的稳定、脱敏错误。 */
-export class WakeflowProgramInstructionRecompositionError extends Error {
-  override readonly name = "WakeflowProgramInstructionRecompositionError";
-  readonly code = "wakeflow-program-instruction-recomposition" as const;
-  readonly reason: WakeflowProgramInstructionRecompositionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowProgramInstructionRecompositionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowProgramInstructionRecompositionError extends ModuleError<WakeflowProgramInstructionRecompositionErrorReason> {
+  static override readonly code = "wakeflow-program-instruction-recomposition";
 }
 
 export interface ParsedWakeflowProgramInstructionRecompositionOptions {
@@ -107,17 +78,8 @@ export interface ParsedWakeflowProgramInstructionRecompositionOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-export function failWakeflowProgramInstructionRecomposition(
-  reason: WakeflowProgramInstructionRecompositionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowProgramInstructionRecompositionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failWakeflowProgramInstructionRecomposition: Fail<WakeflowProgramInstructionRecompositionErrorReason> =
+  failWith(WakeflowProgramInstructionRecompositionError);
 
 export function assertWakeflowProgramInstructionRecompositionRoot(
   value: unknown,

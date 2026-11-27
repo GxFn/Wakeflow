@@ -5,6 +5,7 @@ import { types } from "node:util";
 
 import { computeSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
@@ -72,33 +73,8 @@ type DurableFileCandidateErrorReason =
   | "cleanup-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable file candidate input is invalid.",
-  capacity: "Durable file candidate exceeds its byte capacity.",
-  "hash-failure": "Durable file candidate bytes could not be hashed.",
-  "root-scope": "Durable file candidate lost its rooted scope.",
-  parent: "Durable file candidate parent is unavailable or unsafe.",
-  "target-exists": "Durable file candidate target already exists.",
-  "create-failure": "Durable file candidate could not be created exclusively.",
-  "write-failure": "Durable file candidate bytes could not be written exactly.",
-  "sync-failure": "Durable file candidate could not synchronize its bytes.",
-  "candidate-changed": "Durable file candidate changed during preparation.",
-  "durability-failure": "Durable file candidate directory entry could not be synchronized.",
-  "cleanup-failure": "Failed durable file candidate could not be retired exactly.",
-  "close-failure": "Durable file candidate handle could not be closed.",
-} as const satisfies Readonly<Record<DurableFileCandidateErrorReason, string>>;
-
-export class DurableFileCandidateError extends Error {
-  override readonly name = "DurableFileCandidateError";
-  readonly code = "wakeflow-durable-file-candidate" as const;
-  readonly reason: DurableFileCandidateErrorReason;
-  readonly path: string;
-
-  constructor(reason: DurableFileCandidateErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableFileCandidateError extends ModuleError<DurableFileCandidateErrorReason> {
+  static override readonly code = "wakeflow-durable-file-candidate";
 }
 
 interface ParsedOptions {
@@ -116,9 +92,7 @@ interface InputBytes {
 /** 与耐久原子单文件写入一致的Foundation单文件硬上限。 */
 const DURABLE_FILE_CANDIDATE_MAXIMUM_BYTES = DURABLE_ATOMIC_FILE_MAXIMUM_BYTES;
 
-function fail(reason: DurableFileCandidateErrorReason, path: string, cause?: unknown): never {
-  throw new DurableFileCandidateError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<DurableFileCandidateErrorReason> = failWith(DurableFileCandidateError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

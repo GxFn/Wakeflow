@@ -3,6 +3,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
@@ -53,33 +54,14 @@ type WakeflowWindowHostIdentityProfileErrorReason =
   | "reserved"
   | "handle";
 
-const ERROR_MESSAGES = {
-  input: "Window Host Identity Profile is not passive data.",
-  shape: "Window Host Identity Profile has an invalid field set.",
-  host: "Window Host Identity Profile host is invalid.",
-  kind: "Window Host Identity Profile handle kind is invalid.",
-  capacity: "Window Host Identity Profile capacity is invalid.",
-  reserved: "Window Host Identity Profile reserved value set is invalid.",
-  handle: "Window host handle is invalid for the current host profile.",
-} as const satisfies Readonly<Record<WakeflowWindowHostIdentityProfileErrorReason, string>>;
-
 /** Host Identity Profile 或 opaque handle 准入失败的稳定错误。 */
-export class WakeflowWindowHostIdentityProfileError extends Error {
-  override readonly name = "WakeflowWindowHostIdentityProfileError";
-  readonly code = "wakeflow-window-host-identity-profile" as const;
-  readonly reason: WakeflowWindowHostIdentityProfileErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowHostIdentityProfileErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowHostIdentityProfileError extends ModuleError<WakeflowWindowHostIdentityProfileErrorReason> {
+  static override readonly code = "wakeflow-window-host-identity-profile";
 }
+
+const fail: Fail<WakeflowWindowHostIdentityProfileErrorReason> = failWith(
+  WakeflowWindowHostIdentityProfileError,
+);
 
 const PROFILE_FIELDS = Object.freeze([
   "handleKind",
@@ -93,18 +75,6 @@ const HANDLE_KIND_PATTERN = /^[a-z][a-z0-9-]{0,63}$/u;
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in profile text
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f]/u;
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
-
-function fail(
-  reason: WakeflowWindowHostIdentityProfileErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowHostIdentityProfileError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {

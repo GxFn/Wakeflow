@@ -31,6 +31,7 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   AbsoluteDirectoryMaterializationError,
   materializeAbsoluteDirectoryPlacement,
@@ -191,48 +192,14 @@ export type WakeflowStaticMaterializationStepExecutionErrorReason =
   | "owner"
   | "root-scope";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow static materialization step input is invalid.",
-  gate: "Wakeflow static materialization step requires the active gate.",
-  plan: "Wakeflow static materialization step is not in the confirmed preview.",
-  "source-config": "Wakeflow static materialization source Config is inconsistent.",
-  "target-authority": "Wakeflow static materialization target authority changed.",
-  "strict-absent": "Wakeflow fresh whole-owned target was not created exclusively.",
-  owner: "Wakeflow static materialization domain owner failed.",
-  "root-scope": "Wakeflow static materialization lost its root scope.",
-} as const satisfies Readonly<
-  Record<WakeflowStaticMaterializationStepExecutionErrorReason, string>
->;
-
 /** 静态物化 step 执行失败的稳定、脱敏错误。 */
-export class WakeflowStaticMaterializationStepExecutionError extends Error {
-  override readonly name = "WakeflowStaticMaterializationStepExecutionError";
-  readonly code = "wakeflow-static-materialization-step-execution" as const;
-  readonly reason: WakeflowStaticMaterializationStepExecutionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowStaticMaterializationStepExecutionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowStaticMaterializationStepExecutionError extends ModuleError<WakeflowStaticMaterializationStepExecutionErrorReason> {
+  static override readonly code = "wakeflow-static-materialization-step-execution";
 }
 
-function fail(
-  reason: WakeflowStaticMaterializationStepExecutionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowStaticMaterializationStepExecutionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowStaticMaterializationStepExecutionErrorReason> = failWith(
+  WakeflowStaticMaterializationStepExecutionError,
+);
 
 interface ParsedStepExecutionOptions {
   readonly sourceConfig: WakeflowConfigModel | null;

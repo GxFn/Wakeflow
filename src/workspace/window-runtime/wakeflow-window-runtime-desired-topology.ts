@@ -10,6 +10,7 @@ import {
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostId,
@@ -67,42 +68,14 @@ type WakeflowWindowRuntimeDesiredTopologyErrorReason =
   | "capacity"
   | "reference";
 
-const ERROR_MESSAGES = {
-  config: "Window Runtime desired topology Config is invalid.",
-  profile: "Window Runtime desired topology Host Profile is invalid.",
-  capacity: "Window Runtime desired topology exceeds its static window budget.",
-  reference: "Window Runtime desired topology contains an unresolved root reference.",
-} as const satisfies Readonly<Record<WakeflowWindowRuntimeDesiredTopologyErrorReason, string>>;
-
 /** Window Runtime 期望拓扑编译失败的稳定、脱敏错误。 */
-export class WakeflowWindowRuntimeDesiredTopologyError extends Error {
-  override readonly name = "WakeflowWindowRuntimeDesiredTopologyError";
-  readonly code = "wakeflow-window-runtime-desired-topology" as const;
-  readonly reason: WakeflowWindowRuntimeDesiredTopologyErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowRuntimeDesiredTopologyError extends ModuleError<WakeflowWindowRuntimeDesiredTopologyErrorReason> {
+  static override readonly code = "wakeflow-window-runtime-desired-topology";
 }
 
-function fail(
-  reason: WakeflowWindowRuntimeDesiredTopologyErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowRuntimeDesiredTopologyError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowWindowRuntimeDesiredTopologyErrorReason> = failWith(
+  WakeflowWindowRuntimeDesiredTopologyError,
+);
 
 function compareWindowId(
   left: Readonly<WakeflowConfigWindow>,

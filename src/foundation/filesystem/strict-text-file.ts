@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
@@ -34,32 +35,12 @@ export type StrictTextFileErrorReason =
   | "empty"
   | "unicode-normalization";
 
-const ERROR_MESSAGES = {
-  utf8: "Strict text file must contain valid fatal UTF-8.",
-  bom: "Strict text file cannot begin with a UTF-8 BOM.",
-  "line-endings": "Strict text file must use LF-only line endings.",
-  "final-newline": "Strict text file must end with exactly one LF.",
-  empty: "Strict text file must contain non-empty logical content.",
-  "unicode-normalization": "Strict text file source must use Unicode NFC.",
-} as const satisfies Readonly<Record<StrictTextFileErrorReason, string>>;
-
 /** 严格文本编码或固定文本形态失败时返回的稳定、脱敏错误。 */
-export class StrictTextFileError extends Error {
-  override readonly name = "StrictTextFileError";
-  readonly code = "wakeflow-strict-text-file" as const;
-  readonly reason: StrictTextFileErrorReason;
-  readonly path: string;
-
-  constructor(reason: StrictTextFileErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class StrictTextFileError extends ModuleError<StrictTextFileErrorReason> {
+  static override readonly code = "wakeflow-strict-text-file";
 }
 
-function fail(reason: StrictTextFileErrorReason, path: string, cause?: unknown): never {
-  throw new StrictTextFileError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<StrictTextFileErrorReason> = failWith(StrictTextFileError);
 
 function decodeStrictUtf8(bytes: Uint8Array): string {
   try {

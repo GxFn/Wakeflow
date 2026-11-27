@@ -1,4 +1,5 @@
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { ModuleError } from "../../../foundation/error/module-error.js";
 import type { DeterministicJsonFileResult } from "../../../foundation/filesystem/deterministic-json-file.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
 import type { RequirementClaimState } from "../../../kernel/requirement-board.js";
@@ -57,26 +58,8 @@ export type DemandEventSourcingPublicationServiceErrorReason =
   | "lock-unsafe"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing publication input is invalid.",
-  "root-scope": "Demand Event Sourcing publication workspace root changed.",
-  authority: "Demand Event Sourcing publication authority is unresolved.",
-  "package-not-found": "Demand Event Sourcing publication requirement package is not on the board.",
-  "cas-mismatch": "Demand Event Sourcing publication expectation is stale.",
-  capacity: "Demand Event Sourcing publication resource exceeds its byte budget.",
-  conflict: "Demand Event Sourcing publication resources conflict.",
-  "not-found": "Demand Event Sourcing publication transaction does not exist.",
-  "recovery-required": "Demand Event Sourcing publication requires explicit recovery.",
-  "lock-timeout": "Demand Event Sourcing publication lock timed out.",
-  "lock-unsafe": "Demand Event Sourcing publication lock is unsafe.",
-  "operation-failure": "Demand Event Sourcing publication failed.",
-} as const satisfies Readonly<Record<DemandEventSourcingPublicationServiceErrorReason, string>>;
-
-export class DemandEventSourcingPublicationServiceError extends Error {
-  override readonly name = "DemandEventSourcingPublicationServiceError";
-  readonly code = "wakeflow-demand-event-sourcing-publication-service" as const;
-  readonly reason: DemandEventSourcingPublicationServiceErrorReason;
-  readonly path: string;
+export class DemandEventSourcingPublicationServiceError extends ModuleError<DemandEventSourcingPublicationServiceErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-publication-service";
   readonly publicationAuthority: DemandEventSourcingPublicationEffectAuthority;
 
   constructor(
@@ -85,9 +68,7 @@ export class DemandEventSourcingPublicationServiceError extends Error {
     publicationAuthority: DemandEventSourcingPublicationEffectAuthority = "unknown",
     options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.publicationAuthority = publicationAuthority;
   }
 }

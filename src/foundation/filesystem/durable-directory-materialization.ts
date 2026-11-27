@@ -2,6 +2,7 @@ import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
@@ -120,36 +121,14 @@ export type DurableDirectoryMaterializationErrorReason =
   | "path-changed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable directory materialization input is invalid.",
-  "root-scope": "Directory target could not establish its rooted scope.",
-  "parent-not-found": "Directory target parent does not exist.",
-  "parent-symlink": "Directory target parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Directory target parent must be a directory.",
-  "parent-open-failure": "Directory target parent could not be opened safely.",
-  "parent-changed": "Directory target parent changed during creation.",
-  "target-exists": "Atomic directory create target already exists.",
-  "target-symlink": "Directory materialization target cannot be a symbolic link.",
-  "target-not-directory": "Directory materialization target must be a directory.",
-  "target-inspection-failure": "Directory target could not be inspected safely.",
-  "create-failure": "Directory target could not be created exclusively.",
-  "commit-uncertain": "Created directory target could not be proven exact.",
-  "durability-failure": "Created directory and parent could not be synchronized.",
-  "path-changed": "Materialized directory path changed during final verification.",
-  "close-failure": "A directory materialization handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableDirectoryMaterializationErrorReason, string>>;
-
 /**
  * 根作用域目录创建与物化的稳定错误。
  *
  * 错误不回显物理根目录、资源引用、目录名称、权限位、节点元数据、取消原因、
  * 系统调用或底层原因链。`mkdir` 调用后的错误不得被解释为目标一定不存在。
  */
-export class DurableDirectoryMaterializationError extends Error {
-  override readonly name = "DurableDirectoryMaterializationError";
-  readonly code = "wakeflow-durable-directory-materialization" as const;
-  readonly reason: DurableDirectoryMaterializationErrorReason;
-  readonly path: string;
+export class DurableDirectoryMaterializationError extends ModuleError<DurableDirectoryMaterializationErrorReason> {
+  static override readonly code = "wakeflow-durable-directory-materialization";
   /** `mkdir` 之后的失败：目录可能已经建好，也可能没有。 */
   readonly commitUncertain: boolean;
 
@@ -158,9 +137,7 @@ export class DurableDirectoryMaterializationError extends Error {
     path: string,
     options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.commitUncertain =
       reason === "commit-uncertain" ||
       reason === "durability-failure" ||
@@ -173,17 +150,9 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableDirectoryMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableDirectoryMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableDirectoryMaterializationErrorReason> = failWith(
+  DurableDirectoryMaterializationError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

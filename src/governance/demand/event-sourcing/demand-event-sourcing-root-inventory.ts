@@ -3,6 +3,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
@@ -103,32 +104,13 @@ export type DemandEventSourcingRootInventoryErrorReason =
   | "source-changed"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing root inventory input is invalid.",
-  "root-scope": "Demand Event Sourcing root changed during inventory.",
-  "tree-shape": "Demand Event Sourcing root contains a missing or unknown resource.",
-  "node-policy": "Demand Event Sourcing root resource violates private node policy.",
-  capacity: "Demand Event Sourcing root inventory exceeds its capacity.",
-  "source-changed": "Demand Event Sourcing root inventory changed during observation.",
-  "operation-failure": "Demand Event Sourcing root inventory failed.",
-} as const satisfies Readonly<Record<DemandEventSourcingRootInventoryErrorReason, string>>;
-
-export class DemandEventSourcingRootInventoryError extends Error {
-  override readonly name = "DemandEventSourcingRootInventoryError";
-  readonly code = "wakeflow-demand-event-sourcing-root-inventory" as const;
-  readonly reason: DemandEventSourcingRootInventoryErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingRootInventoryErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingRootInventoryError extends ModuleError<DemandEventSourcingRootInventoryErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-root-inventory";
 }
+
+const fail: Fail<DemandEventSourcingRootInventoryErrorReason> = failWith(
+  DemandEventSourcingRootInventoryError,
+);
 
 const ROOT_NAMES = Object.freeze([
   "artifacts",
@@ -144,18 +126,6 @@ const EVENT_SOURCING_NAMES = Object.freeze([
   "snapshots",
 ] as const);
 const ARTIFACT_NAMES = new Set(["managed-evidence", "permits", "task-packages"]);
-
-function fail(
-  reason: DemandEventSourcingRootInventoryErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingRootInventoryError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function exactNames(
   read: Readonly<StableDirectoryReadResult<PortableResourcePath | null>>,

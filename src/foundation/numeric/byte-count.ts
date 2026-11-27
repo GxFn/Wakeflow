@@ -1,3 +1,5 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
+
 /**
  * Wakeflow Foundation / Numeric：可由 JavaScript `number` 精确表示的字节数量。
  *
@@ -23,29 +25,14 @@ export const MAX_SAFE_BYTE_COUNT = Number.MAX_SAFE_INTEGER as ByteCount;
 /** 字节数准入或运算失败的稳定分类。 */
 export type ByteCountErrorReason = "number-range" | "bigint-range" | "addition-overflow";
 
-const ERROR_MESSAGES = {
-  "number-range": "Byte count must be a non-negative safe integer number.",
-  "bigint-range": "BigInt byte count must fit a non-negative safe integer number.",
-  "addition-overflow": "Byte count addition exceeds the safe integer range.",
-} as const satisfies Readonly<Record<ByteCountErrorReason, string>>;
-
 /**
  * 字节数准入或运算失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方路径，不回显输入数量、文件大小、累计值
  * 或领域容量，避免诊断文本意外携带敏感结构信息。
  */
-export class ByteCountError extends Error {
-  override readonly name = "ByteCountError";
-  readonly code = "wakeflow-byte-count" as const;
-  readonly reason: ByteCountErrorReason;
-  readonly path: string;
-
-  constructor(reason: ByteCountErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ByteCountError extends ModuleError<ByteCountErrorReason> {
+  static override readonly code = "wakeflow-byte-count";
 }
 
 function normalizeErrorPath(path: unknown): string {
@@ -56,9 +43,7 @@ function memberPath(basePath: string, member: string): string {
   return basePath === "$" ? `$${member}` : `${basePath}.${member}`;
 }
 
-function fail(reason: ByteCountErrorReason, path: string): never {
-  throw new ByteCountError(reason, path);
-}
+const fail: Fail<ByteCountErrorReason> = failWith(ByteCountError);
 
 function parseNumberByteCount(value: unknown, path: string): ByteCount {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {

@@ -3,6 +3,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 
 /**
  * Wakeflow Foundation / Resource：资源处理角色与机械操作合同。
@@ -190,32 +191,9 @@ export type WakeflowResourceProcessingContractErrorReason =
   | "recovery"
   | "operation";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow resource processing input is not passive data.",
-  shape: "Wakeflow resource processing input has an invalid shape.",
-  kind: "Wakeflow resource processing kind is invalid.",
-  role: "Wakeflow resource processing role is invalid.",
-  recipe: "Wakeflow resource mutation recipe is invalid.",
-  recovery: "Wakeflow resource recovery strategy is invalid.",
-  operation: "Wakeflow resource operation is not admitted by its contract.",
-} as const satisfies Readonly<Record<WakeflowResourceProcessingContractErrorReason, string>>;
-
 /** 资源处理合同准入失败的稳定、脱敏错误。 */
-export class WakeflowResourceProcessingContractError extends Error {
-  override readonly name = "WakeflowResourceProcessingContractError";
-  readonly code = "wakeflow-resource-processing-contract" as const;
-  readonly reason: WakeflowResourceProcessingContractErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowResourceProcessingContractErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowResourceProcessingContractError extends ModuleError<WakeflowResourceProcessingContractErrorReason> {
+  static override readonly code = "wakeflow-resource-processing-contract";
 }
 
 interface RolePolicy {
@@ -286,17 +264,9 @@ const DIRECTORY_CONTAINER_FIELDS = new Set([
   "recoveryStrategy",
 ]);
 
-function fail(
-  reason: WakeflowResourceProcessingContractErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowResourceProcessingContractError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowResourceProcessingContractErrorReason> = failWith(
+  WakeflowResourceProcessingContractError,
+);
 
 function propertyPath(key: string): string {
   return `$/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`;

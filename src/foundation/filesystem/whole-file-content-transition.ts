@@ -6,6 +6,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
 
 /**
@@ -38,24 +39,9 @@ export type WholeFileContentTransitionErrorReason =
   | "duplicate-current"
   | "unadmitted-source";
 
-const ERROR_MESSAGES = {
-  input: "Whole-file content transition input is invalid.",
-  "duplicate-current": "Whole-file current content is duplicated.",
-  "unadmitted-source": "Whole-file source is not an admitted content render.",
-} as const satisfies Readonly<Record<WholeFileContentTransitionErrorReason, string>>;
-
 /** 整文件字节转换准入失败的稳定、脱敏错误。 */
-export class WholeFileContentTransitionError extends Error {
-  override readonly name = "WholeFileContentTransitionError";
-  readonly code = "wakeflow-whole-file-content-transition" as const;
-  readonly reason: WholeFileContentTransitionErrorReason;
-  readonly path: string;
-
-  constructor(reason: WholeFileContentTransitionErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WholeFileContentTransitionError extends ModuleError<WholeFileContentTransitionErrorReason> {
+  static override readonly code = "wakeflow-whole-file-content-transition";
 }
 
 interface ContentSnapshot {
@@ -66,13 +52,7 @@ interface ContentSnapshot {
 
 const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
 
-function fail(reason: WholeFileContentTransitionErrorReason, path: string, cause?: unknown): never {
-  throw new WholeFileContentTransitionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WholeFileContentTransitionErrorReason> = failWith(WholeFileContentTransitionError);
 
 function snapshotBytes(value: unknown, path: string): Readonly<ContentSnapshot> {
   if (

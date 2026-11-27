@@ -14,6 +14,7 @@ import {
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   MarkdownJsonStringLiteralError,
   renderMarkdownJsonStringLiteral,
@@ -67,45 +68,16 @@ export type WakeflowSupportMemoryAuthorityErrorReason =
   | "surface"
   | "text";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow support memory authority input is invalid.",
-  config: "Wakeflow support memory config source is invalid.",
-  profile: "Wakeflow support memory host profile is invalid.",
-  surface: "Wakeflow support memory requires a managed Design/Test surface.",
-  text: "Wakeflow support memory text cannot be represented safely.",
-} as const satisfies Readonly<Record<WakeflowSupportMemoryAuthorityErrorReason, string>>;
-
 /** Support whole-file memory 权威准入失败的稳定、脱敏错误。 */
-export class WakeflowSupportMemoryAuthorityError extends Error {
-  override readonly name = "WakeflowSupportMemoryAuthorityError";
-  readonly code = "wakeflow-support-memory-authority" as const;
-  readonly reason: WakeflowSupportMemoryAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowSupportMemoryAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowSupportMemoryAuthorityError extends ModuleError<WakeflowSupportMemoryAuthorityErrorReason> {
+  static override readonly code = "wakeflow-support-memory-authority";
 }
+
+const fail: Fail<WakeflowSupportMemoryAuthorityErrorReason> = failWith(
+  WakeflowSupportMemoryAuthorityError,
+);
 
 const MANAGED_MARKER_PREFIX = "<!-- wakeflow:managed-content:";
-
-function fail(
-  reason: WakeflowSupportMemoryAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowSupportMemoryAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {

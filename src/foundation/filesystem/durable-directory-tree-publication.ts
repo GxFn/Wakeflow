@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidateResult,
@@ -57,23 +58,9 @@ export type DurableDirectoryTreePublicationErrorReason =
   | "durability-failure"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Directory tree publication input is invalid.",
-  "source-changed": "Directory tree publication source changed before commit.",
-  "source-conflict": "Directory tree publication source is not the declared closed candidate.",
-  "destination-exists": "Directory tree publication destination already exists.",
-  "cross-device": "Directory tree publication requires one filesystem device.",
-  "commit-uncertain": "Directory tree publication commit result could not be proven exact.",
-  "durability-failure": "Directory tree publication directory entries could not be synchronized.",
-  "operation-failure": "Directory tree publication could not cross its commit point safely.",
-} as const satisfies Readonly<Record<DurableDirectoryTreePublicationErrorReason, string>>;
-
 /** 目录树整体发布失败时返回的稳定、脱敏错误。 */
-export class DurableDirectoryTreePublicationError extends Error {
-  override readonly name = "DurableDirectoryTreePublicationError";
-  readonly code = "wakeflow-durable-directory-tree-publication" as const;
-  readonly reason: DurableDirectoryTreePublicationErrorReason;
-  readonly path: string;
+export class DurableDirectoryTreePublicationError extends ModuleError<DurableDirectoryTreePublicationErrorReason> {
+  static override readonly code = "wakeflow-durable-directory-tree-publication";
   /** 重命名提交之后的失败：目录树可能已经发布，也可能没有。 */
   readonly commitUncertain: boolean;
 
@@ -82,9 +69,7 @@ export class DurableDirectoryTreePublicationError extends Error {
     path: string,
     options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.commitUncertain = reason === "commit-uncertain" || reason === "durability-failure";
   }
 }
@@ -93,17 +78,9 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableDirectoryTreePublicationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableDirectoryTreePublicationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableDirectoryTreePublicationErrorReason> = failWith(
+  DurableDirectoryTreePublicationError,
+);
 
 function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {

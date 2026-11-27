@@ -1,4 +1,5 @@
 import { WAKEFLOW_WINDOW_HOST_BINDING_ID_PREFIX } from "../../contracts/identity/wakeflow-typed-id-prefixes.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -22,40 +23,14 @@ export type WakeflowWindowHostBindingId = string & {
 
 type WakeflowWindowHostBindingIdErrorReason = "format" | "factory";
 
-const ERROR_MESSAGES = {
-  format: "Wakeflow Window Host Binding ID is invalid.",
-  factory: "Wakeflow Window Host Binding ID could not be generated.",
-} as const satisfies Readonly<Record<WakeflowWindowHostBindingIdErrorReason, string>>;
-
 /** Binding ID 解析或创建失败的稳定、脱敏错误。 */
-export class WakeflowWindowHostBindingIdError extends Error {
-  override readonly name = "WakeflowWindowHostBindingIdError";
-  readonly code = "wakeflow-window-host-binding-id" as const;
-  readonly reason: WakeflowWindowHostBindingIdErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowHostBindingIdErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowHostBindingIdError extends ModuleError<WakeflowWindowHostBindingIdErrorReason> {
+  static override readonly code = "wakeflow-window-host-binding-id";
 }
 
-function fail(
-  reason: WakeflowWindowHostBindingIdErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowHostBindingIdError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowWindowHostBindingIdErrorReason> = failWith(
+  WakeflowWindowHostBindingIdError,
+);
 
 /** 严格解析一个 Window Host Binding 代际 ID。 */
 export function parseWakeflowWindowHostBindingId(

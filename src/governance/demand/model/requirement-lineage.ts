@@ -17,6 +17,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -46,35 +47,16 @@ export interface RequirementLineageReference {
 
 type RequirementLineageErrorReason = "json" | "schema" | "identifier" | "path" | "digest";
 
-const ERROR_MESSAGES = {
-  json: "Requirement lineage is not passive JSON data.",
-  schema: "Requirement lineage does not satisfy its portable Schema.",
-  identifier: "Requirement lineage contains an invalid requirement identity.",
-  path: "Requirement lineage contains an invalid record reference.",
-  digest: "Requirement lineage contains an invalid digest.",
-} as const satisfies Readonly<Record<RequirementLineageErrorReason, string>>;
-
-export class RequirementLineageError extends Error {
-  override readonly name = "RequirementLineageError";
-  readonly code = "wakeflow-requirement-lineage" as const;
-  readonly reason: RequirementLineageErrorReason;
-  readonly path: string;
-
-  constructor(reason: RequirementLineageErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class RequirementLineageError extends ModuleError<RequirementLineageErrorReason> {
+  static override readonly code = "wakeflow-requirement-lineage";
 }
+
+const fail: Fail<RequirementLineageErrorReason> = failWith(RequirementLineageError);
 
 const validateWire = createRuntimeJsonSchemaValidator<RequirementLineageWire>(
   WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA,
   [WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
-
-function fail(reason: RequirementLineageErrorReason, path: string, cause?: unknown): never {
-  throw new RequirementLineageError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 /** 需求包记录在 Ledger 根内的固定引用：`requirements/<requirementId>/record.json`。 */
 export function requirementLineageRecordRef(

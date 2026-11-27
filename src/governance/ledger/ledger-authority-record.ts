@@ -25,6 +25,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -161,32 +162,12 @@ export type LedgerAuthorityRecordErrorReason =
   | "relation"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Ledger authority record input is invalid.",
-  json: "Ledger authority record is not passive JSON data.",
-  schema: "Ledger authority record does not satisfy its portable Schema.",
-  identifier: "Ledger authority record contains an invalid typed identity.",
-  time: "Ledger authority record contains an invalid instant.",
-  text: "Ledger authority record contains non-canonical text.",
-  document: "Ledger authority document inventory is inconsistent.",
-  section: "Ledger authority section table is inconsistent.",
-  relation: "Ledger authority record header fields contradict each other.",
-  representation: "Ledger authority record bytes are not its deterministic domain representation.",
-} as const satisfies Readonly<Record<LedgerAuthorityRecordErrorReason, string>>;
-
 /** Ledger 权威记录准入或持久化表示验证失败时返回的稳定、脱敏错误。 */
-export class LedgerAuthorityRecordError extends Error {
-  override readonly name = "LedgerAuthorityRecordError";
-  readonly code = "wakeflow-ledger-authority-record" as const;
-  readonly reason: LedgerAuthorityRecordErrorReason;
-  readonly path: string;
-
-  constructor(reason: LedgerAuthorityRecordErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class LedgerAuthorityRecordError extends ModuleError<LedgerAuthorityRecordErrorReason> {
+  static override readonly code = "wakeflow-ledger-authority-record";
 }
+
+const fail: Fail<LedgerAuthorityRecordErrorReason> = failWith(LedgerAuthorityRecordError);
 
 const validateRequirementWire = createRuntimeJsonSchemaValidator<RequirementRecordWire>(
   WAKEFLOW_REQUIREMENT_RECORD_SCHEMA,
@@ -219,10 +200,6 @@ const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
 );
-
-function fail(reason: LedgerAuthorityRecordErrorReason, path: string, cause?: unknown): never {
-  throw new LedgerAuthorityRecordError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function parseCanonicalText(value: string, path: string): string {
   if (

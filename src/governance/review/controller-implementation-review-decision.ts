@@ -22,6 +22,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
   UuidV4Error,
@@ -151,34 +152,14 @@ export type ControllerImplementationReviewDecisionErrorReason =
   | "text"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Controller Implementation Review Decision is not passive JSON data.",
-  schema: "Controller Implementation Review Decision does not satisfy its Schema.",
-  identifier: "Controller Implementation Review Decision contains an invalid identity.",
-  digest: "Controller Implementation Review Decision contains an invalid or inconsistent digest.",
-  position: "Controller Implementation Review Decision contains an invalid Event Stream position.",
-  time: "Controller Implementation Review Decision contains an invalid decision time.",
-  text: "Controller Implementation Review Decision contains invalid review text.",
-  relation: "Controller Implementation Review Decision facts are inconsistent.",
-} as const satisfies Readonly<Record<ControllerImplementationReviewDecisionErrorReason, string>>;
-
 /** Controller审查决定准入或创建失败时的稳定错误。 */
-export class ControllerImplementationReviewDecisionError extends Error {
-  override readonly name = "ControllerImplementationReviewDecisionError";
-  readonly code = "wakeflow-controller-implementation-review-decision" as const;
-  readonly reason: ControllerImplementationReviewDecisionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ControllerImplementationReviewDecisionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ControllerImplementationReviewDecisionError extends ModuleError<ControllerImplementationReviewDecisionErrorReason> {
+  static override readonly code = "wakeflow-controller-implementation-review-decision";
 }
+
+const fail: Fail<ControllerImplementationReviewDecisionErrorReason> = failWith(
+  ControllerImplementationReviewDecisionError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
   WAKEFLOW_CONTROLLER_IMPLEMENTATION_REVIEW_DECISION_SCHEMA,
@@ -190,18 +171,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(
-  reason: ControllerImplementationReviewDecisionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ControllerImplementationReviewDecisionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function id<
   Kind extends

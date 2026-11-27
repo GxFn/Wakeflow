@@ -32,6 +32,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -182,37 +183,12 @@ export type DeliveryEnvelopeErrorReason =
   | "attempt"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Delivery Envelope is not passive JSON data.",
-  schema: "Delivery Envelope does not satisfy its portable Schema.",
-  identifier: "Delivery Envelope contains an invalid typed identity.",
-  digest: "Delivery Envelope contains an invalid or inconsistent digest.",
-  path: "Delivery Envelope contains an invalid TaskPackage reference.",
-  host: "Delivery Envelope contains an unsupported host.",
-  language: "Delivery Envelope contains an unsupported presentation language.",
-  prompt: "Delivery Envelope prompt is invalid.",
-  rework: "Delivery Envelope rework context is invalid or inconsistent.",
-  "product-defect-remediation":
-    "Delivery Envelope product-defect remediation context is invalid or inconsistent.",
-  time: "Delivery Envelope contains an invalid preparation time.",
-  "task-package": "Delivery Envelope source TaskPackage is invalid.",
-  attempt: "Delivery Envelope test attempt is invalid or does not follow its sources.",
-  relation: "Delivery Envelope does not match its TaskPackage, route, or sources.",
-} as const satisfies Readonly<Record<DeliveryEnvelopeErrorReason, string>>;
-
 /** 投递信封准入、创建或来源闭合失败时的稳定错误。 */
-export class DeliveryEnvelopeError extends Error {
-  override readonly name = "DeliveryEnvelopeError";
-  readonly code = "wakeflow-delivery-envelope" as const;
-  readonly reason: DeliveryEnvelopeErrorReason;
-  readonly path: string;
-
-  constructor(reason: DeliveryEnvelopeErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DeliveryEnvelopeError extends ModuleError<DeliveryEnvelopeErrorReason> {
+  static override readonly code = "wakeflow-delivery-envelope";
 }
+
+const fail: Fail<DeliveryEnvelopeErrorReason> = failWith(DeliveryEnvelopeError);
 
 const MAXIMUM_REWORK_RATIONALE_CODE_POINTS = 1_024;
 // 返工整改项要装得下证据 ref 与摘要（§13.120 第二轮：256 个码点把第一条证据 ref 截在半路）。
@@ -239,10 +215,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DeliveryEnvelopeWire>(
     WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
   ],
 );
-
-function fail(reason: DeliveryEnvelopeErrorReason, path: string, cause?: unknown): never {
-  throw new DeliveryEnvelopeError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function parseId<
   Kind extends

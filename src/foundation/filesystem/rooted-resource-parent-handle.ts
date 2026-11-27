@@ -2,6 +2,7 @@ import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, lstat, open as openFileHandle } from "node:fs/promises";
 import nodePath from "node:path";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -57,36 +58,13 @@ export type RootedResourceParentHandleErrorReason =
   | "closed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Rooted resource parent handle input is invalid.",
-  "root-scope": "Rooted resource parent could not establish its root scope.",
-  "parent-not-found": "Rooted resource parent directory does not exist.",
-  "parent-symlink": "Rooted resource parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Rooted resource parent must be a directory.",
-  "parent-open-failure": "Rooted resource parent could not be opened safely.",
-  "parent-changed": "Rooted resource parent no longer names the opened directory.",
-  "target-inspection-failure": "Rooted resource target could not be inspected safely.",
-  "sync-failure": "Rooted resource parent could not be synchronized safely.",
-  closed: "Rooted resource parent handle is already closed.",
-  "close-failure": "Rooted resource parent handle could not be closed safely.",
-} as const satisfies Readonly<Record<RootedResourceParentHandleErrorReason, string>>;
-
 /**
  * RootedResourceParentHandle 的稳定错误。
  *
  * 错误不回显根目录、资源、父目录、目标绝对路径、节点元数据、系统调用或原因链。
  */
-export class RootedResourceParentHandleError extends Error {
-  override readonly name = "RootedResourceParentHandleError";
-  readonly code = "wakeflow-rooted-resource-parent-handle" as const;
-  readonly reason: RootedResourceParentHandleErrorReason;
-  readonly path: string;
-
-  constructor(reason: RootedResourceParentHandleErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class RootedResourceParentHandleError extends ModuleError<RootedResourceParentHandleErrorReason> {
+  static override readonly code = "wakeflow-rooted-resource-parent-handle";
 }
 
 interface ResourceAddress {
@@ -103,13 +81,7 @@ function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(reason: RootedResourceParentHandleErrorReason, path: string, cause?: unknown): never {
-  throw new RootedResourceParentHandleError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<RootedResourceParentHandleErrorReason> = failWith(RootedResourceParentHandleError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

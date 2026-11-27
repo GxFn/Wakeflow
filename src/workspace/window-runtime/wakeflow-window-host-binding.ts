@@ -24,6 +24,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
   parseUtcInstant,
@@ -107,41 +108,17 @@ type WakeflowWindowHostBindingErrorReason =
   | "time"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Window Host Binding is not passive JSON data.",
-  schema: "Window Host Binding does not satisfy its portable Schema.",
-  profile: "Window Host Binding does not belong to the supplied Host Identity Profile.",
-  handle: "Window Host Binding contains an invalid current-host handle.",
-  time: "Window Host Binding contains an invalid UTC instant.",
-  representation: "Window Host Binding bytes are not deterministic.",
-} as const satisfies Readonly<Record<WakeflowWindowHostBindingErrorReason, string>>;
-
 /** Window Host Binding 准入失败的稳定、脱敏错误。 */
-export class WakeflowWindowHostBindingError extends Error {
-  override readonly name = "WakeflowWindowHostBindingError";
-  readonly code = "wakeflow-window-host-binding" as const;
-  readonly reason: WakeflowWindowHostBindingErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowWindowHostBindingErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowHostBindingError extends ModuleError<WakeflowWindowHostBindingErrorReason> {
+  static override readonly code = "wakeflow-window-host-binding";
 }
+
+const fail: Fail<WakeflowWindowHostBindingErrorReason> = failWith(WakeflowWindowHostBindingError);
 
 const validateWire = createRuntimeJsonSchemaValidator<WindowHostBindingWire>(
   WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
-
-function fail(reason: WakeflowWindowHostBindingErrorReason, path: string, cause?: unknown): never {
-  throw new WakeflowWindowHostBindingError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function typedId<Kind extends "program" | "window">(
   value: unknown,

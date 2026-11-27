@@ -10,6 +10,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -91,48 +92,17 @@ export type WakeflowMaintenanceExecutionPlanErrorReason =
   | "order"
   | "digest";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance execution plan input is invalid.",
-  host: "Wakeflow maintenance execution plan host identity is invalid.",
-  "shared-preview": "Wakeflow maintenance execution plan shared preview is invalid.",
-  "host-contribution": "Wakeflow maintenance execution plan host contribution is invalid.",
-  matrix: "Wakeflow maintenance execution plan host profile does not match its matrix.",
-  order: "Wakeflow maintenance execution plan step order is invalid.",
-  digest: "Wakeflow maintenance execution plan digest is invalid.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionPlanErrorReason, string>>;
-
 /** 聚合维护执行计划准入失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceExecutionPlanError extends Error {
-  override readonly name = "WakeflowMaintenanceExecutionPlanError";
-  readonly code = "wakeflow-maintenance-execution-plan" as const;
-  readonly reason: WakeflowMaintenanceExecutionPlanErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowMaintenanceExecutionPlanErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceExecutionPlanError extends ModuleError<WakeflowMaintenanceExecutionPlanErrorReason> {
+  static override readonly code = "wakeflow-maintenance-execution-plan";
 }
+
+const fail: Fail<WakeflowMaintenanceExecutionPlanErrorReason> = failWith(
+  WakeflowMaintenanceExecutionPlanError,
+);
 
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const JOURNAL_MAXIMUM_STEPS = 256;
-
-function fail(
-  reason: WakeflowMaintenanceExecutionPlanErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowMaintenanceExecutionPlanError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseHostId(value: unknown, path: string): WakeflowWorkspaceHostId {
   if (typeof value !== "string" || !HOST_ID_SET.has(value)) {

@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   hasPassiveJsonSerializationEnvironment,
   type JsonValue,
@@ -27,45 +28,12 @@ export type DeterministicJsonDocumentErrorReason =
   | "render-failure"
   | JsonValueErrorReason;
 
-const ERROR_MESSAGES = {
-  input: "Deterministic JSON document input is invalid.",
-  "json-syntax": "Deterministic JSON document syntax is invalid.",
-  "non-deterministic": "JSON text does not use the deterministic pretty representation.",
-  "render-failure": "Deterministic JSON document rendering failed after JSON admission.",
-  "unsupported-type": "Deterministic JSON value contains an unsupported type.",
-  "non-finite-number": "Deterministic JSON numbers must be finite.",
-  "negative-zero": "Deterministic JSON does not accept negative zero.",
-  "lone-surrogate": "Deterministic JSON text contains invalid Unicode.",
-  cycle: "Deterministic JSON values cannot contain cycles.",
-  "maximum-depth": "Deterministic JSON exceeds its structural depth limit.",
-  "invalid-container": "Deterministic JSON contains an invalid container.",
-  proxy: "Deterministic JSON does not accept Proxy values.",
-  "record-prototype": "Deterministic JSON objects require a plain prototype.",
-  "symbol-key": "Deterministic JSON objects cannot contain symbol keys.",
-  "non-enumerable-property": "Deterministic JSON cannot contain hidden properties.",
-  "accessor-property": "Deterministic JSON cannot contain accessors.",
-  "array-prototype": "Deterministic JSON arrays require the standard prototype.",
-  "array-slot": "Deterministic JSON arrays must be dense.",
-  "array-extra-property": "Deterministic JSON arrays cannot contain extra properties.",
-} as const satisfies Readonly<Record<DeterministicJsonDocumentErrorReason, string>>;
-
 /** 确定性格式化 JSON 准入或渲染失败时返回的稳定、脱敏错误。 */
-export class DeterministicJsonDocumentError extends Error {
-  override readonly name = "DeterministicJsonDocumentError";
-  readonly code = "wakeflow-deterministic-json-document" as const;
-  readonly reason: DeterministicJsonDocumentErrorReason;
-  readonly path: string;
-
-  constructor(reason: DeterministicJsonDocumentErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DeterministicJsonDocumentError extends ModuleError<DeterministicJsonDocumentErrorReason> {
+  static override readonly code = "wakeflow-deterministic-json-document";
 }
 
-function fail(reason: DeterministicJsonDocumentErrorReason, path: string): never {
-  throw new DeterministicJsonDocumentError(reason, path);
-}
+const fail: Fail<DeterministicJsonDocumentErrorReason> = failWith(DeterministicJsonDocumentError);
 
 function assertNoInheritedArrayToJson(path: string): void {
   if (!hasPassiveJsonSerializationEnvironment()) fail("render-failure", path);

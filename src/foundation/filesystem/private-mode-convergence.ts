@@ -1,5 +1,6 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { currentUserIdOrNull } from "../node/current-user.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
@@ -41,30 +42,11 @@ export type PrivateModeConvergenceErrorReason =
   | "resource-unsafe"
   | "chmod-failure";
 
-const ERROR_MESSAGES = {
-  input: "Private mode convergence input is invalid.",
-  "root-scope": "Private mode convergence could not establish its rooted scope.",
-  "resource-changed": "Private node no longer matches the observation it was planned from.",
-  "resource-unsafe": "Private node is not a safe mode drift and is never converged.",
-  "chmod-failure": "Private node mode could not be changed safely.",
-} as const satisfies Readonly<Record<PrivateModeConvergenceErrorReason, string>>;
-
-export class PrivateModeConvergenceError extends Error {
-  override readonly name = "PrivateModeConvergenceError";
-  readonly code = "wakeflow-private-mode-convergence" as const;
-  readonly reason: PrivateModeConvergenceErrorReason;
-  readonly path: string;
-
-  constructor(reason: PrivateModeConvergenceErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class PrivateModeConvergenceError extends ModuleError<PrivateModeConvergenceErrorReason> {
+  static override readonly code = "wakeflow-private-mode-convergence";
 }
 
-function fail(reason: PrivateModeConvergenceErrorReason, path: string, cause?: unknown): never {
-  throw new PrivateModeConvergenceError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<PrivateModeConvergenceErrorReason> = failWith(PrivateModeConvergenceError);
 
 /** 目录 0700、文件 0600；其余类型没有私有模式。 */
 function privateModeOf(node: Readonly<FileNodeSnapshot>): number | null {

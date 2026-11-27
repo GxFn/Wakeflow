@@ -1,6 +1,7 @@
 import type { WakeflowGitObjectId as GitObjectIdWire } from "../../contracts/generated/foundation/git-object-id.generated.js";
 import { WAKEFLOW_GIT_OBJECT_ID_SCHEMA } from "../../contracts/generated/foundation/git-object-id.generated.js";
 import { JsonValueError, parseJsonValue } from "../data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../schema/runtime-json-schema.js";
 
 /**
@@ -17,31 +18,15 @@ export type GitObjectId =
 
 export type GitObjectIdErrorReason = "input" | "schema";
 
-const ERROR_MESSAGES = {
-  input: "Git object ID is not passive JSON data.",
-  schema: "Git object ID does not satisfy its complete object-format contract.",
-} as const satisfies Readonly<Record<GitObjectIdErrorReason, string>>;
-
-export class GitObjectIdError extends Error {
-  override readonly name = "GitObjectIdError";
-  readonly code = "wakeflow-git-object-id" as const;
-  readonly reason: GitObjectIdErrorReason;
-  readonly path: string;
-
-  constructor(reason: GitObjectIdErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class GitObjectIdError extends ModuleError<GitObjectIdErrorReason> {
+  static override readonly code = "wakeflow-git-object-id";
 }
 
 const validateWire = createRuntimeJsonSchemaValidator<GitObjectIdWire>(
   WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
 );
 
-function fail(reason: GitObjectIdErrorReason, path: string, cause?: unknown): never {
-  throw new GitObjectIdError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<GitObjectIdErrorReason> = failWith(GitObjectIdError);
 
 /** 严格解析一个带算法标签的完整Git object ID。 */
 export function parseGitObjectId(value: unknown, path = "$gitObjectId"): Readonly<GitObjectId> {

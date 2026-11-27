@@ -1,6 +1,7 @@
 import { types } from "node:util";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidateResult,
   DurableDirectoryTreeCandidateError,
@@ -81,36 +82,13 @@ export type ManagedEvidencePublicationRecordPublisherErrorReason =
   | "commit-uncertain"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence publication record publisher input is invalid.",
-  journal: "Managed evidence publication record journal is absent, changed, or different.",
-  "root-scope": "Managed evidence publication record escaped its Demand root.",
-  "stage-missing": "Managed evidence publication record has no stage or final tree.",
-  "stage-conflict": "Managed evidence publication stage is incomplete or conflicting.",
-  "final-conflict": "Managed evidence publication final record conflicts with its plan.",
-  "destination-exists": "Managed evidence publication final destination appeared before commit.",
-  "cross-device": "Managed evidence publication record requires one filesystem device.",
-  "durability-failure": "Managed evidence publication final directory entries are not durable.",
-  "commit-uncertain": "Managed evidence publication final commit could not be proven exact.",
-  "operation-failure": "Managed evidence publication record could not be published safely.",
-} as const satisfies Readonly<Record<ManagedEvidencePublicationRecordPublisherErrorReason, string>>;
-
-export class ManagedEvidencePublicationRecordPublisherError extends Error {
-  override readonly name = "ManagedEvidencePublicationRecordPublisherError";
-  readonly code = "wakeflow-managed-evidence-publication-record-publisher" as const;
-  readonly reason: ManagedEvidencePublicationRecordPublisherErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidencePublicationRecordPublisherErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidencePublicationRecordPublisherError extends ModuleError<ManagedEvidencePublicationRecordPublisherErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-publication-record-publisher";
 }
+
+const fail: Fail<ManagedEvidencePublicationRecordPublisherErrorReason> = failWith(
+  ManagedEvidencePublicationRecordPublisherError,
+);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
@@ -119,18 +97,6 @@ interface ParsedOptions {
 interface PhysicalState {
   readonly stageNode: Readonly<FileNodeSnapshot> | null;
   readonly finalNode: Readonly<FileNodeSnapshot> | null;
-}
-
-function fail(
-  reason: ManagedEvidencePublicationRecordPublisherErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidencePublicationRecordPublisherError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {

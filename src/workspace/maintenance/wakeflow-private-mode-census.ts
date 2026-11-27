@@ -1,5 +1,6 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   BoundedDirectoryTreeScanError,
   scanBoundedResourceDirectoryTree,
@@ -64,32 +65,12 @@ export interface WakeflowPrivateModeConvergenceReceipt {
 
 export type WakeflowPrivateModeCensusErrorReason = "input" | "convergence";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow private mode census input is invalid.",
-  convergence: "Wakeflow private mode convergence failed.",
-} as const satisfies Readonly<Record<WakeflowPrivateModeCensusErrorReason, string>>;
-
 /** 私有模式普查与收敛的稳定错误；不回显绝对路径或底层原因。 */
-export class WakeflowPrivateModeCensusError extends Error {
-  override readonly name = "WakeflowPrivateModeCensusError";
-  readonly code = "wakeflow-private-mode-census" as const;
-  readonly reason: WakeflowPrivateModeCensusErrorReason;
-  readonly path: string;
-
-  constructor(reason: WakeflowPrivateModeCensusErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowPrivateModeCensusError extends ModuleError<WakeflowPrivateModeCensusErrorReason> {
+  static override readonly code = "wakeflow-private-mode-census";
 }
 
-function fail(reason: WakeflowPrivateModeCensusErrorReason, path: string, cause?: unknown): never {
-  throw new WakeflowPrivateModeCensusError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowPrivateModeCensusErrorReason> = failWith(WakeflowPrivateModeCensusError);
 
 function compareCodeUnits(left: string, right: string): number {
   if (left < right) return -1;

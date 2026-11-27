@@ -1,6 +1,7 @@
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createWakeflowWorkspaceHostResourceCatalog,
   hostProfileHasOperationSurface,
@@ -29,40 +30,14 @@ export interface WakeflowHostCapabilityLayoutAuthority {
 
 export type WakeflowHostCapabilityLayoutAuthorityErrorReason = "profile" | "catalog";
 
-const ERROR_MESSAGES = {
-  profile: "Host capability layout profile is invalid.",
-  catalog: "Host capability layout catalog is incomplete.",
-} as const satisfies Readonly<Record<WakeflowHostCapabilityLayoutAuthorityErrorReason, string>>;
-
 /** Host capability layout authority 编译失败的稳定、脱敏错误。 */
-export class WakeflowHostCapabilityLayoutAuthorityError extends Error {
-  override readonly name = "WakeflowHostCapabilityLayoutAuthorityError";
-  readonly code = "wakeflow-host-capability-layout-authority" as const;
-  readonly reason: WakeflowHostCapabilityLayoutAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowHostCapabilityLayoutAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowHostCapabilityLayoutAuthorityError extends ModuleError<WakeflowHostCapabilityLayoutAuthorityErrorReason> {
+  static override readonly code = "wakeflow-host-capability-layout-authority";
 }
 
-function fail(
-  reason: WakeflowHostCapabilityLayoutAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowHostCapabilityLayoutAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowHostCapabilityLayoutAuthorityErrorReason> = failWith(
+  WakeflowHostCapabilityLayoutAuthorityError,
+);
 
 /** 仅按 Profile capability 编译父目录声明；不按 hostId 分支。 */
 export function compileWakeflowHostCapabilityLayoutAuthority(

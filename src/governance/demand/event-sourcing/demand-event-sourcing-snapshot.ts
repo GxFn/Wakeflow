@@ -27,6 +27,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandAggregateStateDigest,
@@ -93,35 +94,13 @@ export type DemandEventSourcingSnapshotErrorReason =
   | "mismatch"
   | "representation";
 
-const ERROR_MESSAGES = {
-  json: "Demand Event Sourcing snapshot is not passive JSON data.",
-  schema: "Demand Event Sourcing snapshot does not satisfy its Schema.",
-  identifier: "Demand Event Sourcing snapshot contains an invalid identity.",
-  position: "Demand Event Sourcing snapshot contains an invalid stream position.",
-  digest: "Demand Event Sourcing snapshot contains an invalid digest.",
-  state: "Demand Event Sourcing snapshot contains an invalid aggregate state.",
-  aggregate: "Demand Event Sourcing snapshot requires a valid aggregate.",
-  commit: "Demand Event Sourcing snapshot requires a valid anchor commit.",
-  mismatch: "Demand Event Sourcing snapshot does not match its commit boundary.",
-  representation: "Demand Event Sourcing snapshot bytes are not deterministic.",
-} as const satisfies Readonly<Record<DemandEventSourcingSnapshotErrorReason, string>>;
-
-export class DemandEventSourcingSnapshotError extends Error {
-  override readonly name = "DemandEventSourcingSnapshotError";
-  readonly code = "wakeflow-demand-event-sourcing-snapshot" as const;
-  readonly reason: DemandEventSourcingSnapshotErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingSnapshotErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingSnapshotError extends ModuleError<DemandEventSourcingSnapshotErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-snapshot";
 }
+
+const fail: Fail<DemandEventSourcingSnapshotErrorReason> = failWith(
+  DemandEventSourcingSnapshotError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
   WAKEFLOW_DEMAND_EVENT_SOURCING_SNAPSHOT_SCHEMA,
@@ -134,18 +113,6 @@ const validateWire = createRuntimeJsonSchemaValidator<SnapshotWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(
-  reason: DemandEventSourcingSnapshotErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingSnapshotError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {

@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith } from "../error/module-error.js";
 import { isAbortSignal } from "../node/abort-signal.js";
 import { admitFrozenFileNodeSnapshot, type FileNodeSnapshot } from "./file-node-snapshot.js";
 import {
@@ -57,9 +58,7 @@ interface ParsedSourceTransitionOptions {
 export function sourceTransitionSteps<E extends Error>(
   Failure: new (reason: SourceTransitionReason, path: string, options?: ErrorOptions) => E,
 ) {
-  function fail(reason: SourceTransitionReason, path: string, cause?: unknown): never {
-    throw new Failure(reason, path, cause === undefined ? undefined : { cause });
-  }
+  const fail: Fail<SourceTransitionReason> = failWith(Failure);
 
   function parseResourcePath(value: unknown, path: ResourceErrorPath): PortableResourcePath {
     try {

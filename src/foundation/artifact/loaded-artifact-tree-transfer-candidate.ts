@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../filesystem/directory-tree-candidate-plan.js";
 import {
   createDirectoryAtomically,
@@ -63,50 +64,18 @@ export type LoadedArtifactTreeTransferCandidateErrorReason =
   | "copy-failure"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Loaded artifact tree transfer candidate input is invalid.",
-  capacity: "Loaded artifact tree transfer exceeds its admitted capacity.",
-  "source-root-scope": "Loaded artifact tree transfer lost its source root scope.",
-  "source-changed": "Loaded artifact tree source differs from its transfer plan.",
-  "destination-root-scope": "Loaded artifact tree transfer lost its destination root scope.",
-  "candidate-conflict": "Loaded artifact tree candidate conflicts with its closed plan.",
-  "copy-failure": "Loaded artifact tree file could not be copied safely.",
-  "operation-failure": "Loaded artifact tree candidate could not be materialized safely.",
-} as const satisfies Readonly<Record<LoadedArtifactTreeTransferCandidateErrorReason, string>>;
-
 /** Loaded Artifact Tree candidate 物化失败的稳定、脱敏错误。 */
-export class LoadedArtifactTreeTransferCandidateError extends Error {
-  override readonly name = "LoadedArtifactTreeTransferCandidateError";
-  readonly code = "wakeflow-loaded-artifact-tree-transfer-candidate" as const;
-  readonly reason: LoadedArtifactTreeTransferCandidateErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: LoadedArtifactTreeTransferCandidateErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class LoadedArtifactTreeTransferCandidateError extends ModuleError<LoadedArtifactTreeTransferCandidateErrorReason> {
+  static override readonly code = "wakeflow-loaded-artifact-tree-transfer-candidate";
 }
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: LoadedArtifactTreeTransferCandidateErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new LoadedArtifactTreeTransferCandidateError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<LoadedArtifactTreeTransferCandidateErrorReason> = failWith(
+  LoadedArtifactTreeTransferCandidateError,
+);
 
 function assertRoot(
   value: unknown,

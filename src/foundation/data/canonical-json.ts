@@ -1,5 +1,6 @@
 import canonicalize from "canonicalize";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { encodeUtf8, Utf8Error } from "../text/utf8.js";
 import {
   hasPassiveJsonSerializationEnvironment,
@@ -29,30 +30,15 @@ export type CanonicalJsonErrorReason = JsonValueErrorReason | "canonicalizer-fai
  * 输入错误保留 `json-value` 的中立原因和路径；第三方异常统一映射，不暴露依赖的
  * 消息、调用栈、原因链或成员值。
  */
-export class CanonicalJsonError extends Error {
-  override readonly name = "CanonicalJsonError";
-  readonly code = "wakeflow-canonical-json" as const;
-  readonly reason: CanonicalJsonErrorReason;
-  readonly path: string;
-
-  constructor(reason: CanonicalJsonErrorReason, path: string) {
-    super(
-      reason === "canonicalizer-failure"
-        ? "The RFC 8785 canonicalizer failed for an admitted JSON value."
-        : "The input is not an admitted JSON value.",
-    );
-    this.reason = reason;
-    this.path = path;
-  }
+export class CanonicalJsonError extends ModuleError<CanonicalJsonErrorReason> {
+  static override readonly code = "wakeflow-canonical-json";
 }
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(reason: CanonicalJsonErrorReason, path: string): never {
-  throw new CanonicalJsonError(reason, path);
-}
+const fail: Fail<CanonicalJsonErrorReason> = failWith(CanonicalJsonError);
 
 function assertNoInheritedArrayToJson(path: string): void {
   if (!hasPassiveJsonSerializationEnvironment()) {

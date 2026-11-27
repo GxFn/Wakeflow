@@ -4,6 +4,7 @@ import { type FileHandle, lstat, open as openFileHandle, realpath } from "node:f
 import nodePath from "node:path";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   createFileNodeSnapshot,
@@ -76,43 +77,14 @@ export type RootedDirectoryErrorReason =
   | "closed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  "root-input": "Rooted directory requires one normalized non-root absolute path.",
-  "unsupported-platform": "Rooted directory requires Node no-follow directory handles.",
-  "root-not-found": "Rooted directory does not exist.",
-  "root-symlink": "Rooted directory cannot be a symbolic link.",
-  "root-type": "Rooted directory root must be a directory.",
-  "root-alias": "Opened rooted directory path now resolves through a physical alias.",
-  "root-open-failure": "Rooted directory could not be opened safely.",
-  "root-changed": "Rooted directory path no longer names the opened root node.",
-  "resource-path": "Rooted resource path is not a valid portable resource path.",
-  "resource-not-found": "Rooted resource does not exist.",
-  "ancestor-symlink": "Rooted resource contains a symbolic-link ancestor.",
-  "ancestor-type": "Rooted resource ancestor is not a directory.",
-  "resource-alias": "Rooted resource resolves through a non-canonical path alias.",
-  "resource-changed": "Rooted resource changed while it was being inspected.",
-  "inspection-failure": "Rooted resource could not be inspected safely.",
-  closed: "Rooted directory is already closed.",
-  "close-failure": "Rooted directory handle could not be closed safely.",
-} as const satisfies Readonly<Record<RootedDirectoryErrorReason, string>>;
-
 /**
  * 根作用域文件系统失败的稳定错误。
  *
  * 错误只暴露能力代码、分类和调用方结构路径，不回显物理根目录、资源路径、系统调用、
  * Node.js 错误消息或底层原因。
  */
-export class RootedDirectoryError extends Error {
-  override readonly name = "RootedDirectoryError";
-  readonly code = "wakeflow-rooted-directory" as const;
-  readonly reason: RootedDirectoryErrorReason;
-  readonly path: string;
-
-  constructor(reason: RootedDirectoryErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class RootedDirectoryError extends ModuleError<RootedDirectoryErrorReason> {
+  static override readonly code = "wakeflow-rooted-directory";
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in paths
@@ -122,9 +94,7 @@ function normalizeErrorPath(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function fail(reason: RootedDirectoryErrorReason, path: string, cause?: unknown): never {
-  throw new RootedDirectoryError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<RootedDirectoryErrorReason> = failWith(RootedDirectoryError);
 
 function normalizeRootPath(value: unknown, errorPath: string): string {
   if (

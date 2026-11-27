@@ -1,5 +1,6 @@
 import { createHash, type Hash } from "node:crypto";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   addByteCounts,
   type ByteCount,
@@ -41,32 +42,13 @@ export type Sha256HasherErrorReason =
   | "already-finalized"
   | "failed-state";
 
-const ERROR_MESSAGES = {
-  "initialization-failure": "The incremental SHA-256 operation could not be initialized.",
-  "input-type": "Incremental SHA-256 input must be a Uint8Array byte sequence.",
-  "byte-count-overflow": "Incremental SHA-256 byte count exceeds the safe integer range.",
-  "update-failure": "The incremental SHA-256 operation failed while consuming bytes.",
-  "digest-failure": "The incremental SHA-256 operation failed while producing its digest.",
-  "already-finalized": "The incremental SHA-256 operation has already been finalized.",
-  "failed-state": "The incremental SHA-256 operation is unusable after an earlier failure.",
-} as const satisfies Readonly<Record<Sha256HasherErrorReason, string>>;
-
 /**
  * 增量 SHA-256 生命周期失败的稳定错误。
  *
  * 错误不回显数据分块、累计数量、摘要、Node.js/OpenSSL 消息、调用栈或原因链。
  */
-export class Sha256HasherError extends Error {
-  override readonly name = "Sha256HasherError";
-  readonly code = "wakeflow-sha256-hasher" as const;
-  readonly reason: Sha256HasherErrorReason;
-  readonly path: string;
-
-  constructor(reason: Sha256HasherErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class Sha256HasherError extends ModuleError<Sha256HasherErrorReason> {
+  static override readonly code = "wakeflow-sha256-hasher";
 }
 
 type Sha256HasherState = "active" | "finalized" | "failed";
@@ -75,9 +57,7 @@ function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$bytes";
 }
 
-function fail(reason: Sha256HasherErrorReason, path: string): never {
-  throw new Sha256HasherError(reason, path);
-}
+const fail: Fail<Sha256HasherErrorReason> = failWith(Sha256HasherError);
 
 function isUint8Array(value: unknown): value is Uint8Array {
   return ArrayBuffer.isView(value) && value instanceof Uint8Array;

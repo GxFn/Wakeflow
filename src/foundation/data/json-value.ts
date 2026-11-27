@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   PassiveOwnDataError,
   type PassiveOwnDataErrorReason,
@@ -54,24 +55,6 @@ export type JsonValueErrorReason =
   | "array-slot"
   | "array-extra-property";
 
-const ERROR_MESSAGES = {
-  "unsupported-type": "The value is not part of the JSON data model.",
-  "non-finite-number": "JSON numbers must be finite IEEE 754 values.",
-  "negative-zero": "Negative zero is not accepted as Wakeflow JSON data.",
-  "lone-surrogate": "JSON strings must not contain lone Unicode surrogates.",
-  cycle: "JSON values must not contain circular references.",
-  "maximum-depth": "The JSON value exceeds the structural depth limit.",
-  "invalid-container": "The JSON container is not structurally valid.",
-  proxy: "Proxy values are not accepted as JSON data.",
-  "record-prototype": "JSON objects require a plain or null prototype.",
-  "symbol-key": "JSON containers must not contain symbol-keyed properties.",
-  "non-enumerable-property": "JSON containers must not contain hidden properties.",
-  "accessor-property": "JSON containers must not contain accessor properties.",
-  "array-prototype": "JSON arrays require the standard Array prototype.",
-  "array-slot": "JSON arrays must be dense own-data arrays.",
-  "array-extra-property": "JSON arrays must not contain additional own properties.",
-} as const satisfies Readonly<Record<JsonValueErrorReason, string>>;
-
 const PASSIVE_REASON_MAP = {
   proxy: "proxy",
   "value-type": "invalid-container",
@@ -92,22 +75,11 @@ const PASSIVE_REASON_MAP = {
  * 错误只暴露能力代码、失败分类和结构路径；原始成员值与下层异常消息不会进入
  * 公共字段，领域职责所有者可据此映射自己的错误合同。
  */
-export class JsonValueError extends Error {
-  override readonly name = "JsonValueError";
-  readonly code = "wakeflow-json-value" as const;
-  readonly reason: JsonValueErrorReason;
-  readonly path: string;
-
-  constructor(reason: JsonValueErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class JsonValueError extends ModuleError<JsonValueErrorReason> {
+  static override readonly code = "wakeflow-json-value";
 }
 
-function fail(reason: JsonValueErrorReason, path: string): never {
-  throw new JsonValueError(reason, path);
-}
+const fail: Fail<JsonValueErrorReason> = failWith(JsonValueError);
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";

@@ -2,6 +2,7 @@ import { types } from "node:util";
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
@@ -80,44 +81,14 @@ export type WakeflowSharedCoordinationLayoutErrorReason =
   | "root-scope"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Shared Coordination Layout input is invalid.",
-  authority: "Shared Coordination Layout declarations are invalid.",
-  "strict-absent": "Fresh Shared Coordination Layout target already exists.",
-  layout: "Shared Coordination Layout contains an unsafe directory.",
-  "root-scope": "Shared Coordination Layout lost workspace scope.",
-  "operation-failure": "Shared Coordination Layout materialization failed.",
-} as const satisfies Readonly<Record<WakeflowSharedCoordinationLayoutErrorReason, string>>;
-
 /** Shared Coordination Layout检查或物化失败时的稳定错误。 */
-export class WakeflowSharedCoordinationLayoutError extends Error {
-  override readonly name = "WakeflowSharedCoordinationLayoutError";
-  readonly code = "wakeflow-shared-coordination-layout" as const;
-  readonly reason: WakeflowSharedCoordinationLayoutErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowSharedCoordinationLayoutErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowSharedCoordinationLayoutError extends ModuleError<WakeflowSharedCoordinationLayoutErrorReason> {
+  static override readonly code = "wakeflow-shared-coordination-layout";
 }
 
-function fail(
-  reason: WakeflowSharedCoordinationLayoutErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowSharedCoordinationLayoutError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowSharedCoordinationLayoutErrorReason> = failWith(
+  WakeflowSharedCoordinationLayoutError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

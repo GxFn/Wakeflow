@@ -6,6 +6,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import { sameFileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
@@ -89,44 +90,13 @@ export type DemandEventSourcingRootAuthorityErrorReason =
   | "stream"
   | "closure";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing root authority input is invalid.",
-  inventory: "Demand Event Sourcing root inventory does not satisfy its requested phase.",
-  identity: "Demand Event Sourcing root identity is invalid.",
-  authority: "Demand Event Sourcing root authority record is invalid.",
-  ledger: "Demand Event Sourcing root authority cannot resolve its Ledger closure.",
-  stream: "Demand Event Sourcing root event stream is invalid.",
-  closure: "Demand Event Sourcing root records do not form one aggregate.",
-} as const satisfies Readonly<Record<DemandEventSourcingRootAuthorityErrorReason, string>>;
-
-export class DemandEventSourcingRootAuthorityError extends Error {
-  override readonly name = "DemandEventSourcingRootAuthorityError";
-  readonly code = "wakeflow-demand-event-sourcing-root-authority" as const;
-  readonly reason: DemandEventSourcingRootAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingRootAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingRootAuthorityError extends ModuleError<DemandEventSourcingRootAuthorityErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-root-authority";
 }
 
-function fail(
-  reason: DemandEventSourcingRootAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingRootAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DemandEventSourcingRootAuthorityErrorReason> = failWith(
+  DemandEventSourcingRootAuthorityError,
+);
 
 function sameOptionalNode(
   left: Readonly<FileNodeSnapshot> | undefined,

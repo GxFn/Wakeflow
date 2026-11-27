@@ -1,6 +1,7 @@
 import pLimit from "p-limit";
 
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   addByteCounts,
   type ByteCount,
@@ -95,38 +96,13 @@ export type StableResourceTreeReadErrorReason =
   | "io-failure"
   | "source-changed";
 
-const ERROR_MESSAGES = {
-  input: "Stable resource tree read input is invalid.",
-  "root-scope": "Stable resource tree read could not establish its rooted scope.",
-  "not-found": "Stable resource tree read target does not exist.",
-  symlink: "Stable resource tree read target cannot be a symbolic link.",
-  "not-directory": "Stable resource tree read target must be a directory.",
-  "entry-limit": "Stable resource tree exceeds the caller entry limit.",
-  "depth-limit": "Stable resource tree exceeds the caller depth limit.",
-  "file-count": "Stable resource tree exceeds the caller regular-file limit.",
-  "file-bytes": "A stable resource tree file exceeds the caller byte limit.",
-  "total-bytes": "Stable resource tree exceeds the caller total-byte limit.",
-  "entry-path": "Stable resource tree contains a non-portable resource path.",
-  "io-failure": "Stable resource tree facts could not be observed safely.",
-  "source-changed": "Stable resource tree changed while it was being read.",
-} as const satisfies Readonly<Record<StableResourceTreeReadErrorReason, string>>;
-
 /**
  * 稳定资源树读取的公共、脱敏错误。
  *
  * 错误不回显物理路径、资源引用、节点元数据、容量、摘要、取消原因或底层原因。
  */
-export class StableResourceTreeReadError extends Error {
-  override readonly name = "StableResourceTreeReadError";
-  readonly code = "wakeflow-stable-resource-tree-read" as const;
-  readonly reason: StableResourceTreeReadErrorReason;
-  readonly path: string;
-
-  constructor(reason: StableResourceTreeReadErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class StableResourceTreeReadError extends ModuleError<StableResourceTreeReadErrorReason> {
+  static override readonly code = "wakeflow-stable-resource-tree-read";
 }
 
 interface ParsedStableResourceTreeReadOptions {
@@ -141,9 +117,7 @@ interface ParsedStableResourceTreeReadOptions {
 
 type TreeRootResourcePath = PortableResourcePath | null;
 
-function fail(reason: StableResourceTreeReadErrorReason, path: string, cause?: unknown): never {
-  throw new StableResourceTreeReadError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<StableResourceTreeReadErrorReason> = failWith(StableResourceTreeReadError);
 
 function parseCount(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {

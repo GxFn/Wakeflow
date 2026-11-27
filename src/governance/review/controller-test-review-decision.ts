@@ -22,6 +22,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
   UuidV4Error,
@@ -137,33 +138,13 @@ export type ControllerTestReviewDecisionErrorReason =
   | "text"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Controller Test Review Decision is not passive JSON data.",
-  schema: "Controller Test Review Decision does not satisfy its Schema.",
-  identifier: "Controller Test Review Decision contains an invalid identity.",
-  digest: "Controller Test Review Decision contains an invalid or inconsistent digest.",
-  position: "Controller Test Review Decision contains an invalid Event Stream position.",
-  time: "Controller Test Review Decision contains an invalid decision time.",
-  text: "Controller Test Review Decision contains invalid review text.",
-  relation: "Controller Test Review Decision facts are inconsistent.",
-} as const satisfies Readonly<Record<ControllerTestReviewDecisionErrorReason, string>>;
-
-export class ControllerTestReviewDecisionError extends Error {
-  override readonly name = "ControllerTestReviewDecisionError";
-  readonly code = "wakeflow-controller-test-review-decision" as const;
-  readonly reason: ControllerTestReviewDecisionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ControllerTestReviewDecisionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ControllerTestReviewDecisionError extends ModuleError<ControllerTestReviewDecisionErrorReason> {
+  static override readonly code = "wakeflow-controller-test-review-decision";
 }
+
+const fail: Fail<ControllerTestReviewDecisionErrorReason> = failWith(
+  ControllerTestReviewDecisionError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
   WAKEFLOW_CONTROLLER_TEST_REVIEW_DECISION_SCHEMA,
@@ -175,18 +156,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DecisionWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-
-function fail(
-  reason: ControllerTestReviewDecisionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ControllerTestReviewDecisionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function id<
   Kind extends

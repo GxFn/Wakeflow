@@ -9,6 +9,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
@@ -86,46 +87,19 @@ export interface WakeflowWindowRuntimeRegisteredProjectionEntry {
 
 type WakeflowWindowRuntimeRegisteredProjectionErrorReason = "input" | "schema" | "source";
 
-const ERROR_MESSAGES = {
-  input: "Window Runtime registered projection input is invalid.",
-  schema: "Window Runtime registered projection does not satisfy its Schema.",
-  source: "Window Runtime registered projection sources are inconsistent.",
-} as const satisfies Readonly<Record<WakeflowWindowRuntimeRegisteredProjectionErrorReason, string>>;
-
 /** Registered projection 编译或准入失败的稳定、脱敏错误。 */
-export class WakeflowWindowRuntimeRegisteredProjectionError extends Error {
-  override readonly name = "WakeflowWindowRuntimeRegisteredProjectionError";
-  readonly code = "wakeflow-window-runtime-registered-projection" as const;
-  readonly reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowRuntimeRegisteredProjectionError extends ModuleError<WakeflowWindowRuntimeRegisteredProjectionErrorReason> {
+  static override readonly code = "wakeflow-window-runtime-registered-projection";
 }
+
+const fail: Fail<WakeflowWindowRuntimeRegisteredProjectionErrorReason> = failWith(
+  WakeflowWindowRuntimeRegisteredProjectionError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<RegisteredProjectionWire>(
   WAKEFLOW_WINDOW_RUNTIME_REGISTERED_PROJECTION_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_WINDOW_RUNTIME_UNREGISTERED_PROJECTION_SCHEMA],
 );
-
-function fail(
-  reason: WakeflowWindowRuntimeRegisteredProjectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowRuntimeRegisteredProjectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function projectionBasis(
   value: Omit<WakeflowWindowRuntimeRegisteredProjection, "projectionDigest">,

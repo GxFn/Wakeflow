@@ -1,5 +1,6 @@
 import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   admitWakeflowResourceOperation,
   type WakeflowResourceOperation,
@@ -40,50 +41,19 @@ export type WakeflowWorkspaceStaticResourceOperationContextErrorReason =
   | "declaration-not-found"
   | "operation";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow static resource operation context input is invalid.",
-  matrix: "Wakeflow static resource operation context matrix is invalid.",
-  "matrix-changed": "Wakeflow static resource matrix differs from its expectation.",
-  "declaration-not-found": "Wakeflow static resource declaration does not exist.",
-  operation: "Wakeflow static resource operation is not admitted.",
-} as const satisfies Readonly<
-  Record<WakeflowWorkspaceStaticResourceOperationContextErrorReason, string>
->;
-
 /** 静态资源操作上下文准入失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceStaticResourceOperationContextError extends Error {
-  override readonly name = "WakeflowWorkspaceStaticResourceOperationContextError";
-  readonly code = "wakeflow-workspace-static-resource-operation-context" as const;
-  readonly reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWorkspaceStaticResourceOperationContextError extends ModuleError<WakeflowWorkspaceStaticResourceOperationContextErrorReason> {
+  static override readonly code = "wakeflow-workspace-static-resource-operation-context";
 }
+
+const fail: Fail<WakeflowWorkspaceStaticResourceOperationContextErrorReason> = failWith(
+  WakeflowWorkspaceStaticResourceOperationContextError,
+);
 
 interface ParsedRequest {
   readonly expectedMatrixDigest: Sha256Digest;
   readonly declarationId: string;
   readonly recipe: unknown;
-}
-
-function fail(
-  reason: WakeflowWorkspaceStaticResourceOperationContextErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWorkspaceStaticResourceOperationContextError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function plainRecord(value: unknown, path: string): Readonly<Record<string, unknown>> {

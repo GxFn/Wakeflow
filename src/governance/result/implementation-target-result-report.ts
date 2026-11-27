@@ -24,6 +24,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -175,34 +176,13 @@ export type ImplementationTargetResultReportErrorReason =
   | "time"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Implementation Target Result Report is not passive closed JSON data.",
-  schema: "Implementation Target Result Report does not satisfy its Schema.",
-  identifier: "Implementation Target Result Report contains an invalid identity.",
-  digest: "Implementation Target Result Report contains an invalid or inconsistent digest.",
-  path: "Implementation Target Result Report contains an invalid portable resource path.",
-  "git-object-id": "Implementation Target Result Report contains an invalid Git object ID.",
-  text: "Implementation Target Result Report contains invalid human text or token text.",
-  time: "Implementation Target Result Report contains an invalid time.",
-  relation: "Implementation Target Result Report facts are inconsistent.",
-} as const satisfies Readonly<Record<ImplementationTargetResultReportErrorReason, string>>;
-
-export class ImplementationTargetResultReportError extends Error {
-  override readonly name = "ImplementationTargetResultReportError";
-  readonly code = "wakeflow-implementation-target-result-report" as const;
-  readonly reason: ImplementationTargetResultReportErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ImplementationTargetResultReportErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ImplementationTargetResultReportError extends ModuleError<ImplementationTargetResultReportErrorReason> {
+  static override readonly code = "wakeflow-implementation-target-result-report";
 }
+
+const fail: Fail<ImplementationTargetResultReportErrorReason> = failWith(
+  ImplementationTargetResultReportError,
+);
 
 const REPORT_SCHEMA_DEPENDENCIES = [
   WAKEFLOW_GIT_OBJECT_ID_SCHEMA,
@@ -218,18 +198,6 @@ const validateWire = createRuntimeJsonSchemaValidator<ReportWireV2>(
   WAKEFLOW_IMPLEMENTATION_TARGET_RESULT_REPORT_V2_SCHEMA,
   REPORT_SCHEMA_DEPENDENCIES,
 );
-
-function fail(
-  reason: ImplementationTargetResultReportErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ImplementationTargetResultReportError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function jsonRecord(value: unknown, fields: readonly string[], path: string): Readonly<JsonObject> {
   let json: JsonValue;

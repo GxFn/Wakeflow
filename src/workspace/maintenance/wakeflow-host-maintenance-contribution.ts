@@ -14,6 +14,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
@@ -76,33 +77,14 @@ export type WakeflowHostMaintenanceContributionErrorReason =
   | "order"
   | "status";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow host maintenance contribution input is invalid.",
-  host: "Wakeflow host maintenance contribution host identity is invalid.",
-  identity: "Wakeflow host maintenance contribution identity is invalid.",
-  digest: "Wakeflow host maintenance contribution digest is invalid.",
-  payload: "Wakeflow host maintenance operation payload is invalid.",
-  order: "Wakeflow host maintenance operations are not uniquely ordered.",
-  status: "Wakeflow host maintenance contribution status is inconsistent.",
-} as const satisfies Readonly<Record<WakeflowHostMaintenanceContributionErrorReason, string>>;
-
 /** 宿主维护 contribution 准入失败的稳定、脱敏错误。 */
-export class WakeflowHostMaintenanceContributionError extends Error {
-  override readonly name = "WakeflowHostMaintenanceContributionError";
-  readonly code = "wakeflow-host-maintenance-contribution" as const;
-  readonly reason: WakeflowHostMaintenanceContributionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowHostMaintenanceContributionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowHostMaintenanceContributionError extends ModuleError<WakeflowHostMaintenanceContributionErrorReason> {
+  static override readonly code = "wakeflow-host-maintenance-contribution";
 }
+
+const fail: Fail<WakeflowHostMaintenanceContributionErrorReason> = failWith(
+  WakeflowHostMaintenanceContributionError,
+);
 
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 const COMPONENT_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -112,18 +94,6 @@ const TARGET_KEY_PATTERN = /^[a-z0-9][a-z0-9_.:-]{0,255}$/u;
 const MAXIMUM_OPERATIONS = 128;
 const MAXIMUM_BLOCKERS = 128;
 const MAXIMUM_IDENTITY_LENGTH = 256;
-
-function fail(
-  reason: WakeflowHostMaintenanceContributionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowHostMaintenanceContributionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function digest(value: unknown, path: string): Sha256Digest {
   try {

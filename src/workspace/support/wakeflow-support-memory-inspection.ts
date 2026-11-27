@@ -21,6 +21,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -121,38 +122,14 @@ export type WakeflowSupportMemoryInspectionErrorReason =
   | "unadmitted-source"
   | "capacity";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow support memory inspection input is invalid.",
-  config: "Wakeflow support memory inspection config is invalid.",
-  profile: "Wakeflow support memory inspection host profile is invalid.",
-  catalog: "Wakeflow support memory inspection catalog is invalid.",
-  surface: "Wakeflow support memory inspection surface is unavailable.",
-  placement: "Wakeflow support memory root placement is inconsistent.",
-  "root-policy": "Wakeflow support memory root violates its node policy.",
-  authority: "Wakeflow support memory content authority is invalid.",
-  source: "Wakeflow support memory source cannot be read stably.",
-  "source-policy": "Wakeflow support memory source violates its node policy.",
-  "unadmitted-source": "Wakeflow support memory source is not an admitted whole-file render.",
-  capacity: "Wakeflow support memory exceeds its byte budget.",
-} as const satisfies Readonly<Record<WakeflowSupportMemoryInspectionErrorReason, string>>;
-
 /** Support memory 只读检查失败的稳定、脱敏错误。 */
-export class WakeflowSupportMemoryInspectionError extends Error {
-  override readonly name = "WakeflowSupportMemoryInspectionError";
-  readonly code = "wakeflow-support-memory-inspection" as const;
-  readonly reason: WakeflowSupportMemoryInspectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowSupportMemoryInspectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowSupportMemoryInspectionError extends ModuleError<WakeflowSupportMemoryInspectionErrorReason> {
+  static override readonly code = "wakeflow-support-memory-inspection";
 }
+
+const fail: Fail<WakeflowSupportMemoryInspectionErrorReason> = failWith(
+  WakeflowSupportMemoryInspectionError,
+);
 
 export interface ParsedWakeflowSupportMemoryInspectionRequest {
   readonly currentConfig: WakeflowConfigModel | null;
@@ -163,18 +140,6 @@ export interface ParsedWakeflowSupportMemoryInspectionRequest {
   readonly catalog: Readonly<WakeflowManagedSupportResourceCatalog>;
   readonly surfaceId: WakeflowDurableId<"surface">;
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: WakeflowSupportMemoryInspectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowSupportMemoryInspectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {

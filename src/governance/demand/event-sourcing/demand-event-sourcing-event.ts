@@ -23,6 +23,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   createRuntimeJsonSchemaValidator,
   type RuntimeJsonSchemaValidator,
@@ -310,43 +311,11 @@ export type DemandEventSourcingEventErrorReason =
   | "managed-evidence-manifest"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing event input is invalid.",
-  identifier: "Demand Event Sourcing event contains an invalid identity.",
-  time: "Demand Event Sourcing event contains an invalid recorded time.",
-  digest: "Demand Event Sourcing event contains an invalid digest.",
-  "event-type": "Demand Event Sourcing event type and data do not form one closed variant.",
-  text: "Demand Event Sourcing event contains non-canonical text.",
-  "task-package": "Demand Event Sourcing event contains an invalid TaskPackage.",
-  "delivery-envelope": "Demand Event Sourcing event contains an invalid Delivery Envelope.",
-  "delivery-outcome": "Demand Event Sourcing event contains an invalid Delivery Outcome.",
-  "delivery-rearm": "Demand Event Sourcing event contains an invalid Delivery Rearm.",
-  "target-result": "Demand Event Sourcing event contains an invalid TargetResult.",
-  "controller-review-decision":
-    "Demand Event Sourcing event contains an invalid Controller Review Decision.",
-  "controller-product-defect-remediation-authorization":
-    "Demand Event Sourcing event contains an invalid Controller Product Defect Remediation Authorization.",
-  "target-result-callback":
-    "Demand Event Sourcing event contains an invalid Target Result callback record.",
-  "demand-completion": "Demand Event Sourcing event contains an invalid Demand Completion.",
-  "lifecycle-data": "Demand Event Sourcing event carries invalid lifecycle data.",
-  "managed-evidence-manifest":
-    "Demand Event Sourcing event contains an invalid Managed Evidence Manifest.",
-  relation: "Demand Event Sourcing event identity and payload do not close.",
-} as const satisfies Readonly<Record<DemandEventSourcingEventErrorReason, string>>;
-
-export class DemandEventSourcingEventError extends Error {
-  override readonly name = "DemandEventSourcingEventError";
-  readonly code = "wakeflow-demand-event-sourcing-event" as const;
-  readonly reason: DemandEventSourcingEventErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandEventSourcingEventErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingEventError extends ModuleError<DemandEventSourcingEventErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-event";
 }
+
+const fail: Fail<DemandEventSourcingEventErrorReason> = failWith(DemandEventSourcingEventError);
 
 const BASE_FIELDS = Object.freeze([
   "data",
@@ -428,14 +397,6 @@ const CONTROLLER_TARGET_REVIEW_DECIDED_DATA_FIELDS = Object.freeze(["decision"] 
 const PRODUCT_DEFECT_REMEDIATION_AUTHORIZED_DATA_FIELDS = Object.freeze(["authorization"] as const);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-
-function fail(reason: DemandEventSourcingEventErrorReason, path: string, cause?: unknown): never {
-  throw new DemandEventSourcingEventError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function exactRecord(
   value: unknown,

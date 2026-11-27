@@ -8,6 +8,7 @@ import {
 } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostId,
@@ -51,42 +52,14 @@ export type WakeflowManagedSupportResourceCatalogErrorReason =
   | "topology"
   | "declaration";
 
-const ERROR_MESSAGES = {
-  config: "Wakeflow managed support resource catalog config is invalid.",
-  profile: "Wakeflow managed support resource catalog host profile is invalid.",
-  topology: "Wakeflow managed support resource catalog topology is inconsistent.",
-  declaration: "Wakeflow managed support resource declaration is invalid.",
-} as const satisfies Readonly<Record<WakeflowManagedSupportResourceCatalogErrorReason, string>>;
-
 /** 受管 Support 动态资源目录构建失败的稳定、脱敏错误。 */
-export class WakeflowManagedSupportResourceCatalogError extends Error {
-  override readonly name = "WakeflowManagedSupportResourceCatalogError";
-  readonly code = "wakeflow-managed-support-resource-catalog" as const;
-  readonly reason: WakeflowManagedSupportResourceCatalogErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowManagedSupportResourceCatalogErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowManagedSupportResourceCatalogError extends ModuleError<WakeflowManagedSupportResourceCatalogErrorReason> {
+  static override readonly code = "wakeflow-managed-support-resource-catalog";
 }
 
-function fail(
-  reason: WakeflowManagedSupportResourceCatalogErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowManagedSupportResourceCatalogError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowManagedSupportResourceCatalogErrorReason> = failWith(
+  WakeflowManagedSupportResourceCatalogError,
+);
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {

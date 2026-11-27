@@ -3,6 +3,7 @@ import { types } from "node:util";
 import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
   WakeflowWorkspaceHostId,
@@ -64,45 +65,17 @@ export type WakeflowHostMaintenanceCapabilityErrorReason =
   | "identity"
   | "contribution";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow host maintenance capability input is invalid.",
-  host: "Wakeflow host maintenance capability does not match the current host.",
-  identity: "Wakeflow host maintenance capability identity is invalid.",
-  contribution: "Wakeflow host maintenance contribution does not match its capability.",
-} as const satisfies Readonly<Record<WakeflowHostMaintenanceCapabilityErrorReason, string>>;
-
 /** 当前宿主 capability 准入失败的稳定、脱敏错误。 */
-export class WakeflowHostMaintenanceCapabilityError extends Error {
-  override readonly name = "WakeflowHostMaintenanceCapabilityError";
-  readonly code = "wakeflow-host-maintenance-capability" as const;
-  readonly reason: WakeflowHostMaintenanceCapabilityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowHostMaintenanceCapabilityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowHostMaintenanceCapabilityError extends ModuleError<WakeflowHostMaintenanceCapabilityErrorReason> {
+  static override readonly code = "wakeflow-host-maintenance-capability";
 }
+
+const fail: Fail<WakeflowHostMaintenanceCapabilityErrorReason> = failWith(
+  WakeflowHostMaintenanceCapabilityError,
+);
 
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
 const MAXIMUM_CAPABILITY_ID_LENGTH = 256;
-
-function fail(
-  reason: WakeflowHostMaintenanceCapabilityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowHostMaintenanceCapabilityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 /** 验证一次执行所提供的唯一 capability 与当前宿主精确对应。 */
 export function assertWakeflowHostMaintenanceCapability(

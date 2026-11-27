@@ -18,6 +18,7 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   MarkdownJsonStringLiteralError,
   renderMarkdownJsonStringLiteral,
@@ -89,44 +90,14 @@ export type WakeflowExternalInstructionBodyAuthorityErrorReason =
   | "target"
   | "text";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow external instruction authority input is invalid.",
-  config: "Wakeflow external instruction config source is invalid.",
-  profile: "Wakeflow external instruction host profile is invalid.",
-  target:
-    "Wakeflow external instruction target is not a managed-block repository or external-owned surface.",
-  text: "Wakeflow external instruction text cannot be represented safely.",
-} as const satisfies Readonly<Record<WakeflowExternalInstructionBodyAuthorityErrorReason, string>>;
-
 /** 外部指令正文权威准入失败的稳定、脱敏错误。 */
-export class WakeflowExternalInstructionBodyAuthorityError extends Error {
-  override readonly name = "WakeflowExternalInstructionBodyAuthorityError";
-  readonly code = "wakeflow-external-instruction-body-authority" as const;
-  readonly reason: WakeflowExternalInstructionBodyAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowExternalInstructionBodyAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowExternalInstructionBodyAuthorityError extends ModuleError<WakeflowExternalInstructionBodyAuthorityErrorReason> {
+  static override readonly code = "wakeflow-external-instruction-body-authority";
 }
 
-function fail(
-  reason: WakeflowExternalInstructionBodyAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowExternalInstructionBodyAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<WakeflowExternalInstructionBodyAuthorityErrorReason> = failWith(
+  WakeflowExternalInstructionBodyAuthorityError,
+);
 
 function parseConfig(value: unknown): WakeflowConfigModel {
   try {

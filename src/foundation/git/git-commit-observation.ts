@@ -2,6 +2,7 @@ import { types } from "node:util";
 
 import { parseSha256Digest, SHA256_DIGEST_PREFIX, type Sha256Digest } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { RootedDirectory, RootedDirectoryError } from "../filesystem/rooted-directory.js";
 import { isAbortSignal, throwIfAborted } from "../node/abort-signal.js";
 import { decodeUtf8, Utf8Error } from "../text/utf8.js";
@@ -70,28 +71,9 @@ export type GitCommitObservationErrorReason =
   | "output-limit"
   | "protocol";
 
-const ERROR_MESSAGES = {
-  input: "Git commit observation input is invalid.",
-  "root-scope": "Git commit observation could not establish its rooted scope.",
-  "git-unavailable": "Git commit observation could not start Git.",
-  "query-failure": "Git commit observation query failed.",
-  timeout: "Git commit observation exceeded its execution deadline.",
-  "output-limit": "Git commit observation exceeded its output budget.",
-  protocol: "Git commit observation returned an invalid machine record.",
-} as const satisfies Readonly<Record<GitCommitObservationErrorReason, string>>;
-
 /** 提交观察失败的稳定、脱敏错误。 */
-export class GitCommitObservationError extends Error {
-  override readonly name = "GitCommitObservationError";
-  readonly code = "wakeflow-git-commit-observation" as const;
-  readonly reason: GitCommitObservationErrorReason;
-  readonly path: string;
-
-  constructor(reason: GitCommitObservationErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class GitCommitObservationError extends ModuleError<GitCommitObservationErrorReason> {
+  static override readonly code = "wakeflow-git-commit-observation";
 }
 
 const OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
@@ -104,9 +86,7 @@ const CHANGE_STATUSES: Readonly<Record<string, GitChangedPathStatus>> = Object.f
   T: "type-changed",
 });
 
-function fail(reason: GitCommitObservationErrorReason, path: string, cause?: unknown): never {
-  throw new GitCommitObservationError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<GitCommitObservationErrorReason> = failWith(GitCommitObservationError);
 
 function assertRoot(value: unknown, path: string): asserts value is RootedDirectory {
   if (

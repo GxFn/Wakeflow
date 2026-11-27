@@ -1,3 +1,5 @@
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
+
 /**
  * Wakeflow Governance / Demand Event Sourcing：归约器状态模型与历史摘要版本。
  *
@@ -18,27 +20,13 @@ export type DemandEventSourcingStateModelVersion = number & {
 
 export type DemandEventSourcingStateVersionErrorReason = "input" | "unsupported-version";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing state-model version is invalid.",
-  "unsupported-version": "Demand Event Sourcing state-model version is unsupported.",
-} as const satisfies Readonly<Record<DemandEventSourcingStateVersionErrorReason, string>>;
-
-export class DemandEventSourcingStateVersionError extends Error {
-  override readonly name = "DemandEventSourcingStateVersionError";
-  readonly code = "wakeflow-demand-event-sourcing-state-version" as const;
-  readonly reason: DemandEventSourcingStateVersionErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandEventSourcingStateVersionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingStateVersionError extends ModuleError<DemandEventSourcingStateVersionErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-state-version";
 }
 
-function fail(reason: DemandEventSourcingStateVersionErrorReason, path: string): never {
-  throw new DemandEventSourcingStateVersionError(reason, path);
-}
+const fail: Fail<DemandEventSourcingStateVersionErrorReason> = failWith(
+  DemandEventSourcingStateVersionError,
+);
 
 export function parseDemandEventSourcingStateModelVersion(
   value: unknown,

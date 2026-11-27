@@ -10,6 +10,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   isRootedDirectory,
   type RootedDirectory,
@@ -108,36 +109,14 @@ export type WakeflowProgramInstructionInspectionErrorReason =
   | "unknown-managed-body"
   | "target-capacity";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Program Instruction inspection input is invalid.",
-  "unsupported-platform": "Wakeflow Program Instruction inspection requires POSIX ownership facts.",
-  context: "Wakeflow Program Instruction operation context is invalid.",
-  authority: "Wakeflow Program Instruction content authority is invalid.",
-  source: "Wakeflow Program Instruction source cannot be read stably.",
-  "source-capacity": "Wakeflow Program Instruction source exceeds its byte budget.",
-  "source-policy": "Wakeflow Program Instruction source violates its node policy.",
-  envelope: "Wakeflow Program Instruction managed envelope is invalid.",
-  "unknown-managed-body": "Wakeflow Program Instruction managed body is not an admitted render.",
-  "target-capacity": "Wakeflow Program Instruction candidate exceeds its byte budget.",
-} as const satisfies Readonly<Record<WakeflowProgramInstructionInspectionErrorReason, string>>;
-
 /** Program Instruction 只读检查失败的稳定、脱敏错误。 */
-export class WakeflowProgramInstructionInspectionError extends Error {
-  override readonly name = "WakeflowProgramInstructionInspectionError";
-  readonly code = "wakeflow-program-instruction-inspection" as const;
-  readonly reason: WakeflowProgramInstructionInspectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowProgramInstructionInspectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowProgramInstructionInspectionError extends ModuleError<WakeflowProgramInstructionInspectionErrorReason> {
+  static override readonly code = "wakeflow-program-instruction-inspection";
 }
+
+const fail: Fail<WakeflowProgramInstructionInspectionErrorReason> = failWith(
+  WakeflowProgramInstructionInspectionError,
+);
 
 export interface ParsedWakeflowProgramInstructionInspectionRequest {
   readonly matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>;
@@ -148,18 +127,6 @@ export interface ParsedWakeflowProgramInstructionInspectionRequest {
   readonly desiredConfig: WakeflowConfigModel;
   readonly desiredConfigDigest: Sha256Digest;
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: WakeflowProgramInstructionInspectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowProgramInstructionInspectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseDigest(value: unknown, path: string): Sha256Digest {

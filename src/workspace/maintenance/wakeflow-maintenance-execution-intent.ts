@@ -19,6 +19,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
@@ -101,51 +102,19 @@ export type WakeflowMaintenanceExecutionIntentErrorReason =
   | "plan"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance execution intent input is invalid.",
-  json: "Wakeflow maintenance execution intent is not passive JSON data.",
-  schema: "Wakeflow maintenance execution intent does not satisfy its Schema.",
-  operation: "Wakeflow maintenance execution intent operation identity is invalid.",
-  config: "Wakeflow maintenance execution intent desired Config is invalid.",
-  request: "Wakeflow maintenance execution intent Host Profile request is invalid.",
-  plan: "Wakeflow maintenance execution intent plan sources are invalid.",
-  relation: "Wakeflow maintenance execution intent fields are inconsistent.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionIntentErrorReason, string>>;
-
 /** Maintenance execution intent 准入失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceExecutionIntentError extends Error {
-  override readonly name = "WakeflowMaintenanceExecutionIntentError";
-  readonly code = "wakeflow-maintenance-execution-intent" as const;
-  readonly reason: WakeflowMaintenanceExecutionIntentErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowMaintenanceExecutionIntentErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceExecutionIntentError extends ModuleError<WakeflowMaintenanceExecutionIntentErrorReason> {
+  static override readonly code = "wakeflow-maintenance-execution-intent";
 }
+
+const fail: Fail<WakeflowMaintenanceExecutionIntentErrorReason> = failWith(
+  WakeflowMaintenanceExecutionIntentError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<WakeflowMaintenanceExecutionIntentWire>(
   WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA,
   [WAKEFLOW_CONFIG_SCHEMA, WAKEFLOW_SHA256_DIGEST_SCHEMA],
 );
-
-function fail(
-  reason: WakeflowMaintenanceExecutionIntentErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowMaintenanceExecutionIntentError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function normalizeConfig(value: unknown): WakeflowConfigModel {
   try {

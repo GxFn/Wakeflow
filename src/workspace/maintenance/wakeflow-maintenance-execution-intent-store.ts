@@ -3,6 +3,7 @@ import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -103,51 +104,16 @@ export type WakeflowMaintenanceExecutionIntentStoreErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow maintenance execution intent store input is invalid.",
-  gate: "Wakeflow maintenance execution intent store requires the active matching gate.",
-  "transactions-shape": "Wakeflow maintenance transaction resources have an invalid shape.",
-  source: "Wakeflow maintenance execution intent cannot be read stably.",
-  "source-policy": "Wakeflow maintenance execution intent violates its node policy.",
-  intent: "Wakeflow maintenance execution intent content is invalid.",
-  capacity: "Wakeflow maintenance execution intent exceeds its capacity.",
-  conflict: "Wakeflow maintenance execution intent changed before its exact effect.",
-  "recovery-required": "Wakeflow maintenance execution intent requires explicit recovery.",
-  "effect-failure": "Wakeflow maintenance execution intent effect failed safely.",
-  "commit-uncertain": "Wakeflow maintenance execution intent commit could not be proven.",
-} as const satisfies Readonly<Record<WakeflowMaintenanceExecutionIntentStoreErrorReason, string>>;
-
 /** Maintenance execution intent store 失败的稳定、脱敏错误。 */
-export class WakeflowMaintenanceExecutionIntentStoreError extends Error {
-  override readonly name = "WakeflowMaintenanceExecutionIntentStoreError";
-  readonly code = "wakeflow-maintenance-execution-intent-store" as const;
-  readonly reason: WakeflowMaintenanceExecutionIntentStoreErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowMaintenanceExecutionIntentStoreErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowMaintenanceExecutionIntentStoreError extends ModuleError<WakeflowMaintenanceExecutionIntentStoreErrorReason> {
+  static override readonly code = "wakeflow-maintenance-execution-intent-store";
 }
+
+const fail: Fail<WakeflowMaintenanceExecutionIntentStoreErrorReason> = failWith(
+  WakeflowMaintenanceExecutionIntentStoreError,
+);
 
 const ISSUED_SOURCES = new WeakSet<object>();
-
-function fail(
-  reason: WakeflowMaintenanceExecutionIntentStoreErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowMaintenanceExecutionIntentStoreError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
   try {

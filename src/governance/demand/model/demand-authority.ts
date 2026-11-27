@@ -30,6 +30,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -109,34 +110,11 @@ export type DemandAuthorityErrorReason =
   | "resolution"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Demand authority input is invalid.",
-  json: "Demand authority is not passive JSON data.",
-  schema: "Demand authority does not satisfy its portable Schema.",
-  identifier: "Demand authority contains an invalid Demand identity.",
-  digest: "Demand authority contains an invalid identity digest.",
-  text: "Demand authority contains non-canonical text.",
-  reference: "Demand authority contains an invalid Ledger member reference.",
-  ordering: "Demand authority references are not in canonical unique order.",
-  identity: "Demand authority does not bind its exact immutable identity.",
-  role: "Demand authority does not contain its required role closure.",
-  testing: "Demand authority testing decision is inconsistent.",
-  resolution: "Demand authority reference cannot be resolved exactly.",
-  representation: "Demand authority bytes are not its deterministic domain representation.",
-} as const satisfies Readonly<Record<DemandAuthorityErrorReason, string>>;
-
-export class DemandAuthorityError extends Error {
-  override readonly name = "DemandAuthorityError";
-  readonly code = "wakeflow-demand-authority" as const;
-  readonly reason: DemandAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandAuthorityErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandAuthorityError extends ModuleError<DemandAuthorityErrorReason> {
+  static override readonly code = "wakeflow-demand-authority";
 }
+
+const fail: Fail<DemandAuthorityErrorReason> = failWith(DemandAuthorityError);
 
 const PACKAGE_ROLES = Object.freeze(["requirement", "landing"] as const);
 /**
@@ -163,10 +141,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandAuthorityWire>(
     WAKEFLOW_SHA256_DIGEST_SCHEMA,
   ],
 );
-
-function fail(reason: DemandAuthorityErrorReason, path: string, cause?: unknown): never {
-  throw new DemandAuthorityError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function referenceLocationKey(reference: Readonly<LedgerAuthorityMemberReference>): string {
   return [

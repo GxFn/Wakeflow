@@ -6,6 +6,7 @@ import {
   type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
@@ -60,43 +61,13 @@ export type WakeflowWindowRuntimeProjectionErrorReason =
   | "plan"
   | "effect";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow window runtime projection input is invalid.",
-  profile: "Wakeflow window runtime projection host profile is invalid.",
-  topology: "Wakeflow window runtime projection topology is invalid.",
-  plan: "Wakeflow window runtime projection operation no longer matches the current authority.",
-  effect: "Wakeflow window runtime projection could not be published safely.",
-} as const satisfies Readonly<Record<WakeflowWindowRuntimeProjectionErrorReason, string>>;
-
 /** 窗口运行投影观察与维护失败的稳定、脱敏错误。 */
-export class WakeflowWindowRuntimeProjectionError extends Error {
-  override readonly name = "WakeflowWindowRuntimeProjectionError";
-  readonly code = "wakeflow-window-runtime-projection" as const;
-  readonly reason: WakeflowWindowRuntimeProjectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWindowRuntimeProjectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWindowRuntimeProjectionError extends ModuleError<WakeflowWindowRuntimeProjectionErrorReason> {
+  static override readonly code = "wakeflow-window-runtime-projection";
 }
 
-export function failWindowRuntimeProjection(
-  reason: WakeflowWindowRuntimeProjectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWindowRuntimeProjectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failWindowRuntimeProjection: Fail<WakeflowWindowRuntimeProjectionErrorReason> =
+  failWith(WakeflowWindowRuntimeProjectionError);
 
 export interface WakeflowWindowRuntimeProjectionInputs {
   readonly config: WakeflowConfigModel;

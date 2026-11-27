@@ -2,6 +2,7 @@ import { types } from "node:util";
 
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import {
   createFileAtomically,
@@ -97,56 +98,20 @@ export type ManagedEvidencePublicationStageMaterializationErrorReason =
   | "recovery-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence publication stage materialization input is invalid.",
-  journal: "Managed evidence publication journal is absent, changed, or different.",
-  "source-root-scope": "Managed evidence publication source escaped its admitted root.",
-  "source-changed": "Managed evidence publication source differs from its Manifest.",
-  "destination-root-scope": "Managed evidence publication stage escaped its Demand root.",
-  "stage-conflict": "Managed evidence publication stage conflicts with its record plan.",
-  capacity: "Managed evidence publication stage exceeds its admitted capacity.",
-  "recovery-required":
-    "Managed evidence publication stage materialization requires explicit recovery.",
-  "operation-failure": "Managed evidence publication stage could not be materialized safely.",
-} as const satisfies Readonly<
-  Record<ManagedEvidencePublicationStageMaterializationErrorReason, string>
->;
-
 /** Stage物化无法证明同一journal/source/record plan时的稳定错误。 */
-export class ManagedEvidencePublicationStageMaterializationError extends Error {
-  override readonly name = "ManagedEvidencePublicationStageMaterializationError";
-  readonly code = "wakeflow-managed-evidence-publication-stage-materialization" as const;
-  readonly reason: ManagedEvidencePublicationStageMaterializationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidencePublicationStageMaterializationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidencePublicationStageMaterializationError extends ModuleError<ManagedEvidencePublicationStageMaterializationErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-publication-stage-materialization";
 }
+
+const fail: Fail<ManagedEvidencePublicationStageMaterializationErrorReason> = failWith(
+  ManagedEvidencePublicationStageMaterializationError,
+);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
 const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME);
-
-function fail(
-  reason: ManagedEvidencePublicationStageMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidencePublicationStageMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function assertRoot(
   value: unknown,

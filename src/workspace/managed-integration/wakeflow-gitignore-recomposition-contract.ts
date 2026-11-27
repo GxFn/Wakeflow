@@ -10,6 +10,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type {
   DurableAtomicFileReplaceResult,
   DurableAtomicFileWriteResult,
@@ -87,39 +88,9 @@ export type WakeflowGitignoreRecompositionErrorReason =
   | "effect-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Gitignore recomposition input is invalid.",
-  "unsupported-platform":
-    "Wakeflow Gitignore recomposition requires reliable local POSIX ownership semantics.",
-  "root-scope": "Wakeflow Gitignore recomposition lost its workspace root scope.",
-  "root-policy": "Wakeflow Gitignore recomposition requires a current-user workspace root.",
-  "source-invalid": "Wakeflow Gitignore source cannot be recomposed safely.",
-  "observation-failure": "Wakeflow Gitignore semantics could not be observed.",
-  capacity: "Wakeflow Gitignore recomposition exceeds its byte budget.",
-  conflict: "Wakeflow Gitignore source changed before atomic publication.",
-  "lock-timeout": "Wakeflow Gitignore recomposition lock acquisition timed out.",
-  "lock-unsafe": "Wakeflow Gitignore recomposition lock is unsafe.",
-  "recovery-required": "Wakeflow Gitignore recomposition requires explicit recovery.",
-  "effect-failure": "Wakeflow Gitignore candidate could not be published safely.",
-  "commit-uncertain": "Published Wakeflow Gitignore could not be proven exact.",
-} as const satisfies Readonly<Record<WakeflowGitignoreRecompositionErrorReason, string>>;
-
 /** Gitignore 重组与恢复失败的稳定、脱敏错误。 */
-export class WakeflowGitignoreRecompositionError extends Error {
-  override readonly name = "WakeflowGitignoreRecompositionError";
-  readonly code = "wakeflow-gitignore-recomposition" as const;
-  readonly reason: WakeflowGitignoreRecompositionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowGitignoreRecompositionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowGitignoreRecompositionError extends ModuleError<WakeflowGitignoreRecompositionErrorReason> {
+  static override readonly code = "wakeflow-gitignore-recomposition";
 }
 
 export interface ParsedWakeflowGitignoreRecompositionRequest {
@@ -134,17 +105,8 @@ export interface ParsedWakeflowGitignoreRecompositionOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-export function failWakeflowGitignoreRecomposition(
-  reason: WakeflowGitignoreRecompositionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowGitignoreRecompositionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failWakeflowGitignoreRecomposition: Fail<WakeflowGitignoreRecompositionErrorReason> =
+  failWith(WakeflowGitignoreRecompositionError);
 
 export function assertWakeflowGitignoreRecompositionRoot(
   value: unknown,

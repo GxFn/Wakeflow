@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { sourceTransitionSteps } from "./durable-source-transition-steps.js";
@@ -66,46 +67,19 @@ export type DurableResourceRenameErrorReason =
   | "durability-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable resource rename input is invalid.",
-  "root-scope": "Resource rename could not establish its rooted scope.",
-  "parent-not-found": "Resource rename parent directory does not exist.",
-  "parent-symlink": "Resource rename parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Resource rename parent must be a directory.",
-  "parent-open-failure": "Resource rename parent could not be opened safely.",
-  "parent-changed": "Resource rename parent changed during the operation.",
-  "source-not-found": "Resource rename source does not exist.",
-  "source-symlink": "Resource rename source cannot be a symbolic link.",
-  "source-not-supported": "Resource rename source must be a real file or directory.",
-  "source-open-failure": "Resource rename source could not be opened safely.",
-  "source-changed": "Resource rename source no longer matches its expectation.",
-  "destination-exists": "Resource rename destination already exists.",
-  "destination-inspection-failure": "Resource rename destination could not be inspected safely.",
-  "cross-device": "Resource rename cannot cross a filesystem boundary.",
-  "rename-failure": "Resource rename commit could not be executed safely.",
-  "commit-uncertain": "Resource rename commit result could not be proven exact.",
-  "durability-failure": "Resource rename parent entries could not be synchronized.",
-  "close-failure": "A resource rename handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableResourceRenameErrorReason, string>>;
-
 /**
  * 持久化资源重命名失败时返回的稳定错误。
  *
  * 错误不回显物理路径、资源引用、节点元数据、取消原因、系统调用或原因链。
  * 重命名调用后的错误不得被解释为源资源一定仍在原路径。
  */
-export class DurableResourceRenameError extends Error {
-  override readonly name = "DurableResourceRenameError";
-  readonly code = "wakeflow-durable-resource-rename" as const;
-  readonly reason: DurableResourceRenameErrorReason;
-  readonly path: string;
+export class DurableResourceRenameError extends ModuleError<DurableResourceRenameErrorReason> {
+  static override readonly code = "wakeflow-durable-resource-rename";
   /** 重命名调用之后的失败：资源可能已经移到目标，也可能没有。 */
   readonly commitUncertain: boolean;
 
   constructor(reason: DurableResourceRenameErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.commitUncertain =
       reason === "commit-uncertain" ||
       reason === "durability-failure" ||
@@ -127,9 +101,7 @@ const {
   closeSource,
 } = sourceTransitionSteps(DurableResourceRenameError);
 
-function fail(reason: DurableResourceRenameErrorReason, path: string, cause?: unknown): never {
-  throw new DurableResourceRenameError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<DurableResourceRenameErrorReason> = failWith(DurableResourceRenameError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

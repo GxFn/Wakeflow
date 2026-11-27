@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { SHA256_DIGEST_PATTERN_SOURCE } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 
 /**
  * Wakeflow Foundation / Crypto：SHA-256 字节摘要与词法合同。
@@ -38,38 +39,21 @@ export type Sha256Digest = `sha256:${string}` & {
 /** SHA-256 基础能力失败的稳定分类。 */
 export type Sha256ErrorReason = "input-type" | "hash-failure" | "digest-format";
 
-const ERROR_MESSAGES = {
-  "input-type": "SHA-256 input must be a Uint8Array byte sequence.",
-  "hash-failure": "The Node.js SHA-256 operation failed.",
-  "digest-format": `SHA-256 digest must match ${SHA256_DIGEST_PREFIX}<${SHA256_HEX_LENGTH} lowercase hexadecimal characters>.`,
-} as const satisfies Readonly<Record<Sha256ErrorReason, string>>;
-
 /**
  * SHA-256 字节摘要与词法解析的稳定错误。
  *
  * 错误只暴露能力代码、失败分类和调用方结构路径；不回显输入、Node.js/OpenSSL
  * 错误消息、调用栈或底层原因。
  */
-export class Sha256Error extends Error {
-  override readonly name = "Sha256Error";
-  readonly code = "wakeflow-sha256" as const;
-  readonly reason: Sha256ErrorReason;
-  readonly path: string;
-
-  constructor(reason: Sha256ErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class Sha256Error extends ModuleError<Sha256ErrorReason> {
+  static override readonly code = "wakeflow-sha256";
 }
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(reason: Sha256ErrorReason, path: string): never {
-  throw new Sha256Error(reason, path);
-}
+const fail: Fail<Sha256ErrorReason> = failWith(Sha256Error);
 
 function isUint8Array(value: unknown): value is Uint8Array {
   return ArrayBuffer.isView(value) && value instanceof Uint8Array;

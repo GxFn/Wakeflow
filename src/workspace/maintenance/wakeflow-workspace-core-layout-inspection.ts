@@ -2,6 +2,7 @@ import { types } from "node:util";
 
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
@@ -95,45 +96,16 @@ export type WakeflowWorkspaceCoreLayoutInspectionErrorReason =
   | "source-changed"
   | "inspection";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow workspace core layout inspection input is invalid.",
-  "root-scope": "Wakeflow workspace root changed during layout inspection.",
-  capacity: "Wakeflow workspace core layout exceeds its inspection budget.",
-  "source-changed": "Wakeflow workspace core layout changed during inspection.",
-  inspection: "Wakeflow workspace core layout could not be inspected safely.",
-} as const satisfies Readonly<Record<WakeflowWorkspaceCoreLayoutInspectionErrorReason, string>>;
-
 /** 核心私有布局检查失败的稳定、脱敏错误。 */
-export class WakeflowWorkspaceCoreLayoutInspectionError extends Error {
-  override readonly name = "WakeflowWorkspaceCoreLayoutInspectionError";
-  readonly code = "wakeflow-workspace-core-layout-inspection" as const;
-  readonly reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowWorkspaceCoreLayoutInspectionError extends ModuleError<WakeflowWorkspaceCoreLayoutInspectionErrorReason> {
+  static override readonly code = "wakeflow-workspace-core-layout-inspection";
 }
+
+const fail: Fail<WakeflowWorkspaceCoreLayoutInspectionErrorReason> = failWith(
+  WakeflowWorkspaceCoreLayoutInspectionError,
+);
 
 const MAXIMUM_PROTOCOL_ENTRIES = 4_096;
-
-function fail(
-  reason: WakeflowWorkspaceCoreLayoutInspectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowWorkspaceCoreLayoutInspectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseSignal(value: unknown): AbortSignal | undefined {
   if (value === undefined) return undefined;

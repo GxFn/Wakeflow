@@ -4,6 +4,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createDirectoryAtomically,
   DurableDirectoryMaterializationError,
@@ -69,35 +70,14 @@ export type WakeflowHostCapabilityLayoutMaterializationErrorReason =
   | "root-scope"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Host capability layout materialization input is invalid.",
-  authority: "Host capability layout authority is invalid.",
-  prerequisite: "Host capability layout prerequisite is unavailable.",
-  "strict-absent": "Fresh host capability layout target already exists.",
-  "prefix-conflict": "Host capability layout prefix is not exact.",
-  "root-scope": "Host capability layout lost workspace scope.",
-  "operation-failure": "Host capability layout materialization failed.",
-} as const satisfies Readonly<
-  Record<WakeflowHostCapabilityLayoutMaterializationErrorReason, string>
->;
-
 /** Host capability layout 物化失败的稳定、脱敏错误。 */
-export class WakeflowHostCapabilityLayoutMaterializationError extends Error {
-  override readonly name = "WakeflowHostCapabilityLayoutMaterializationError";
-  readonly code = "wakeflow-host-capability-layout-materialization" as const;
-  readonly reason: WakeflowHostCapabilityLayoutMaterializationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowHostCapabilityLayoutMaterializationError extends ModuleError<WakeflowHostCapabilityLayoutMaterializationErrorReason> {
+  static override readonly code = "wakeflow-host-capability-layout-materialization";
 }
+
+const fail: Fail<WakeflowHostCapabilityLayoutMaterializationErrorReason> = failWith(
+  WakeflowHostCapabilityLayoutMaterializationError,
+);
 
 interface ParsedOptions {
   readonly recoveringFreshLayout: boolean;
@@ -111,18 +91,6 @@ interface DirectoryEffect {
 }
 
 type ExpectedChildren = ReadonlyMap<PortableResourcePath, ReadonlySet<string>>;
-
-function fail(
-  reason: WakeflowHostCapabilityLayoutMaterializationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowHostCapabilityLayoutMaterializationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseOptions(value: unknown): Readonly<ParsedOptions> {
   let record: Readonly<Record<string, unknown>>;

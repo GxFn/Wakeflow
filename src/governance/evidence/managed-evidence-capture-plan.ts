@@ -10,6 +10,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
@@ -56,28 +57,12 @@ export type ManagedEvidenceCapturePlanErrorReason =
   | "manifest"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence capture plan input is invalid.",
-  identifier: "Managed evidence capture plan contains an invalid identity.",
-  position: "Managed evidence capture plan contains an invalid stream position.",
-  digest: "Managed evidence capture plan contains an invalid digest.",
-  manifest: "Managed evidence capture plan contains an invalid Manifest.",
-  relation: "Managed evidence capture plan fields do not describe one preview.",
-} as const satisfies Readonly<Record<ManagedEvidenceCapturePlanErrorReason, string>>;
-
 /** Capture plan无法形成单一零写preview时的稳定错误。 */
-export class ManagedEvidenceCapturePlanError extends Error {
-  override readonly name = "ManagedEvidenceCapturePlanError";
-  readonly code = "wakeflow-managed-evidence-capture-plan" as const;
-  readonly reason: ManagedEvidenceCapturePlanErrorReason;
-  readonly path: string;
-
-  constructor(reason: ManagedEvidenceCapturePlanErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceCapturePlanError extends ModuleError<ManagedEvidenceCapturePlanErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-capture-plan";
 }
+
+const fail: Fail<ManagedEvidenceCapturePlanErrorReason> = failWith(ManagedEvidenceCapturePlanError);
 
 interface ManagedEvidenceCapturePlanBasis {
   readonly kind: typeof MANAGED_EVIDENCE_CAPTURE_PLAN_KIND;
@@ -102,14 +87,6 @@ const EXPECTATION_FIELDS = Object.freeze([
   "stateDigest",
   "streamRevision",
 ] as const);
-
-function fail(reason: ManagedEvidenceCapturePlanErrorReason, path: string, cause?: unknown): never {
-  throw new ManagedEvidenceCapturePlanError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function exactRecord(
   value: unknown,

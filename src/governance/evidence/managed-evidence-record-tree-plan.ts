@@ -12,6 +12,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidatePlan,
   type DirectoryTreeCandidatePlanFile,
@@ -78,32 +79,14 @@ export type ManagedEvidenceRecordTreePlanErrorReason =
   | "path"
   | "plan";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence record tree plan input is invalid.",
-  identifier: "Managed evidence record tree plan identity is invalid.",
-  manifest: "Managed evidence record tree plan Manifest is invalid.",
-  capacity: "Managed evidence record tree exceeds its admitted capacity.",
-  path: "Managed evidence record tree paths are invalid.",
-  plan: "Managed evidence record tree plan is inconsistent.",
-} as const satisfies Readonly<Record<ManagedEvidenceRecordTreePlanErrorReason, string>>;
-
 /** Managed Evidence record tree无法形成关闭计划时的稳定错误。 */
-export class ManagedEvidenceRecordTreePlanError extends Error {
-  override readonly name = "ManagedEvidenceRecordTreePlanError";
-  readonly code = "wakeflow-managed-evidence-record-tree-plan" as const;
-  readonly reason: ManagedEvidenceRecordTreePlanErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidenceRecordTreePlanErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceRecordTreePlanError extends ModuleError<ManagedEvidenceRecordTreePlanErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-record-tree-plan";
 }
+
+const fail: Fail<ManagedEvidenceRecordTreePlanErrorReason> = failWith(
+  ManagedEvidenceRecordTreePlanError,
+);
 
 interface ManagedEvidenceRecordTreePlanBasis {
   readonly artifactKind: typeof MANAGED_EVIDENCE_RECORD_TREE_PLAN_KIND;
@@ -134,18 +117,6 @@ const RECORD_CAPACITY = Object.freeze({
   maximumFiles: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxFiles,
   maximumTotalBytes: LOADED_ARTIFACT_TREE_IDENTITY_LIMITS.maxTotalBytes,
 } as const);
-
-function fail(
-  reason: ManagedEvidenceRecordTreePlanErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidenceRecordTreePlanError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function exactRecord(value: unknown): Readonly<Record<string, unknown>> {
   let record: Readonly<Record<string, unknown>>;

@@ -19,6 +19,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createUuidV4,
   parseUuidV4,
@@ -153,57 +154,19 @@ export type ControllerProductDefectRemediationAuthorizationErrorReason =
   | "decision"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Controller Product Defect Remediation Authorization is not passive JSON data.",
-  schema: "Controller Product Defect Remediation Authorization does not satisfy its Schema.",
-  identifier: "Controller Product Defect Remediation Authorization contains an invalid identity.",
-  digest:
-    "Controller Product Defect Remediation Authorization contains an invalid or inconsistent digest.",
-  position:
-    "Controller Product Defect Remediation Authorization contains an invalid Event Stream position.",
-  time: "Controller Product Defect Remediation Authorization contains an invalid time.",
-  text: "Controller Product Defect Remediation Authorization contains invalid text.",
-  decision:
-    "Controller Product Defect Remediation Authorization requires an exact escalate{product-defect} Test Decision.",
-  relation: "Controller Product Defect Remediation Authorization sources are inconsistent.",
-} as const satisfies Readonly<
-  Record<ControllerProductDefectRemediationAuthorizationErrorReason, string>
->;
-
 /** 产品缺陷修复授权无法形成严格领域值时的稳定错误。 */
-export class ControllerProductDefectRemediationAuthorizationError extends Error {
-  override readonly name = "ControllerProductDefectRemediationAuthorizationError";
-  readonly code = "wakeflow-controller-product-defect-remediation-authorization" as const;
-  readonly reason: ControllerProductDefectRemediationAuthorizationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ControllerProductDefectRemediationAuthorizationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ControllerProductDefectRemediationAuthorizationError extends ModuleError<ControllerProductDefectRemediationAuthorizationErrorReason> {
+  static override readonly code = "wakeflow-controller-product-defect-remediation-authorization";
 }
+
+const fail: Fail<ControllerProductDefectRemediationAuthorizationErrorReason> = failWith(
+  ControllerProductDefectRemediationAuthorizationError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<AuthorizationWire>(
   WAKEFLOW_CONTROLLER_PRODUCT_DEFECT_REMEDIATION_AUTHORIZATION_SCHEMA,
   [WAKEFLOW_SHA256_DIGEST_SCHEMA, WAKEFLOW_UTC_INSTANT_SCHEMA],
 );
-
-function fail(
-  reason: ControllerProductDefectRemediationAuthorizationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ControllerProductDefectRemediationAuthorizationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function id<
   Kind extends

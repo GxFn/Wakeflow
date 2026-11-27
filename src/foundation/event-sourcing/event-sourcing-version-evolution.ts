@@ -6,6 +6,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 
 /**
  * Wakeflow Foundation / Event Sourcing：持久化事件数据的逐版本内存演进注册表。
@@ -46,26 +47,8 @@ export type EventSourcingVersionEvolutionErrorReason =
   | "missing-step"
   | "upcast";
 
-const ERROR_MESSAGES = {
-  input: "Event Sourcing version evolution input is invalid.",
-  definition: "Event Sourcing version evolution definition is invalid.",
-  "unsupported-version": "Persisted Event Sourcing version is unsupported.",
-  codec: "Persisted Event Sourcing version data is invalid.",
-  "missing-step": "Event Sourcing version evolution chain is incomplete.",
-  upcast: "Event Sourcing version upcast failed.",
-} as const satisfies Readonly<Record<EventSourcingVersionEvolutionErrorReason, string>>;
-
-export class EventSourcingVersionEvolutionError extends Error {
-  override readonly name = "EventSourcingVersionEvolutionError";
-  readonly code = "wakeflow-event-sourcing-version-evolution" as const;
-  readonly reason: EventSourcingVersionEvolutionErrorReason;
-  readonly path: string;
-
-  constructor(reason: EventSourcingVersionEvolutionErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class EventSourcingVersionEvolutionError extends ModuleError<EventSourcingVersionEvolutionErrorReason> {
+  static override readonly code = "wakeflow-event-sourcing-version-evolution";
 }
 
 interface ParsedDefinition {
@@ -74,9 +57,9 @@ interface ParsedDefinition {
   readonly steps: readonly Readonly<EventSourcingVersionUpcastStep>[];
 }
 
-function fail(reason: EventSourcingVersionEvolutionErrorReason, path: string): never {
-  throw new EventSourcingVersionEvolutionError(reason, path);
-}
+const fail: Fail<EventSourcingVersionEvolutionErrorReason> = failWith(
+  EventSourcingVersionEvolutionError,
+);
 
 function parseVersion(value: unknown, path: string): number {
   if (!Number.isSafeInteger(value) || (value as number) < 1) {

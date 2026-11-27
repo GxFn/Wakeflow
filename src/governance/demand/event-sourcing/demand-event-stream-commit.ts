@@ -30,6 +30,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandAggregateStateDigest,
@@ -212,34 +213,11 @@ export type DemandEventStreamCommitErrorReason =
   | "transition"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Stream commit input is invalid.",
-  json: "Demand Event Stream commit is not passive JSON data.",
-  schema: "Demand Event Stream commit does not satisfy its Schema.",
-  identifier: "Demand Event Stream commit contains an invalid identity.",
-  position: "Demand Event Stream commit contains an invalid stream position.",
-  digest: "Demand Event Stream commit contains an invalid digest.",
-  event: "Demand Event Stream commit contains an invalid event.",
-  aggregate: "Demand Event Stream commit requires a valid current aggregate.",
-  relation: "Demand Event Stream commit fields do not form one append batch.",
-  "event-version": "Demand Event Stream commit contains an unsupported event version.",
-  "state-version": "Demand Event Stream commit contains an unsupported state-model version.",
-  transition: "Demand Event Stream commit cannot be evolved from the current state.",
-  representation: "Demand Event Stream commit bytes are not deterministic.",
-} as const satisfies Readonly<Record<DemandEventStreamCommitErrorReason, string>>;
-
-export class DemandEventStreamCommitError extends Error {
-  override readonly name = "DemandEventStreamCommitError";
-  readonly code = "wakeflow-demand-event-stream-commit" as const;
-  readonly reason: DemandEventStreamCommitErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandEventStreamCommitErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventStreamCommitError extends ModuleError<DemandEventStreamCommitErrorReason> {
+  static override readonly code = "wakeflow-demand-event-stream-commit";
 }
+
+const fail: Fail<DemandEventStreamCommitErrorReason> = failWith(DemandEventStreamCommitError);
 
 const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
   WAKEFLOW_DEMAND_EVENT_STREAM_COMMIT_SCHEMA,
@@ -252,10 +230,6 @@ const validateWire = createRuntimeJsonSchemaValidator<CommitWire>(
 const PREPARE_FIELDS = Object.freeze(["commandDigest", "commitId", "events"] as const);
 const PREPARE_OPTIONAL_FIELDS = Object.freeze(["idempotency", "writer"] as const);
 const ISSUED_PREPARED_COMMITS = new WeakSet<object>();
-
-function fail(reason: DemandEventStreamCommitErrorReason, path: string, cause?: unknown): never {
-  throw new DemandEventStreamCommitError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {

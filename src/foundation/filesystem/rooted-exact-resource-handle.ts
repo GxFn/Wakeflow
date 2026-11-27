@@ -1,6 +1,7 @@
 import { constants as fileSystemConstants } from "node:fs";
 import { type FileHandle, open as openFileHandle } from "node:fs/promises";
 
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import {
   admitFrozenFileNodeSnapshot,
@@ -53,35 +54,13 @@ export type RootedExactResourceHandleErrorReason =
   | "closed"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Rooted exact resource handle input is invalid.",
-  "root-scope": "Rooted exact resource could not establish its root scope.",
-  "resource-not-found": "Rooted exact resource does not exist.",
-  "resource-symlink": "Rooted exact resource cannot be a symbolic link.",
-  "resource-kind": "Rooted exact resource has a disallowed node kind.",
-  "resource-open-failure": "Rooted exact resource could not be opened safely.",
-  "resource-changed": "Rooted exact resource no longer matches its admission.",
-  "sync-failure": "Rooted exact resource could not be synchronized safely.",
-  closed: "Rooted exact resource handle is already closed.",
-  "close-failure": "Rooted exact resource handle could not be closed safely.",
-} as const satisfies Readonly<Record<RootedExactResourceHandleErrorReason, string>>;
-
 /**
  * RootedExactResourceHandle 的稳定错误。
  *
  * 错误不回显根目录、资源、绝对路径、预期节点、当前节点、系统调用或原因链。
  */
-export class RootedExactResourceHandleError extends Error {
-  override readonly name = "RootedExactResourceHandleError";
-  readonly code = "wakeflow-rooted-exact-resource-handle" as const;
-  readonly reason: RootedExactResourceHandleErrorReason;
-  readonly path: string;
-
-  constructor(reason: RootedExactResourceHandleErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class RootedExactResourceHandleError extends ModuleError<RootedExactResourceHandleErrorReason> {
+  static override readonly code = "wakeflow-rooted-exact-resource-handle";
 }
 
 type ResourceAdmission = "regular-file" | "file-or-directory";
@@ -90,13 +69,7 @@ function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$resourcePath";
 }
 
-function fail(reason: RootedExactResourceHandleErrorReason, path: string, cause?: unknown): never {
-  throw new RootedExactResourceHandleError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<RootedExactResourceHandleErrorReason> = failWith(RootedExactResourceHandleError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

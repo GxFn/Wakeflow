@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   type ByteCount,
   ByteCountError,
@@ -33,28 +34,13 @@ export interface FileByteRange {
 /** 文件字节区间准入或算术失败分类。 */
 export type FileByteRangeErrorReason = "offset-range" | "length-range" | "end-overflow";
 
-const ERROR_MESSAGES = {
-  "offset-range": "File byte offset must be a non-negative safe integer.",
-  "length-range": "File byte range length must be a valid byte count.",
-  "end-overflow": "File byte range end exceeds the safe integer range.",
-} as const satisfies Readonly<Record<FileByteRangeErrorReason, string>>;
-
 /**
  * 文件字节区间的稳定错误。
  *
  * 错误只暴露分类与结构路径，不回显偏移量、长度或结束位置。
  */
-export class FileByteRangeError extends Error {
-  override readonly name = "FileByteRangeError";
-  readonly code = "wakeflow-file-byte-range" as const;
-  readonly reason: FileByteRangeErrorReason;
-  readonly path: string;
-
-  constructor(reason: FileByteRangeErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class FileByteRangeError extends ModuleError<FileByteRangeErrorReason> {
+  static override readonly code = "wakeflow-file-byte-range";
 }
 
 function normalizeErrorPath(value: unknown, fallback: string): string {
@@ -65,9 +51,7 @@ function fieldPath(basePath: string, field: string): string {
   return `${basePath}.${field}`;
 }
 
-function fail(reason: FileByteRangeErrorReason, path: string, cause?: unknown): never {
-  throw new FileByteRangeError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<FileByteRangeErrorReason> = failWith(FileByteRangeError);
 
 function parseOffset(value: unknown, path: string): FileByteOffset {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {

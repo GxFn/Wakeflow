@@ -2,6 +2,7 @@ import {
   PORTABLE_RESOURCE_PATH_PATTERN_SOURCE,
   type WakeflowPortableResourcePathText,
 } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 
 /**
  * Wakeflow Foundation / Filesystem：根目录内可移植资源路径的词法合同。
@@ -32,37 +33,20 @@ export type PortableResourcePathErrorReason =
   | "unicode-well-formed"
   | "unicode-normalization";
 
-const ERROR_MESSAGES = {
-  format: "Portable resource path must use one canonical root-relative slash-separated form.",
-  "unicode-well-formed": "Portable resource path must contain well-formed Unicode text.",
-  "unicode-normalization": "Portable resource path must already use Unicode NFC.",
-} as const satisfies Readonly<Record<PortableResourcePathErrorReason, string>>;
-
 /**
  * 可移植资源路径词法验证失败时返回的稳定错误。
  *
  * 错误只暴露能力代码、分类和调用方路径，不回显候选路径、分段或 Unicode 文本。
  */
-export class PortableResourcePathError extends Error {
-  override readonly name = "PortableResourcePathError";
-  readonly code = "wakeflow-portable-resource-path" as const;
-  readonly reason: PortableResourcePathErrorReason;
-  readonly path: string;
-
-  constructor(reason: PortableResourcePathErrorReason, path: string) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
-  }
+export class PortableResourcePathError extends ModuleError<PortableResourcePathErrorReason> {
+  static override readonly code = "wakeflow-portable-resource-path";
 }
 
 function normalizeErrorPath(path: unknown): string {
   return typeof path === "string" && path.length > 0 ? path : "$";
 }
 
-function fail(reason: PortableResourcePathErrorReason, path: string): never {
-  throw new PortableResourcePathError(reason, path);
-}
+const fail: Fail<PortableResourcePathErrorReason> = failWith(PortableResourcePathError);
 
 function parsePath(value: unknown, path: string): PortableResourcePath {
   if (typeof value !== "string") fail("format", path);

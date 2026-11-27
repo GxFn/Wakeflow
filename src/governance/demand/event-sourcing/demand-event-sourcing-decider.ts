@@ -11,6 +11,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { deriveUuidV4, parseUuidV4 } from "../../../foundation/identity/uuid-v4.js";
 import {
   parseUtcInstant,
@@ -312,56 +313,13 @@ export type DemandEventSourcingDecisionErrorReason =
   | "transition"
   | "event";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing command input is invalid.",
-  identifier: "Demand Event Sourcing command contains an invalid identity.",
-  time: "Demand Event Sourcing command contains an invalid recorded time.",
-  digest: "Demand Event Sourcing command contains an invalid digest.",
-  text: "Demand Event Sourcing command contains non-canonical text.",
-  "task-package": "Demand Event Sourcing command contains an invalid TaskPackage.",
-  "demand-authority": "Demand Event Sourcing command contains an invalid Demand Authority.",
-  "demand-completion": "Demand Event Sourcing command contains an invalid Demand Completion.",
-  "lifecycle-data": "Demand Event Sourcing command carries invalid lifecycle data.",
-  "managed-evidence-manifest":
-    "Demand Event Sourcing command contains an invalid Managed Evidence Manifest.",
-  "delivery-envelope": "Demand Event Sourcing command contains an invalid Delivery Envelope.",
-  "target-delivery-rework-context":
-    "Demand Event Sourcing command contains an invalid Target Delivery rework source.",
-  "target-delivery-product-defect-remediation-context":
-    "Demand Event Sourcing command contains an invalid Target Delivery product-defect remediation source.",
-  "delivery-outcome": "Demand Event Sourcing command contains an invalid Delivery Outcome.",
-  "delivery-rearm": "Demand Event Sourcing command contains an invalid Delivery Rearm.",
-  "target-result": "Demand Event Sourcing command contains an invalid TargetResult.",
-  "controller-implementation-review-decision":
-    "Demand Event Sourcing command contains an invalid Controller Target Review Decision.",
-  "controller-review-decision":
-    "Demand Event Sourcing command contains an invalid Controller Review Decision.",
-  "controller-product-defect-remediation-authorization":
-    "Demand Event Sourcing command contains an invalid Controller Product Defect Remediation Authorization.",
-  "target-result-callback":
-    "Demand Event Sourcing command contains an invalid Target Result callback record.",
-  state: "Demand Event Sourcing Decider received an invalid aggregate state.",
-  identity: "Demand Event Sourcing command does not belong to the aggregate.",
-  transition: "Demand Event Sourcing command or event is not admitted from the current state.",
-  event: "Demand Event Sourcing Decider received an invalid event.",
-} as const satisfies Readonly<Record<DemandEventSourcingDecisionErrorReason, string>>;
-
-export class DemandEventSourcingDecisionError extends Error {
-  override readonly name = "DemandEventSourcingDecisionError";
-  readonly code = "wakeflow-demand-event-sourcing-decision" as const;
-  readonly reason: DemandEventSourcingDecisionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingDecisionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingDecisionError extends ModuleError<DemandEventSourcingDecisionErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-decision";
 }
+
+const fail: Fail<DemandEventSourcingDecisionErrorReason> = failWith(
+  DemandEventSourcingDecisionError,
+);
 
 const PUBLISH_FIELDS = Object.freeze([
   "authorityDigest",
@@ -481,18 +439,6 @@ const DECIDE_TARGET_RESULT_REVIEW_WITH_AUTHORIZATION_FIELDS = Object.freeze([
 ] as const);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-
-function fail(
-  reason: DemandEventSourcingDecisionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingDecisionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 /** 生命周期命令的数据借事件解析器按 Schema 准入，不另写一份编解码。 */
 function lifecycleEvent(

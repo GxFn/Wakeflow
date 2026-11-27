@@ -26,6 +26,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -130,29 +131,12 @@ export type TestTargetResultReportErrorReason =
   | "time"
   | "relation";
 
-const ERROR_MESSAGES = {
-  input: "Test Target Result Report is not passive closed JSON data.",
-  schema: "Test Target Result Report does not satisfy its Schema.",
-  digest: "Test Target Result Report contains an invalid or inconsistent digest.",
-  path: "Test Target Result Report contains an invalid portable resource path.",
-  text: "Test Target Result Report contains invalid human text or token text.",
-  time: "Test Target Result Report contains an invalid time.",
-  relation: "Test Target Result Report facts are inconsistent.",
-} as const satisfies Readonly<Record<TestTargetResultReportErrorReason, string>>;
-
 /** Test Report输入或关系失败时的稳定错误。 */
-export class TestTargetResultReportError extends Error {
-  override readonly name = "TestTargetResultReportError";
-  readonly code = "wakeflow-test-target-result-report" as const;
-  readonly reason: TestTargetResultReportErrorReason;
-  readonly path: string;
-
-  constructor(reason: TestTargetResultReportErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TestTargetResultReportError extends ModuleError<TestTargetResultReportErrorReason> {
+  static override readonly code = "wakeflow-test-target-result-report";
 }
+
+const fail: Fail<TestTargetResultReportErrorReason> = failWith(TestTargetResultReportError);
 
 const REPORT_SCHEMA_DEPENDENCIES = [
   WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA,
@@ -167,10 +151,6 @@ const validateWire = createRuntimeJsonSchemaValidator<ReportWireV2>(
   WAKEFLOW_TEST_TARGET_RESULT_REPORT_V2_SCHEMA,
   REPORT_SCHEMA_DEPENDENCIES,
 );
-
-function fail(reason: TestTargetResultReportErrorReason, path: string, cause?: unknown): never {
-  throw new TestTargetResultReportError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function exactRecord(
   value: unknown,

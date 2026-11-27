@@ -1,4 +1,5 @@
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import {
   admitFrozenFileNodeSnapshot,
   type FileNodeSnapshot,
@@ -55,40 +56,9 @@ export type DurableRegularFileSettlementErrorReason =
   | "commit-uncertain"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable regular file settlement input is invalid.",
-  "root-scope": "Regular file settlement could not establish its rooted scope.",
-  "parent-not-found": "Regular file settlement parent directory does not exist.",
-  "parent-symlink": "Regular file settlement parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Regular file settlement parent must be a directory.",
-  "parent-open-failure": "Regular file settlement parent could not be opened safely.",
-  "parent-changed": "Regular file settlement parent changed during the operation.",
-  "resource-not-found": "Regular file settlement target does not exist.",
-  "resource-symlink": "Regular file settlement target cannot be a symbolic link.",
-  "resource-not-file": "Regular file settlement target must be a regular file.",
-  "resource-open-failure": "Regular file settlement target could not be opened safely.",
-  "resource-changed": "Regular file settlement target no longer matches its expectation.",
-  "durability-failure": "Regular file and parent could not be synchronized safely.",
-  "commit-uncertain": "Regular file settlement result could not be proven exact.",
-  "close-failure": "A regular file settlement handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableRegularFileSettlementErrorReason, string>>;
-
 /** 指定普通文件持久性结算失败时返回的稳定、脱敏错误。 */
-export class DurableRegularFileSettlementError extends Error {
-  override readonly name = "DurableRegularFileSettlementError";
-  readonly code = "wakeflow-durable-regular-file-settlement" as const;
-  readonly reason: DurableRegularFileSettlementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DurableRegularFileSettlementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableRegularFileSettlementError extends ModuleError<DurableRegularFileSettlementErrorReason> {
+  static override readonly code = "wakeflow-durable-regular-file-settlement";
 }
 
 interface ParsedOptions {
@@ -96,17 +66,9 @@ interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-function fail(
-  reason: DurableRegularFileSettlementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableRegularFileSettlementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<DurableRegularFileSettlementErrorReason> = failWith(
+  DurableRegularFileSettlementError,
+);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

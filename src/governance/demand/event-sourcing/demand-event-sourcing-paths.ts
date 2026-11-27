@@ -3,6 +3,7 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
 } from "../../../contracts/identity/wakeflow-durable-id.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -52,37 +53,17 @@ export type DemandEventSourcingPathErrorReason =
   | "permit-prompt-kind"
   | "permit-prompt-file-name";
 
-const ERROR_MESSAGES = {
-  "commit-file-name": "Demand event commit filename is invalid.",
-  "append-candidate-file-name": "Demand append candidate filename is invalid.",
-  "append-owner-token": "Demand append candidate owner token is invalid.",
-  "commit-identity": "Demand append candidate commit identity is invalid.",
-  "permit-prompt-kind": "Demand permit prompt kind is invalid.",
-  "permit-prompt-file-name": "Demand permit prompt filename is invalid.",
-} as const satisfies Readonly<Record<DemandEventSourcingPathErrorReason, string>>;
-
-export class DemandEventSourcingPathError extends Error {
-  override readonly name = "DemandEventSourcingPathError";
-  readonly code = "wakeflow-demand-event-sourcing-path" as const;
-  readonly reason: DemandEventSourcingPathErrorReason;
-  readonly path: string;
-
-  constructor(reason: DemandEventSourcingPathErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingPathError extends ModuleError<DemandEventSourcingPathErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-path";
 }
+
+const fail: Fail<DemandEventSourcingPathErrorReason> = failWith(DemandEventSourcingPathError);
 
 interface AppendOwnerToken {
   readonly pid: number;
   readonly threadId: number;
   readonly uuid: string;
   readonly token: string;
-}
-
-function fail(reason: DemandEventSourcingPathErrorReason, path: string, cause?: unknown): never {
-  throw new DemandEventSourcingPathError(reason, path, cause === undefined ? undefined : { cause });
 }
 
 function parseAppendOwnerToken(value: unknown): Readonly<AppendOwnerToken> {

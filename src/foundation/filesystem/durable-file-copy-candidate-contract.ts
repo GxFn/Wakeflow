@@ -2,6 +2,7 @@ import { types } from "node:util";
 
 import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { type ByteCount, ByteCountError, parseByteCount } from "../numeric/byte-count.js";
 import {
   admitFrozenFileNodeSnapshot,
@@ -62,40 +63,9 @@ export type DurableFileCopyCandidateErrorReason =
   | "cleanup-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable file copy candidate input is invalid.",
-  capacity: "Durable file copy source exceeds its byte budget.",
-  "source-root-scope": "Durable file copy lost its source root scope.",
-  "source-not-found": "Durable file copy source does not exist.",
-  "source-symlink": "Durable file copy source cannot be a symbolic link.",
-  "source-not-file": "Durable file copy source must be a regular file.",
-  "source-changed": "Durable file copy source changed during the operation.",
-  "source-mismatch": "Durable file copy source differs from its content expectation.",
-  "source-read-failure": "Durable file copy source could not be read safely.",
-  "destination-root-scope": "Durable file copy lost its destination root scope.",
-  "destination-parent": "Durable file copy candidate parent is unavailable or unsafe.",
-  "target-exists": "Durable file copy candidate target already exists.",
-  "candidate-create-failure": "Durable file copy candidate could not be created exclusively.",
-  "candidate-write-failure": "Durable file copy candidate could not be written exactly.",
-  "candidate-sync-failure": "Durable file copy candidate could not synchronize its bytes.",
-  "candidate-changed": "Durable file copy candidate changed during verification.",
-  "durability-failure": "Durable file copy candidate directory entry could not be synchronized.",
-  "cleanup-failure": "Failed durable file copy candidate could not be retired exactly.",
-  "close-failure": "Durable file copy candidate handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableFileCopyCandidateErrorReason, string>>;
-
 /** 跨根流式文件候选失败的稳定、脱敏错误。 */
-export class DurableFileCopyCandidateError extends Error {
-  override readonly name = "DurableFileCopyCandidateError";
-  readonly code = "wakeflow-durable-file-copy-candidate" as const;
-  readonly reason: DurableFileCopyCandidateErrorReason;
-  readonly path: string;
-
-  constructor(reason: DurableFileCopyCandidateErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableFileCopyCandidateError extends ModuleError<DurableFileCopyCandidateErrorReason> {
+  static override readonly code = "wakeflow-durable-file-copy-candidate";
 }
 
 export interface ParsedDurableFileCopyExpectation {
@@ -110,17 +80,9 @@ interface ParsedDurableFileCopyOptions {
   readonly signal: AbortSignal | undefined;
 }
 
-export function failDurableFileCopyCandidate(
-  reason: DurableFileCopyCandidateErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DurableFileCopyCandidateError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+export const failDurableFileCopyCandidate: Fail<DurableFileCopyCandidateErrorReason> = failWith(
+  DurableFileCopyCandidateError,
+);
 
 export function assertDurableFileCopyRoot(
   value: unknown,

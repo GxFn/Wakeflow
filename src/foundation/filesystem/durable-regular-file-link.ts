@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 import { readNodeSystemErrorCode } from "../node/node-system-error.js";
 import { sourceTransitionSteps } from "./durable-source-transition-steps.js";
@@ -73,45 +74,14 @@ export type DurableRegularFileLinkErrorReason =
   | "durability-failure"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Durable regular file link input is invalid.",
-  "root-scope": "Regular file link could not establish its rooted scope.",
-  "parent-not-found": "Regular file link parent directory does not exist.",
-  "parent-symlink": "Regular file link parent chain cannot contain a symbolic link.",
-  "parent-not-directory": "Regular file link parent must be a directory.",
-  "parent-open-failure": "Regular file link parent could not be opened safely.",
-  "parent-changed": "Regular file link parent changed during the operation.",
-  "source-not-found": "Regular file link source does not exist.",
-  "source-symlink": "Regular file link source cannot be a symbolic link.",
-  "source-not-file": "Regular file link source must be a regular file.",
-  "source-open-failure": "Regular file link source could not be opened safely.",
-  "source-changed": "Regular file link source no longer matches its expectation.",
-  "destination-exists": "Regular file link destination already exists.",
-  "destination-inspection-failure": "Regular file link destination could not be inspected safely.",
-  "cross-device": "Regular file hard link cannot cross a filesystem boundary.",
-  "link-failure": "Regular file hard-link commit could not be executed safely.",
-  "commit-uncertain": "Regular file linked-pair commit could not be proven exact.",
-  "durability-failure": "Regular file linked pair could not be synchronized safely.",
-  "close-failure": "A regular file link handle could not be closed safely.",
-} as const satisfies Readonly<Record<DurableRegularFileLinkErrorReason, string>>;
-
 /**
  * 普通文件持久化链接失败时返回的稳定错误。
  *
  * 错误不回显物理路径、资源引用、节点元数据、链接数、取消原因、系统调用或底层原因。
  * `link` 调用后的错误不得被解释为目标路径一定不存在。
  */
-export class DurableRegularFileLinkError extends Error {
-  override readonly name = "DurableRegularFileLinkError";
-  readonly code = "wakeflow-durable-regular-file-link" as const;
-  readonly reason: DurableRegularFileLinkErrorReason;
-  readonly path: string;
-
-  constructor(reason: DurableRegularFileLinkErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DurableRegularFileLinkError extends ModuleError<DurableRegularFileLinkErrorReason> {
+  static override readonly code = "wakeflow-durable-regular-file-link";
 }
 
 // 选项、父目录与源句柄的各步与重命名是同一份（durable-source-transition-steps.ts）。
@@ -128,9 +98,7 @@ const {
   closeSource,
 } = sourceTransitionSteps(DurableRegularFileLinkError);
 
-function fail(reason: DurableRegularFileLinkErrorReason, path: string, cause?: unknown): never {
-  throw new DurableRegularFileLinkError(reason, path, cause === undefined ? undefined : { cause });
-}
+const fail: Fail<DurableRegularFileLinkErrorReason> = failWith(DurableRegularFileLinkError);
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

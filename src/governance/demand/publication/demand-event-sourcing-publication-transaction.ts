@@ -33,6 +33,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -111,37 +112,13 @@ export type DemandEventSourcingPublicationTransactionErrorReason =
   | "relation"
   | "representation";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing publication transaction input is invalid.",
-  json: "Demand Event Sourcing publication transaction is not passive JSON data.",
-  schema: "Demand Event Sourcing publication transaction does not satisfy its Schema.",
-  identifier: "Demand Event Sourcing publication transaction contains an invalid identity.",
-  path: "Demand Event Sourcing publication transaction contains an invalid path.",
-  digest: "Demand Event Sourcing publication transaction contains an invalid digest.",
-  identity: "Demand Event Sourcing publication transaction contains an invalid Demand identity.",
-  authority: "Demand Event Sourcing publication transaction contains invalid authority.",
-  command: "Demand Event Sourcing publication transaction contains an invalid initial command.",
-  commit: "Demand Event Sourcing publication transaction contains an invalid initial commit.",
-  relation: "Demand Event Sourcing publication transaction fields do not form one publication.",
-  representation: "Demand Event Sourcing publication transaction bytes are not deterministic.",
-} as const satisfies Readonly<Record<DemandEventSourcingPublicationTransactionErrorReason, string>>;
-
-export class DemandEventSourcingPublicationTransactionError extends Error {
-  override readonly name = "DemandEventSourcingPublicationTransactionError";
-  readonly code = "wakeflow-demand-event-sourcing-publication-transaction" as const;
-  readonly reason: DemandEventSourcingPublicationTransactionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingPublicationTransactionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingPublicationTransactionError extends ModuleError<DemandEventSourcingPublicationTransactionErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-publication-transaction";
 }
+
+const fail: Fail<DemandEventSourcingPublicationTransactionErrorReason> = failWith(
+  DemandEventSourcingPublicationTransactionError,
+);
 
 const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
   WAKEFLOW_DEMAND_EVENT_SOURCING_PUBLICATION_TRANSACTION_SCHEMA,
@@ -165,18 +142,6 @@ const CREATE_FIELDS = Object.freeze([
   "identity",
   "recordedAt",
 ] as const);
-
-function fail(
-  reason: DemandEventSourcingPublicationTransactionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingPublicationTransactionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {

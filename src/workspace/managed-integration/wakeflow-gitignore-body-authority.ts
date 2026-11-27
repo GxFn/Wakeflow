@@ -11,6 +11,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -72,48 +73,19 @@ export type WakeflowGitignoreBodyAuthorityErrorReason =
   | "authority"
   | "outside";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Gitignore body authority input is invalid.",
-  "profile-set": "Wakeflow Gitignore body authority requires one complete host profile set.",
-  path: "Wakeflow Gitignore body authority cannot encode a private resource path.",
-  authority: "Wakeflow Gitignore body authority record is invalid.",
-  outside: "Wakeflow Gitignore outside text input is invalid.",
-} as const satisfies Readonly<Record<WakeflowGitignoreBodyAuthorityErrorReason, string>>;
-
 /** Gitignore body authority 准入失败的稳定、脱敏错误。 */
-export class WakeflowGitignoreBodyAuthorityError extends Error {
-  override readonly name = "WakeflowGitignoreBodyAuthorityError";
-  readonly code = "wakeflow-gitignore-body-authority" as const;
-  readonly reason: WakeflowGitignoreBodyAuthorityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowGitignoreBodyAuthorityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowGitignoreBodyAuthorityError extends ModuleError<WakeflowGitignoreBodyAuthorityErrorReason> {
+  static override readonly code = "wakeflow-gitignore-body-authority";
 }
+
+const fail: Fail<WakeflowGitignoreBodyAuthorityErrorReason> = failWith(
+  WakeflowGitignoreBodyAuthorityError,
+);
 
 const ACTIVE_ROOT_REF = parsePortableResourcePath(WAKEFLOW_ACTIVE_ROOT);
 const LOCAL_ROOT_REF = parsePortableResourcePath(WAKEFLOW_LOCAL_ROOT);
 const GITIGNORE_MAGIC_PATTERN = /[\\*?[\]#!]/gu;
 const GITIGNORE_MAGIC_CHARACTERS = new Set(["\\", "*", "?", "[", "]", "#", "!"]);
-
-function fail(
-  reason: WakeflowGitignoreBodyAuthorityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowGitignoreBodyAuthorityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function lexicalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;

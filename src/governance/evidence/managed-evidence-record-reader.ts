@@ -8,6 +8,7 @@ import {
 import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   type FileNodeSnapshot,
@@ -116,37 +117,14 @@ export type ManagedEvidenceRecordReaderErrorReason =
   | "source-changed"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Managed evidence record reader input is invalid.",
-  "root-scope": "Managed evidence record reader escaped its Demand root.",
-  "not-found": "Managed evidence final record does not exist.",
-  "node-policy": "Managed evidence final record violates its private node policy.",
-  record: "Managed evidence final record structure is invalid.",
-  manifest: "Managed evidence final record Manifest is invalid.",
-  "member-not-found": "Managed evidence payload member is not declared.",
-  capacity: "Managed evidence payload member exceeds the admitted read capacity.",
-  "content-mismatch": "Managed evidence payload bytes differ from their Manifest descriptor.",
-  "source-changed": "Managed evidence final record changed during reading.",
-  "operation-failure": "Managed evidence final record could not be read safely.",
-} as const satisfies Readonly<Record<ManagedEvidenceRecordReaderErrorReason, string>>;
-
 /** 单记录Manifest、成员或整树读取无法稳定证明时的脱敏错误。 */
-export class ManagedEvidenceRecordReaderError extends Error {
-  override readonly name = "ManagedEvidenceRecordReaderError";
-  readonly code = "wakeflow-managed-evidence-record-reader" as const;
-  readonly reason: ManagedEvidenceRecordReaderErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidenceRecordReaderErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceRecordReaderError extends ModuleError<ManagedEvidenceRecordReaderErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-record-reader";
 }
+
+const fail: Fail<ManagedEvidenceRecordReaderErrorReason> = failWith(
+  ManagedEvidenceRecordReaderError,
+);
 
 interface ParsedLoadOptions {
   readonly expectedRootNode: Readonly<FileNodeSnapshot> | undefined;
@@ -159,18 +137,6 @@ interface ParsedMemberOptions {
 }
 
 const ISSUED_RECORDS = new WeakSet<object>();
-
-function fail(
-  reason: ManagedEvidenceRecordReaderErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidenceRecordReaderError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {
   if (!isRootedDirectory(value)) fail("input", "$root");

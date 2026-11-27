@@ -13,6 +13,7 @@ import {
   PassiveOwnDataError,
   parsePlainRecord,
 } from "../../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { OperationAbortedError, throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import type { DemandEventSourcingAggregate } from "./demand-event-sourcing-aggregate.js";
 import {
@@ -83,30 +84,13 @@ export type DemandEventSourcingCommandHandlerErrorReason =
   | "decision-rejected"
   | "stream";
 
-const ERROR_MESSAGES = {
-  input: "Demand Event Sourcing Command Handler input is invalid.",
-  "idempotency-conflict": "Demand Event Sourcing commitId is already bound to another command.",
-  "concurrency-conflict": "Demand Event Sourcing command expected a stale stream revision.",
-  "decision-rejected": "Demand Event Sourcing command is not admitted from current state.",
-  stream: "Demand Event Sourcing command cannot load or append its stream.",
-} as const satisfies Readonly<Record<DemandEventSourcingCommandHandlerErrorReason, string>>;
-
-export class DemandEventSourcingCommandHandlerError extends Error {
-  override readonly name = "DemandEventSourcingCommandHandlerError";
-  readonly code = "wakeflow-demand-event-sourcing-command-handler" as const;
-  readonly reason: DemandEventSourcingCommandHandlerErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: DemandEventSourcingCommandHandlerErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class DemandEventSourcingCommandHandlerError extends ModuleError<DemandEventSourcingCommandHandlerErrorReason> {
+  static override readonly code = "wakeflow-demand-event-sourcing-command-handler";
 }
+
+const fail: Fail<DemandEventSourcingCommandHandlerErrorReason> = failWith(
+  DemandEventSourcingCommandHandlerError,
+);
 
 const OPTION_FIELDS = new Set([
   "commitId",
@@ -116,18 +100,6 @@ const OPTION_FIELDS = new Set([
   "signal",
 ]);
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
-
-function fail(
-  reason: DemandEventSourcingCommandHandlerErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new DemandEventSourcingCommandHandlerError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function assertRepository(value: unknown): asserts value is DemandEventSourcingRepository {
   if (

@@ -27,6 +27,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
@@ -132,30 +133,11 @@ export type TargetResultErrorReason =
   | "report"
   | "relation";
 
-const ERROR_MESSAGES = {
-  json: "Target Result is not passive JSON data.",
-  schema: "Target Result does not satisfy its Schema.",
-  identifier: "Target Result contains an invalid identity.",
-  digest: "Target Result contains an invalid or inconsistent digest.",
-  path: "Target Result contains an invalid portable resource path.",
-  time: "Target Result contains an invalid time.",
-  claim: "Target Result requires a valid delivery fence claim.",
-  report: "Target Result requires a matching implementation or Test Report.",
-  relation: "Target Result sources are inconsistent.",
-} as const satisfies Readonly<Record<TargetResultErrorReason, string>>;
-
-export class TargetResultError extends Error {
-  override readonly name = "TargetResultError";
-  readonly code = "wakeflow-target-result" as const;
-  readonly reason: TargetResultErrorReason;
-  readonly path: string;
-
-  constructor(reason: TargetResultErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class TargetResultError extends ModuleError<TargetResultErrorReason> {
+  static override readonly code = "wakeflow-target-result";
 }
+
+const fail: Fail<TargetResultErrorReason> = failWith(TargetResultError);
 
 // 结果的文档版本 2：结果自己的记录形状没有变，它内嵌的报告可以是记录版本 1 或 2（ADR-0030）。
 const validateWire = createRuntimeJsonSchemaValidator<ResultWire>(
@@ -174,10 +156,6 @@ const validateWire = createRuntimeJsonSchemaValidator<ResultWire>(
     WAKEFLOW_WINDOW_HOST_BINDING_SCHEMA,
   ],
 );
-
-function fail(reason: TargetResultErrorReason, path: string, cause?: unknown): never {
-  throw new TargetResultError(reason, path, cause === undefined ? undefined : { cause });
-}
 
 function id<
   Kind extends

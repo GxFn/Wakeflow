@@ -4,6 +4,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   inspectWakeflowManagedTextEnvelope,
@@ -47,31 +48,14 @@ export type WakeflowManagedTextAuthorityTransitionErrorReason =
   | "relation"
   | "unadmitted-source";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow managed text authority transition input is invalid.",
-  target: "Wakeflow managed text authority transition target is invalid.",
-  envelope: "Wakeflow managed text source envelope is invalid.",
-  relation: "Wakeflow managed text source belongs to another owner.",
-  "unadmitted-source": "Wakeflow managed text source body is not an admitted authority render.",
-} as const satisfies Readonly<Record<WakeflowManagedTextAuthorityTransitionErrorReason, string>>;
-
 /** Managed Text 权威转换失败的稳定、脱敏错误。 */
-export class WakeflowManagedTextAuthorityTransitionError extends Error {
-  override readonly name = "WakeflowManagedTextAuthorityTransitionError";
-  readonly code = "wakeflow-managed-text-authority-transition" as const;
-  readonly reason: WakeflowManagedTextAuthorityTransitionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowManagedTextAuthorityTransitionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowManagedTextAuthorityTransitionError extends ModuleError<WakeflowManagedTextAuthorityTransitionErrorReason> {
+  static override readonly code = "wakeflow-managed-text-authority-transition";
 }
+
+const fail: Fail<WakeflowManagedTextAuthorityTransitionErrorReason> = failWith(
+  WakeflowManagedTextAuthorityTransitionError,
+);
 
 interface ParsedTarget {
   readonly target: Readonly<WakeflowManagedTextEnvelopeTarget>;
@@ -81,18 +65,6 @@ interface ParsedTarget {
 interface ParsedRequest {
   readonly currentTargets: readonly Readonly<ParsedTarget>[];
   readonly desiredTarget: Readonly<ParsedTarget>;
-}
-
-function fail(
-  reason: WakeflowManagedTextAuthorityTransitionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowManagedTextAuthorityTransitionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseTarget(value: unknown, path: string): Readonly<ParsedTarget> {

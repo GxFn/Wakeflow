@@ -3,6 +3,7 @@ import {
   type WakeflowDurableId,
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
@@ -53,41 +54,14 @@ export type ManagedEvidenceResourcePathErrorReason =
   | "record-directory-name"
   | "stage-directory-name";
 
-const ERROR_MESSAGES = {
-  identifier: "Managed evidence resource identity is invalid.",
-  "record-directory-name": "Managed evidence record directory name is invalid.",
-  "stage-directory-name": "Managed evidence stage directory name is invalid.",
-} as const satisfies Readonly<Record<ManagedEvidenceResourcePathErrorReason, string>>;
-
 /** Managed Evidence资源路径无法形成唯一映射时的稳定错误。 */
-export class ManagedEvidenceResourcePathError extends Error {
-  override readonly name = "ManagedEvidenceResourcePathError";
-  readonly code = "wakeflow-managed-evidence-resource-path" as const;
-  readonly reason: ManagedEvidenceResourcePathErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ManagedEvidenceResourcePathErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ManagedEvidenceResourcePathError extends ModuleError<ManagedEvidenceResourcePathErrorReason> {
+  static override readonly code = "wakeflow-managed-evidence-resource-path";
 }
 
-function fail(
-  reason: ManagedEvidenceResourcePathErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ManagedEvidenceResourcePathError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<ManagedEvidenceResourcePathErrorReason> = failWith(
+  ManagedEvidenceResourcePathError,
+);
 
 function evidenceId(value: unknown, path: string): WakeflowDurableId<"evidence"> {
   try {

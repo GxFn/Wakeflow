@@ -7,10 +7,6 @@ import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/pas
 import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
@@ -20,8 +16,10 @@ import {
   isPrivateFile,
 } from "../../foundation/filesystem/private-node-policy.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
-import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
+import {
+  settleStagesOfDeadWritersStrictly,
+  withWorkspaceLockOrRefuse,
+} from "../../kernel/workspace-locks.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -236,29 +234,6 @@ function parseInspectOptions(
   });
 }
 
-async function recoverStages(
-  root: RootedDirectory,
-  targets: readonly PortableResourcePath[],
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  try {
-    const recovery = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      targets,
-      signal === undefined ? undefined : { signal },
-    );
-    if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
-      fail("recovery-required", "$stages");
-    }
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostBindingStoreError) throw error;
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      fail("recovery-required", "$stages");
-    }
-    throw error;
-  }
-}
-
 async function readInventory(
   root: RootedDirectory,
   authority: Readonly<WakeflowWindowHostBindingStoreAuthority>,
@@ -404,45 +379,45 @@ export async function withWakeflowWindowHostBindingStore<Result>(
   throwIfAborted(options.signal);
   const authority =
     typeof authoritySource === "function" ? await authoritySource() : authoritySource;
-  let entered = false;
-  try {
-    // 登记锁（ADR-0033）：两个宿主的登记共用一把；上一次登记留下的暂存在锁内先恢复（见下）。
-    return await withWorkspaceLock(
-      root,
-      "window-binding",
-      async () => {
-        entered = true;
-        const current = typeof authoritySource === "function" ? await authoritySource() : authority;
-        if (
-          current.bindingRootRef !== authority.bindingRootRef ||
-          current.programId !== authority.programId ||
-          current.resourceProfile.hostId !== authority.resourceProfile.hostId
-        ) {
-          fail("input", "$authority");
-        }
-        await recoverStages(root, current.bindingRefs, options.signal);
-        return operation(
-          Object.freeze({
-            inventory: await readInventory(root, current, options.signal),
-            uuidFactory: options.uuidFactory,
-            wallClock: options.wallClock,
-            signal: options.signal,
+  // 登记锁（ADR-0033）：两个宿主的登记共用一把；上一次登记留下的暂存在锁内先恢复（见下）。
+  return withWorkspaceLockOrRefuse(
+    root,
+    "window-binding",
+    async () => {
+      const current = typeof authoritySource === "function" ? await authoritySource() : authority;
+      if (
+        current.bindingRootRef !== authority.bindingRootRef ||
+        current.programId !== authority.programId ||
+        current.resourceProfile.hostId !== authority.resourceProfile.hostId
+      ) {
+        fail("input", "$authority");
+      }
+      await settleStagesOfDeadWritersStrictly(
+        root,
+        current.bindingRefs,
+        "closed",
+        options.signal,
+        () => fail("recovery-required", "$stages"),
+      );
+      return operation(
+        Object.freeze({
+          inventory: await readInventory(root, current, options.signal),
+          uuidFactory: options.uuidFactory,
+          wallClock: options.wallClock,
+          signal: options.signal,
+        }),
+      );
+    },
+    () => fail("lock", "$lock"),
+    {
+      ...(options.acquireTimeoutMilliseconds === undefined
+        ? {}
+        : {
+            acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
           }),
-        );
-      },
-      {
-        ...(options.acquireTimeoutMilliseconds === undefined
-          ? {}
-          : {
-              acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds,
-            }),
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      },
-    );
-  } catch (error: unknown) {
-    if (!entered && error instanceof KernelFileLockError) fail("lock", "$lock");
-    throw error;
-  }
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    },
+  );
 }
 
 /** 在已锁定 inventory 下 no-replace 创建一份新的 Binding authority。 */

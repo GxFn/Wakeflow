@@ -17,9 +17,9 @@ import {
   parsePortableResourcePath,
 } from "../../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
-import { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
+import type { KernelFileLockError } from "../../../foundation/filesystem/kernel-file-lock.js";
 import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
-import { withWorkspaceLock } from "../../../kernel/workspace-locks.js";
+import { withWorkspaceLockOrRefuse } from "../../../kernel/workspace-locks.js";
 import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
@@ -114,15 +114,6 @@ function parseSignal(value: unknown): AbortSignal | undefined {
     fail("input", "$options");
   }
   return record.signal as AbortSignal | undefined;
-}
-
-/** 幂等创建 Workspace 级发布流程目录。 */
-export async function initializeDemandEventSourcingPublication(
-  root: RootedDirectory,
-  options?: { readonly signal?: AbortSignal },
-): Promise<void> {
-  assertRoot(root);
-  await initializePublicationStorage(root, parseSignal(options));
 }
 
 /**
@@ -222,29 +213,15 @@ function mapLockError(error: KernelFileLockError): never {
  * 在 Demand 发布锁内执行。全部 Demand 共用一把（ADR-0033 决定 3）：两个 Demand 的发布先后进行；
  * 持有者死掉时内核收走它，没有要退役的残留。
  */
-async function runLocked<Result>(
+function runLocked<Result>(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
 ): Promise<Result> {
-  let entered = false;
-  try {
-    return await withWorkspaceLock(
-      root,
-      "demand-publication",
-      () => {
-        entered = true;
-        return operation();
-      },
-      {
-        acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-  } catch (error: unknown) {
-    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
-    throw error;
-  }
+  return withWorkspaceLockOrRefuse(root, "demand-publication", operation, mapLockError, {
+    acquireTimeoutMilliseconds: DEMAND_EVENT_SOURCING_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS,
+    ...(signal === undefined ? {} : { signal }),
+  });
 }
 
 async function loadIdempotentResult(

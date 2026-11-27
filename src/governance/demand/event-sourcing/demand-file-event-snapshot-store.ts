@@ -9,11 +9,6 @@ import {
 } from "../../../foundation/data/passive-own-data.js";
 import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  type DurableAtomicFileStageRecoveryReceipt,
-  recoverDurableAtomicFileStagesInDirectory,
-} from "../../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../../foundation/filesystem/durable-atomic-file-write.js";
@@ -368,30 +363,6 @@ export class DemandFileEventSnapshotStore {
     return Object.freeze({
       snapshots: Object.freeze(snapshots),
     });
-  }
-
-  /** 显式恢复快照父目录中不再活动的原子发布暂存文件。 */
-  async recoverPublicationStages(options?: {
-    readonly signal?: AbortSignal;
-  }): Promise<Readonly<DurableAtomicFileStageRecoveryReceipt>> {
-    const parsed = parseOptions(options);
-    try {
-      const receipt = await recoverDurableAtomicFileStagesInDirectory(
-        this.#root,
-        DEMAND_EVENT_SOURCING_SNAPSHOTS_ROOT_REF,
-        parsed.signal === undefined ? undefined : { signal: parsed.signal },
-      );
-      if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-        fail("recovery-required", "$snapshots");
-      }
-      return receipt;
-    } catch (error: unknown) {
-      if (error instanceof DemandFileEventSnapshotStoreError) throw error;
-      if (error instanceof DurableAtomicFileStageRecoveryError) {
-        fail("recovery-required", "$snapshots", error);
-      }
-      throw error;
-    }
   }
 
   /** 直接退休一个序号的快照；不存在或失败返回 `false`，中止照常上抛。 */

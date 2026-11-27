@@ -1,5 +1,7 @@
 import {
   DurableAtomicFileStageRecoveryError,
+  type DurableAtomicFileStageRecoveryReceipt,
+  recoverDurableAtomicFileStagesForTargets,
   recoverDurableAtomicFileStagesMatchingTargets,
 } from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import { materializeDirectoryPath } from "../foundation/filesystem/durable-directory-materialization.js";
@@ -124,6 +126,34 @@ export async function withWorkspaceLock<Result>(
 }
 
 /**
+ * `withWorkspaceLock`，并把"拿不到锁"与"操作自己抛出"分开：`operation` 开始之前的 `KernelFileLockError`
+ * 交给 `refuse` 说成调用方自己的拒绝；进到操作之后抛出的一切（包括临界区里别的锁的同类错误）原样穿过。
+ */
+export async function withWorkspaceLockOrRefuse<Result>(
+  root: RootedDirectory,
+  name: WorkspaceLockName,
+  operation: () => Promise<Result>,
+  refuse: (error: KernelFileLockError) => never,
+  options: WorkspaceLockOptions = {},
+): Promise<Result> {
+  let entered = false;
+  try {
+    return await withWorkspaceLock(
+      root,
+      name,
+      () => {
+        entered = true;
+        return operation();
+      },
+      options,
+    );
+  } catch (error: unknown) {
+    if (!entered && error instanceof KernelFileLockError) refuse(error);
+    throw error;
+  }
+}
+
+/**
  * 拿到锁之后、读受保护的文件之前做的事（ADR-0033 决定 6）：上一个持有者死在写到一半时，它的原子写暂存还
  * 留在这些文件旁边——可能还链接着目标。先结算掉确定由死掉的写者留下的；否则替换自己会在写之前退役那份
  * 暂存，目标的链接数随之变化，它刚读到的期望就对不上。
@@ -145,6 +175,33 @@ export async function settleStagesOfDeadWriters(
     )
       throw error;
   }
+}
+
+/**
+ * `settleStagesOfDeadWriters` 的严格版，给结算不了就不能往下走的读者：属主还活着或说不清的暂存留在
+ * 原处并调用 `refuse()`，恢复自己失败时调用 `refuse(cause)`；中止与别的错误照常上抛。`scope` 是
+ * foundation 的两种目标范围：`closed` 在同一目录里见到集合之外的暂存时什么都不退休并报错，`matching`
+ * 只看集合里的目标。
+ */
+export async function settleStagesOfDeadWritersStrictly(
+  root: RootedDirectory,
+  targets: readonly PortableResourcePath[],
+  scope: "closed" | "matching",
+  signal: AbortSignal | undefined,
+  refuse: (cause?: DurableAtomicFileStageRecoveryError) => never,
+): Promise<void> {
+  const recover =
+    scope === "closed"
+      ? recoverDurableAtomicFileStagesForTargets
+      : recoverDurableAtomicFileStagesMatchingTargets;
+  let receipt: Readonly<DurableAtomicFileStageRecoveryReceipt>;
+  try {
+    receipt = await recover(root, targets, signalOptions(signal));
+  } catch (error: unknown) {
+    if (error instanceof DurableAtomicFileStageRecoveryError) refuse(error);
+    throw error;
+  }
+  if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) refuse();
 }
 
 /** 只读：`name` 这把锁此刻是否被独占持有。不创建任何东西。 */

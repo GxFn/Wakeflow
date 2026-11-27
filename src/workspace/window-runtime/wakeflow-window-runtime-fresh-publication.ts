@@ -5,10 +5,6 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { hasDurableAtomicFileStagePrefix } from "../../foundation/filesystem/durable-atomic-file-stage-address.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
@@ -47,6 +43,7 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
@@ -318,30 +315,6 @@ function expectedFileName(
   return splitPortableResourcePath(entry.resourceRef).at(-1) ?? "";
 }
 
-async function recoverProjectionStages(
-  root: RootedDirectory,
-  authority: Readonly<WakeflowFreshWindowRuntimeAuthority>,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  try {
-    const receipt = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      authority.projectionSet.entries.map((entry) => entry.resourceRef),
-      signal === undefined ? undefined : { signal },
-    );
-    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-      fail("prefix-conflict", "$projectionStages");
-    }
-  } catch (error: unknown) {
-    if (error instanceof WakeflowFreshWindowRuntimePublicationError) throw error;
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "root-scope") fail("root-scope", "$root", error);
-      fail("prefix-conflict", "$projectionStages", error);
-    }
-    throw error;
-  }
-}
-
 async function assertProjectionNamespaceNames(
   root: RootedDirectory,
   authority: Readonly<WakeflowFreshWindowRuntimeAuthority>,
@@ -538,7 +511,16 @@ export async function publishFreshWakeflowWindowRuntime(
     options.signal,
   );
   await assertProjectionNamespaceNames(rootValue, authority, options.signal);
-  await recoverProjectionStages(rootValue, authority, options.signal);
+  await settleStagesOfDeadWritersStrictly(
+    rootValue,
+    authority.projectionSet.entries.map((entry) => entry.resourceRef),
+    "closed",
+    options.signal,
+    (cause) =>
+      cause?.reason === "root-scope"
+        ? fail("root-scope", "$root", cause)
+        : fail("prefix-conflict", "$projectionStages", cause),
+  );
   const before = await inspectProjectionInventory(rootValue, authority, options.signal);
   const createdProjectionCount = await createMissingProjections(
     rootValue,

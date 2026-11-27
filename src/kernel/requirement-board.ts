@@ -26,7 +26,7 @@ import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
 } from "../foundation/filesystem/durable-directory-materialization.js";
-import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
+import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import type { PortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
@@ -51,7 +51,7 @@ import {
   REQUIREMENT_BOARD_ROOT_REF,
   requirementClaimStateRef,
 } from "./layout.js";
-import { settleStagesOfDeadWriters, withWorkspaceLock } from "./workspace-locks.js";
+import { settleStagesOfDeadWriters, withWorkspaceLockOrRefuse } from "./workspace-locks.js";
 
 /**
  * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
@@ -140,28 +140,16 @@ const INDEX_REFRESH_ATTEMPTS = 4;
  * 替换；刷新在锁内列举、渲染、发布；调用方在状态提交之后、锁外调用刷新。锁本身的失败由调用方按自己的
  * 边界映射，临界区的错误原样穿过。
  */
-async function withBoardLock<Result>(
+function withBoardLock<Result>(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
   operation: () => Promise<Result>,
   mapLockError: (error: KernelFileLockError) => never,
 ): Promise<Result> {
-  let entered = false;
-  try {
-    return await withWorkspaceLock(
-      root,
-      "requirement-board",
-      () => {
-        entered = true;
-        return operation();
-      },
-      { acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS, ...signalOptions(signal) },
-    );
-  } catch (error: unknown) {
-    // 只把获取时的失败说成锁的失败；临界区里别的锁抛出的同类错误不是这把锁的。
-    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
-    throw error;
-  }
+  return withWorkspaceLockOrRefuse(root, "requirement-board", operation, mapLockError, {
+    acquireTimeoutMilliseconds: LOCK_ACQUIRE_TIMEOUT_MILLISECONDS,
+    ...signalOptions(signal),
+  });
 }
 
 /** 状态文件的写入：期望检查与替换在锁内连成一步，两个认领者恰有一个成功。 */

@@ -2,10 +2,6 @@ import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical
 import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import type { JsonValue } from "../foundation/data/json-value.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
@@ -30,7 +26,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../foundation/filesystem/rooted-directory.js";
-import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
+import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
   readStableResourceDirectory,
   readStableResourceDirectoryOrNull,
@@ -51,7 +47,7 @@ import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { fail, failIo } from "./error.js";
-import { withWorkspaceLock } from "./workspace-locks.js";
+import { settleStagesOfDeadWritersStrictly, withWorkspaceLockOrRefuse } from "./workspace-locks.js";
 import {
   demandProjectionIndexRef,
   demandProjectionProgressRef,
@@ -1338,19 +1334,11 @@ async function settleDirectoryStages(
 ): Promise<void> {
   const first = pages[0];
   if (first === undefined || !(await stageParentPresent(root, first))) return;
-  try {
-    const recovery = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      pages,
-      signalOptions(signal),
-    );
-    if (recovery.activeStageCount !== 0 || recovery.unknownStageCount !== 0) {
-      fail("io-failure", "projection-stage-active", `$projection/${first}`);
-    }
-  } catch (error: unknown) {
-    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
-    fail("io-failure", "projection-stage", `$projection/${first}`, { cause: error });
-  }
+  await settleStagesOfDeadWritersStrictly(root, pages, "closed", signal, (cause) =>
+    cause === undefined
+      ? fail("io-failure", "projection-stage-active", `$projection/${first}`)
+      : fail("io-failure", "projection-stage", `$projection/${first}`, { cause }),
+  );
 }
 
 /**
@@ -1414,24 +1402,16 @@ export async function publishActiveProjection(
   assertRoot(root);
   const signal = options.signal;
   throwIfAborted(signal);
-  let entered = false;
-  try {
-    return await withWorkspaceLock(
-      root,
-      "active-projection",
-      () => {
-        entered = true;
-        return renderAndPublishLocked(root, render, options);
-      },
-      {
-        acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
-        ...signalOptions(signal),
-      },
-    );
-  } catch (error: unknown) {
-    if (!entered && error instanceof KernelFileLockError) mapLockError(error);
-    throw error;
-  }
+  return withWorkspaceLockOrRefuse(
+    root,
+    "active-projection",
+    () => renderAndPublishLocked(root, render, options),
+    mapLockError,
+    {
+      acquireTimeoutMilliseconds: options.acquireTimeoutMilliseconds ?? LOCK_TIMEOUT_MILLISECONDS,
+      ...signalOptions(signal),
+    },
+  );
 }
 
 /** 锁内的一轮：渲染（或接过已渲染的文件）、结算上一个发布方留下的暂存、再发布。 */

@@ -20,7 +20,6 @@ import {
   DemandEventSourcingRepositoryError,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { prepareDemandEventStreamCommit } from "../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
-import { DemandFileEventSnapshotStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-snapshot-store.js";
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -67,7 +66,6 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
   const root = await RootedDirectory.open(fixtureRoot);
   try {
     const eventStore = new DemandFileEventStore(root);
-    const snapshotStore = new DemandFileEventSnapshotStore(root);
     const repository = new DemandEventSourcingRepository(root);
     throws(
       () => new DemandEventSourcingRepository(eventStore as never),
@@ -110,12 +108,8 @@ test("Demand Event Sourcing Repository 正常 load 使用 snapshot + tail，audi
     const staged = await repository.load();
     equal(staged?.snapshotStatus, "invalid");
     equal(staged?.replayedCommitCount, 1);
-    const stageRecovery = await snapshotStore.recoverPublicationStages();
-    equal(stageRecovery.retiredStageCount, 1);
 
-    const beforeSnapshot = await repository.load();
-    equal(beforeSnapshot?.snapshotStatus, "missing");
-    equal(beforeSnapshot?.replayedCommitCount, 1);
+    // 发布同一序号的快照时，写入自己先退休这个死写者的暂存：随后 load 用上快照，目录里只剩快照文件。
     await repository.publishSnapshot(first.aggregate);
     const snapshotCurrent = await repository.load();
     equal(snapshotCurrent?.snapshotStatus, "used");

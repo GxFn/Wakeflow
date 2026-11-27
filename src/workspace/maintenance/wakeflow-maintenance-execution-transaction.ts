@@ -13,13 +13,10 @@ import {
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesForTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type { UuidV4Factory } from "../../foundation/identity/uuid-v4.js";
 import { OperationAbortedError, throwIfAborted } from "../../foundation/node/abort-signal.js";
+import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
   assertWakeflowHostMaintenanceCapability,
@@ -860,23 +857,6 @@ function assertRecoveryConfigState(
   fail("source-config", "$config", operationId);
 }
 
-/** 回收这次操作的 intent 自己留下的、写者已经不在的原子写暂存；属主还活着或说不清的不动，恢复不往下走。 */
-async function recoverOperationStages(
-  root: RootedDirectory,
-  operationId: WakeflowMaintenanceOperationId,
-): Promise<void> {
-  try {
-    const receipt = await recoverDurableAtomicFileStagesForTargets(
-      root,
-      Object.freeze([wakeflowMaintenanceIntentRef(operationId)]),
-    );
-    if (receipt.activeStageCount === 0 && receipt.unknownStageCount === 0) return;
-  } catch (error: unknown) {
-    if (!(error instanceof DurableAtomicFileStageRecoveryError)) throw error;
-  }
-  fail("recovery-required", "$transactions", operationId);
-}
-
 /**
  * 只凭operation ID、磁盘intent和固定宿主capability恢复同一事务。
  */
@@ -891,7 +871,14 @@ export async function recoverWakeflowMaintenanceExecutionTransaction(
   const operationId = admittedOperationId(operationIdValue);
   assertNotAborted(options.signal, operationId);
   try {
-    await recoverOperationStages(root, operationId);
+    // 先回收这次操作的 intent 自己留下的、写者已经不在的原子写暂存；属主还活着或说不清的不动，恢复不往下走。
+    await settleStagesOfDeadWritersStrictly(
+      root,
+      Object.freeze([wakeflowMaintenanceIntentRef(operationId)]),
+      "closed",
+      undefined,
+      () => fail("recovery-required", "$transactions", operationId),
+    );
     assertNotAborted(options.signal, operationId);
     const intentSource = await readWakeflowMaintenanceExecutionIntentOrNull(root, operationId);
     if (intentSource === null) fail("intent", "$intent", operationId);

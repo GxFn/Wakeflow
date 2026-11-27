@@ -64,7 +64,7 @@ import {
 } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail, failIo } from "../../kernel/error.js";
-import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
+import { withWorkspaceLockOrRefuse } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import {
@@ -91,7 +91,6 @@ import {
   evidencePlanSummary,
   evidencePreviewNext,
 } from "./decide.js";
-import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
@@ -555,28 +554,21 @@ async function applyEvidence(
  * 跟着 status 的 `demand-recovery` 调 recover 时，会把一次还在跑的记录接过去做完，原来那次调用随后以
  * 对不上的盘面失败（真实进程里量出来的，§13.293）。等不到锁是可重试的冲突：有一次记录或恢复正在进行。
  */
-async function withEvidencePublicationLock<Result>(
+function withEvidencePublicationLock<Result>(
   context: EvidenceSliceContext,
   operation: () => Promise<Result>,
 ): Promise<Result> {
-  let entered = false;
-  try {
-    return await withWorkspaceLock(
-      context.root,
-      "evidence-publication",
-      () => {
-        entered = true;
-        return operation();
-      },
-      signalOptions(context.options.signal),
-    );
-  } catch (error: unknown) {
-    if (entered || !(error instanceof KernelFileLockError)) throw error;
-    fail("concurrency-conflict", `evidence-lock-${error.reason}`, "$request.demandId", {
-      cause: error,
-      retryable: error.reason === "timeout",
-    });
-  }
+  return withWorkspaceLockOrRefuse(
+    context.root,
+    "evidence-publication",
+    operation,
+    (error) =>
+      fail("concurrency-conflict", `evidence-lock-${error.reason}`, "$request.demandId", {
+        cause: error,
+        retryable: error.reason === "timeout",
+      }),
+    signalOptions(context.options.signal),
+  );
 }
 
 async function recoverEvidence(

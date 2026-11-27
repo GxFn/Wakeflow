@@ -4,10 +4,6 @@ import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { joinDirectoryTreeCandidatePath } from "../../foundation/filesystem/directory-tree-candidate-plan.js";
 import {
-  DurableAtomicFileStageRecoveryError,
-  recoverDurableAtomicFileStagesMatchingTargets,
-} from "../../foundation/filesystem/durable-atomic-file-stage-recovery.js";
-import {
   createFileAtomically,
   DurableAtomicFileWriteError,
 } from "../../foundation/filesystem/durable-atomic-file-write.js";
@@ -38,6 +34,7 @@ import {
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
 import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
 import {
   ManagedEvidencePublicationPayloadMaterializationError,
@@ -360,32 +357,6 @@ async function inspectComplete(
   }
 }
 
-async function recoverManifestAtomicStages(
-  demandRoot: RootedDirectory,
-  plan: Readonly<ManagedEvidenceRecordTreePlan>,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  const manifestRef = joinDirectoryTreeCandidatePath(plan.candidateRootPath, MANIFEST_REF);
-  try {
-    const receipt = await recoverDurableAtomicFileStagesMatchingTargets(
-      demandRoot,
-      Object.freeze([manifestRef]),
-      signal === undefined ? undefined : { signal },
-    );
-    if (receipt.activeStageCount !== 0 || receipt.unknownStageCount !== 0) {
-      fail("recovery-required", "$manifest/stage");
-    }
-  } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileStageRecoveryError) {
-      if (error.reason === "root-scope") {
-        fail("destination-root-scope", "$demandRoot", error);
-      }
-      fail("recovery-required", "$manifest/stage", error);
-    }
-    throw error;
-  }
-}
-
 function assertManifestIsLast(progress: Readonly<DirectoryTreeCandidateProgress>): void {
   const manifestMissing = progress.missingFiles.includes(MANIFEST_REF);
   if (progress.status === "incomplete" && !manifestMissing) {
@@ -481,7 +452,16 @@ export async function materializeManagedEvidencePublicationStage(
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   await ensureEvidenceRoot(demandRootValue, transaction, options.signal);
   await ensureDirectory(demandRootValue, plan.candidateRootPath, "$stage", options.signal);
-  await recoverManifestAtomicStages(demandRootValue, plan, options.signal);
+  await settleStagesOfDeadWritersStrictly(
+    demandRootValue,
+    Object.freeze([joinDirectoryTreeCandidatePath(plan.candidateRootPath, MANIFEST_REF)]),
+    "matching",
+    options.signal,
+    (cause) =>
+      cause?.reason === "root-scope"
+        ? fail("destination-root-scope", "$demandRoot", cause)
+        : fail("recovery-required", "$manifest/stage", cause),
+  );
   let progress = await inspectProgress(demandRootValue, plan, options.signal);
   if (progress.status === "complete") {
     await loadExactJournal(demandRootValue, transaction, options.signal, stored.source.node);

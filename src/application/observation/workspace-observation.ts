@@ -52,15 +52,15 @@ import {
   observeWorktreeCheckout,
   type PodWorktreeReceipt,
   type WorktreeCheckoutObservation,
-} from "../pod/pod-worktree-receipts.js";
+} from "../../governance/pod/pod-worktree-receipts.js";
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
   type RequirementBoardIndexLanguage,
   renderRequirementBoardIndex,
-} from "../ledger/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
-import { inspectWorkClaim, type WorkClaim } from "../delivery/work-claims.js";
+import { inspectWorkClaim, type WorkClaim } from "../../governance/delivery/work-claims.js";
 import {
   scanWakeflowLegacyResidue,
   type WakeflowLegacyResidueScan,
@@ -74,26 +74,26 @@ import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/works
 import {
   buildDemandControllerRoute,
   type DemandControllerRoute,
-} from "../controller/demand-controller-route.js";
+} from "../../governance/controller/demand-controller-route.js";
 import {
   closeDemandOperationRoot,
   openDemandOperationRoot,
-} from "../demand/demand-operation-authority-context.js";
+} from "../../governance/demand/demand-operation-authority-context.js";
 import {
   type LoadedDemandEventSourcingRootAuthority,
   loadDemandEventSourcingRootAuthority,
-} from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
-import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
-import { derivePodState, type PodState } from "../pod/pod-state.js";
+} from "../../governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
+import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-store.js";
+import { derivePodState, type PodState } from "../../governance/pod/pod-state.js";
 import {
   type DemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
-} from "../demand/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-result-review-snapshot.js";
 import {
   type ArchivedDemandCandidate,
   type ObservedArchivedDemands,
   observeArchivedDemands,
-} from "./archived-demand-observation.js";
+} from "../../governance/observation/archived-demand-observation.js";
 import {
   WAKEFLOW_OBSERVATION_POLICY,
   type WakeflowObservationPolicy,
@@ -104,7 +104,7 @@ import {
 } from "./repository-pointer-observation.js";
 
 /**
- * Wakeflow Governance / Observation：一次观察，多份投影（能力卡 9 §9.1，gate-log §13.94 D4）。
+ * Wakeflow Application / Observation：一次观察，多份投影（能力卡 9 §9.1，gate-log §13.94 D4）。
  *
  * 每个域独立读取并隔离失败：读不出只让该域 `unavailable` 并带 issue，其他域照常；中止一律上抛。
  * status、verify 与活动投影都从同一份观察记录派生。`projection` 作用域只读投影需要的域

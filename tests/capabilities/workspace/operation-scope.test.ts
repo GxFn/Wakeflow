@@ -19,7 +19,7 @@ import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../../src/governance/demand/demand-operation-authority-context.js";
-import { refreshActiveProjection } from "../../../src/governance/observation/active-projection-refresh.js";
+import { refreshActiveProjection } from "../../../src/application/observation/active-projection-refresh.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { WORKSPACE_MAINTENANCE_TRANSACTIONS_REF } from "../../../src/kernel/layout.js";
 import { isWorkspaceLockHeld, withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";

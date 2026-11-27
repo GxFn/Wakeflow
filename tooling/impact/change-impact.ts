@@ -40,7 +40,7 @@ export interface ChangeImpactReport {
   readonly since: string;
   readonly changed: number;
   readonly categories: Readonly<Record<ImpactCategory, readonly string[]>>;
-  /** 运行时按六层归 owner：foundation、contracts、kernel、capabilities/<slice>、governance、configuration、workspace。 */
+  /** 运行时按六层归 owner：foundation、contracts、kernel、capabilities/<slice>、governance、configuration、workspace、application。 */
   readonly owners: Readonly<Record<string, readonly string[]>>;
   readonly schemaBuildRequired: boolean;
   readonly artifactsAffected: boolean;
@@ -147,7 +147,7 @@ function classify(file: string): ImpactCategory {
 
 function ownerOf(file: string): string | null {
   const match =
-    /^src\/(foundation|contracts|kernel|governance|configuration|workspace|hosts|entrypoints)\//u.exec(
+    /^src\/(foundation|contracts|kernel|governance|configuration|workspace|application|hosts|entrypoints)\//u.exec(
       file,
     );
   if (match !== null) return match[1] as string;

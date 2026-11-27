@@ -37,7 +37,7 @@ import { readStableFile } from "../../foundation/filesystem/stable-file-read.js"
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { afterMutationRefresh } from "../../application/observation/active-projection-refresh.js";
 import { worktreeDisposalGuidance } from "../../governance/pod/worktree-disposal.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, WakeflowError } from "../../kernel/error.js";

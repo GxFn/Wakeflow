@@ -21,7 +21,7 @@ import {
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 
 /**
- * Wakeflow Governance / Observation：仓库指针文件事实（gate-log §13.94 D2）。
+ * Wakeflow Application / Observation：仓库指针文件事实（gate-log §13.94 D2）。
  *
  * 不 spawn git。只读主检出 `.git/HEAD`、`refs/heads/*`、`packed-refs` 与
  * `.git/worktrees/<name>/{gitdir, HEAD}`，报告 HEAD、当前分支、分支尖端、登记的 worktree 与

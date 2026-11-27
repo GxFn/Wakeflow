@@ -18,7 +18,7 @@ import {
 import type { WakeflowConfigModel } from "../configuration/wakeflow-config.js";
 import type { WakeflowNarrowedWindowRole } from "../contracts/vocabulary/wakeflow-role-tool-access.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import type { ObservationHostAssets } from "../governance/observation/workspace-observation.js";
+import type { ObservationHostAssets } from "../application/observation/workspace-observation.js";
 import {
   CLAUDE_CODE_DESKTOP_ASSET_DIGEST,
   CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME,

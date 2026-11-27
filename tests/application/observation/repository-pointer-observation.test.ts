@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import {
   observeRepositoryPointers,
   repositoryBranchesComplete,
-} from "../../../src/governance/observation/repository-pointer-observation.js";
+} from "../../../src/application/observation/repository-pointer-observation.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { runGit } from "../../support/git-fixture.js";
@@ -275,7 +275,7 @@ test("观察从不 spawn git：模块不引用子进程，中止信号照常上�
   const { repository } = fixture(t);
   const source = readFileSync(
     fileURLToPath(
-      import.meta.resolve("../../../src/governance/observation/repository-pointer-observation.js"),
+      import.meta.resolve("../../../src/application/observation/repository-pointer-observation.js"),
     ),
     "utf8",
   );

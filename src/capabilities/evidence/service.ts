@@ -62,7 +62,7 @@ import {
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
 } from "../../governance/demand/demand-result-review-snapshot.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { afterMutationRefresh } from "../../application/observation/active-projection-refresh.js";
 import { fail, failIo } from "../../kernel/error.js";
 import { withWorkspaceLockOrRefuse } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";

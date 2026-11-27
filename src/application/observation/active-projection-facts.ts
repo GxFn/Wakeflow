@@ -15,8 +15,8 @@ import { deriveNextProjection } from "../../kernel/next-projection.js";
 import {
   currentTestTargetsOf,
   type DemandAggregateState,
-} from "../demand/model/demand-aggregate-state.js";
-import type { DemandResultReviewSnapshot } from "../demand/demand-result-review-snapshot.js";
+} from "../../governance/demand/model/demand-aggregate-state.js";
+import type { DemandResultReviewSnapshot } from "../../governance/demand/demand-result-review-snapshot.js";
 import { repositoryBranchesComplete } from "./repository-pointer-observation.js";
 import type {
   ObservedDemand,
@@ -26,7 +26,7 @@ import type {
 } from "./workspace-observation.js";
 
 /**
- * Wakeflow Governance / Observation：把观察记录压成内核投影事实（gate-log §13.94 D5）。
+ * Wakeflow Application / Observation：把观察记录压成内核投影事实（gate-log §13.94 D5）。
  *
  * 事实只含标识、显示名与摘要，没有路径与句柄；活动投影与 status 的 `unmergedAccepted`
  * 都从这里取。分支是否合并只在 full 作用域里按仓库指针核对；projection 作用域全部列出。

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { executeDemandCompletionRequest } from "../../../src/capabilities/demand/lifecycle.js";
 import { executeStatusRequest } from "../../../src/capabilities/observation/service.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { refreshLedgerReadingPagesAfterMaintenance } from "../../../src/governance/observation/active-projection-refresh.js";
+import { refreshLedgerReadingPagesAfterMaintenance } from "../../../src/application/observation/active-projection-refresh.js";
 import { refreshLedgerReadingPages } from "../../../src/governance/observation/ledger-reading-pages.js";
 import {
   cleanupAcceptedDemandCompletionWorkspaceFixture,

@@ -42,7 +42,7 @@ import {
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { afterMutationRefresh } from "../../application/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
 import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {

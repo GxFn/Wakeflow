@@ -21,18 +21,18 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { buildActiveProjectionFacts } from "../../../src/governance/observation/active-projection-facts.js";
+import { buildActiveProjectionFacts } from "../../../src/application/observation/active-projection-facts.js";
 import {
   afterMutationRefresh,
   refreshActiveProjection,
-} from "../../../src/governance/observation/active-projection-refresh.js";
-import { WAKEFLOW_OBSERVATION_POLICY } from "../../../src/governance/observation/observation-policy.js";
+} from "../../../src/application/observation/active-projection-refresh.js";
+import { WAKEFLOW_OBSERVATION_POLICY } from "../../../src/application/observation/observation-policy.js";
 import type {
   ObservedDemand,
   ObservedDomain,
   ObservedPod,
   WorkspaceObservation,
-} from "../../../src/governance/observation/workspace-observation.js";
+} from "../../../src/application/observation/workspace-observation.js";
 import {
   materializeActiveLayout,
   renderActiveProjectionFiles,

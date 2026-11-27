@@ -91,12 +91,12 @@ import {
   LedgerAuthorityStore,
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { afterMutationRefresh } from "../../application/observation/active-projection-refresh.js";
 import {
   type ObservationHostAssets,
   observeHostAssetState,
   selectObservationHostAssets,
-} from "../../governance/observation/workspace-observation.js";
+} from "../../application/observation/workspace-observation.js";
 import type { TargetResult } from "../../governance/result/target-result.js";
 import {
   deriveTargetResultCallbackStatus,

@@ -82,7 +82,7 @@ import {
 } from "../../governance/evidence/managed-evidence-record-reader.js";
 import { managedEvidenceRecordAddress } from "../../governance/evidence/managed-evidence-resource-paths.js";
 import type { ManagedEvidenceCommitObservation } from "../../governance/evidence/managed-evidence-source-selection.js";
-import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
+import { afterMutationRefresh } from "../../application/observation/active-projection-refresh.js";
 import {
   createImplementationTargetResult,
   ImplementationTargetResultError,

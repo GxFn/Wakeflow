@@ -19,7 +19,7 @@ import { buildActiveProjectionFacts } from "./active-projection-facts.js";
 import {
   LEDGER_READING_PAGES_MAINTENANCE_RENDER_LIMIT,
   refreshLedgerReadingPagesQuietly,
-} from "./ledger-reading-pages.js";
+} from "../../governance/observation/ledger-reading-pages.js";
 import { observeWorkspace } from "./workspace-observation.js";
 import {
   OperationAbortedError,
@@ -28,7 +28,7 @@ import {
 } from "../../foundation/node/abort-signal.js";
 
 /**
- * Wakeflow Governance / Observation：变更之后重算并重写活动投影（gate-log §13.94 D5）。
+ * Wakeflow Application / Observation：变更之后重算并重写活动投影（gate-log §13.94 D5）。
  *
  * 触发方是各切片的变更执行器（Demand 事件提交、pod 创建与关闭、维护 apply）；它们在自己的
  * 事务提交之后调用一次。投影是自愈的派生物：刷新失败不能否定已经提交的事件，所以静默版本

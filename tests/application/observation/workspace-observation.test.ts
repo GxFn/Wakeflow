@@ -23,7 +23,7 @@ import {
   orphanWorkClaims,
   selectObservationHostAssets,
   type WorkspaceObservation,
-} from "../../../src/governance/observation/workspace-observation.js";
+} from "../../../src/application/observation/workspace-observation.js";
 import { CLAUDE_CODE_DESKTOP_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-desktop-asset.js";
 import { CLAUDE_CODE_STATUSLINE_ASSET_FILE_NAME } from "../../../src/hosts/claude-code/claude-code-statusline-asset.js";
 import {
@@ -50,7 +50,7 @@ import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,
   prepareFixtureDelivery,
-} from "../delivery/delivery-workspace.fixture.js";
+} from "../../governance/delivery/delivery-workspace.fixture.js";
 
 useDisposableDurability();
 

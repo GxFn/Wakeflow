@@ -7,11 +7,8 @@
  * "过渡"一节里的规则守住旧树内部的接缝，随 L1 各切片删除旧树时一并删除。
  */
 
-const LEGACY_DOMAIN_ROOTS = "configuration|workspace|governance";
+const LEGACY_DOMAIN_ROOTS = "configuration|workspace|governance|application";
 const HOST_NEUTRAL_RUNTIME = `^src/(?:${LEGACY_DOMAIN_ROOTS}|kernel|capabilities)/`;
-
-const GOVERNANCE_WORKSPACE_CONTRACT_TARGETS =
-  "^src/workspace/(?:window-runtime/(?:wakeflow-window-host-binding(?:-store-authority|-store)?|wakeflow-window-host-identity-profile|wakeflow-window-runtime-projection-inspection)|workspace-host-resource-profile|wakeflow-legacy-residue-scan)\\.ts$";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
@@ -136,11 +133,11 @@ module.exports = {
       to: { path: "^src/", pathNot: "^src/(?:foundation|contracts|kernel|configuration)/" },
     },
     {
-      name: "transitional-governance-uses-only-workspace-contract-seams",
+      name: "layer-governance-imports-only-listed-layers",
       severity: "error",
-      comment: "Governance 只能取得 Workspace 布局、资源声明、宿主 Profile 和 Window 身份合同。",
+      comment: "governance 只引用 foundation、contracts、kernel、configuration 与自己。",
       from: { path: "^src/governance/" },
-      to: { path: "^src/workspace/", pathNot: GOVERNANCE_WORKSPACE_CONTRACT_TARGETS },
+      to: { path: "^src/", pathNot: "^src/(?:foundation|contracts|kernel|configuration|governance)/" },
     },
   ],
   options: {

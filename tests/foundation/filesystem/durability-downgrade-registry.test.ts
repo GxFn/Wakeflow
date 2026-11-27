@@ -293,7 +293,7 @@ const FORWARDED: readonly ForwardedRow[] = [
     "Demand 发布根",
   ),
   derivedRoot(
-    "src/governance/observation/active-projection-refresh.ts",
+    "src/application/observation/active-projection-refresh.ts",
     "openLedgerRoot",
     "root.durability",
     "投影刷新的账本根",

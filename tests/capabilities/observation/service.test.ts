@@ -51,16 +51,16 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import {
   buildActiveProjectionFacts,
   unmergedAcceptedFacts,
-} from "../../../src/governance/observation/active-projection-facts.js";
+} from "../../../src/application/observation/active-projection-facts.js";
 import {
   ARCHIVED_DEMAND_SCAN_MAXIMUM,
   observeArchivedDemands,
 } from "../../../src/governance/observation/archived-demand-observation.js";
-import { WAKEFLOW_OBSERVATION_POLICY } from "../../../src/governance/observation/observation-policy.js";
+import { WAKEFLOW_OBSERVATION_POLICY } from "../../../src/application/observation/observation-policy.js";
 import {
   type ObservedDemand,
   observeWorkspace,
-} from "../../../src/governance/observation/workspace-observation.js";
+} from "../../../src/application/observation/workspace-observation.js";
 import {
   TARGET_RESULT_CALLBACK_GENERATION_LIMIT,
   TARGET_RESULT_CALLBACK_SILENCE_MILLISECONDS,

@@ -43,7 +43,7 @@ import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-s
 import {
   observeProjectionTargets,
   unmergedAcceptedFacts,
-} from "../../governance/observation/active-projection-facts.js";
+} from "../../application/observation/active-projection-facts.js";
 import {
   describeDemandArchive,
   locateLatestDemandArchive,
@@ -58,7 +58,7 @@ import {
   selectObservationHostAssets,
   type WorkspaceObservation,
   type WorkspaceOverallStatus,
-} from "../../governance/observation/workspace-observation.js";
+} from "../../application/observation/workspace-observation.js";
 import type { ActiveProjectionTargetInspection } from "../../kernel/active-projection.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
 import { fail } from "../../kernel/error.js";

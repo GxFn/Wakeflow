@@ -69,8 +69,8 @@ import { LedgerAuthorityStore } from "../../governance/ledger/ledger-authority-s
 import {
   afterMutationRefresh,
   refreshLedgerReadingPagesAfterMaintenance,
-} from "../../governance/observation/active-projection-refresh.js";
-import { observeNewestSessionStartArtifactVersion } from "../../governance/observation/workspace-observation.js";
+} from "../../application/observation/active-projection-refresh.js";
+import { observeNewestSessionStartArtifactVersion } from "../../application/observation/workspace-observation.js";
 import { fail, WakeflowError } from "../../kernel/error.js";
 import {
   type HostHookStageResidueEntry,

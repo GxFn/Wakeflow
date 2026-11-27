@@ -4,7 +4,7 @@ import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/u
 import {
   parseRequirementLineageReference,
   type RequirementLineageReference,
-} from "../../../src/governance/demand/model/requirement-lineage.js";
+} from "../../../src/governance/ledger/requirement-lineage.js";
 import type { RequirementRecord } from "../../../src/governance/ledger/ledger-authority-record.js";
 import type { LoadedLedgerAuthorityRecord } from "../../../src/governance/ledger/ledger-authority-store-contract.js";
 import {
@@ -16,7 +16,7 @@ import {
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
-} from "../../../src/kernel/requirement-board.js";
+} from "../../../src/governance/ledger/requirement-board.js";
 
 /**
  * 看板 fixture：把已发布的需求包记录放上看板（pending），或以某个 Demand 认领它

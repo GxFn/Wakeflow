@@ -14,8 +14,8 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import type { RequirementClaimStateSource } from "../../kernel/requirement-board.js";
-import { inspectWorkClaim } from "../../kernel/work-claims.js";
+import type { RequirementClaimStateSource } from "../ledger/requirement-board.js";
+import { inspectWorkClaim } from "../delivery/work-claims.js";
 import {
   ManagedEvidenceManifestError,
   parseManagedEvidenceManifest,

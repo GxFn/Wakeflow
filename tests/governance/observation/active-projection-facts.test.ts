@@ -42,7 +42,7 @@ import { withWorkspaceLock } from "../../../src/kernel/workspace-locks.js";
 import {
   createPodWorktreeReceipt,
   type WorktreeCheckoutObservation,
-} from "../../../src/kernel/pod-worktree-receipts.js";
+} from "../../../src/governance/pod/pod-worktree-receipts.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { materializeFixtureOperationScope } from "../../support/workspace-operation-scope.fixture.js";

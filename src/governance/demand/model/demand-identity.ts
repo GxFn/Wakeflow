@@ -38,7 +38,7 @@ import {
   parseRequirementLineageReference,
   RequirementLineageError,
   type RequirementLineageReference,
-} from "./requirement-lineage.js";
+} from "../../ledger/requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Demand Model：事件溯源聚合的不可变身份记录。

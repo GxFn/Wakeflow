@@ -9,7 +9,7 @@ import {
   assertNoActiveDemand,
   readDemandPodId,
 } from "../../governance/demand/publication/demand-active-guard.js";
-import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
+import { withPodMutation } from "../../governance/pod/pod-mutation-lock.js";
 import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
@@ -33,8 +33,8 @@ import { unlinkRegularFileExactly } from "../../foundation/filesystem/exact-regu
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import type { UtcInstant } from "../../foundation/time/utc-instant.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
-import { inspectWorkClaim, releaseWorkClaim } from "../../kernel/work-claims.js";
+import { listPodWorktreeReceiptsAnyHost } from "../../governance/pod/pod-worktree-receipts.js";
+import { inspectWorkClaim, releaseWorkClaim } from "../../governance/delivery/work-claims.js";
 import {
   DemandEventSourcingCommandHandlerError,
   executeDemandEventSourcingCommand,
@@ -78,7 +78,7 @@ import {
   withdrawRequirementClaim,
   type RequirementClaimState,
   type RequirementClaimStateSource,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import {
   createArchiveManifest,
   findLatestDemandArchive,

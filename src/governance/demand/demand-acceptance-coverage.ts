@@ -6,7 +6,7 @@ import { fail } from "../../kernel/error.js";
 import {
   acceptanceCriterionLabel,
   parseAcceptanceCriteria,
-} from "../../kernel/requirement-acceptance.js";
+} from "../ledger/requirement-acceptance.js";
 import { ledgerAuthorityMemberRef } from "../ledger/ledger-authority-paths.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
 import { DemandEventSourcingRepository } from "./event-sourcing/demand-event-sourcing-repository.js";

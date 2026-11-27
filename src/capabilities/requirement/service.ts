@@ -75,7 +75,7 @@ import {
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import {
   admitBoardInspectionResult,
   admitRequirementPublicationResult,

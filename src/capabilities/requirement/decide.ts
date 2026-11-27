@@ -18,11 +18,11 @@ import {
   parseMarkdownSections,
 } from "../../kernel/markdown-sections.js";
 import { scanPrivacy } from "../../kernel/privacy-scan.js";
-import { parseAcceptanceCriteria } from "../../kernel/requirement-acceptance.js";
+import { parseAcceptanceCriteria } from "../../governance/ledger/requirement-acceptance.js";
 import type {
   RequirementClaimState,
   RequirementClaimStatus,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 
 /**
  * Wakeflow Capabilities / Requirement：纯决定。

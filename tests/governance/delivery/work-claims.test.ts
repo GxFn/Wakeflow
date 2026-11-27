@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { createWakeflowDurableId } from "../../src/contracts/identity/wakeflow-durable-id.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
+import { createWakeflowDurableId } from "../../../src/contracts/identity/wakeflow-durable-id.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   createWorkClaim,
   inspectWorkClaim,
@@ -14,9 +14,9 @@ import {
   releaseWorkClaimIfHeld,
   takeWorkClaim,
   type WorkClaim,
-} from "../../src/kernel/work-claims.js";
-import { createWakeflowWindowHostBindingId } from "../../src/contracts/identity/wakeflow-window-host-binding-id.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+} from "../../../src/governance/delivery/work-claims.js";
+import { createWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 
@@ -84,6 +84,8 @@ test("条件释放：声明已被别处释放并换成新声明后，旧围栏�
 
 test("声明代际上限是内核常量，投递 rearm 上限由它派生", async () => {
   equal(MAXIMUM_WORK_CLAIM_GENERATION, 4);
-  const { DELIVERY_REARM_LIMIT } = await import("../../src/governance/delivery/delivery-rearm.js");
+  const { DELIVERY_REARM_LIMIT } = await import(
+    "../../../src/governance/delivery/delivery-rearm.js"
+  );
   equal(DELIVERY_REARM_LIMIT, MAXIMUM_WORK_CLAIM_GENERATION - 1);
 });

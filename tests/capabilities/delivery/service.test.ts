@@ -29,7 +29,7 @@ import {
 } from "../../../src/kernel/hook-observations.js";
 import { hostHookObservationsRootRef, workClaimRef } from "../../../src/kernel/layout.js";
 import { countPromptCharacters } from "../../../src/kernel/prompt-digest.js";
-import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import { inspectWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import {
   CODEX_DELIVERY_FACADE,
   cleanupDeliveryWorkspaceFixture,

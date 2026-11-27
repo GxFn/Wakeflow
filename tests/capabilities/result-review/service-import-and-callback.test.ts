@@ -10,7 +10,7 @@ import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/u
 import { computeDeliveryPromptDigest } from "../../../src/governance/delivery/delivery-envelope.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
-import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import { inspectWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import { compileWakeflowWindowLaunchIntents } from "../../../src/workspace/window-runtime/wakeflow-window-launch-intent.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import {

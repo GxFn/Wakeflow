@@ -1,60 +1,63 @@
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../contracts/generated/foundation/portable-resource-path.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
 import {
   WAKEFLOW_REQUIREMENT_CLAIM_STATE_SCHEMA,
   type WakeflowRequirementClaimState,
-} from "../contracts/generated/governance/board/requirement-claim-state.generated.js";
-import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
+} from "../../contracts/generated/governance/board/requirement-claim-state.generated.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-} from "../foundation/data/deterministic-json-document.js";
-import { parseJsonValue } from "../foundation/data/json-value.js";
+} from "../../foundation/data/deterministic-json-document.js";
+import { parseJsonValue } from "../../foundation/data/json-value.js";
 import {
   type DeterministicJsonFileResult,
   readDeterministicJsonFileOrNull,
-} from "../foundation/filesystem/deterministic-json-file.js";
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
-} from "../foundation/filesystem/durable-atomic-file-write.js";
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
-} from "../foundation/filesystem/durable-directory-materialization.js";
-import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
-import type { PortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
-import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
+} from "../../foundation/filesystem/durable-directory-materialization.js";
+import type { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
-} from "../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
+} from "../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFileOrNull,
   StrictTextFileError,
   type StrictTextFileResult,
-} from "../foundation/filesystem/strict-text-file.js";
-import { signalOptions } from "../foundation/node/abort-signal.js";
-import { parseByteCount } from "../foundation/numeric/byte-count.js";
-import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
-import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
-import { encodeUtf8 } from "../foundation/text/utf8.js";
-import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
-import { fail, failIo, WakeflowError } from "./error.js";
+} from "../../foundation/filesystem/strict-text-file.js";
+import { signalOptions } from "../../foundation/node/abort-signal.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
+import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-instant.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {
   REQUIREMENT_BOARD_INDEX_REF,
   REQUIREMENT_BOARD_ROOT_REF,
   requirementClaimStateRef,
-} from "./layout.js";
-import { settleStagesOfDeadWriters, withWorkspaceLockOrRefuse } from "./workspace-locks.js";
+} from "../../kernel/layout.js";
+import {
+  settleStagesOfDeadWriters,
+  withWorkspaceLockOrRefuse,
+} from "../../kernel/workspace-locks.js";
 
 /**
- * Wakeflow Kernel / Requirement Board：需求包的认领状态（ADR-0011 D1 D5）。
+ * Wakeflow Governance / Ledger：需求包的认领状态（ADR-0011 D1 D5）。
  *
  * 每个需求包一份状态文件 `.wakeflow-active/current/board/<requirementId>.json`，
  * 状态 `pending | parked | claimed | withdrawn | archived`，修订链 `revision` 加

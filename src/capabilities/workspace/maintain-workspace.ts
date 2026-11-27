@@ -85,7 +85,7 @@ import {
   type PublicationTransactionPlan,
   runPublicationTransaction,
 } from "../../kernel/publication-transaction.js";
-import { refreshRequirementBoardIndex } from "../../kernel/requirement-board.js";
+import { refreshRequirementBoardIndex } from "../../governance/ledger/requirement-board.js";
 import {
   compareWakeflowArtifactVersions,
   parseWakeflowArtifactManifestIdentity,

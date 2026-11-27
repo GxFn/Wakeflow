@@ -3,11 +3,11 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
-import { WakeflowError } from "../../src/kernel/error.js";
-import { withPodMutation } from "../../src/kernel/pod-mutation-lock.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
+import { withPodMutation } from "../../../src/governance/pod/pod-mutation-lock.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 

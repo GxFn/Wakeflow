@@ -7,7 +7,7 @@ import {
   readRequirementClaimState,
   refreshRequirementBoardIndex,
   replaceRequirementClaimStateFile,
-} from "../../../kernel/requirement-board.js";
+} from "../../ledger/requirement-board.js";
 import {
   type DemandEventSourcingPublicationClaimResult,
   failDemandEventSourcingPublication as fail,

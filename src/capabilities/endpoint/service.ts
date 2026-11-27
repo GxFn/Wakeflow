@@ -66,13 +66,13 @@ import {
   listPodWorktreeReceipts,
   type PodWorktreeReceipt,
   writePodWorktreeReceipt,
-} from "../../kernel/pod-worktree-receipts.js";
+} from "../../governance/pod/pod-worktree-receipts.js";
 import {
   inspectWorkClaim,
   releaseWorkClaim,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
   type WorkClaim,
-} from "../../kernel/work-claims.js";
+} from "../../governance/delivery/work-claims.js";
 import {
   selectWakeflowWindowTransportPort,
   selectWakeflowWorkspaceHostResourceProfile,

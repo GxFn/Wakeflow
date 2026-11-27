@@ -17,7 +17,8 @@ A revision, a claim, a binding or a lock is no longer what the request assumed. 
 - **demand**: `archive-raced`, `payload-changed`, `publication-<reason>`, `stream-advanced`, `stream-revision`
 - **endpoint**: `binding-changed`, `binding-lock`, `claim-changed`
 - **evidence**: `demand-root-read-source-changed`, `evidence-lock-<reason>`
-- **kernel**: `claim-state-changed`, `claim-state-exists`, `claim-state-lock-<reason>`, `maintenance-busy`, `operation-scope-<reason>`, `pod-lock-<reason>`
+- **governance**: `claim-state-changed`, `claim-state-exists`, `claim-state-lock-<reason>`, `pod-lock-<reason>`
+- **kernel**: `maintenance-busy`, `operation-scope-<reason>`
 - **pod**: `config-<reason>`
 - **requirement**: `claim-state-drift`, `ledger-lock`
 - **result-review**: `stream-revision`
@@ -42,8 +43,8 @@ The reason names the condition; `path` names the request field or the state it c
 - **endpoint**: `binding-drift`, `claim-active`, `claim-drift`, `claim-held`, `closure-blocked`, `handle-changed`, `handle-conflict`, `handle-unchanged`, `hook-evidence-missing`, `launch-intent-drift`, `locator-provider`, `observation-file-content`, `registered-at-not-monotonic`, `relocate-not-applicable`, `worktree-occupied`, `worktree-outside-workspace`, `worktree-repository-unavailable`
 - **entrypoints**: `config-<reason>`, `plan-drift`, `runtime-artifact-outdated`, `runtime-artifact-unavailable`, `tool-not-for-role`
 - **evidence**: `capacity`, `config-authority`, `demand-authority`, `demand-root-<reason>`, `evidence-commit-missing`, `source-changed`, `source-missing`, `source-root`, `source-type`
-- **governance**: `archive-manifest`, `board-unavailable`, `claim-demand-id`, `coverage-reference-drift`, `coverage-task-package-missing`, `ledger-root-missing`, `pod-busy`, `pod-lifecycle-residue`, `pod-publication-residue`, `recovery-demand-identity`, `recovery-plan-drift`, `requirement-member-drift`, `requirement-member-missing`, `requirement-record-drift`
-- **kernel**: `active-layout-exists`, `active-layout-node-policy`, `active-layout-not-current`, `claim-<transition>-from-<status>`, `claim-archive-without-claim`, `claim-drift`, `claim-reclaim-other-demand`, `claim-state-chain`, `commit-id-conflict`, `config-authority`, `event-id-conflict`, `idempotency-key-conflict`, `index-anchor`, `maintenance-recovery-required`, `observation-conflict`, `observation-file-<reason>`, `observation-file-content`, `observation-file-digest`, `operation-scope-expired`, `operation-scope-missing`, `operation-scope-promotion`, `operation-scope-root-mismatch`, `plan-blocked`, `plan-drift`, `window-claimed`, `worktree-receipt`, `writer-protocol-unsupported`
+- **governance**: `archive-manifest`, `board-unavailable`, `claim-<transition>-from-<status>`, `claim-archive-without-claim`, `claim-demand-id`, `claim-drift`, `claim-reclaim-other-demand`, `claim-state-chain`, `commit-id-conflict`, `coverage-reference-drift`, `coverage-task-package-missing`, `event-id-conflict`, `idempotency-key-conflict`, `index-anchor`, `ledger-root-missing`, `pod-busy`, `pod-lifecycle-residue`, `pod-publication-residue`, `recovery-demand-identity`, `recovery-plan-drift`, `requirement-member-drift`, `requirement-member-missing`, `requirement-record-drift`, `window-claimed`, `worktree-receipt`
+- **kernel**: `active-layout-exists`, `active-layout-node-policy`, `active-layout-not-current`, `config-authority`, `maintenance-recovery-required`, `observation-conflict`, `observation-file-<reason>`, `observation-file-content`, `observation-file-digest`, `operation-scope-expired`, `operation-scope-missing`, `operation-scope-promotion`, `operation-scope-root-mismatch`, `plan-blocked`, `plan-drift`, `writer-protocol-unsupported`
 - **observation**: `demand-<issue>`, `demands-unavailable`, `ledger-root`, `ledger-root-missing`
 - **pod**: `binding-store`, `config-<reason>`, `plan-drift`
 - **requirement**: `design-surface-alias`, `design-surface-root`, `ledger-root`, `ledger-root-alias`, `ledger-root-missing`, `plan-drift`, `record-conflict`
@@ -58,7 +59,7 @@ Take identifiers only from a previous result. Read `wakeflow_status` or the boar
 - **delivery**: `delivery-unknown`, `envelope-unknown`, `target-unknown`
 - **demand**: `demand-unknown`, `journal-absent`, `publication-absent`
 - **endpoint**: `binding-absent`, `claim-absent`, `window-unknown`
-- **kernel**: `claim-absent`
+- **governance**: `claim-absent`
 - **observation**: `demand-unknown`
 - **requirement**: `design-surface`, `origin-window`, `package-document`, `package-unknown`, `record-absent`
 - **result-review**: `delivery-unknown`, `envelope-unknown`, `result-unknown`, `target-unknown`
@@ -68,7 +69,8 @@ Take identifiers only from a previous result. Read `wakeflow_status` or the boar
 Reduce what the request carries, or tell the user which bound was reached; do not split one record into several to get around it.
 
 - **delivery**: `prompt-capacity`
-- **kernel**: `index-bytes`, `projection-bytes`
+- **governance**: `index-bytes`
+- **kernel**: `projection-bytes`
 - **result-review**: `prompt-capacity`
 
 ## `recovery-required` - an earlier write was interrupted

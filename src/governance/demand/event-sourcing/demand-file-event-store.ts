@@ -47,7 +47,7 @@ import {
   retireStreamIndexAt,
   retireStreamIndexesBefore,
   type StreamIndex,
-} from "../../../kernel/event-stream/stream-index.js";
+} from "./demand-event-stream-index.js";
 import { createDemandEventStreamCommitResourceDeclaration } from "../demand-resource-catalog.js";
 import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,

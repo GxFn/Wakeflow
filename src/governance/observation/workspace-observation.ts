@@ -52,15 +52,15 @@ import {
   observeWorktreeCheckout,
   type PodWorktreeReceipt,
   type WorktreeCheckoutObservation,
-} from "../../kernel/pod-worktree-receipts.js";
+} from "../pod/pod-worktree-receipts.js";
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
   type RequirementBoardIndexLanguage,
   renderRequirementBoardIndex,
-} from "../../kernel/requirement-board.js";
+} from "../ledger/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
-import { inspectWorkClaim, type WorkClaim } from "../../kernel/work-claims.js";
+import { inspectWorkClaim, type WorkClaim } from "../delivery/work-claims.js";
 import {
   scanWakeflowLegacyResidue,
   type WakeflowLegacyResidueScan,

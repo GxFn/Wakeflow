@@ -30,7 +30,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
-import { MAXIMUM_WORK_CLAIM_GENERATION } from "../../kernel/work-claims.js";
+import { MAXIMUM_WORK_CLAIM_GENERATION } from "./work-claims.js";
 import type { DeliveryFence, DeliveryFenceReference } from "./delivery-envelope.js";
 
 /**

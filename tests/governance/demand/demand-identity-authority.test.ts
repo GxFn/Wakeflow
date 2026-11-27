@@ -23,7 +23,7 @@ import {
   parseRequirementLineageReference,
   RequirementLineageError,
   type RequirementLineageReference,
-} from "../../../src/governance/demand/model/requirement-lineage.js";
+} from "../../../src/governance/ledger/requirement-lineage.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,

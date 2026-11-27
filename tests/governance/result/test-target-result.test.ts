@@ -9,7 +9,7 @@ import {
 } from "../../../src/governance/result/test-target-result.js";
 import { createTestTargetResultReport } from "../../../src/governance/result/test-target-result-report.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
+import { inspectWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   loadFixtureDeliveryOutcome,

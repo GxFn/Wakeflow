@@ -1,5 +1,5 @@
 import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
-import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
+import { withPodMutation } from "../../governance/pod/pod-mutation-lock.js";
 import path from "node:path";
 import {
   parseWakeflowConfig,
@@ -49,7 +49,7 @@ import {
   retirePodWorktreeReceipt,
   observeWorktreeCheckout,
   type WorktreeCheckoutObservation,
-} from "../../kernel/pod-worktree-receipts.js";
+} from "../../governance/pod/pod-worktree-receipts.js";
 import {
   type PublicationTransactionEnvelope,
   type PublicationTransactionPhase,

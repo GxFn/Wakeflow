@@ -89,7 +89,7 @@ import {
 import {
   parseRequirementLineageReference,
   RequirementLineageError,
-} from "./requirement-lineage.js";
+} from "../../ledger/requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Demand Model / Aggregate Wire：聚合状态的准入：wire Schema 校验之后逐字段归一——标识、摘要、每个目标按阶段要带的事实、补充包与续接、整份状态的摘要。别的模块只经 `parseDemandAggregateState` 拿到状态。

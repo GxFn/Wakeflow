@@ -37,7 +37,7 @@ import { parseUtcInstant } from "../../../../src/foundation/time/utc-instant.js"
 import { DEMAND_EVENT_SOURCING_IDENTITY_REF } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import { createDemandAuthority } from "../../../../src/governance/demand/model/demand-authority.js";
 import { createDemandIdentity } from "../../../../src/governance/demand/model/demand-identity.js";
-import { parseRequirementLineageReference } from "../../../../src/governance/demand/model/requirement-lineage.js";
+import { parseRequirementLineageReference } from "../../../../src/governance/ledger/requirement-lineage.js";
 import { DemandEventSourcingPublicationServiceError } from "../../../../src/governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import {
   admitDemandPublicationResourceOperation,

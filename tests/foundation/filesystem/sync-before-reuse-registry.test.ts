@@ -113,7 +113,7 @@ const UNSETTLED_REUSE: readonly UnsettledReuse[] = [
       "日志目录已经在、同一份计划的日志已经在都直接沿用：目录的名字没落盘时要“被杀、重试、再掉电”三件事凑齐，正常路径不为它多一次同步（清单 8.3 第二件，open-items L10）。",
   },
   {
-    file: "src/kernel/pod-worktree-receipts.ts",
+    file: "src/governance/pod/pod-worktree-receipts.ts",
     scope: "retirePodReceipts",
     reason:
       "回执目录已经不在就算退役：之后没有以它为前提的持久步骤，回来的回执目录由 pod recover 清掉。",

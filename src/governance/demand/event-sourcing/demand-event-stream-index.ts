@@ -2,38 +2,38 @@ import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import type { JsonObject, JsonValue } from "../../foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+} from "../../../foundation/data/deterministic-json-document.js";
+import type { JsonObject, JsonValue } from "../../../foundation/data/json-value.js";
+import { readDeterministicJsonFile } from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
+} from "../../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
-} from "../../foundation/filesystem/exact-regular-file-unlink.js";
-import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
+} from "../../../foundation/filesystem/exact-regular-file-unlink.js";
+import type { FileNodeSnapshot } from "../../../foundation/filesystem/file-node-snapshot.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+} from "../../../foundation/filesystem/portable-resource-path.js";
 import {
   type RootedDirectory,
   RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
+} from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
-} from "../../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { fail, isWakeflowError } from "../error.js";
+} from "../../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
+import { encodeUtf8 } from "../../../foundation/text/utf8.js";
+import { fail, isWakeflowError } from "../../../kernel/error.js";
 
 /**
- * Wakeflow Kernel / Event Stream：事件流的身份索引检查点（ADR-0005、ADR-0013 L0.3）。
+ * Wakeflow Governance / Demand Event Sourcing：事件流的身份索引检查点（ADR-0005、ADR-0013 L0.3）。
  *
  * 索引是可删除、可重建的派生检查点，按提交序号以不可替换文件发布，记录到某个提交为止
  * 的全部 commitId、eventId、每种事件类型出现的提交序号、每个提交的摘要与总字节数。

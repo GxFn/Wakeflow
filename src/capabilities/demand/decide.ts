@@ -8,7 +8,7 @@ import type { DemandAggregateState } from "../../governance/demand/model/demand-
 import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../../governance/tasking/task-package-projection-paths.js";
 import { deriveDurableId } from "../../kernel/ids.js";
 import { scanPrivacy } from "../../kernel/privacy-scan.js";
-import type { RequirementClaimState } from "../../kernel/requirement-board.js";
+import type { RequirementClaimState } from "../../governance/ledger/requirement-board.js";
 
 /**
  * Wakeflow Capabilities / Demand：纯决定。

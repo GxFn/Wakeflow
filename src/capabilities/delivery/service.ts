@@ -151,7 +151,7 @@ import { deriveNextProjection, type NextProjection } from "../../kernel/next-pro
 import {
   listPodWorktreeReceipts,
   readPodWorktreeReceipt,
-} from "../../kernel/pod-worktree-receipts.js";
+} from "../../governance/pod/pod-worktree-receipts.js";
 import { scanPrivacy } from "../../kernel/privacy-scan.js";
 import { countPromptCharacters } from "../../kernel/prompt-digest.js";
 import {
@@ -162,7 +162,7 @@ import {
   releaseWorkClaimIfHeld,
   takeWorkClaim,
   type WorkClaim,
-} from "../../kernel/work-claims.js";
+} from "../../governance/delivery/work-claims.js";
 import {
   configuredWakeflowWorkspaceHostTransport,
   selectWakeflowWorkspaceHostResourceProfile,

@@ -15,7 +15,7 @@ import {
   parseTargetResultCallbackRecord,
   type TargetResultCallbackRecord,
 } from "../../../src/governance/result/target-result-callback.js";
-import type { WorkClaim } from "../../../src/kernel/work-claims.js";
+import type { WorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import {
   createDeliveryEnvelopeFixture,
   createDeliveryOutcomeFixture,

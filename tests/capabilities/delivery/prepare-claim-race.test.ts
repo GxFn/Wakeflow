@@ -14,7 +14,7 @@ import {
   releaseWorkClaim,
   takeWorkClaim,
   type WorkClaim,
-} from "../../../src/kernel/work-claims.js";
+} from "../../../src/governance/delivery/work-claims.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,

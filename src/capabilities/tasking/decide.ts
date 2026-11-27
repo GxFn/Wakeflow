@@ -15,12 +15,12 @@ import type {
 import {
   type AcceptanceCriterion,
   acceptanceCriterionLabel,
-} from "../../kernel/requirement-acceptance.js";
+} from "../../governance/ledger/requirement-acceptance.js";
 
 export {
   type AcceptanceCriterion,
   parseAcceptanceCriteria,
-} from "../../kernel/requirement-acceptance.js";
+} from "../../governance/ledger/requirement-acceptance.js";
 
 /**
  * Wakeflow Capabilities / Tasking：纯决定。

@@ -6,7 +6,7 @@ import { canonicalizeJson } from "../../../src/foundation/data/canonical-json.js
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { createDemandAuthority } from "../../../src/governance/demand/model/demand-authority.js";
 import { createDemandIdentity } from "../../../src/governance/demand/model/demand-identity.js";
-import { parseRequirementLineageReference } from "../../../src/governance/demand/model/requirement-lineage.js";
+import { parseRequirementLineageReference } from "../../../src/governance/ledger/requirement-lineage.js";
 import {
   createDemandEventSourcingPublicationTransaction,
   DemandEventSourcingPublicationTransactionError,

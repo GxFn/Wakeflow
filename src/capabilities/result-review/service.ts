@@ -164,7 +164,7 @@ import {
   readHostHookObservations,
 } from "../../kernel/hook-observations.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
-import { releaseWorkClaimIfHeld } from "../../kernel/work-claims.js";
+import { releaseWorkClaimIfHeld } from "../../governance/delivery/work-claims.js";
 import {
   selectWakeflowWorkspaceHostResourceProfile,
   type WakeflowWorkspaceHostTransportTable,

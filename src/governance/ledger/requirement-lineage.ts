@@ -1,33 +1,33 @@
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
-import type { WakeflowRequirementLineageReference as RequirementLineageWire } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
-import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
+import type { WakeflowRequirementLineageReference as RequirementLineageWire } from "../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
+import { WAKEFLOW_REQUIREMENT_LINEAGE_SCHEMA } from "../../contracts/generated/governance/ledger/requirement-lineage.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
   WakeflowDurableIdError,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   parseSha256Digest,
   type Sha256Digest,
   Sha256Error,
-} from "../../../foundation/crypto/sha256.js";
+} from "../../foundation/crypto/sha256.js";
 import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
-} from "../../../foundation/data/json-value.js";
-import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
+} from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
   PortableResourcePathError,
   parsePortableResourcePath,
-} from "../../../foundation/filesystem/portable-resource-path.js";
-import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
-import { requirementRootRef } from "../../ledger/ledger-authority-paths.js";
+} from "../../foundation/filesystem/portable-resource-path.js";
+import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+import { requirementRootRef } from "./ledger-authority-paths.js";
 
 /**
- * Wakeflow Governance / Demand Model：Demand 身份绑定的需求包谱系引用。
+ * Wakeflow Governance / Ledger：Demand 身份绑定的需求包谱系引用。
  *
  * 本引用只绑定需求包标识、Ledger 记录的可移植引用和记录摘要；它不引用看板
  * 状态、成员正文或认领修订。Demand 发布流程必须重新解析该引用，并由 Ledger

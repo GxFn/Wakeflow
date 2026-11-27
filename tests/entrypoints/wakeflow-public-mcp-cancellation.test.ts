@@ -11,7 +11,7 @@ import {
 } from "../../src/foundation/filesystem/kernel-file-lock.js";
 import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
 import { WakeflowError } from "../../src/kernel/error.js";
-import { readRequirementClaimState } from "../../src/kernel/requirement-board.js";
+import { readRequirementClaimState } from "../../src/governance/ledger/requirement-board.js";
 import {
   materializeWorkspaceLocksRoot,
   workspaceLockRef,

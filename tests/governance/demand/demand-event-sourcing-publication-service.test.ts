@@ -70,7 +70,7 @@ import {
   readRequirementClaimState,
   replaceRequirementClaimStateFile,
   withdrawRequirementClaim,
-} from "../../../src/kernel/requirement-board.js";
+} from "../../../src/governance/ledger/requirement-board.js";
 import { durableAtomicFileStageRefForTest } from "../../foundation/filesystem/durable-atomic-file-test-support.js";
 import {
   FIXTURE_REQUIREMENT_ID,

@@ -29,7 +29,7 @@ import { publishActiveProjection } from "../../../src/kernel/active-projection.j
 import {
   materializeRequirementBoardRoot,
   publishRequirementBoardIndex,
-} from "../../../src/kernel/requirement-board.js";
+} from "../../../src/governance/ledger/requirement-board.js";
 import { materializeWakeflowHostCapabilityLayout } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
 import { previewWakeflowStaticMaterialization } from "../../../src/workspace/maintenance/wakeflow-static-materialization-preview.js";
 import { recomposeWakeflowWorkspaceGitignore } from "../../../src/workspace/managed-integration/wakeflow-gitignore-recomposition.js";

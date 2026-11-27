@@ -1,9 +1,9 @@
-import { parseWakeflowDurableIdOfKind } from "../contracts/identity/wakeflow-durable-id.js";
-import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
-import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
-import { throwIfAborted } from "../foundation/node/abort-signal.js";
-import { fail } from "./error.js";
-import { withWorkspaceLock } from "./workspace-locks.js";
+import { parseWakeflowDurableIdOfKind } from "../../contracts/identity/wakeflow-durable-id.js";
+import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { throwIfAborted } from "../../foundation/node/abort-signal.js";
+import { fail } from "../../kernel/error.js";
+import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 
 /** 只有等到超时值得重试；锁文件不安全、卷不支持或重入，重试也不会变好（§13.161 F6）。 */
 function mapLockError(error: unknown): never {

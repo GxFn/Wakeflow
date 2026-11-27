@@ -26,7 +26,7 @@
 | 14 | `wakeflow_continue_demand` | 4 | `wakeflow_continue_demand`（continue 与 record-decision） | 重切 | 已实现（demand 切片）：从归档重开、需求包回到 claimed、路由先要求新任务包；与 `plan_target_task` 分开（能力卡 4 Q3） |
 | 15 | `wakeflow_record_evidence` | 8 | `wakeflow_record_evidence` | 已落地 | 2026-09-10 L1 evidence 切片 8：内核 `PublicationTransaction`（apply 重算计划、身份由内容派生、同内容 `already-recorded`）；来源 `managed-path \| observation \| link \| commit`，kind 闭集，隐私白名单加 `controller-confirmed`；`pod-worktree` 根随 pod 切片进表（gate-log §13.90） |
 | 16 | `wakeflow_recover_state_transition` | 4 | 无 | 放弃 | ADR-0002：通用 recover 放弃，每个 preview/apply 工具自带 recover |
-| 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 已落地 | endpoint 切片的 release-claim 加 delivery 切片的内核声明 `kernel/work-claims.ts`（ADR-0009；gate-log §13.84） |
+| 17 | `wakeflow_release_window_lock` | 2 | 工作声明释放 | 已落地 | endpoint 切片的 release-claim 加 delivery 切片的内核声明 `governance/delivery/work-claims.ts`（ADR-0009；gate-log §13.84） |
 | 18 | `wakeflow_view` | 9 | 无 | 放弃 | ADR-0006：通用读取违反脱敏边界；config 事实归 `wakeflow_status`，storage 归 `wakeflow_verify`，result-trace 并入评审 preview |
 | 19 | `wakeflow_storage_preserve` | 8 | 无 | 放弃 | 能力卡 8 Q6：归档封存、清理删除，不再有第三种保留状态 |
 | 20 | `wakeflow_archive` | 8 | 并入 `wakeflow_complete_demand` 与 `wakeflow_cancel_demand` | 重切 | 已实现（demand 切片）：归档包在 `<ledger>/archives/`，前置含无未释放工作声明，verify 报告入归档包（ADR-0012 D3） |

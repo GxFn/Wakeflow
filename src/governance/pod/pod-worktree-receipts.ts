@@ -4,73 +4,81 @@ import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
   WakeflowDurableIdError,
-} from "../contracts/identity/wakeflow-durable-id.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   WAKEFLOW_HOST_IDS,
   type WakeflowHostId,
-} from "../contracts/vocabulary/wakeflow-host-id.js";
-import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+} from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import {
+  parseSha256Digest,
+  type Sha256Digest,
+  Sha256Error,
+} from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-} from "../foundation/data/deterministic-json-document.js";
-import { type JsonObject, type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
+} from "../../foundation/data/deterministic-json-document.js";
+import {
+  type JsonObject,
+  type JsonValue,
+  parseJsonValue,
+} from "../../foundation/data/json-value.js";
 import {
   AbsoluteNodeObservationError,
   observeAbsoluteNode,
   readAbsoluteRegularFileText,
-} from "../foundation/filesystem/absolute-node-observation.js";
-import { readDeterministicJsonFileOrNull } from "../foundation/filesystem/deterministic-json-file.js";
+} from "../../foundation/filesystem/absolute-node-observation.js";
+import { readDeterministicJsonFileOrNull } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
   replaceFileAtomically,
-} from "../foundation/filesystem/durable-atomic-file-write.js";
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
-} from "../foundation/filesystem/durable-directory-materialization.js";
+} from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
-} from "../foundation/filesystem/exact-regular-file-unlink.js";
+} from "../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
   type PortableResourcePath,
   parsePortableResourcePath,
-} from "../foundation/filesystem/portable-resource-path.js";
+} from "../../foundation/filesystem/portable-resource-path.js";
 import {
   type RootedDirectory,
   RootedDirectoryError,
-} from "../foundation/filesystem/rooted-directory.js";
+} from "../../foundation/filesystem/rooted-directory.js";
 import {
   RootedDirectoryTreeRemovalError,
   removeRootedDirectoryTree,
-} from "../foundation/filesystem/rooted-directory-tree-removal.js";
+} from "../../foundation/filesystem/rooted-directory-tree-removal.js";
 import {
   readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
-} from "../foundation/filesystem/stable-directory-read.js";
-import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
-import { parseByteCount } from "../foundation/numeric/byte-count.js";
-import { encodeUtf8 } from "../foundation/text/utf8.js";
+} from "../../foundation/filesystem/stable-directory-read.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
   type UtcInstant,
   UtcInstantError,
-} from "../foundation/time/utc-instant.js";
-import { fail, failIo } from "./error.js";
+} from "../../foundation/time/utc-instant.js";
+import { fail, failIo } from "../../kernel/error.js";
 import {
   hostPodReceiptsRootRef,
   parseWakeflowHostId,
   podReceiptRootRef,
   podWorktreeReceiptRef,
-} from "./layout.js";
+} from "../../kernel/layout.js";
 
 /**
- * Wakeflow Kernel / Pod Worktree Receipts：worktree pod 产品窗口的执行位置回执（ADR-0010 D4）。
+ * Wakeflow Governance / Pod：worktree pod 产品窗口的执行位置回执（ADR-0010 D4）。
  *
  * Agent 在执行检出里运行 `git worktree list --porcelain` 与 `git rev-parse --git-common-dir`
  * 并交回原文；这里解析 porcelain，取 path 等于宿主合同提供的执行根的那一条，然后用

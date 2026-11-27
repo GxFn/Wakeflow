@@ -9,7 +9,7 @@ import { filesystemMutation } from "../../../src/foundation/filesystem/filesyste
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
-import { listRequirementClaimStates } from "../../../src/kernel/requirement-board.js";
+import { listRequirementClaimStates } from "../../../src/governance/ledger/requirement-board.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,

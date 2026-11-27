@@ -33,7 +33,7 @@ import {
 import {
   listRequirementClaimStates,
   type RequirementClaimState,
-} from "../../../kernel/requirement-board.js";
+} from "../../ledger/requirement-board.js";
 import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
 import {
   closeDemandOperationRoot,

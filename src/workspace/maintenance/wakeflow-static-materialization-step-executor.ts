@@ -54,7 +54,7 @@ import {
   materializeRequirementBoardRoot,
   publishRequirementBoardIndex,
   REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import { compileWakeflowHostCapabilityLayoutAuthority } from "../host-runtime/wakeflow-host-capability-layout-authority.js";
 import {
   ensureWakeflowHostCapabilityLayout,

@@ -43,7 +43,7 @@ import {
   type DemandAggregateState,
   DemandAggregateStateError,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
-import { requirementLineageRecordRef } from "../../../src/governance/demand/model/requirement-lineage.js";
+import { requirementLineageRecordRef } from "../../../src/governance/ledger/requirement-lineage.js";
 import { demandFinalRootRef } from "../../../src/kernel/layout.js";
 import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
 import {
@@ -53,7 +53,7 @@ import {
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
-import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
+import { readRequirementClaimState } from "../../../src/governance/ledger/requirement-board.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";

@@ -39,7 +39,7 @@ import {
   REQUIREMENT_BOARD_ROOT_REF,
   WORK_CLAIMS_ROOT_REF,
 } from "../../../src/kernel/layout.js";
-import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
+import { createWorkClaim, takeWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import { createWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observation-facade.fixture.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";

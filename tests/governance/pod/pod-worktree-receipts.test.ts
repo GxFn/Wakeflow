@@ -15,11 +15,11 @@ import { type TestContext, test } from "node:test";
 import {
   RootedDirectory,
   RootedDirectoryError,
-} from "../../src/foundation/filesystem/rooted-directory.js";
-import { RootedResourceParentHandle } from "../../src/foundation/filesystem/rooted-resource-parent-handle.js";
-import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
-import { WakeflowError } from "../../src/kernel/error.js";
-import { podReceiptRootRef } from "../../src/kernel/layout.js";
+} from "../../../src/foundation/filesystem/rooted-directory.js";
+import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
+import { podReceiptRootRef } from "../../../src/kernel/layout.js";
 import {
   admitPodWorktreeObservation,
   candidateWorktreePaths,
@@ -35,9 +35,9 @@ import {
   retirePodReceiptsAllHosts,
   retirePodWorktreeReceipt,
   writePodWorktreeReceipt,
-} from "../../src/kernel/pod-worktree-receipts.js";
-import { countFsyncs } from "../foundation/filesystem/fsync-count-probe.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+} from "../../../src/governance/pod/pod-worktree-receipts.js";
+import { countFsyncs } from "../../foundation/filesystem/fsync-count-probe.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 

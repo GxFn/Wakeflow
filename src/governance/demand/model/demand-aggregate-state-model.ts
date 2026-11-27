@@ -16,7 +16,7 @@ import type { ControllerImplementationReviewDecision } from "../../review/contro
 import type { ControllerTestReviewDecision } from "../../review/controller-test-review-decision.js";
 import type { TaskPackageCommitExpectation } from "../../tasking/task-package.js";
 import type { TestExecutionAttempt } from "../../testing/test-execution-attempt.js";
-import type { RequirementLineageReference } from "./requirement-lineage.js";
+import type { RequirementLineageReference } from "../../ledger/requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Demand Model / Aggregate Model：聚合状态的形状：每个阶段的目标状态、投递与结果的摘要、聚合错误。只有类型、错误与两个不读状态以外任何东西的小函数。

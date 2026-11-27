@@ -3,50 +3,58 @@ import {
   parseWakeflowDurableIdOfKind,
   WakeflowDurableIdError,
   type WakeflowDurableId,
-} from "../contracts/identity/wakeflow-durable-id.js";
-import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
-import { parseSha256Digest, Sha256Error, type Sha256Digest } from "../foundation/crypto/sha256.js";
+} from "../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+import {
+  parseSha256Digest,
+  Sha256Error,
+  type Sha256Digest,
+} from "../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-} from "../foundation/data/deterministic-json-document.js";
-import { parseJsonValue, type JsonObject, type JsonValue } from "../foundation/data/json-value.js";
-import { parseByteCount } from "../foundation/numeric/byte-count.js";
-import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
+} from "../../foundation/data/deterministic-json-document.js";
+import {
+  parseJsonValue,
+  type JsonObject,
+  type JsonValue,
+} from "../../foundation/data/json-value.js";
+import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
-} from "../foundation/filesystem/durable-atomic-file-write.js";
+} from "../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   DurableDirectoryMaterializationError,
   materializeDirectoryPath,
-} from "../foundation/filesystem/durable-directory-materialization.js";
+} from "../../foundation/filesystem/durable-directory-materialization.js";
 import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
-} from "../foundation/filesystem/exact-regular-file-unlink.js";
-import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
+} from "../../foundation/filesystem/exact-regular-file-unlink.js";
+import type { FileNodeSnapshot } from "../../foundation/filesystem/file-node-snapshot.js";
 import {
   type RootedDirectory,
   RootedDirectoryError,
-} from "../foundation/filesystem/rooted-directory.js";
-import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../foundation/filesystem/strict-text-file.js";
-import { encodeUtf8 } from "../foundation/text/utf8.js";
+} from "../../foundation/filesystem/rooted-directory.js";
+import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
+import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   parseUtcInstant,
   UtcInstantError,
   type UtcInstant,
-} from "../foundation/time/utc-instant.js";
-import { fail, failIo, isWakeflowError } from "./error.js";
-import { deriveDurableId } from "./ids.js";
-import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
-import { parseUuidV4 } from "../foundation/identity/uuid-v4.js";
-import { parseWakeflowHostId, WORK_CLAIMS_ROOT_REF, workClaimRef } from "./layout.js";
+} from "../../foundation/time/utc-instant.js";
+import { fail, failIo, isWakeflowError } from "../../kernel/error.js";
+import { deriveDurableId } from "../../kernel/ids.js";
+import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
+import { parseUuidV4 } from "../../foundation/identity/uuid-v4.js";
+import { parseWakeflowHostId, WORK_CLAIMS_ROOT_REF, workClaimRef } from "../../kernel/layout.js";
 
 /**
- * Wakeflow Kernel / Work Claims：对执行端点注意力与工作树的工作声明（ADR-0009 决定 3）。
+ * Wakeflow Governance / Delivery：对执行端点注意力与工作树的工作声明（ADR-0009 决定 3）。
  *
  * 一个稳定窗口同一时刻至多一份当前声明，跨 Demand 排他。声明没有 TTL，不会因时间
  * 自动失效；正确性靠围栏令牌（声明摘要进入投递信封，结果必须带回同一令牌）而不靠

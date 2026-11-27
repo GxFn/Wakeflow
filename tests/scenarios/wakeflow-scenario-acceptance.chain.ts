@@ -87,7 +87,7 @@ import {
 import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
-} from "../../src/kernel/work-claims.js";
+} from "../../src/governance/delivery/work-claims.js";
 import { WAKEFLOW_MANAGED_TEXT_MARKER_PREFIX } from "../../src/workspace/managed-integration/wakeflow-managed-text-envelope.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../configuration/wakeflow-fresh-config-selection.fixture.js";
 import {

@@ -1,5 +1,5 @@
 /**
- * 1 级组件测试：`src/kernel/requirement-board.ts` 在一次性根上的真实读写——认领状态文件的独占创建与
+ * 1 级组件测试：`src/governance/ledger/requirement-board.ts` 在一次性根上的真实读写——认领状态文件的独占创建与
  * CAS 替换、看板列举、索引渲染，以及状态写入与索引刷新共用的那把看板锁（ADR-0011 D1 D5；ADR-0033；
  * §13.126、§13.209；open-items W29 / R-ROOT-02）。锁的"他人持有"用另一条调用链表示；持有者死亡要真实
  * 进程，所以那两个用例起一个子进程持锁再 SIGKILL。
@@ -18,17 +18,17 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
-import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
+import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
-} from "../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { OperationAbortedError } from "../../src/foundation/node/abort-signal.js";
-import { parseUtcInstant } from "../../src/foundation/time/utc-instant.js";
-import { WakeflowError } from "../../src/kernel/error.js";
-import { REQUIREMENT_BOARD_INDEX_REF } from "../../src/kernel/layout.js";
+} from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
+import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
+import { WakeflowError } from "../../../src/kernel/error.js";
+import { REQUIREMENT_BOARD_INDEX_REF } from "../../../src/kernel/layout.js";
 import {
   activateRequirementClaim,
   archiveRequirementClaim,
@@ -47,14 +47,14 @@ import {
   replaceRequirementClaimStateFile,
   supplementAttachTarget,
   withdrawRequirementClaim,
-} from "../../src/kernel/requirement-board.js";
+} from "../../../src/governance/ledger/requirement-board.js";
 import {
   materializeWorkspaceLocksRoot,
   withWorkspaceLock,
   workspaceLockRef,
-} from "../../src/kernel/workspace-locks.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
-import { holdKernelLockInChildProcess } from "../support/kernel-lock-process.js";
+} from "../../../src/kernel/workspace-locks.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
+import { holdKernelLockInChildProcess } from "../../support/kernel-lock-process.js";
 
 useDisposableDurability();
 

@@ -2,7 +2,7 @@ import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { ModuleError } from "../../../foundation/error/module-error.js";
 import type { DeterministicJsonFileResult } from "../../../foundation/filesystem/deterministic-json-file.js";
 import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
-import type { RequirementClaimState } from "../../../kernel/requirement-board.js";
+import type { RequirementClaimState } from "../../ledger/requirement-board.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../event-sourcing/demand-event-sourcing-root-authority.js";
 import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 

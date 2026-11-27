@@ -2,7 +2,7 @@ import { HOST_HOOK_RETENTION_MILLISECONDS } from "../../kernel/hook-observations
 import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
-} from "../../kernel/work-claims.js";
+} from "../delivery/work-claims.js";
 import { DELIVERY_LANDING_SILENCE_MILLISECONDS } from "../delivery/delivery-outcome.js";
 import { DELIVERY_REARM_LIMIT } from "../delivery/delivery-rearm.js";
 import { DEMAND_REWORK_ESCALATION_THRESHOLD } from "../demand/event-sourcing/demand-event-sourcing-decider.js";

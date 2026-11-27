@@ -20,10 +20,10 @@ import {
 import {
   parseRequirementLineageReference,
   RequirementLineageError,
-} from "../../governance/demand/model/requirement-lineage.js";
+} from "../../governance/ledger/requirement-lineage.js";
 import { assertNoActiveDemand } from "../../governance/demand/publication/demand-active-guard.js";
 import { assertDemandOperationConfigCurrentOrFail } from "../../governance/demand/demand-operation-authority-context.js";
-import { withPodMutation } from "../../kernel/pod-mutation-lock.js";
+import { withPodMutation } from "../../governance/pod/pod-mutation-lock.js";
 import { DemandEventSourcingPublicationServiceError } from "../../governance/demand/publication/demand-event-sourcing-publication-contract.js";
 import {
   publishDemandFromPackage,
@@ -54,7 +54,7 @@ import {
 import {
   readRequirementClaimState,
   refreshRequirementBoardIndex,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import {
   closeSliceContext,
   demandRootExists,

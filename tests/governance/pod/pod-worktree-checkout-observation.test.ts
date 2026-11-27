@@ -7,8 +7,8 @@ import { type TestContext, test } from "node:test";
 import {
   observeWorktreeCheckout,
   type PodWorktreeReceipt,
-} from "../../src/kernel/pod-worktree-receipts.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+} from "../../../src/governance/pod/pod-worktree-receipts.js";
+import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 

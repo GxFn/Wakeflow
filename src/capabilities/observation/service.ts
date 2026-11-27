@@ -68,11 +68,11 @@ import {
   deriveNextProjection,
   type NextProjection,
 } from "../../kernel/next-projection.js";
-import type { WorktreeCheckoutObservation } from "../../kernel/pod-worktree-receipts.js";
+import type { WorktreeCheckoutObservation } from "../../governance/pod/pod-worktree-receipts.js";
 import {
   readRequirementClaimState,
   supplementAttachTarget,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import { newestWakeflowArtifactVersion } from "../../kernel/wakeflow-artifact-identity.js";
 import {
   configuredWakeflowWorkspaceHostTransport,

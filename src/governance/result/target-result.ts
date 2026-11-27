@@ -40,7 +40,7 @@ import {
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
 import { deriveDurableId } from "../../kernel/ids.js";
-import { derivedIdFromWorkClaim } from "../../kernel/work-claims.js";
+import { derivedIdFromWorkClaim } from "../delivery/work-claims.js";
 import type { DeliveryReadbackStatus } from "../delivery/delivery-outcome.js";
 import {
   type ImplementationTargetResultReport,

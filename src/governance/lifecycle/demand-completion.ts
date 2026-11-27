@@ -35,7 +35,7 @@ import {
 import {
   parseRequirementLineageReference,
   RequirementLineageError,
-} from "../demand/model/requirement-lineage.js";
+} from "../ledger/requirement-lineage.js";
 
 /**
  * Wakeflow Governance / Lifecycle：Demand成功终态的不可变事件载荷。

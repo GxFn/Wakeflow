@@ -37,7 +37,7 @@ import {
 } from "../../governance/ledger/ledger-authority-store.js";
 import { WakeflowError } from "../../kernel/error.js";
 import { REQUIREMENT_BOARD_ROOT_REF } from "../../kernel/layout.js";
-import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../kernel/requirement-board.js";
+import { REQUIREMENT_BOARD_INITIALIZATION_AUTHORITY_DIGEST } from "../../governance/ledger/requirement-board.js";
 import {
   compileWakeflowHostCapabilityLayoutAuthority,
   WakeflowHostCapabilityLayoutAuthorityError,

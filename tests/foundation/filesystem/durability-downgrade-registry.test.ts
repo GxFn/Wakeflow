@@ -111,7 +111,7 @@ function unchanged(file: string, scope: string, context: string, reason: string)
   return { file, scope, context, value: "none", count: 1, kind: "现状不变（1.4.1 之前）", reason };
 }
 
-const STREAM_INDEX = "src/kernel/event-stream/stream-index.ts";
+const STREAM_INDEX = "src/governance/demand/event-sourcing/demand-event-stream-index.ts";
 const SNAPSHOT_STORE = "src/governance/demand/event-sourcing/demand-file-event-snapshot-store.ts";
 const INCIDENT = "src/kernel/incident.ts";
 const HOOK_OBSERVATIONS = "src/kernel/hook-observations.ts";

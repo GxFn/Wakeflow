@@ -42,7 +42,7 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   computeRequirementClaimStateDigest,
   createRequirementClaimState,
-} from "../../../src/kernel/requirement-board.js";
+} from "../../../src/governance/ledger/requirement-board.js";
 import {
   FIXTURE_LANDING_MARKDOWN,
   FIXTURE_REQUIREMENT_MARKDOWN,

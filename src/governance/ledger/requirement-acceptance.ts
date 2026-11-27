@@ -1,5 +1,5 @@
-import { resolveRequirementSectionAnchor } from "../contracts/vocabulary/requirement-sections.js";
-import { parseMarkdownListItems, parseMarkdownSections } from "./markdown-sections.js";
+import { resolveRequirementSectionAnchor } from "../../contracts/vocabulary/requirement-sections.js";
+import { parseMarkdownListItems, parseMarkdownSections } from "../../kernel/markdown-sections.js";
 
 export interface AcceptanceCriterion {
   readonly itemId: string;

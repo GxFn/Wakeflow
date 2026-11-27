@@ -33,7 +33,7 @@ import {
   demandLifecycleJournalRef,
   workClaimRef,
 } from "../../../src/kernel/layout.js";
-import { readRequirementClaimState } from "../../../src/kernel/requirement-board.js";
+import { readRequirementClaimState } from "../../../src/governance/ledger/requirement-board.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,

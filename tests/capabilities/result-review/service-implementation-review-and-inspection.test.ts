@@ -10,7 +10,7 @@ import {
   inspectWorkClaim,
   releaseWorkClaim,
   takeWorkClaim,
-} from "../../../src/kernel/work-claims.js";
+} from "../../../src/governance/delivery/work-claims.js";
 import {
   cleanupDeliveryWorkspaceFixture,
   createDeliveryWorkspaceFixture,

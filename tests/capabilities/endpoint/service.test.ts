@@ -44,7 +44,7 @@ import { codexWindowTransportPort } from "../../../src/hosts/codex/codex-window-
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
-import { createWorkClaim, takeWorkClaim } from "../../../src/kernel/work-claims.js";
+import { createWorkClaim, takeWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import { workspaceLockRef } from "../../../src/kernel/workspace-locks.js";
 import { parseWakeflowWindowHostBindingId } from "../../../src/contracts/identity/wakeflow-window-host-binding-id.js";
 import { createMinimalWakeflowFreshConfigSelection } from "../../configuration/wakeflow-fresh-config-selection.fixture.js";

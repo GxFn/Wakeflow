@@ -6,7 +6,7 @@ import {
   type PendingRequirementWork,
   type RequirementClaimState,
   type RequirementClaimStatus,
-} from "../../kernel/requirement-board.js";
+} from "../../governance/ledger/requirement-board.js";
 import {
   WAKEFLOW_BOARD_INSPECTION_PUBLIC_TOOL_NAME,
   WAKEFLOW_REQUIREMENT_PUBLICATION_PUBLIC_TOOL_NAME,

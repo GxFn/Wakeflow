@@ -50,7 +50,7 @@
 
 **宿主差异**：无。
 
-**现 TS 状态**：TODO 集合与 `wakeflow_intake_todo`、`wakeflow_inspect_todo` 已删除。看板是需求包认领状态：`.wakeflow-active/current/board/<requirementId>.json`（内核 `src/kernel/requirement-board.ts`，0700/0600），状态 `pending | parked | claimed | withdrawn | archived`，修订链加 `previousStateDigest`，每次变更为带期望的整文件 CAS 替换，无集合锁与日志；人读索引 `board/index.md` 确定性重写并由活动索引链接。`wakeflow_inspect_board` 提供 list（按优先级、发布时间、标识排序，有界 `limit`，各状态计数，无分页令牌）与 package 视图；认领由 `create_demand(requirementId)` 执行，活动 Demand 未终态时拒绝再认领。
+**现 TS 状态**：TODO 集合与 `wakeflow_intake_todo`、`wakeflow_inspect_todo` 已删除。看板是需求包认领状态：`.wakeflow-active/current/board/<requirementId>.json`（内核 `src/governance/ledger/requirement-board.ts`，0700/0600），状态 `pending | parked | claimed | withdrawn | archived`，修订链加 `previousStateDigest`，每次变更为带期望的整文件 CAS 替换，无集合锁与日志；人读索引 `board/index.md` 确定性重写并由活动索引链接。`wakeflow_inspect_board` 提供 list（按优先级、发布时间、标识排序，有界 `limit`，各状态计数，无分页令牌）与 package 视图；认领由 `create_demand(requirementId)` 执行，活动 Demand 未终态时拒绝再认领。
 
 **实现判断**：旧的 `claim_next`、`deliver`、`next_work` 三个公共工具不再出现；`expectedBoardDigest` 不再是可选项，集合级 CAS 由 TS 的 collection digest 承担；旧 13 列压缩为结构化字段后，Markdown 投影只保留人读需要的列。
 

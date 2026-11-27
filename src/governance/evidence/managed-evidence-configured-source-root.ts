@@ -5,7 +5,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
-import { listPodWorktreeReceiptsAnyHost } from "../../kernel/pod-worktree-receipts.js";
+import { listPodWorktreeReceiptsAnyHost } from "../pod/pod-worktree-receipts.js";
 import type { ManagedEvidenceManagedPathSource } from "./managed-evidence-source-selection.js";
 
 /**

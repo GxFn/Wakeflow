@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { parseDeterministicJsonDocument } from "../../src/foundation/data/deterministic-json-document.js";
-import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
-import { RootedDirectory } from "../../src/foundation/filesystem/rooted-directory.js";
-import { isWakeflowError } from "../../src/kernel/error.js";
+import { parseDeterministicJsonDocument } from "../../../../src/foundation/data/deterministic-json-document.js";
+import { parsePortableResourcePath } from "../../../../src/foundation/filesystem/portable-resource-path.js";
+import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { isWakeflowError } from "../../../../src/kernel/error.js";
 import {
   advanceStreamIndex,
   buildStreamIndex,
@@ -18,8 +18,8 @@ import {
   readLatestStreamIndex,
   renderStreamIndex,
   retireStreamIndexesBefore,
-} from "../../src/kernel/event-stream/stream-index.js";
-import { useDisposableDurability } from "../support/disposable-durability.js";
+} from "../../../../src/governance/demand/event-sourcing/demand-event-stream-index.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 
 useDisposableDurability();
 

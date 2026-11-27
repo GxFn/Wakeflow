@@ -91,7 +91,7 @@ import {
 import {
   MAXIMUM_WORK_CLAIM_GENERATION,
   WORK_CLAIM_RECOVERY_WINDOW_MILLISECONDS,
-} from "../../../src/kernel/work-claims.js";
+} from "../../../src/governance/delivery/work-claims.js";
 import { WAKEFLOW_MAINTENANCE_TRANSACTIONS_ROOT_REF } from "../../../src/workspace/maintenance/wakeflow-maintenance-resource-catalog.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
 import { wakeflowWindowHostBindingRootRef } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-paths.js";

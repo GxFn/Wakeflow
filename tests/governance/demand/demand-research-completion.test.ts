@@ -50,7 +50,7 @@ import {
   createDemandCompletion,
   type DemandCompletionTestingMode,
 } from "../../../src/governance/lifecycle/demand-completion.js";
-import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { readDemandResultReviewSnapshot } from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
 import { readRequirementClaimState } from "../../../src/governance/ledger/requirement-board.js";
@@ -58,7 +58,7 @@ import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observa
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
-import { readPostAcceptanceRoute } from "../review/demand-post-acceptance-route.fixture.js";
+import { readPostAcceptanceRoute } from "./demand-post-acceptance-route.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,

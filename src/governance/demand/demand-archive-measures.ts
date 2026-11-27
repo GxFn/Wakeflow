@@ -1,5 +1,5 @@
 /**
- * Wakeflow Governance / Observation：一个已归档 Demand 的三个度量（1.4 开发计划第 1 节）。
+ * Wakeflow Governance / Demand：一个已归档 Demand 的三个度量（1.4 开发计划第 1 节）。
  *
  * 从归档负载里的事件算，纯函数、不读盘。口径与维护者工具 `wf metrics archive` 相同（测试用同一份归档
  * 交叉核对两边的数）：手写字节数只含归档里原样存着的任务包文字与评审决定文字；评审阶段是结果导入到针对

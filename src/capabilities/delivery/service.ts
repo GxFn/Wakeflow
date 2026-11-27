@@ -41,7 +41,7 @@ import {
 import {
   deliveryPermitPromptRef,
   materializeDeliveryPermitPrompt,
-} from "../../governance/delivery/delivery-permit-prompt-file.js";
+} from "../../governance/demand/delivery-permit-prompt-file.js";
 import {
   createDeliveryRearm,
   type DeliveryRearm,
@@ -50,11 +50,11 @@ import {
 import {
   createTargetDeliveryProductDefectRemediationContext,
   TargetDeliveryProductDefectRemediationContextError,
-} from "../../governance/delivery/target-delivery-product-defect-remediation-context.js";
+} from "../../governance/review/target-delivery-product-defect-remediation-context.js";
 import {
   createTargetDeliveryReworkContext,
   TargetDeliveryReworkContextError,
-} from "../../governance/delivery/target-delivery-rework-context.js";
+} from "../../governance/review/target-delivery-rework-context.js";
 import {
   closeDemandOperationAuthorityContext,
   type DemandOperationAuthorityContext,
@@ -113,7 +113,7 @@ import {
 import {
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
-} from "../../governance/review/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-result-review-snapshot.js";
 import {
   computeTaskPackageDigest,
   type TaskPackage,

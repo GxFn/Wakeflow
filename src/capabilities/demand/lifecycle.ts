@@ -51,8 +51,8 @@ import {
 import {
   buildDemandPostAcceptanceRoute,
   DemandPostAcceptanceRouteError,
-} from "../../governance/review/demand-post-acceptance-route.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-post-acceptance-route.js";
+import { readDemandResultReviewSnapshot } from "../../governance/demand/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { refreshLedgerReadingPagesQuietly } from "../../governance/observation/ledger-reading-pages.js";
 import { fail, failIo, WakeflowError } from "../../kernel/error.js";

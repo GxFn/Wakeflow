@@ -34,7 +34,7 @@ import {
   listRequirementClaimStates,
   type RequirementClaimState,
 } from "../../ledger/requirement-board.js";
-import { locateLatestDemandArchive } from "../../observation/demand-archive-locator.js";
+import { locateLatestDemandArchive } from "../demand-archive-locator.js";
 import {
   closeDemandOperationRoot,
   DemandOperationAuthorityContextError,

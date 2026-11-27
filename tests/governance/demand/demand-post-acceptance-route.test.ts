@@ -19,7 +19,7 @@ import {
   cleanupControllerImplementationReviewDecisionServiceFixture,
   createControllerImplementationReviewDecisionServiceFixture,
   decideFixtureImplementation,
-} from "./controller-implementation-review-decision-service.fixture.js";
+} from "../review/controller-implementation-review-decision-service.fixture.js";
 import { readPostAcceptanceRoute } from "./demand-post-acceptance-route.fixture.js";
 
 useDisposableDurability();

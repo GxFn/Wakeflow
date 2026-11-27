@@ -37,11 +37,11 @@ import {
 import {
   createTargetDeliveryProductDefectRemediationContext,
   TargetDeliveryProductDefectRemediationContextError,
-} from "../../delivery/target-delivery-product-defect-remediation-context.js";
+} from "../../review/target-delivery-product-defect-remediation-context.js";
 import {
   createTargetDeliveryReworkContext,
   TargetDeliveryReworkContextError,
-} from "../../delivery/target-delivery-rework-context.js";
+} from "../../review/target-delivery-rework-context.js";
 import {
   type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,

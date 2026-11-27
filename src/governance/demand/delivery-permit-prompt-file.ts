@@ -1,5 +1,5 @@
 /**
- * Wakeflow Governance / Delivery：许可 prompt 的落盘文件（K6，§13.177）。
+ * Wakeflow Governance / Demand：许可 prompt 的落盘文件（K6，§13.177）。
  *
  * 许可签发时 Wakeflow 把 prompt 原样写到 Demand 私有根下的可选工件目录
  * `artifacts/permits/<kind>/<id>.txt`（路径规则与清单形状在 demand-event-sourcing-paths 与
@@ -37,14 +37,14 @@ import {
   type DemandPermitPromptKind,
   demandPermitPromptKindRootRef,
   demandPermitPromptRef,
-} from "../demand/event-sourcing/demand-event-sourcing-paths.js";
+} from "./event-sourcing/demand-event-sourcing-paths.js";
 import {
   DEMAND_FILE_EVENT_STORE_DIRECTORY_MODE,
   DEMAND_FILE_EVENT_STORE_FILE_MODE,
-} from "../demand/event-sourcing/demand-file-event-store.js";
+} from "./event-sourcing/demand-file-event-store.js";
 import { demandFinalRootRef } from "../../kernel/layout.js";
 
-export type { DemandPermitPromptKind } from "../demand/event-sourcing/demand-event-sourcing-paths.js";
+export type { DemandPermitPromptKind } from "./event-sourcing/demand-event-sourcing-paths.js";
 
 export type DeliveryPermitPromptDisposition = "created" | "unchanged" | "replaced";
 

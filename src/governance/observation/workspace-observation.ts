@@ -88,7 +88,7 @@ import { derivePodState, type PodState } from "../pod/pod-state.js";
 import {
   type DemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
-} from "../review/demand-result-review-snapshot.js";
+} from "../demand/demand-result-review-snapshot.js";
 import {
   type ArchivedDemandCandidate,
   type ObservedArchivedDemands,

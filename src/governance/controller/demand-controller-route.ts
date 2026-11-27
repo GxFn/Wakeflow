@@ -13,8 +13,8 @@ import {
   type DemandPostAcceptanceNextStage,
   type DemandPostAcceptanceRoute,
   DemandPostAcceptanceRouteError,
-} from "../review/demand-post-acceptance-route.js";
-import type { DemandResultReviewSnapshot } from "../review/demand-result-review-snapshot.js";
+} from "../demand/demand-post-acceptance-route.js";
+import type { DemandResultReviewSnapshot } from "../demand/demand-result-review-snapshot.js";
 
 /**
  * Wakeflow Governance / Controller：从现有领域读模型组合出的当前责任前沿。

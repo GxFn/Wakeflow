@@ -61,7 +61,7 @@ import {
 import {
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
-} from "../../governance/review/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { fail, failIo } from "../../kernel/error.js";
 import { withWorkspaceLockOrRefuse } from "../../kernel/workspace-locks.js";

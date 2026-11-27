@@ -2,17 +2,17 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { WAKEFLOW_TEST_TARGET_PHASE_RULES } from "../../contracts/vocabulary/wakeflow-target-phases.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
+import type { LoadedDemandEventSourcingRootAuthority } from "./event-sourcing/demand-event-sourcing-root-authority.js";
 import {
   currentTestTargetsOf,
   type DemandPendingTestRetest,
   type DemandTargetTaskState,
-} from "../demand/model/demand-aggregate-state.js";
+} from "./model/demand-aggregate-state.js";
 import {
   type DemandTestingDecision,
   TEST_ENVIRONMENT_AUTHORITY_ROLE,
-} from "../demand/model/demand-authority.js";
-import type { DemandType } from "../demand/model/demand-identity.js";
+} from "./model/demand-authority.js";
+import type { DemandType } from "./model/demand-identity.js";
 import type { LedgerAuthorityMemberReference } from "../ledger/ledger-authority-store.js";
 import type {
   DemandResultReviewSnapshot,
@@ -20,7 +20,7 @@ import type {
 } from "./demand-result-review-snapshot.js";
 
 /**
- * Wakeflow Governance / Review：Controller完成Implementation或Test审查后的下一阶段路由读模型。
+ * Wakeflow Governance / Demand：Controller完成Implementation或Test审查后的下一阶段路由读模型。
  *
  * 本模块只根据冻结Demand Authority和完整Review Snapshot选择下一位业务owner。它不创建
  * test 任务包、不提交completion Event、不解释或返回测试环境正文，也不把`accepted`解释为Demand已经完成。

@@ -29,7 +29,7 @@ import {
   DemandAggregateStateError,
   decideTargetResultReviewInDemandAggregateState,
 } from "../../../src/governance/demand/model/demand-aggregate-state.js";
-import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { readDemandResultReviewSnapshot } from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,

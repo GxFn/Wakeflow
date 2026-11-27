@@ -4,7 +4,7 @@ import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wa
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { projectTargetDeliveryProductDefectRemediationContext } from "../../../src/governance/delivery/delivery-envelope.js";
-import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
+import { createTargetDeliveryReworkContext } from "../../../src/governance/review/target-delivery-rework-context.js";
 import { encodeCurrentDemandEventVersion } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-event-version-codec.js";
 import {
   DemandEventSourcingUpcasterError,

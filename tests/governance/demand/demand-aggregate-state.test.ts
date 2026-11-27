@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { createTargetDeliveryReworkContext } from "../../../src/governance/delivery/target-delivery-rework-context.js";
+import { createTargetDeliveryReworkContext } from "../../../src/governance/review/target-delivery-rework-context.js";
 import {
   cancelDemandAggregateState,
   computeDemandAggregateStateDigest,

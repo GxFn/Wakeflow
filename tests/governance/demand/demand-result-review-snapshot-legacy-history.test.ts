@@ -25,7 +25,7 @@ import {
   type DemandResultReviewDecidedTarget,
   DemandResultReviewSnapshotError,
   readDemandResultReviewSnapshot,
-} from "../../../src/governance/review/demand-result-review-snapshot.js";
+} from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createDeliveryEnvelopeFixture,
@@ -44,7 +44,7 @@ import {
 import {
   createControllerImplementationReviewDecisionForSnapshot,
   createControllerImplementationReviewDecisionForState,
-} from "./controller-implementation-review-decision.fixture.js";
+} from "../review/controller-implementation-review-decision.fixture.js";
 
 useDisposableDurability();
 

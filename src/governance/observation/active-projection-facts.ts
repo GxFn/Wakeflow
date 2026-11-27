@@ -16,7 +16,7 @@ import {
   currentTestTargetsOf,
   type DemandAggregateState,
 } from "../demand/model/demand-aggregate-state.js";
-import type { DemandResultReviewSnapshot } from "../review/demand-result-review-snapshot.js";
+import type { DemandResultReviewSnapshot } from "../demand/demand-result-review-snapshot.js";
 import { repositoryBranchesComplete } from "./repository-pointer-observation.js";
 import type {
   ObservedDemand,

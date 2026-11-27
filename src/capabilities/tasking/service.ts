@@ -50,8 +50,8 @@ import { afterMutationRefresh } from "../../governance/observation/active-projec
 import {
   DemandPostAcceptanceRouteError,
   resolveDemandTestEnvironmentAuthority,
-} from "../../governance/review/demand-post-acceptance-route.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-post-acceptance-route.js";
+import { readDemandResultReviewSnapshot } from "../../governance/demand/demand-result-review-snapshot.js";
 import {
   computeTaskPackageDigest,
   createTaskPackage,
@@ -63,7 +63,7 @@ import {
   type TaskPackageProjectionMaterializationReceipt,
   TaskPackageProjectionStore,
   TaskPackageProjectionStoreError,
-} from "../../governance/tasking/task-package-projection-store.js";
+} from "../../governance/demand/task-package-projection-store.js";
 import {
   type AppendCommandBinding,
   type AppendCommandEnvelope,

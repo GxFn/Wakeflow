@@ -7,14 +7,14 @@ import {
   type ControllerImplementationReviewDecision,
   ControllerImplementationReviewDecisionError,
   parseControllerImplementationReviewDecision,
-} from "../review/controller-implementation-review-decision.js";
+} from "./controller-implementation-review-decision.js";
 import {
   projectTargetDeliveryReworkContext,
   type TargetDeliveryReworkContext,
-} from "./delivery-envelope.js";
+} from "../delivery/delivery-envelope.js";
 
 /**
- * Wakeflow Governance / Delivery：从完整Review历史组装返工投递上下文。
+ * Wakeflow Governance / Review：从完整Review历史组装返工投递上下文。
  *
  * 本模块是Review/Result与Delivery之间的单向适配缝。它验证完整历史来源后只投影
  * Decision/Result身份、有界Controller说明和未通过检查；不修改TaskPackage、不决定

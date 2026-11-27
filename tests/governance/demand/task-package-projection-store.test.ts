@@ -29,7 +29,7 @@ import { taskPackageProjectionRef } from "../../../src/governance/tasking/task-p
 import {
   TaskPackageProjectionStore,
   TaskPackageProjectionStoreError,
-} from "../../../src/governance/tasking/task-package-projection-store.js";
+} from "../../../src/governance/demand/task-package-projection-store.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   createTaskPackageFixture,
@@ -37,7 +37,7 @@ import {
   TASKING_AUTHORITY_DIGEST,
   TASKING_CREATED_AT,
   TASKING_DEMAND_ID,
-} from "./task-package.fixture.js";
+} from "../tasking/task-package.fixture.js";
 
 useDisposableDurability();
 

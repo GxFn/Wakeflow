@@ -13,7 +13,7 @@ import type {
   ControllerReviewEscalation,
   ControllerReviewTargetCompletion,
 } from "../../../src/governance/review/controller-review-decision-contract.js";
-import type { DemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import type { DemandResultReviewSnapshot } from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import { createTargetResultFixture } from "../result/target-result.fixture.js";
 import { createTaskPackageFixture } from "../tasking/task-package.fixture.js";
 

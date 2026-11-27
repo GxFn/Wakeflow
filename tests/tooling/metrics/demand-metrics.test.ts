@@ -15,7 +15,7 @@ import { type TestContext, test } from "node:test";
 import {
   type DemandArchiveEvent,
   measureDemandArchiveEvents,
-} from "../../../src/governance/observation/demand-archive-measures.js";
+} from "../../../src/governance/demand/demand-archive-measures.js";
 import { runToolingCli } from "../../../tooling/cli.js";
 import {
   measureArchivedDemand,

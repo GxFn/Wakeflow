@@ -7,24 +7,21 @@ import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
   type DemandTargetResultSourceEvent,
-} from "../demand/event-sourcing/demand-event-sourcing-repository.js";
+} from "./event-sourcing/demand-event-sourcing-repository.js";
 import type {
   DemandEventCommitSequence,
   DemandEventStreamRevision,
 } from "../../contracts/identity/demand-event-stream-position.js";
-import { DemandFileEventStoreError } from "../demand/event-sourcing/demand-file-event-store-contract.js";
-import { readAllDemandFileEventCommits } from "../demand/event-sourcing/demand-file-event-store-reader.js";
-import type {
-  DemandLifecycle,
-  DemandTargetTaskState,
-} from "../demand/model/demand-aggregate-state.js";
+import { DemandFileEventStoreError } from "./event-sourcing/demand-file-event-store-contract.js";
+import { readAllDemandFileEventCommits } from "./event-sourcing/demand-file-event-store-reader.js";
+import type { DemandLifecycle, DemandTargetTaskState } from "./model/demand-aggregate-state.js";
 import type { TargetResult } from "../result/target-result.js";
 import type { TargetResultOutcome } from "../result/target-result-report-contract.js";
 import type { TaskPackage } from "../tasking/task-package.js";
-import type { ControllerReviewDecision } from "./controller-review-decision.js";
+import type { ControllerReviewDecision } from "../review/controller-review-decision.js";
 
 /**
- * Wakeflow Governance / Review：从Demand Event Stream即时重建的结果审查读模型。
+ * Wakeflow Governance / Demand：从Demand Event Stream即时重建的结果审查读模型。
  *
  * Snapshot把当前Aggregate选择的Target Task与完整TaskPackage、TargetResult及已有Review
  * Decision事件闭合，供Controller读取审查输入和既有决定。它是零写、可丢弃、可重建的

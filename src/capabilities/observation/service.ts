@@ -47,7 +47,7 @@ import {
 import {
   describeDemandArchive,
   locateLatestDemandArchive,
-} from "../../governance/observation/demand-archive-locator.js";
+} from "../../governance/demand/demand-archive-locator.js";
 import {
   deriveOverallStatus,
   type ObservationHost,

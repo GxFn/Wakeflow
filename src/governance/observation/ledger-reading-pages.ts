@@ -29,8 +29,8 @@ import {
   locateLatestDemandArchive,
   readDemandArchiveEvents,
   readDemandArchiveIdentity,
-} from "./demand-archive-locator.js";
-import { measureDemandArchiveEvents } from "./demand-archive-measures.js";
+} from "../demand/demand-archive-locator.js";
+import { measureDemandArchiveEvents } from "../demand/demand-archive-measures.js";
 import {
   buildDemandArchivePageFacts,
   DEMAND_ARCHIVE_PAGE_COMPACT_LIMITS,

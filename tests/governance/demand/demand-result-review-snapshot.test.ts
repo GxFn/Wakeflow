@@ -13,8 +13,8 @@ import {
   DemandResultReviewSnapshotError,
   readArchivedDemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
-} from "../../../src/governance/review/demand-result-review-snapshot.js";
-import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
+} from "../../../src/governance/demand/demand-result-review-snapshot.js";
+import { TaskPackageProjectionStore } from "../../../src/governance/demand/task-package-projection-store.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupDeliveryWorkspaceFixture,
@@ -24,7 +24,7 @@ import {
 import {
   importFixtureImplementationResult,
   registerFixtureControllerWindow,
-} from "./controller-implementation-review-decision-service.fixture.js";
+} from "../review/controller-implementation-review-decision-service.fixture.js";
 
 useDisposableDurability();
 

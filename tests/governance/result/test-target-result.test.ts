@@ -8,7 +8,7 @@ import {
   TestTargetResultError,
 } from "../../../src/governance/result/test-target-result.js";
 import { createTestTargetResultReport } from "../../../src/governance/result/test-target-result-report.js";
-import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
+import { readDemandResultReviewSnapshot } from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import { inspectWorkClaim } from "../../../src/governance/delivery/work-claims.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
@@ -26,7 +26,7 @@ import {
   TEST_RESULT_REPORTED_AT,
   testResultReportContent,
 } from "../review/controller-test-review-decision-service.fixture.js";
-import { readPostAcceptanceRoute } from "../review/demand-post-acceptance-route.fixture.js";
+import { readPostAcceptanceRoute } from "../demand/demand-post-acceptance-route.fixture.js";
 import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
 useDisposableDurability();

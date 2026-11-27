@@ -34,7 +34,7 @@ import type { DeliveryEnvelope } from "../../governance/delivery/delivery-envelo
 import {
   deliveryPermitPromptRef,
   materializeDeliveryPermitPrompt,
-} from "../../governance/delivery/delivery-permit-prompt-file.js";
+} from "../../governance/demand/delivery-permit-prompt-file.js";
 import {
   closeDemandOperationAuthorityContext,
   type DemandOperationAuthorityContext,
@@ -147,7 +147,7 @@ import {
   type DemandResultReviewTarget,
   type DemandTargetReviewHistoryEntry,
   readDemandResultReviewSnapshot,
-} from "../../governance/review/demand-result-review-snapshot.js";
+} from "../../governance/demand/demand-result-review-snapshot.js";
 import type { TaskPackage, TestTaskPackage } from "../../governance/tasking/task-package.js";
 import {
   type AppendCommandBinding,

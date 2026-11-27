@@ -31,7 +31,7 @@ import type { DemandArchiveEvent } from "./demand-archive-measures.js";
 import { signalOptions } from "../../foundation/node/abort-signal.js";
 
 /**
- * Wakeflow Governance / Observation：已归档 Demand 的回执摘要（`wakeflow_status{demandId}`），
+ * Wakeflow Governance / Demand：已归档 Demand 的回执摘要（`wakeflow_status{demandId}`），
  * 也供 `archived-demand-observation.ts` 的归档观察使用。
  *
  * 只读归档清单里公开的几个字段（结局、时间、终态事件、清单摘要、pod），不解析整份清单；

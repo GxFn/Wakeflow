@@ -13,7 +13,7 @@ import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { demandFinalRootRef, demandLifecycleJournalRef } from "../../kernel/layout.js";
 import { DEMAND_RECOVERY_TOOLS } from "../../kernel/next-projection.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../evidence/managed-evidence-resource-paths.js";
-import { locateLatestDemandArchive } from "../observation/demand-archive-locator.js";
+import { locateLatestDemandArchive } from "./demand-archive-locator.js";
 import { TASK_PACKAGE_PROJECTIONS_ROOT_REF } from "../tasking/task-package-projection-paths.js";
 import {
   DEMAND_EVENT_APPEND_CANDIDATES_ROOT_REF,

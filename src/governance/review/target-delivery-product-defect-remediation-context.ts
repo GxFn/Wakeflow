@@ -7,14 +7,14 @@ import {
   type ControllerProductDefectRemediationAuthorization,
   ControllerProductDefectRemediationAuthorizationError,
   parseControllerProductDefectRemediationAuthorization,
-} from "../review/controller-product-defect-remediation-authorization.js";
+} from "./controller-product-defect-remediation-authorization.js";
 import {
   projectTargetDeliveryProductDefectRemediationContext,
   type TargetDeliveryProductDefectRemediationContext,
-} from "./delivery-envelope.js";
+} from "../delivery/delivery-envelope.js";
 
 /**
- * Wakeflow Governance / Delivery：从完整产品缺陷Authorization历史组装投递投影。
+ * Wakeflow Governance / Review：从完整产品缺陷Authorization历史组装投递投影。
  *
  * 本模块验证Authorization选中的产品baseline与先前accepted TargetResult后，只投影
  * Target执行所需的有界来源（失败步骤编号与观察摘要）；它不修改TaskPackage、不授权

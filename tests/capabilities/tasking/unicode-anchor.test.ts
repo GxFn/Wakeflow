@@ -7,7 +7,7 @@ import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/kernel/layout.js";
-import { TaskPackageProjectionStore } from "../../../src/governance/tasking/task-package-projection-store.js";
+import { TaskPackageProjectionStore } from "../../../src/governance/demand/task-package-projection-store.js";
 import { FIXTURE_REQUIREMENT_MARKDOWN } from "../../governance/ledger/requirement-package.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,

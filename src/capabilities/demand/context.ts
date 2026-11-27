@@ -41,7 +41,7 @@ import { fail, failIo } from "../../kernel/error.js";
 import type { PublicationTransactionEnvelope } from "../../kernel/publication-transaction.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../governance/ledger/requirement-board.js";
-import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
+import { readDemandResultReviewSnapshot } from "../../governance/demand/demand-result-review-snapshot.js";
 import { buildDemandControllerRoute } from "../../governance/controller/demand-controller-route.js";
 import {
   findLatestDemandArchive,

@@ -35,25 +35,25 @@ import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import {
   createDemandEventSourcingResourceCatalog,
   createTaskPackageProjectionResourceDeclaration,
-} from "../demand/demand-resource-catalog.js";
+} from "./demand-resource-catalog.js";
 import {
   DemandEventSourcingRepository,
   DemandEventSourcingRepositoryError,
-} from "../demand/event-sourcing/demand-event-sourcing-repository.js";
+} from "./event-sourcing/demand-event-sourcing-repository.js";
 import {
   computeTaskPackageDigest,
   parseTaskPackageDocument,
   renderTaskPackage,
   type TaskPackage,
   TaskPackageError,
-} from "./task-package.js";
+} from "../tasking/task-package.js";
 import {
   TASK_PACKAGE_PROJECTIONS_ROOT_REF,
   taskPackageProjectionRef,
-} from "./task-package-projection-paths.js";
+} from "../tasking/task-package-projection-paths.js";
 
 /**
- * Wakeflow Governance / Tasking：事件权威 TaskPackage 的根作用域文件投影存储。
+ * Wakeflow Governance / Demand：事件权威 TaskPackage 的根作用域文件投影存储。
  *
  * `materialize` 先完整审计 Demand 事件流并定位唯一
  * `tasking.target-task-planned`，随后才在固定 ID 路径执行不替换的原子创建。相同请求

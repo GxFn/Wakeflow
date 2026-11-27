@@ -5,8 +5,8 @@ import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import {
   type DemandResultReviewSnapshot,
   readArchivedDemandResultReviewSnapshot,
-} from "../review/demand-result-review-snapshot.js";
-import { locateLatestDemandArchive } from "./demand-archive-locator.js";
+} from "../demand/demand-result-review-snapshot.js";
+import { locateLatestDemandArchive } from "../demand/demand-archive-locator.js";
 
 /**
  * Wakeflow Governance / Observation：仍在配置里的 worktree pod 的已归档 Demand（gate-log §13.130）。

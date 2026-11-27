@@ -13,7 +13,7 @@ import type { ControllerReviewDecision } from "../review/controller-review-decis
 import type {
   DemandResultReviewSnapshot,
   DemandResultReviewTarget,
-} from "../review/demand-result-review-snapshot.js";
+} from "../demand/demand-result-review-snapshot.js";
 import {
   parseTargetSessionPromptObservation,
   type TargetSessionPromptObservation,
@@ -23,8 +23,8 @@ import type { TaskPackage } from "../tasking/task-package.js";
 import type {
   DemandArchiveIdentityReadback,
   LocatedDemandArchiveSummary,
-} from "./demand-archive-locator.js";
-import type { DemandArchiveMeasures } from "./demand-archive-measures.js";
+} from "../demand/demand-archive-locator.js";
+import type { DemandArchiveMeasures } from "../demand/demand-archive-measures.js";
 
 /**
  * Wakeflow Governance / Observation：一个已归档 Demand 的人读页面（open-items I22，1.4 第 3 段）。

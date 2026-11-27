@@ -11,7 +11,7 @@ import { OperationAbortedError } from "../../../src/foundation/node/abort-signal
 import {
   describeDemandArchive,
   locateLatestDemandArchive,
-} from "../../../src/governance/observation/demand-archive-locator.js";
+} from "../../../src/governance/demand/demand-archive-locator.js";
 import { WakeflowError } from "../../../src/kernel/error.js";
 import { demandArchivesRootRef } from "../../../src/kernel/layout.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";

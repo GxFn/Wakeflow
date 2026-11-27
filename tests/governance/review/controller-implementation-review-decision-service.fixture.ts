@@ -24,7 +24,7 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import {
   type DemandResultReviewSnapshot,
   readDemandResultReviewSnapshot,
-} from "../../../src/governance/review/demand-result-review-snapshot.js";
+} from "../../../src/governance/demand/demand-result-review-snapshot.js";
 import type { TaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";

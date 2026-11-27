@@ -16,7 +16,7 @@ import {
   deriveManagedEvidenceContentBlockers,
   deriveManagedEvidenceId,
   type ManagedEvidenceCaptureReview,
-} from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import { createManagedEvidenceManifest } from "../../../src/governance/evidence/managed-evidence-manifest.js";
 import {
   managedEvidenceSourceKey,
@@ -25,7 +25,7 @@ import {
 import {
   createManagedEvidenceCapturePlanFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
-} from "../../governance/evidence/managed-evidence-publication.fixture.js";
+} from "../../governance/demand/managed-evidence/managed-evidence-publication.fixture.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 

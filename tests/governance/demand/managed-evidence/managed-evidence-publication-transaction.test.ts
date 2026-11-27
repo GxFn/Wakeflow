@@ -1,11 +1,11 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
+import { computeCanonicalJsonSha256Digest } from "../../../../src/foundation/crypto/canonical-json-sha256.js";
 import {
   computeDemandEventSourcingCommandDigest,
   parseDemandEventSourcingCommand,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
+} from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
@@ -16,8 +16,8 @@ import {
   parseManagedEvidencePublicationTransaction,
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
-import { useDisposableDurability } from "../../support/disposable-durability.js";
+} from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import {
   createManagedEvidenceCapturePlanFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS as DIGESTS,

@@ -21,16 +21,16 @@ import {
   ManagedEvidencePublicationStageMaterializationError,
   type ManagedEvidencePublicationStageMaterializationErrorReason,
   materializeManagedEvidencePublicationStage,
-} from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-publication-stage-materializer.js";
 import {
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationRecordTreePlan,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   createManagedEvidencePublicationTransactionJournal,
   loadManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
-import { inspectManagedEvidenceRecordSetInventory } from "../../../src/governance/evidence/managed-evidence-record-set-inventory.js";
+} from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction-store.js";
+import { inspectManagedEvidenceRecordSetInventory } from "../../../src/governance/demand/managed-evidence/managed-evidence-record-set-inventory.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_ROOT_REF,
@@ -41,7 +41,7 @@ import {
   createManagedEvidencePublicationTransactionFixture,
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS,
-} from "./managed-evidence-publication.fixture.js";
+} from "../demand/managed-evidence/managed-evidence-publication.fixture.js";
 
 useDisposableDurability();
 

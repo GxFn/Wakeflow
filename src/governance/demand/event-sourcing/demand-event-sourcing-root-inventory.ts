@@ -19,7 +19,7 @@ import {
   inspectManagedEvidenceRecordSetInventory,
   type ManagedEvidenceRecordSetInventory,
   ManagedEvidenceRecordSetInventoryError,
-} from "../../evidence/managed-evidence-record-set-inventory.js";
+} from "../managed-evidence/managed-evidence-record-set-inventory.js";
 import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_FILE_NAME } from "../../evidence/managed-evidence-resource-paths.js";
 import {
   parseTaskPackageProjectionFileName,

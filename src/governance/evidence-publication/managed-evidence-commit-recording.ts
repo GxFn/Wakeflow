@@ -3,15 +3,15 @@ import type { RootedDirectory } from "../../foundation/filesystem/rooted-directo
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
 import type { DemandEventStreamCommitWriter } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import { ManagedEvidenceCapturePlanningService } from "./managed-evidence-capture-planning-service.js";
-import { deriveManagedEvidenceEventIdentity } from "./managed-evidence-event-identity.js";
+import { deriveManagedEvidenceEventIdentity } from "../evidence/managed-evidence-event-identity.js";
 import { ManagedEvidencePublicationApplicationService } from "./managed-evidence-publication-application-service.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 
 /**
- * Wakeflow Governance / Evidence：把一个已核实的提交记成受管证据（ADR-0028 决定 4）。
+ * Wakeflow Governance / Evidence Publication：把一个已核实的提交记成受管证据（ADR-0028 决定 4）。
  *
  * 目标导入结果的那一次调用用它给报告里的提交各记一条证据，Controller 被唤醒时证据已经在。它走的是
  * 记录证据工具同一条路——同一份捕获规划（规划时只读地观察提交）、同一个发布事务、同一条身份派生——

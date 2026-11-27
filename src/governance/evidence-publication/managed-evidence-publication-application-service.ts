@@ -34,7 +34,7 @@ import type {
 import {
   ManagedEvidenceConfiguredSourceRootError,
   openConfiguredManagedEvidenceSourceRoot,
-} from "./managed-evidence-configured-source-root.js";
+} from "../evidence/managed-evidence-configured-source-root.js";
 import type { ManagedEvidencePublicationRecordResult } from "./managed-evidence-publication-record-publisher.js";
 import {
   ManagedEvidencePublicationStageMaterializationError,
@@ -43,7 +43,7 @@ import {
 import {
   computeManagedEvidencePublicationTransactionDigest,
   type ManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   appendManagedEvidencePublicationEvent,
   completeManagedEvidencePublicationTransaction,
@@ -59,12 +59,12 @@ import {
   loadManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionStoreError,
   type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   managedEvidencePublicationStageRef,
-} from "./managed-evidence-resource-paths.js";
+} from "../evidence/managed-evidence-resource-paths.js";
 
 /** 还没发布的暂存树里的清单：暂存树里只有它是按"建暂存、链接、删暂存"写的。 */
 function stageManifestRef(evidenceId: string): PortableResourcePath {
@@ -74,7 +74,7 @@ function stageManifestRef(evidenceId: string): PortableResourcePath {
 }
 
 /**
- * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的Application/Recovery。
+ * Wakeflow Governance / Evidence Publication：Managed Evidence跨资源发布的Application/Recovery。
  *
  * 固定顺序为“journal → complete stage → Event append → final publish → 事务期闭包
  * → journal retire → healthy闭包”。Transaction不保存可变phase；恢复只观察exact

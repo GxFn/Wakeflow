@@ -14,10 +14,10 @@ import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { demandFinalRootRef } from "../../../src/kernel/layout.js";
-import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
-import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
-import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
-import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
+import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
+import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence-publication/managed-evidence-publication-stage-materializer.js";
+import { createManagedEvidencePublicationTransaction } from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
+import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../../src/kernel/limits.js";
@@ -29,7 +29,7 @@ import {
   fileSelection,
   type ManagedEvidenceCapturePlanningWorkspaceFixture,
   readyCapturePlan,
-} from "../../governance/evidence/managed-evidence-capture-planning-service.fixture.js";
+} from "../../governance/evidence-publication/managed-evidence-capture-planning-service.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();

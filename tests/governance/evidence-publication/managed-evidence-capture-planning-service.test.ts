@@ -13,7 +13,7 @@ import {
   ManagedEvidenceCapturePlanningService,
   ManagedEvidenceCapturePlanningServiceError,
   type ManagedEvidenceCapturePlanningServiceErrorReason,
-} from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import { parseManagedEvidenceSourceSelection } from "../../../src/governance/evidence/managed-evidence-source-selection.js";
 import { writeHostHookObservation } from "../../../src/kernel/hook-observations.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";

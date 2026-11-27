@@ -31,18 +31,18 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import type { ManagedEvidencePublicationTransaction } from "./managed-evidence-publication-transaction.js";
+import type { ManagedEvidencePublicationTransaction } from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_EXECUTABLE_FILE_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
   type ManagedEvidenceRecordTreePlan,
-} from "./managed-evidence-record-tree-plan.js";
-import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME } from "./managed-evidence-resource-paths.js";
-import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
+} from "../evidence/managed-evidence-record-tree-plan.js";
+import { MANAGED_EVIDENCE_PAYLOAD_DIRECTORY_NAME } from "../evidence/managed-evidence-resource-paths.js";
+import { encodeManagedEvidenceSourceProjection } from "../evidence/managed-evidence-source-projection.js";
 
 /**
- * Wakeflow Governance / Evidence：Managed Evidence payload的source-specific物化。
+ * Wakeflow Governance / Evidence Publication：Managed Evidence payload的source-specific物化。
  *
  * file来源执行一份stable streaming copy；tree来源打开exact子根并复用Loaded Artifact
  * transfer，在复制前后重算完整位置无关identity；引用类来源（observation、link、commit）

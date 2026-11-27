@@ -1,37 +1,37 @@
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { DeterministicJsonDocumentError } from "../../../foundation/data/deterministic-json-document.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type DeterministicJsonFileResult,
   readDeterministicJsonFile,
-} from "../../foundation/filesystem/deterministic-json-file.js";
+} from "../../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
-} from "../../foundation/filesystem/durable-atomic-file-write.js";
+} from "../../../foundation/filesystem/durable-atomic-file-write.js";
 import {
   ExactRegularFileUnlinkError,
   type ExactRegularFileUnlinkReceipt,
   unlinkRegularFileExactly,
-} from "../../foundation/filesystem/exact-regular-file-unlink.js";
+} from "../../../foundation/filesystem/exact-regular-file-unlink.js";
 import {
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
-} from "../../foundation/filesystem/file-node-snapshot.js";
-import { isPrivateFile } from "../../foundation/filesystem/private-node-policy.js";
+} from "../../../foundation/filesystem/file-node-snapshot.js";
+import { isPrivateFile } from "../../../foundation/filesystem/private-node-policy.js";
 import {
   type RootedDirectory,
   RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
-import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
-import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
-import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import { parseByteCount } from "../../foundation/numeric/byte-count.js";
+} from "../../../foundation/filesystem/rooted-directory.js";
+import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
+import { StrictTextFileError } from "../../../foundation/filesystem/strict-text-file.js";
+import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
+import { parseByteCount } from "../../../foundation/numeric/byte-count.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
-} from "../../foundation/resource/resource-processing-contract.js";
-import { encodeUtf8 } from "../../foundation/text/utf8.js";
+} from "../../../foundation/resource/resource-processing-contract.js";
+import { encodeUtf8 } from "../../../foundation/text/utf8.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
@@ -40,11 +40,11 @@ import {
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
-import { createManagedEvidencePublicationTransactionResourceDeclaration } from "./managed-evidence-resource-catalog.js";
-import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "./managed-evidence-resource-paths.js";
+import { createManagedEvidencePublicationTransactionResourceDeclaration } from "../../evidence/managed-evidence-resource-catalog.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../../evidence/managed-evidence-resource-paths.js";
 
 /**
- * Wakeflow Governance / Evidence：固定Publication Transaction journal的耐久Store。
+ * Wakeflow Governance / Demand Managed Evidence：固定Publication Transaction journal的耐久Store。
  *
  * Store只拥有Demand根内一个0600、single-link、absent-only journal槽位。正常create
  * 遇到任何现存文件都会拒绝并路由显式恢复；load稳定读取并签发进程内retire能力；

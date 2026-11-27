@@ -98,9 +98,9 @@
 | `wakeflow-demand-state-service.mjs` | 2197 | 单根事务：journal → artifact → event → 快照 → 闭包检查 | `kernel/append-command.ts`、`kernel/publication-transaction.ts`、`governance/demand/event-sourcing/demand-file-event-store.ts`、`demand-event-stream-commit.ts` | recut |  |
 | `wakeflow-target-result-authority.mjs` | 551 | 结果只读权威投影：current 选择器、双向闭包、ready/blocked/missing/closed | `governance/result/*`、`capabilities/result-review/decide.ts`（`allowedDecisions`） | recut |  |
 | `wakeflow-result-review-orchestration.mjs` | 2428 | 导入结果、group/trace 视图、评审候选、决定提交、Controller 回传 | `capabilities/result-review/service.ts`（导入、检查投影、两个决定工具）、`governance/review/*`、回调 `governance/delivery` | recut | 回调随导入返回（ADR-0012 D1） |
-| `wakeflow-evidence-importer.mjs` | 1061 | 受管证据 preview/apply/recover 编排 | `capabilities/evidence/*`、`governance/evidence/managed-evidence-capture-planning-service.ts`、`managed-evidence-publication-application-service.ts` | recut |  |
+| `wakeflow-evidence-importer.mjs` | 1061 | 受管证据 preview/apply/recover 编排 | `capabilities/evidence/*`、`governance/evidence-publication/managed-evidence-capture-planning-service.ts`、`managed-evidence-publication-application-service.ts` | recut |  |
 | `wakeflow-evidence-records.mjs` | 1171 | 证据 manifest 合同、身份、严格读取、库存诊断 | `governance/evidence/managed-evidence-manifest.ts`、`managed-evidence-record-tree-plan.ts`、`managed-evidence-event-sourcing.ts` | recut |  |
-| `wakeflow-evidence-tree.mjs` | 1280 | 来源捕获（类型、容量、隐私扫描）、stage/final 树、残留恢复 | `governance/evidence/managed-evidence-publication-stage-materializer.ts`、`kernel/privacy-scan.ts` | recut | `controller-confirmed` 内容审阅（§13.90） |
+| `wakeflow-evidence-tree.mjs` | 1280 | 来源捕获（类型、容量、隐私扫描）、stage/final 树、残留恢复 | `governance/evidence-publication/managed-evidence-publication-stage-materializer.ts`、`kernel/privacy-scan.ts` | recut | `controller-confirmed` 内容审阅（§13.90） |
 
 ### E 投递、窗口、租约与宿主激活
 

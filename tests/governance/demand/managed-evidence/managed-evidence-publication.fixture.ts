@@ -1,12 +1,15 @@
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { validateLoadedArtifactTreeManifest } from "../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
-import { computeSha256Digest, parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
-import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
-import { createManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
-import { createManagedEvidenceManifest } from "../../../src/governance/evidence/managed-evidence-manifest.js";
-import { createManagedEvidencePublicationTransaction } from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+import { parseWakeflowDurableIdOfKind } from "../../../../src/contracts/identity/wakeflow-durable-id.js";
+import { validateLoadedArtifactTreeManifest } from "../../../../src/foundation/artifact/loaded-artifact-tree-identity.js";
+import { computeCanonicalJsonSha256Digest } from "../../../../src/foundation/crypto/canonical-json-sha256.js";
+import {
+  computeSha256Digest,
+  parseSha256Digest,
+} from "../../../../src/foundation/crypto/sha256.js";
+import { encodeUtf8 } from "../../../../src/foundation/text/utf8.js";
+import { parseUtcInstant } from "../../../../src/foundation/time/utc-instant.js";
+import { createManagedEvidenceCapturePlan } from "../../../../src/governance/evidence/managed-evidence-capture-plan.js";
+import { createManagedEvidenceManifest } from "../../../../src/governance/evidence/managed-evidence-manifest.js";
+import { createManagedEvidencePublicationTransaction } from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 
 /** Managed Evidence纯合同与存储测试共享的最小、无I/O fixture。 */
 

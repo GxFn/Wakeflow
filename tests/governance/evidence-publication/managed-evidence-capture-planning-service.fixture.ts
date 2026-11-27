@@ -7,7 +7,7 @@ import {
 } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { ManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
-import type { ManagedEvidenceCapturePreview } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+import type { ManagedEvidenceCapturePreview } from "../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import {
   cleanupDemandEventSourcingPublicationWorkspaceFixture,
   createDemandEventSourcingPublicationWorkspaceFixture,

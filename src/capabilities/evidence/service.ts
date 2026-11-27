@@ -42,18 +42,18 @@ import type { ManagedEvidenceCapturePlan } from "../../governance/evidence/manag
 import {
   ManagedEvidenceCapturePlanningService,
   ManagedEvidenceCapturePlanningServiceError,
-} from "../../governance/evidence/managed-evidence-capture-planning-service.js";
+} from "../../governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import {
   ManagedEvidencePublicationApplicationService,
   ManagedEvidencePublicationApplicationServiceError,
   type ManagedEvidencePublicationCompletionResult,
   type ManagedEvidencePublicationRecoveryResult,
-} from "../../governance/evidence/managed-evidence-publication-application-service.js";
+} from "../../governance/evidence-publication/managed-evidence-publication-application-service.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionError,
-} from "../../governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   ManagedEvidenceRecordTreePlanError,
   planManagedEvidenceRecordTree,

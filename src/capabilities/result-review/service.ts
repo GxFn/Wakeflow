@@ -69,7 +69,7 @@ import {
   decideTargetResultReviewInDemandAggregateState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
 import { observeConfiguredRepositoryCommitKind } from "../../governance/evidence/managed-evidence-commit-observation.js";
-import { recordManagedCommitEvidence } from "../../governance/evidence/managed-evidence-commit-recording.js";
+import { recordManagedCommitEvidence } from "../../governance/evidence-publication/managed-evidence-commit-recording.js";
 import { ManagedEvidenceConfiguredSourceRootError } from "../../governance/evidence/managed-evidence-configured-source-root.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_MAXIMUM_BYTES,

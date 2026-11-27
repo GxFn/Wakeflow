@@ -4,13 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
+import { parseWakeflowDurableIdOfKind } from "../../../../src/contracts/identity/wakeflow-durable-id.js";
+import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { OperationAbortedError } from "../../../../src/foundation/node/abort-signal.js";
 import {
   createManagedEvidencePublicationTransaction,
   renderManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   createManagedEvidencePublicationTransactionJournal,
   loadManagedEvidencePublicationTransaction,
@@ -18,9 +18,9 @@ import {
   ManagedEvidencePublicationTransactionStoreError,
   type ManagedEvidencePublicationTransactionStoreErrorReason,
   retireManagedEvidencePublicationTransactionJournal,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
-import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
-import { useDisposableDurability } from "../../support/disposable-durability.js";
+} from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction-store.js";
+import { MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF } from "../../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import { createManagedEvidencePublicationTransactionFixture } from "./managed-evidence-publication.fixture.js";
 
 useDisposableDurability();

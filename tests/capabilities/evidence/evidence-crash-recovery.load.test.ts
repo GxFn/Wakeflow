@@ -13,7 +13,7 @@ import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
   fileSelection,
-} from "../../governance/evidence/managed-evidence-capture-planning-service.fixture.js";
+} from "../../governance/evidence-publication/managed-evidence-capture-planning-service.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
 import { startSyncCrashProcess } from "../../support/sync-crash-process.js";

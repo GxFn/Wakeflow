@@ -28,12 +28,12 @@ import {
   ManagedEvidencePublicationPayloadMaterializationError,
   type ManagedEvidencePublicationPayloadMaterializationErrorReason,
   materializeManagedEvidencePublicationPayload,
-} from "../../../src/governance/evidence/managed-evidence-publication-payload-materializer.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-publication-payload-materializer.js";
 import {
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import { MANAGED_EVIDENCE_ROOT_REF } from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
 import {
   encodeManagedEvidenceSourceProjection,
@@ -50,7 +50,7 @@ import {
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT,
   MANAGED_EVIDENCE_PUBLICATION_TEST_DIGESTS,
   MANAGED_EVIDENCE_PUBLICATION_TEST_IDS,
-} from "./managed-evidence-publication.fixture.js";
+} from "../demand/managed-evidence/managed-evidence-publication.fixture.js";
 
 useDisposableDurability();
 

@@ -29,17 +29,17 @@ import {
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   ManagedEvidencePublicationTransactionStoreError,
   requireCurrentManagedEvidencePublicationTransaction,
   type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
-import type { ManagedEvidenceRecordTreePlan } from "./managed-evidence-record-tree-plan.js";
-import { createManagedEvidenceRecordResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction-store.js";
+import type { ManagedEvidenceRecordTreePlan } from "../evidence/managed-evidence-record-tree-plan.js";
+import { createManagedEvidenceRecordResourceDeclaration } from "../evidence/managed-evidence-resource-catalog.js";
 
 /**
- * Wakeflow Governance / Evidence：完整stage到immutable final record的同根发布owner。
+ * Wakeflow Governance / Evidence Publication：完整stage到immutable final record的同根发布owner。
  *
  * Publisher只在固定journal仍绑定exact Transaction时工作。final已存在时，仅接受stage
  * 已消失且final整树匹配record plan；final不存在时，仅发布完整stage。rename前后均

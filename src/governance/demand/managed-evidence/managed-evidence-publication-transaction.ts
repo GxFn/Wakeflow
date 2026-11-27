@@ -1,62 +1,62 @@
-import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
-import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../contracts/generated/foundation/portable-resource-path.generated.js";
-import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
-import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../contracts/generated/foundation/utc-instant.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
-import type { WakeflowManagedEvidencePublicationTransaction as TransactionWire } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
-import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
+import { WAKEFLOW_LOADED_ARTIFACT_TREE_MANIFEST_SCHEMA } from "../../../contracts/generated/foundation/loaded-artifact-tree-manifest.generated.js";
+import { WAKEFLOW_PORTABLE_RESOURCE_PATH_SCHEMA } from "../../../contracts/generated/foundation/portable-resource-path.generated.js";
+import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../../contracts/generated/foundation/sha256-digest.generated.js";
+import { WAKEFLOW_UTC_INSTANT_SCHEMA } from "../../../contracts/generated/foundation/utc-instant.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_MANIFEST_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-manifest.generated.js";
+import type { WakeflowManagedEvidencePublicationTransaction as TransactionWire } from "../../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
+import { WAKEFLOW_MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_SCHEMA } from "../../../contracts/generated/governance/evidence/managed-evidence-publication-transaction.generated.js";
 import {
   parseWakeflowDurableIdOfKind,
   type WakeflowDurableId,
   WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
+} from "../../../contracts/identity/wakeflow-durable-id.js";
+import { computeCanonicalJsonSha256Digest } from "../../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
   type Sha256Digest,
   Sha256Error,
-} from "../../foundation/crypto/sha256.js";
+} from "../../../foundation/crypto/sha256.js";
 import {
   DeterministicJsonDocumentError,
   parseDeterministicJsonDocument,
   renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
+} from "../../../foundation/data/deterministic-json-document.js";
 import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
-} from "../../foundation/data/json-value.js";
-import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
+} from "../../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
+import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
   computeDemandEventSourcingCommandDigest,
   DemandEventSourcingDecisionError,
   parseDemandEventSourcingCommand,
   type RecordManagedEvidenceCommand,
-} from "../demand/event-sourcing/demand-event-sourcing-decider.js";
+} from "../event-sourcing/demand-event-sourcing-decider.js";
 import {
   DemandEventStreamPositionError,
   type DemandEventStreamRevision,
   parseDemandEventStreamRevision,
-} from "../../contracts/identity/demand-event-stream-position.js";
+} from "../../../contracts/identity/demand-event-stream-position.js";
 import {
   createManagedEvidenceCapturePlan,
   type ManagedEvidenceCapturePlan,
   ManagedEvidenceCapturePlanError,
-} from "./managed-evidence-capture-plan.js";
+} from "../../evidence/managed-evidence-capture-plan.js";
 import {
   type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,
   parseManagedEvidenceManifest,
-} from "./managed-evidence-manifest.js";
+} from "../../evidence/managed-evidence-manifest.js";
 import {
   type ManagedEvidenceRecordTreePlan,
   ManagedEvidenceRecordTreePlanError,
   planManagedEvidenceRecordTree,
-} from "./managed-evidence-record-tree-plan.js";
+} from "../../evidence/managed-evidence-record-tree-plan.js";
 
 /**
- * Wakeflow Governance / Evidence：Managed Evidence跨资源发布的不可变事务合同。
+ * Wakeflow Governance / Demand Managed Evidence：Managed Evidence跨资源发布的不可变事务合同。
  *
  * Transaction把一份已确认capture plan绑定到完整record tree，以及Demand Event
  * Sourcing的一次乐观追加。它只保存恢复所需且无法从Manifest完全推导的摘要、CAS

@@ -33,7 +33,7 @@ import {
 } from "../../foundation/resource/resource-processing-contract.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
-import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
+import { renderManagedEvidenceManifest } from "../evidence/managed-evidence-manifest.js";
 import {
   ManagedEvidencePublicationPayloadMaterializationError,
   materializeManagedEvidencePublicationPayload,
@@ -41,25 +41,25 @@ import {
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   ManagedEvidencePublicationTransactionStoreError,
   requireCurrentManagedEvidencePublicationTransaction,
   type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_RECORD_DIRECTORY_MODE,
   MANAGED_EVIDENCE_RECORD_FILE_MODE,
   type ManagedEvidenceRecordTreePlan,
-} from "./managed-evidence-record-tree-plan.js";
-import { createManagedEvidenceRootResourceDeclaration } from "./managed-evidence-resource-catalog.js";
+} from "../evidence/managed-evidence-record-tree-plan.js";
+import { createManagedEvidenceRootResourceDeclaration } from "../evidence/managed-evidence-resource-catalog.js";
 import {
   MANAGED_EVIDENCE_MANIFEST_FILE_NAME,
   MANAGED_EVIDENCE_ROOT_REF,
-} from "./managed-evidence-resource-paths.js";
+} from "../evidence/managed-evidence-resource-paths.js";
 
 /**
- * Wakeflow Governance / Evidence：journal授权的source→stage耐久物化owner。
+ * Wakeflow Governance / Evidence Publication：journal授权的source→stage耐久物化owner。
  *
  * Materializer先证明固定journal与输入Transaction完全一致，再创建可选Evidence容器
  * 和同ID stage。完整stage直接复用，不重新读取source；partial stage只有在Manifest

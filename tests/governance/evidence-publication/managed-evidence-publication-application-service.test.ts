@@ -14,24 +14,24 @@ import {
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import {
   ManagedEvidencePublicationApplicationService,
   ManagedEvidencePublicationApplicationServiceError,
-} from "../../../src/governance/evidence/managed-evidence-publication-application-service.js";
-import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence/managed-evidence-publication-stage-materializer.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-publication-application-service.js";
+import { materializeManagedEvidencePublicationStage } from "../../../src/governance/evidence-publication/managed-evidence-publication-stage-materializer.js";
 import {
   computeManagedEvidencePublicationTransactionDigest,
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   completeManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionSettlementError,
   retireStaleManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-settlement.js";
-import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
+} from "../../../src/governance/evidence-publication/managed-evidence-publication-transaction-settlement.js";
+import { createManagedEvidencePublicationTransactionJournal } from "../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,

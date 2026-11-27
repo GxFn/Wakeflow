@@ -1,28 +1,28 @@
 import pLimit from "p-limit";
 
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
-import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
+import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type DirectoryTreeCandidateProgress,
   DurableDirectoryTreeCandidateError,
   inspectDirectoryTreeCandidate,
   inspectDirectoryTreeCandidateProgress,
-} from "../../foundation/filesystem/durable-directory-tree-candidate.js";
+} from "../../../foundation/filesystem/durable-directory-tree-candidate.js";
 import {
   type FileNodeSnapshot,
   sameFileNodeSnapshot,
-} from "../../foundation/filesystem/file-node-snapshot.js";
-import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
-import { isPrivateDirectory } from "../../foundation/filesystem/private-node-policy.js";
-import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+} from "../../../foundation/filesystem/file-node-snapshot.js";
+import type { PortableResourcePath } from "../../../foundation/filesystem/portable-resource-path.js";
+import { isPrivateDirectory } from "../../../foundation/filesystem/private-node-policy.js";
+import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   type StableDirectoryEntry,
   StableDirectoryReadError,
   type StableDirectoryReadResult,
-} from "../../foundation/filesystem/stable-directory-read.js";
-import { throwIfAborted } from "../../foundation/node/abort-signal.js";
+} from "../../../foundation/filesystem/stable-directory-read.js";
+import { throwIfAborted } from "../../../foundation/node/abort-signal.js";
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
@@ -35,16 +35,16 @@ import {
 import {
   loadManagedEvidenceRecord,
   ManagedEvidenceRecordReaderError,
-} from "./managed-evidence-record-reader.js";
+} from "../../evidence/managed-evidence-record-reader.js";
 import {
   MANAGED_EVIDENCE_ROOT_REF,
   ManagedEvidenceResourcePathError,
   parseManagedEvidenceRecordDirectoryName,
   parseManagedEvidenceStageDirectoryName,
-} from "./managed-evidence-resource-paths.js";
+} from "../../evidence/managed-evidence-resource-paths.js";
 
 /**
- * Wakeflow Governance / Evidence：Demand根内Managed Evidence记录集合的稳定只读清单。
+ * Wakeflow Governance / Demand Managed Evidence：Demand根内Managed Evidence记录集合的稳定只读清单。
  *
  * healthy观察只接纳完整final record。事务观察额外读取固定journal，并只允许该
  * journal绑定Evidence的一个安全partial/complete stage或完整final。healthy集合稳定

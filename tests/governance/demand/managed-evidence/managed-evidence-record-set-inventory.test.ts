@@ -4,42 +4,42 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
-import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
-import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
+import { RootedDirectory } from "../../../../src/foundation/filesystem/rooted-directory.js";
+import { encodeUtf8 } from "../../../../src/foundation/text/utf8.js";
+import { executeDemandEventSourcingCommand } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
+import { DemandEventSourcingRepository } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
   DemandEventSourcingRootAuthorityError,
   loadDemandEventSourcingRootAuthority,
   loadDemandEventSourcingRootAuthorityDuringManagedEvidencePublication,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
+} from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import {
   DemandEventSourcingRootInventoryError,
   inspectDemandEventSourcingRootInventory,
-} from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
-import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
-import { ManagedEvidenceCapturePlanningService } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
+} from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
+import { DemandFileEventStore } from "../../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
+import { ManagedEvidenceCapturePlanningService } from "../../../../src/governance/evidence-publication/managed-evidence-capture-planning-service.js";
 import {
   createManagedEvidenceManifest,
   renderManagedEvidenceManifest,
-} from "../../../src/governance/evidence/managed-evidence-manifest.js";
+} from "../../../../src/governance/evidence/managed-evidence-manifest.js";
 import {
   createManagedEvidencePublicationTransaction,
   deriveManagedEvidencePublicationEventSourcingCommand,
   renderManagedEvidencePublicationTransaction,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction.js";
+} from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   createManagedEvidencePublicationTransactionJournal,
   retireManagedEvidencePublicationTransactionJournal,
-} from "../../../src/governance/evidence/managed-evidence-publication-transaction-store.js";
+} from "../../../../src/governance/demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
   MANAGED_EVIDENCE_ROOT_REF,
   managedEvidencePublicationStageRef,
   managedEvidenceRecordRootRef,
-} from "../../../src/governance/evidence/managed-evidence-resource-paths.js";
-import { LedgerAuthorityStore } from "../../../src/governance/ledger/ledger-authority-store.js";
-import { useDisposableDurability } from "../../support/disposable-durability.js";
+} from "../../../../src/governance/evidence/managed-evidence-resource-paths.js";
+import { LedgerAuthorityStore } from "../../../../src/governance/ledger/ledger-authority-store.js";
+import { useDisposableDurability } from "../../../support/disposable-durability.js";
 import {
   cleanupManagedEvidenceCapturePlanningWorkspaceFixture,
   createManagedEvidenceCapturePlanningWorkspaceFixture,
@@ -47,7 +47,7 @@ import {
   EVIDENCE_DEMAND_ID,
   fileSelection,
   readyCapturePlan,
-} from "./managed-evidence-capture-planning-service.fixture.js";
+} from "../../evidence-publication/managed-evidence-capture-planning-service.fixture.js";
 import {
   MANAGED_EVIDENCE_PUBLICATION_TEST_CONTENT as CONTENT,
   createManagedEvidencePublicationTransactionFixture,

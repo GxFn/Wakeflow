@@ -33,7 +33,7 @@ import type {
   DemandEventStreamCommitWriter,
 } from "../demand/event-sourcing/demand-event-stream-commit.js";
 import { LedgerAuthorityStore } from "../ledger/ledger-authority-store.js";
-import { renderManagedEvidenceManifest } from "./managed-evidence-manifest.js";
+import { renderManagedEvidenceManifest } from "../evidence/managed-evidence-manifest.js";
 import {
   ManagedEvidencePublicationRecordPublisherError,
   type ManagedEvidencePublicationRecordResult,
@@ -44,17 +44,17 @@ import {
   deriveManagedEvidencePublicationEventSourcingCommand,
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction.js";
 import {
   ManagedEvidencePublicationTransactionStoreError,
   requireCurrentManagedEvidencePublicationTransaction,
   retireManagedEvidencePublicationTransactionJournal,
   type StoredManagedEvidencePublicationTransaction,
-} from "./managed-evidence-publication-transaction-store.js";
+} from "../demand/managed-evidence/managed-evidence-publication-transaction-store.js";
 import { ownString } from "../../foundation/data/own-string.js";
 
 /**
- * Wakeflow Governance / Evidence：已耐久Publication Transaction的不可逆边界结算。
+ * Wakeflow Governance / Evidence Publication：已耐久Publication Transaction的不可逆边界结算。
  *
  * 本模块只处理Event追加、Event后final前向完成、Event前stale candidate退休，以及
  * journal-last闭合。Config/source准入与stage物化属于Application；本模块不会在

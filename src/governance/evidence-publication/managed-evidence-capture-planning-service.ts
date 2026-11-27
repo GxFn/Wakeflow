@@ -55,22 +55,22 @@ import {
   type ManagedEvidenceCaptureDemandExpectation,
   type ManagedEvidenceCapturePlan,
   ManagedEvidenceCapturePlanError,
-} from "./managed-evidence-capture-plan.js";
+} from "../evidence/managed-evidence-capture-plan.js";
 import {
   managedEvidenceCommitObservationOf,
   observeConfiguredRepositoryCommit,
-} from "./managed-evidence-commit-observation.js";
+} from "../evidence/managed-evidence-commit-observation.js";
 import {
   ManagedEvidenceConfiguredSourceRootError,
   openConfiguredManagedEvidenceSourceRoot,
-} from "./managed-evidence-configured-source-root.js";
+} from "../evidence/managed-evidence-configured-source-root.js";
 import {
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
   type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,
-} from "./managed-evidence-manifest.js";
-import { encodeManagedEvidenceSourceProjection } from "./managed-evidence-source-projection.js";
+} from "../evidence/managed-evidence-manifest.js";
+import { encodeManagedEvidenceSourceProjection } from "../evidence/managed-evidence-source-projection.js";
 import {
   assertManagedEvidenceKindMatchesSource,
   type ManagedEvidenceCommitSelection,
@@ -81,10 +81,10 @@ import {
   ManagedEvidenceSourceSelectionError,
   managedEvidenceSourceKey,
   parseManagedEvidenceSourceSelection,
-} from "./managed-evidence-source-selection.js";
+} from "../evidence/managed-evidence-source-selection.js";
 
 /**
- * Wakeflow Governance / Evidence：证据来源的零写捕获规划（切片 8 D1 到 D3）。
+ * Wakeflow Governance / Evidence Publication：证据来源的零写捕获规划（切片 8 D1 到 D3）。
  *
  * Service 重新读取 Config 与完整 Demand Authority，按来源种类观察实际字节：`managed-path`
  * 稳定读取配置根下的文件或目录树，`observation` 读取本工作区的一条 hook 记录并只保留脱敏

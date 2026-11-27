@@ -38,7 +38,7 @@
 | [0010](./0010-worktree-isolated-execution-and-converged-flow.md) | Pod 隔离执行与流程收敛：main 是 `primary` 的 pod、一 pod 一时一 Demand、worktree 归产品窗口并由宿主原生能力创建、合并在 Wakeflow 之外、只有 main 开关 pod、一条直线的流程 | `accepted`，首版任务粒度的 D1 到 D3 被用户的 pod 模型取代；未决三项于 2026-09-18 关闭（gate-log §13.92 D6、§13.94 D2） | 2026-09-04 | 配置 `pods[]`、Demand 身份 `podId`、窗口绑定、投递目标、结果 schema、状态投影、TSD-15、L1 切片 |
 | [0011](./0011-requirement-package-as-single-handoff.md) | 需求包作为唯一交接物：取消确认记录与 TODO 摄入、两份文档加必需章节、两个确认点、一个总控一次一个 Demand、同窗口多任务沿用任务包 | `accepted` | 2026-09-04 | 能力卡 3、4、5；`publish_confirmation` 与 `intake_todo` 删除；能力映射矩阵；场景 `card-04` 重塑 |
 | [0012](./0012-flow-convergence-callback-calls-testing-redesign.md) | 流程收敛：回传固定效果、三种调用形状、完成即归档、测试记录对比与失败分类、删除 redesign 改为 escalate | `accepted` | 2026-09-04 | 能力卡 4、5、6、7；能力映射矩阵；总览 F5 到 F9（已回写） |
-| [0013](./0013-target-architecture-and-slice-plan.md) | 目标架构六层、切片解剖、三种调用形状的内核实现、单一错误模型、foundation 收敛、20 个公共工具、L1 切片顺序 | `accepted` | 2026-09-04 | 计划 §8.1 L0 与 L1、§11；能力映射矩阵 §1.1 新工具清单；dependency-cruiser 规则 |
+| [0013](./0013-target-architecture-and-slice-plan.md) | 目标架构六层（补记二改为九层）、切片解剖、三种调用形状的内核实现、单一错误模型、foundation 收敛、20 个公共工具、L1 切片顺序 | `accepted` | 2026-09-04 | 计划 §8.1 L0 与 L1、§11；能力映射矩阵 §1.1 新工具清单；dependency-cruiser 规则 |
 | [0014](./0014-runtime-recovery-and-completion-coverage.md) | 取消与提交边界、公开候选恢复、pod 临界区、验收全集及历史格式保持 | `accepted` | 2026-10-02 | 修复设计前四批；Q3/Q6/Q8 推荐默认值；运行时、Schema、skills 和进程回归 |
 | [0015](./0015-hook-history-and-read-completeness.md) | hook 历史容量、读取完整性和损坏隔离 | `accepted` | 2026-10-02 | 分片与旧目录共读、有界查询、缺失制品诊断 |
 | [0016](./0016-window-projection-publication-boundary.md) | 窗口绑定与投影发布的并发边界 | `accepted` | 2026-10-02 | 维护与注册共用绑定锁、目录补齐只创建、保留配置并发未决范围 |

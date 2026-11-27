@@ -41,3 +41,16 @@ P0 结束，能力卡与总览已确认。进入 L0 与 L1 前需要固定代码
 - **不照字面删类的理由。** 下层不知道请求的形状，决定不了公开的码与路径；原因的名字只在各自的域里唯一，按"类 + 原因"分支的恢复与自愈代码需要这个域。
 
 登记项 G2 按这个目标重写后关闭；"技术债第 7 批：错误体系按目录收敛"由上述计划的主题 B 取代。
+
+## 补记二：九层与内核的内容（2026-11-27，用户裁决）
+
+决定 A 写的是六层：foundation、contracts、kernel、capabilities、hosts、entrypoints。`governance`、`workspace`、`configuration` 后来作为既有领域的目录保留，它们彼此之间、与 capabilities 之间的次序没有写下来，19 个切片连成一个环，靠四条 `transitional-*` 规则里的 22 条放行路径维持；规则注释“共享内容下沉到 kernel”让内核里约四成成了领域代码。2026-11-27 的分层研究量了每一条跨层、跨切片的导入，并在副本里把搬家做完、编译、跑架构检查（计划见 [reviews/2026-11-27-1.4.5-layering-plan.md](../reviews/2026-11-27-1.4.5-layering-plan.md) 第 7、8 节）。用户接受该计划并要求“优先做正确的判断与设计”，据此定下：
+
+- **九层，自下而上**：foundation → contracts → kernel → configuration → governance → workspace → application → capabilities | hosts → entrypoints。每层一条“只引用这些层”的规则。capabilities 与 hosts 并列；宿主只取得 foundation、contracts、kernel、configuration 与 workspace：它实现 workspace 定义的端口，与 Demand 账本无关。entrypoints 是组合根。
+- **共用的代码放在它的依赖允许的最低一层**，取代“共享内容下沉到 kernel”。内核只放机制（错误、命令外壳、追加命令与发布事务的协议、锁、操作作用域、工具登记、钩子观察记录、制品身份）和各层都读的数据表（路径目录、`next` 表、旧错误家族表）。名字里带领域概念的内核模块只因两种理由留下：它是数据表，或钩子观察器的闭包要它；观察器在每个宿主钩子事件上运行，闭包限于 foundation、contracts 与 kernel，由架构规则检查。七个领域存储离开内核：需求板与验收进 governance/ledger，pod 回执与 pod 锁进 governance/pod，窗口工作认领进 governance/delivery，事件流索引进 governance/demand。活动投影拆开：两级容器留在 kernel/active-layout；页面的渲染与发布进 workspace/active-projection，因为维护事务初始化时要写空工作区的投影。标识与词表放回它们该在的最低处：资源声明进内核，窗口绑定标识与事件流修订号进 contracts/identity，宿主标识只有 contracts 一份。
+- **application 层**在 governance 与 workspace 之上、capabilities 之下：读遍整个工作区（配置、Demand、看板、pod、窗口）的状态视图放在这里，`wakeflow_status` 与投影刷新共用它。它不是一个能力，也不属于工作区的安装与运行。把刷新、错误表与 `next` 绑在一起的命令外壳以后也放在这里；内核里的命令外壳、追加命令与发布事务的协议仍是机制。
+- **层内有层级。** governance 依据实际导入定次序：Demand 事件携带的记录种类在 demand 之下，读写 Demand 根的在 demand 里，发布证据这个操作在 demand 之上，读整个 Demand 状态的读模型在最上，即 ledger、pod < tasking、lifecycle、evidence < testing < delivery < result < review < demand < evidence-publication < controller、observation。证据的记录格式留在 evidence；发布事务的日志与记录集清点嵌着一条 Demand 命令、由 Demand 根的清点读回，所以在 demand 里；发布操作单独成片。contracts、foundation、workspace、application 同样有层级表。一个切片只引用更低层级的切片，同一层级互不引用。层表与层级表在 `tooling/architecture/layer-map.cjs`，架构检查核对表与 `src/` 下的目录一致。
+
+结果（门日志 §13.306）：放行路径从 22 条归零，每一条跨切片依赖都有规则管方向；内核从 28 个模块、9,342 行变为 23 个、5,967 行。
+
+后果：`CLAUDE.md` 与 `AGENTS.md` 描述层次的一句要改为九层（那是用户的文件，改之前给用户看，写下本补记时尚未改）；测试目录镜像九层；登记项 L17、L18、L20 关闭。

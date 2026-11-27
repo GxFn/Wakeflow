@@ -861,6 +861,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 证据：L0 退出 gate 表（gate-log 约 2476-2485 行）：foundation ≤ 20 个文件，实际 63 个且至今未变；append < 50 ms 被推迟；ADR-0013 D（单一错误类型）和 E（14 个 foundation 原语）没有实现；ADR-0013 未决问题（约 32 行，§13.101 F8）已经定下 governance/workspace/configuration 作为现有领域保留，但 .dependency-cruiser.cjs 的头注释（:4-7）和规则名（:131-163）仍写着“transitional、在 L1 与旧树一起删除”；tools/list 目标见上下文主题
   - 建议：请用户决定：是按现状重设 ADR-0013 和 ADR-0004 的基线（governance 作为永久领域层、现实的目录预算和 foundation 规模），还是给缺失的工作排期（request-schema 的 $defs 共享、foundation 收敛）；然后给 transitional 规则改名，并去掉预算测试里的 INTERIM。
   - 2026-11-27（`.build/research/reports/2026-11-27-layering/r3-structure.md`；本机核对过）：Q12 裁决要的改名没有做。`.dependency-cruiser.cjs` 的头注释（`:4-7`）仍说 configuration、workspace、governance 是"过渡期的旧领域"，"过渡"一节的规则"随 L1 各切片删除旧树时一并删除"；四条规则仍叫 `transitional-*`（`:138-162`）。状态：计划主题 D 的最后一项对应 r3 的 R10，R10 含这次改名；计划正文没有单独写出改名。
+  - 进展（2026-11-27，§13.306）：四条 `transitional-*` 规则与 22 条放行路径已不存在，中间层有了写成规则的次序，ADR-0013 补记二写下九层。本项里别的未达成目标下次逐条核对后再决定是否关闭。
 - **L8** [低 / 债务] 生成的合同层体积大、重复多，而且比它所依据的 schema 更宽松（计划阶段 9；状态：开放）（**2026-11-09 收敛：1.3.0 批 8**——生成合同层的体积与宽松度）（**部分 1.3.0 批 8，§13.245**：宽松度修了，体积没有动。对象 Schema 在 `properties` 之外带 `allOf` 或 `if` / `then` 时，生成器把只加约束的成员译成 `{ [k: string]: unknown }` 再与真正的对象相交，封闭的对象因此接受任何多余的键；代码生成加一步后处理去掉这个操作数（连成串的也去），索引签名从 85 处降到 17 处，余下的是确实开放的对象。收紧之后类型检查只查出一处：一条测试没有按 mode 收窄就读预览才有的字段。棘轮测试钉住条件操作数为 0、索引签名不超过 17。**余项**：共享的 `$defs` 仍在每个生成文件里各展开一份——1,351 个类型声明里 214 个名字重复、多出 871 份（`WakeflowSha256DigestText` 48 次）；让它们只生成一次要改生成文件之间的引用方式）（**用户裁决 2026-11-14**：余项进 1.3.1）（**1.3.1 第二段，§13.252：没有动，量过之后建议不做，待裁决。** 生成层 95 个文件、23,570 行、1,351 个声明；重名 214 个、多出 871 份，但逐字节相同的多余副本合计只有约 2,013 行（8.5%）——绝大多数是 `export type DemandId = string;` 这样的一行。另有 108 个名字在不同文件里是不同的定义，不能按名字合并。要去重得在生成器里自己切声明（仓库用的 TypeScript 7 没有可用的解析 API）、再加跨文件的 import 与转出；类型不进制品，省下的只是源码行数。我的建议是关闭这一条的余项，不是裁决）（**用户裁决 2026-11-16：按建议，不做，余项关闭。** 生成层的重复声明留着；宽松度一项已在 1.3.0 批 8 修掉，棘轮测试照旧钉着）
   - 说明：每次改一个共享 schema 都会重新产出很多大文件，diff 很吵。开放的索引签名关掉了 TS 的多余属性检查，字段拼错也能编译通过，只能靠运行时的 AJV 兜住。
   - 证据：95 个 schema（24.8k 行 JSON）生成 22.6k 行 TS，1,313 个类型声明，其中 208 个名字重复（WakeflowSha256DigestText 48 次、DemandId 41 次）；controller-target-review-decided-event-data-v1.generated.ts 2,234 行；36 个文件里有 83 处 `[k: string]: unknown` 索引签名，即使 schema 设了 additionalProperties:false（因为 allOf 的缘故）
@@ -935,10 +936,12 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **L17** [低 / 缺口] 架构检查不定 24% 跨切片导入边的方向，中间层的次序没有写成规则（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`；脚本把 `.dependency-cruiser.cjs` 的规则套在真实导入图上算，没有改动检查）
   - 事实：手写 `src` 的 3,039 条跨切片模块边里 716 条（24%）没有规则定方向，主要是能力层到治理层 168、基础层切片之间 166、治理层切片之间 160、工作区切片之间 120、能力层到工作区 60。中间层的次序（能力层在治理、工作区、配置之上；宿主层与配置层不引治理层）今天反向边是 0，但哪条规则都没写。切片级的循环没人查：治理层 7 对、工作区 4 对切片互相引用，治理层的每一对里都有 demand（模块级没有环）。
   - 状态：计划主题 D 最后一项（把没写下来的中间层次序写进架构检查）；切片级循环不在计划里。
+  - 状态：已关闭（2026-11-27，§13.306）。九层的次序与层内层级由 `tooling/architecture/layer-map.cjs` 生成 55 条规则，每一条跨切片依赖都有规则管方向，0 违规。
 
 - **L18** [低 / 债务] 架构检查有两条规则指向不存在的目录（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`；本机核对过）
   - 事实：`.dependency-cruiser.cjs:63`（`no-runtime-to-development-or-legacy`）的目标含 `test`、`tools`、`core`，`:70`（`no-new-tests-to-legacy-runtime`）含 `core`、`test`；仓库根下这三个目录都不存在。这几项永远匹配不到，读的人会以为还有一棵旧树要防。
   - 状态：计划主题 D 最后一项（删掉失效的配置）。
+  - 状态：已关闭（2026-11-27，§13.306）。规则整套换成由层表生成的，架构检查核对层表与 `src/` 下的目录一致，指向不存在目录的规则不会再出现。
 
 - **L19** [低 / 债务] 生产入口写了两份：`ADMITTED_PRODUCTION_ROOTS` 与 knip 的 `entry` 对不上（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`）
   - 事实：`tooling/architecture/check-dependencies.ts:36-52` 列 13 个可以没有导入方的模块，`knip.json` 的 `entry` 列 12 个 `src` 入口；knip 列了 `src/hosts/codex/codex-process-launch-profile.ts`，它不是根（`codex-hook-fragment.ts` 导入它），准入清单里的两个 `.d.ts` knip 没有列。同类的双写：宿主与入口的 tsconfig 手列 56 个 `files`，与依赖规则重复守同一个方向；两个生成目录 Biome 都排除，knip 只排除 `src/contracts/generated`。
@@ -947,6 +950,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **L20** [低 / 债务] kernel 约 42% 是领域模块，起因是规则说明让共享内容"下沉到 kernel"（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`；规则文字本机核对过）
   - 事实：kernel 9,384 行里约 3,905 行是 Demand、pod、需求与窗口认领的领域代码——`active-projection.ts`（1,510 行）、`pod-worktree-receipts.ts`（862）、`requirement-board.ts`（807）、`work-claims.ts`（452）、`next-projection.ts`、`layout.ts` 等，各被五到八个切片引用。kernel 不能引治理层，这些模块只好自带形状、由治理层填进去；随之有重复：`listDemandProjectionDirectories` 与 `listArchivedDemandIds`，`isControlCodePoint` 三份，`realpathOrNull` 在 kernel 与端点各一份。`.dependency-cruiser.cjs:100` 的说明是"垂直切片之间不得互相引用；共享内容下沉到 kernel 或经 contracts 相遇"。
   - 状态：计划第 2 节：模块不搬（一行不删，白动约 70 处引用），只把规则的措辞改成"kernel 放机制，共享的领域代码放治理层"；计划没有把措辞这一处归进哪个主题。
+  - 状态：已关闭（2026-11-27，§13.306）。七个领域存储搬到治理层，活动投影拆开；内核 9,342 行变 5,967 行。规则说明改成“共用的代码放在它的依赖允许的最低一层”。
 
 - **L21** [中 / 债务] 手写 `src` 比 v1.2.1 多约 1.2 万行（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`；同一种数法按标签逐个量）
   - 事实：手写 `src`（去掉两个生成目录）v1.2.1 是 138,014 行，v1.3.0 143,886，v1.4.0 149,713，v1.4.2 152,594，v1.4.4 151,562，`973ea6b6` 是 150,337（426 个模块）。1.4.4 的锁原语与 1.4.5 前五批合计删了约 2,565 行，仍比 v1.2.1 多 12,323 行。超过 1,600 行的模块 9 个，合计 19,099 行。

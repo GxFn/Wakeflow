@@ -5,12 +5,10 @@ import {
   computeSha256Digest,
   computeSha256Hex,
   parseSha256Digest,
-  parseSha256Hex,
   SHA256_DIGEST_PREFIX,
   type Sha256Digest,
   Sha256Error,
   type Sha256ErrorReason,
-  type Sha256Hex,
 } from "../../../src/foundation/crypto/sha256.js";
 
 const encoder = new TextEncoder();
@@ -76,30 +74,16 @@ test("Buffer and offset Uint8Array views hash only their exact visible bytes", (
   deepEqual([...storage], before);
 });
 
-test("validated hex and digest strings receive their distinct branded types", () => {
+test("a validated digest string receives its branded type", () => {
   const hexValue = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
   const digestValue = `sha256:${hexValue}`;
-  const hex: Sha256Hex = parseSha256Hex(hexValue);
   const digest: Sha256Digest = parseSha256Digest(digestValue);
 
-  equal(hex, hexValue);
   equal(digest, digestValue);
 });
 
-test("hex and prefixed digest parsing is exact, lowercase, and non-coercive", () => {
+test("prefixed digest parsing is exact, lowercase, and non-coercive", () => {
   const hexValue = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
-  const invalidHex: readonly unknown[] = [
-    null,
-    1,
-    hexValue.toUpperCase(),
-    hexValue.slice(1),
-    `${hexValue}0`,
-    `sha256:${hexValue}`,
-  ];
-  for (const value of invalidHex) {
-    expectSha256Error(() => parseSha256Hex(value, "$.hex"), "hex-format", "$.hex");
-  }
-
   const invalidDigest: readonly unknown[] = [
     null,
     1,

@@ -2,12 +2,10 @@ import { equal } from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  compareUtcInstants,
   parseUtcInstant,
   type UtcInstant,
   UtcInstantError,
   type UtcInstantErrorReason,
-  utcInstantEpochNanoseconds,
 } from "../../../src/foundation/time/utc-instant.js";
 
 function expectUtcInstantError(
@@ -30,10 +28,6 @@ function expectUtcInstantError(
   equal(caught.reason, reason);
   equal(caught.path, expectedPath);
   return caught;
-}
-
-function asUtcInstant(value: unknown): UtcInstant {
-  return value as UtcInstant;
 }
 
 test("strict UTC texts preserve their original precision and receive a brand", () => {
@@ -98,52 +92,6 @@ test("calendar parsing rejects Date rollover while preserving Gregorian leap yea
 
   equal(parseUtcInstant("2000-02-29T00:00:00Z"), "2000-02-29T00:00:00Z");
   equal(parseUtcInstant("2028-02-29T00:00:00Z"), "2028-02-29T00:00:00Z");
-});
-
-test("comparison uses the nanosecond timeline rather than lexical text", () => {
-  const beforeEpoch = parseUtcInstant("1969-12-31T23:59:59.999999999Z");
-  const epoch = parseUtcInstant("1970-01-01T00:00:00Z");
-  const afterEpoch = parseUtcInstant("1970-01-01T00:00:00.000000001Z");
-  const whole = parseUtcInstant("2026-08-25T10:20:30Z");
-  const zeroFraction = parseUtcInstant("2026-08-25T10:20:30.000000000Z");
-  const shortFraction = parseUtcInstant("2026-08-25T10:20:30.1Z");
-  const longFraction = parseUtcInstant("2026-08-25T10:20:30.100000000Z");
-  const nextNanosecond = parseUtcInstant("2026-08-25T10:20:30.100000001Z");
-
-  equal(compareUtcInstants(beforeEpoch, epoch), -1);
-  equal(compareUtcInstants(epoch, afterEpoch), -1);
-  equal(compareUtcInstants(beforeEpoch, afterEpoch), -1);
-  equal(compareUtcInstants(whole, zeroFraction), 0);
-  equal(compareUtcInstants(shortFraction, longFraction), 0);
-  equal(compareUtcInstants(whole, shortFraction), -1);
-  equal(compareUtcInstants(nextNanosecond, longFraction), 1);
-  equal(utcInstantEpochNanoseconds(epoch), 0n);
-  equal(utcInstantEpochNanoseconds(afterEpoch), 1n);
-  equal(utcInstantEpochNanoseconds(beforeEpoch), -1n);
-});
-
-test("branded comparison still revalidates both runtime values", () => {
-  expectUtcInstantError(
-    () =>
-      compareUtcInstants(
-        asUtcInstant("2026-02-30T00:00:00Z"),
-        parseUtcInstant("2026-08-25T10:20:30Z"),
-      ),
-    "calendar",
-    "$left",
-  );
-  expectUtcInstantError(
-    () =>
-      compareUtcInstants(asUtcInstant("not-an-instant"), parseUtcInstant("2026-08-25T10:20:30Z")),
-    "format",
-    "$left",
-  );
-  expectUtcInstantError(
-    () =>
-      compareUtcInstants(parseUtcInstant("2026-08-25T10:20:30Z"), asUtcInstant("not-an-instant")),
-    "format",
-    "$right",
-  );
 });
 
 test("parsing is non-coercive and errors do not disclose rejected text", () => {

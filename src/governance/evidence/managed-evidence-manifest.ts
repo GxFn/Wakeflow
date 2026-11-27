@@ -153,18 +153,6 @@ export interface ManagedEvidenceManifest {
   readonly manifestDigest: Sha256Digest;
 }
 
-export interface ManagedEvidenceManifestDraft {
-  readonly evidenceId: WakeflowDurableId<"evidence">;
-  readonly programId: WakeflowDurableId<"program">;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly demandAuthorityDigest: Sha256Digest;
-  readonly kind: EvidenceKind;
-  readonly recordedBy: Readonly<ManagedEvidenceRecorder>;
-  readonly source: ManagedEvidenceSource;
-  readonly payload: Readonly<ManagedEvidencePayload>;
-  readonly contentReview: Readonly<ManagedEvidenceContentReview>;
-}
-
 export interface CreateManagedEvidenceManifestOptions {
   readonly clock?: UtcWallClock;
 }
@@ -562,9 +550,4 @@ export function parseManagedEvidenceManifestDocument(
     fail("representation", "$manifest");
   }
   return manifest;
-}
-
-/** 返回已经由codec验证并绑定完整Manifest basis的领域摘要。 */
-export function computeManagedEvidenceManifestDigest(value: unknown): Sha256Digest {
-  return parseManagedEvidenceManifest(value).manifestDigest;
 }

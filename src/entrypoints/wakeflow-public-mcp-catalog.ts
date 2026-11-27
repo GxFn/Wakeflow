@@ -151,11 +151,3 @@ const REGISTRATIONS: readonly Registration[] = Object.freeze([
 /** 全部公共工具的登记表；组合根按它生成目录。 */
 export const WAKEFLOW_PUBLIC_TOOL_CATALOG: Readonly<WakeflowToolCatalog> =
   createWakeflowToolCatalog(REGISTRATIONS);
-
-/** 组合根必须绑定的 executor 名（按登记表顺序）。 */
-export const WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS: readonly WakeflowPublicMcpExecutorField[] =
-  Object.freeze(
-    WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.map(
-      (tool) => tool.executor as WakeflowPublicMcpExecutorField,
-    ),
-  );

@@ -18,11 +18,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
@@ -140,8 +135,7 @@ export type ControllerTestReviewDecisionErrorReason =
   | "position"
   | "time"
   | "text"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   json: "Controller Test Review Decision is not passive JSON data.",
@@ -152,7 +146,6 @@ const ERROR_MESSAGES = {
   time: "Controller Test Review Decision contains an invalid decision time.",
   text: "Controller Test Review Decision contains invalid review text.",
   relation: "Controller Test Review Decision facts are inconsistent.",
-  representation: "Controller Test Review Decision bytes are not deterministic.",
 } as const satisfies Readonly<Record<ControllerTestReviewDecisionErrorReason, string>>;
 
 export class ControllerTestReviewDecisionError extends Error {
@@ -522,27 +515,4 @@ export function createControllerTestReviewDecision(
     ...basis,
     decisionDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-export function renderControllerTestReviewDecision(value: unknown): string {
-  return renderDeterministicJsonDocument(parseControllerTestReviewDecision(value), "$decision");
-}
-
-export function parseControllerTestReviewDecisionDocument(
-  text: unknown,
-): Readonly<ControllerTestReviewDecision> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$decision");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$decision", error);
-    }
-    throw error;
-  }
-  const decision = parseControllerTestReviewDecision(json);
-  if (renderControllerTestReviewDecision(decision) !== text) {
-    fail("representation", "$decision");
-  }
-  return decision;
 }

@@ -1,31 +1,12 @@
-import { deepEqual, equal, rejects, throws } from "node:assert/strict";
+import { deepEqual, equal, throws } from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { test } from "node:test";
-import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import {
   observePidOwnerSync,
-  observeProcessInstance,
   parseProcessHolderLine,
-  recordedProcessIsInactive,
 } from "../../../src/foundation/node/process-instance.js";
 import { loadSensitive } from "../../support/load-sensitive.js";
-
-test("process birth observations are stable, and PID replacement needs positive evidence", async () => {
-  const one = await observeProcessInstance(process.pid);
-  const two = await observeProcessInstance(process.pid);
-  equal(one.state, "active");
-  equal(two.birthDigest, one.birthDigest);
-  const old = computeCanonicalJsonSha256Digest({ birth: "old" });
-  const current = computeCanonicalJsonSha256Digest({ birth: "new" });
-  equal(recordedProcessIsInactive(old, { state: "active", birthDigest: current }), true);
-  equal(recordedProcessIsInactive(old, { state: "unknown", birthDigest: current }), true);
-  equal(recordedProcessIsInactive(old, { state: "active", birthDigest: old }), false);
-  equal(recordedProcessIsInactive(old, { state: "unknown", birthDigest: null }), false);
-  equal(recordedProcessIsInactive(null, { state: "active", birthDigest: current }), false);
-  equal(recordedProcessIsInactive(null, { state: "inactive", birthDigest: null }), true);
-  await rejects(observeProcessInstance(-1), TypeError);
-});
 
 test("ps holder lines parse to the owner and a UTC start instant; anything else is not a holder", () => {
   deepEqual(parseProcessHolderLine("  501 Mon Nov  9 21:12:00 2026\n"), {

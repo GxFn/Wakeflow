@@ -25,7 +25,7 @@ const SHA256_DIGEST_PATTERN = new RegExp(SHA256_DIGEST_PATTERN_SOURCE, "u");
 declare const SHA256_HEX_BRAND: unique symbol;
 declare const SHA256_DIGEST_BRAND: unique symbol;
 
-/** 已计算或严格解析的完整小写 SHA-256 十六进制摘要。 */
+/** 已计算的完整小写 SHA-256 十六进制摘要。 */
 export type Sha256Hex = string & {
   readonly [SHA256_HEX_BRAND]: "Sha256Hex";
 };
@@ -36,12 +36,11 @@ export type Sha256Digest = `sha256:${string}` & {
 };
 
 /** SHA-256 基础能力失败的稳定分类。 */
-export type Sha256ErrorReason = "input-type" | "hash-failure" | "hex-format" | "digest-format";
+export type Sha256ErrorReason = "input-type" | "hash-failure" | "digest-format";
 
 const ERROR_MESSAGES = {
   "input-type": "SHA-256 input must be a Uint8Array byte sequence.",
   "hash-failure": "The Node.js SHA-256 operation failed.",
-  "hex-format": `SHA-256 hex must contain exactly ${SHA256_HEX_LENGTH} lowercase hexadecimal characters.`,
   "digest-format": `SHA-256 digest must match ${SHA256_DIGEST_PREFIX}<${SHA256_HEX_LENGTH} lowercase hexadecimal characters>.`,
 } as const satisfies Readonly<Record<Sha256ErrorReason, string>>;
 
@@ -102,15 +101,6 @@ export function computeSha256Hex(bytes: Uint8Array, errorPath?: string): Sha256H
 export function computeSha256Digest(bytes: Uint8Array, errorPath?: string): Sha256Digest {
   const hex = computeSha256Hex(bytes, errorPath);
   return `${SHA256_DIGEST_PREFIX}${hex}` as Sha256Digest;
-}
-
-/** 严格解析完整小写 SHA-256 十六进制摘要，不执行字符串强制转换。 */
-export function parseSha256Hex(value: unknown, errorPath?: string): Sha256Hex {
-  const path = normalizeErrorPath(errorPath);
-  if (typeof value !== "string" || !SHA256_HEX_PATTERN.test(value)) {
-    fail("hex-format", path);
-  }
-  return value as Sha256Hex;
 }
 
 /** 严格解析 `sha256:<64 lowercase hex>`，不接受别名、大小写或空白差异。 */

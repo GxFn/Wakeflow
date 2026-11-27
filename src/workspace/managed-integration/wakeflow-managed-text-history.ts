@@ -26,9 +26,6 @@ export interface WakeflowManagedTextHistoricalRender<Inputs extends readonly unk
   readonly render: (...inputs: Inputs) => string | null;
 }
 
-/** 每张表的上限：转换层最多 8 个 current 目标，其中一个是当前渲染。 */
-export const WAKEFLOW_MANAGED_TEXT_HISTORY_MAXIMUM = 7;
-
 export type WakeflowProgramInstructionHistoryInputs = readonly [
   configValue: unknown,
   profileValue: unknown,

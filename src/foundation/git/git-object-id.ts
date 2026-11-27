@@ -59,12 +59,3 @@ export function parseGitObjectId(value: unknown, path = "$gitObjectId"): Readonl
     value: validated.value.value,
   });
 }
-
-/** 比较两个已经重新准入的Git object ID。 */
-export function sameGitObjectId(left: unknown, right: unknown): boolean {
-  const admittedLeft = parseGitObjectId(left, "$left");
-  const admittedRight = parseGitObjectId(right, "$right");
-  return (
-    admittedLeft.algorithm === admittedRight.algorithm && admittedLeft.value === admittedRight.value
-  );
-}

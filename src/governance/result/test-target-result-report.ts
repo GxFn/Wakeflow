@@ -21,11 +21,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonObject,
   type JsonValue,
   JsonValueError,
@@ -133,8 +128,7 @@ export type TestTargetResultReportErrorReason =
   | "path"
   | "text"
   | "time"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   input: "Test Target Result Report is not passive closed JSON data.",
@@ -144,10 +138,9 @@ const ERROR_MESSAGES = {
   text: "Test Target Result Report contains invalid human text or token text.",
   time: "Test Target Result Report contains an invalid time.",
   relation: "Test Target Result Report facts are inconsistent.",
-  representation: "Test Target Result Report bytes are not deterministic.",
 } as const satisfies Readonly<Record<TestTargetResultReportErrorReason, string>>;
 
-/** Test Report输入、关系或确定性表示失败时的稳定错误。 */
+/** Test Report输入或关系失败时的稳定错误。 */
 export class TestTargetResultReportError extends Error {
   override readonly name = "TestTargetResultReportError";
   readonly code = "wakeflow-test-target-result-report" as const;
@@ -494,31 +487,4 @@ export function createTestTargetResultReport(
     ...basis,
     reportDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-export function testTargetResultReportContentDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseTestTargetResultReportContent(value));
-}
-
-export function renderTestTargetResultReport(value: unknown): string {
-  return renderDeterministicJsonDocument(parseTestTargetResultReport(value), "$report");
-}
-
-export function parseTestTargetResultReportDocument(
-  textValue: unknown,
-): Readonly<TestTargetResultReport> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(textValue, "$report");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$report", error);
-    }
-    throw error;
-  }
-  const report = parseTestTargetResultReport(json);
-  if (renderTestTargetResultReport(report) !== textValue) {
-    fail("representation", "$report");
-  }
-  return report;
 }

@@ -47,8 +47,7 @@ export type DemandEventSourcingStoredEventErrorReason =
   | "revision"
   | "digest"
   | "state-version"
-  | "state"
-  | "representation";
+  | "state";
 
 const ERROR_MESSAGES = {
   json: "Demand Event Sourcing stored event is not passive JSON data.",
@@ -58,7 +57,6 @@ const ERROR_MESSAGES = {
   digest: "Demand Event Sourcing stored event digest is invalid.",
   "state-version": "Demand Event Sourcing stored event state-model version is invalid.",
   state: "Demand Event Sourcing stored event requires a valid resulting state.",
-  representation: "Demand Event Sourcing stored event bytes are not deterministic.",
 } as const satisfies Readonly<Record<DemandEventSourcingStoredEventErrorReason, string>>;
 
 export class DemandEventSourcingStoredEventError extends Error {
@@ -95,7 +93,6 @@ function mapEnvelopeError(error: DemandEventSourcingPersistedEventEnvelopeError)
   if (error.reason === "revision") fail("revision", error.path);
   if (error.reason === "digest") fail("digest", error.path);
   if (error.reason === "state-version") fail("state-version", error.path);
-  if (error.reason === "representation") fail("representation", error.path);
   fail("schema", error.path);
 }
 

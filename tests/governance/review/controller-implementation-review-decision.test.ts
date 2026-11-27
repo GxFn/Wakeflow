@@ -6,8 +6,6 @@ import {
   ControllerImplementationReviewDecisionError,
   createControllerImplementationReviewDecision,
   parseControllerImplementationReviewDecision,
-  parseControllerImplementationReviewDecisionDocument,
-  renderControllerImplementationReviewDecision,
 } from "../../../src/governance/review/controller-implementation-review-decision.js";
 import { controllerReviewDecisionEventId } from "../../../src/governance/review/controller-review-decision.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -44,11 +42,6 @@ test("Controller Implementation Review Decision保存独立审查事实、完成
   equal(
     controllerReviewDecisionEventId(decision),
     `demand-event_${CONTROLLER_REVIEW_DECISION_UUID}`,
-  );
-  const rendered = renderControllerImplementationReviewDecision(decision);
-  equal(
-    parseControllerImplementationReviewDecisionDocument(rendered).decisionDigest,
-    decision.decisionDigest,
   );
 });
 

@@ -2,7 +2,6 @@ import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
-  WAKEFLOW_PRESENTATION_LANGUAGES,
   WakeflowConfigError,
   type WakeflowConfigModel,
   type WakeflowManagedSupportSurface,
@@ -14,18 +13,7 @@ import {
   WakeflowDurableIdError,
 } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import {
-  PortableResourcePathError,
-  parsePortableResourcePath,
-  splitPortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import { computeSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   MarkdownJsonStringLiteralError,
   renderMarkdownJsonStringLiteral,
@@ -33,7 +21,6 @@ import {
 import { encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import {
   parseWakeflowWorkspaceHostResourceProfile,
-  WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceComponent,
   type WakeflowWorkspaceHostResourceProfile,
@@ -78,8 +65,7 @@ export type WakeflowSupportMemoryAuthorityErrorReason =
   | "config"
   | "profile"
   | "surface"
-  | "text"
-  | "authority";
+  | "text";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow support memory authority input is invalid.",
@@ -87,7 +73,6 @@ const ERROR_MESSAGES = {
   profile: "Wakeflow support memory host profile is invalid.",
   surface: "Wakeflow support memory requires a managed Design/Test surface.",
   text: "Wakeflow support memory text cannot be represented safely.",
-  authority: "Wakeflow support memory authority record is invalid.",
 } as const satisfies Readonly<Record<WakeflowSupportMemoryAuthorityErrorReason, string>>;
 
 /** Support whole-file memory 权威准入失败的稳定、脱敏错误。 */
@@ -108,9 +93,6 @@ export class WakeflowSupportMemoryAuthorityError extends Error {
   }
 }
 
-const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
-const LANGUAGE_SET = new Set<string>(WAKEFLOW_PRESENTATION_LANGUAGES);
-const ROLE_SET = new Set<string>(["design", "test"]);
 const MANAGED_MARKER_PREFIX = "<!-- wakeflow:managed-content:";
 
 function fail(
@@ -283,7 +265,7 @@ function simplifiedChineseBody(
   ].join("\n")}\n`;
 }
 
-function assertBody(body: string, reason: "text" | "authority"): void {
+function assertBody(body: string): void {
   if (
     !body.isWellFormed() ||
     body.normalize("NFC") !== body ||
@@ -293,7 +275,7 @@ function assertBody(body: string, reason: "text" | "authority"): void {
     body.endsWith("\n\n") ||
     body.includes(MANAGED_MARKER_PREFIX)
   ) {
-    fail(reason, reason === "text" ? "$body" : "$authority.body");
+    fail("text", "$body");
   }
 }
 
@@ -356,7 +338,7 @@ export function createWakeflowSupportMemoryAuthority(
     language === "en"
       ? englishBody(config, surface, window.windowId, profile)
       : simplifiedChineseBody(config, surface, window.windowId, profile);
-  assertBody(body, "text");
+  assertBody(body);
   let bodyDigest: Sha256Digest;
   try {
     bodyDigest = computeSha256Digest(encodeUtf8(body, "$body"), "$body");
@@ -392,139 +374,6 @@ export function createWakeflowSupportMemoryAuthority(
     declarationId: declarationId(surface.surfaceId, profile.hostId),
     language,
     body,
-    bodyDigest,
-    authorityDigest,
-  });
-}
-
-function authorityRecord(value: unknown): Readonly<Record<string, unknown>> {
-  try {
-    return parsePlainRecord(value, "$authority");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("authority", "$authority", error);
-    throw error;
-  }
-}
-
-function authorityId<K extends "program" | "surface" | "window">(
-  value: unknown,
-  kind: K,
-  path: string,
-): WakeflowDurableId<K> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, kind, path);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("authority", path, error);
-    throw error;
-  }
-}
-
-function instructionFileName(value: unknown): WakeflowWorkspaceHostResourceComponent {
-  try {
-    const path = parsePortableResourcePath(value, "$authority.instructionFileName");
-    if (splitPortableResourcePath(path).length !== 1) {
-      fail("authority", "$authority.instructionFileName");
-    }
-    return path as WakeflowWorkspaceHostResourceComponent;
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("authority", "$authority.instructionFileName", error);
-    }
-    throw error;
-  }
-}
-
-/** 重验 whole-file body、身份与摘要，返回解除别名的冻结 authority。 */
-export function parseWakeflowSupportMemoryAuthority(
-  value: unknown,
-): Readonly<WakeflowSupportMemoryAuthority> {
-  const record = authorityRecord(value);
-  const expectedKeys = [
-    "authorityDigest",
-    "body",
-    "bodyDigest",
-    "configDigest",
-    "declarationId",
-    "hostId",
-    "instructionFileName",
-    "kind",
-    "language",
-    "programId",
-    "role",
-    "schemaVersion",
-    "surfaceId",
-    "windowId",
-  ];
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== expectedKeys.length ||
-    keys.some((key, index) => key !== expectedKeys[index]) ||
-    record.kind !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_KIND ||
-    record.schemaVersion !== WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_SCHEMA_VERSION ||
-    typeof record.hostId !== "string" ||
-    !HOST_ID_SET.has(record.hostId) ||
-    typeof record.role !== "string" ||
-    !ROLE_SET.has(record.role) ||
-    typeof record.language !== "string" ||
-    !LANGUAGE_SET.has(record.language) ||
-    typeof record.body !== "string"
-  ) {
-    fail("authority", "$authority");
-  }
-  const programId = authorityId(record.programId, "program", "$authority.programId");
-  const surfaceId = authorityId(record.surfaceId, "surface", "$authority.surfaceId");
-  const windowId = authorityId(record.windowId, "window", "$authority.windowId");
-  const hostId = record.hostId as WakeflowWorkspaceHostId;
-  const role = record.role as WakeflowSupportRole;
-  const language = record.language as WakeflowPresentationLanguage;
-  const fileName = instructionFileName(record.instructionFileName);
-  const expectedDeclarationId = declarationId(surfaceId, hostId);
-  if (record.declarationId !== expectedDeclarationId) {
-    fail("authority", "$authority.declarationId");
-  }
-  assertBody(record.body, "authority");
-  let configDigest: Sha256Digest;
-  let bodyDigest: Sha256Digest;
-  let authorityDigest: Sha256Digest;
-  try {
-    configDigest = parseSha256Digest(record.configDigest, "$authority.configDigest");
-    bodyDigest = parseSha256Digest(record.bodyDigest, "$authority.bodyDigest");
-    authorityDigest = parseSha256Digest(record.authorityDigest, "$authority.authorityDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("authority", error.path, error);
-    throw error;
-  }
-  if (
-    computeSha256Digest(encodeUtf8(record.body), "$authority.body") !== bodyDigest ||
-    computeCanonicalJsonSha256Digest(
-      digestBasis(
-        configDigest,
-        programId,
-        surfaceId,
-        windowId,
-        role,
-        hostId,
-        fileName,
-        language,
-        bodyDigest,
-      ),
-    ) !== authorityDigest
-  ) {
-    fail("authority", "$authority");
-  }
-  return Object.freeze({
-    kind: WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_KIND,
-    schemaVersion: WAKEFLOW_SUPPORT_MEMORY_AUTHORITY_SCHEMA_VERSION,
-    configDigest,
-    programId,
-    surfaceId,
-    windowId,
-    role,
-    hostId,
-    instructionFileName: fileName,
-    declarationId: expectedDeclarationId,
-    language,
-    body: record.body,
     bodyDigest,
     authorityDigest,
   });

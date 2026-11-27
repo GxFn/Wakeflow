@@ -50,7 +50,6 @@ import {
   createDemandCompletion,
   type DemandCompletionTestingMode,
 } from "../../../src/governance/lifecycle/demand-completion.js";
-import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { createTaskPackage } from "../../../src/governance/tasking/task-package.js";
 import { deriveNextProjection } from "../../../src/kernel/next-projection.js";
@@ -59,6 +58,7 @@ import { CODEX_OBSERVATION_FACADE } from "../../capabilities/observation/observa
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { createPreparedWorkspaceStore } from "../../support/prepared-workspace.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
+import { readPostAcceptanceRoute } from "../review/demand-post-acceptance-route.fixture.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
   createTargetTaskPlanningWorkspaceFixture,
@@ -388,7 +388,7 @@ function archivePayloadTexts(directory: string): readonly string[] {
 test("research Demand 路由：无 document 证据为 not-ready/research-evidence-missing 与 blocked；有证据后 completion-preflight{not-applicable} 与 work-available，内核投影指向 wakeflow_complete_demand", async (t) => {
   const fixture = await createResearchDemandFixture(t);
 
-  const missing = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+  const missing = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
   equal(missing.demandType, "research");
   equal(missing.testingDecision.mode, "not-applicable");
   equal(missing.nextStage.status, "not-ready");
@@ -417,7 +417,7 @@ test("research Demand 路由：无 document 证据为 not-ready/research-evidenc
   equal(recorded.disposition, "recorded");
   equal(recorded.publication?.kind, "document");
 
-  const present = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+  const present = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
   equal(present.nextStage.status, "completion-preflight");
   if (present.nextStage.status !== "completion-preflight") throw new Error("Expected preflight.");
   deepEqual(present.nextStage.testingClosure, { mode: "not-applicable" });
@@ -496,7 +496,7 @@ test("research Demand 带未接受的实现目标：证据在场也先 targets-n
     await demandRoot.close();
   }
 
-  const route = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+  const route = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
   equal(route.nextStage.status, "not-ready");
   if (route.nextStage.status !== "not-ready") throw new Error("Expected not-ready.");
   equal(route.nextStage.reason, "targets-not-accepted");

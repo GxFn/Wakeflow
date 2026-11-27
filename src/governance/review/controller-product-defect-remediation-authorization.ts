@@ -15,11 +15,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
@@ -156,8 +151,7 @@ export type ControllerProductDefectRemediationAuthorizationErrorReason =
   | "time"
   | "text"
   | "decision"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   json: "Controller Product Defect Remediation Authorization is not passive JSON data.",
@@ -172,8 +166,6 @@ const ERROR_MESSAGES = {
   decision:
     "Controller Product Defect Remediation Authorization requires an exact escalate{product-defect} Test Decision.",
   relation: "Controller Product Defect Remediation Authorization sources are inconsistent.",
-  representation:
-    "Controller Product Defect Remediation Authorization bytes are not deterministic.",
 } as const satisfies Readonly<
   Record<ControllerProductDefectRemediationAuthorizationErrorReason, string>
 >;
@@ -702,30 +694,4 @@ export function productDefectRemediationAuthorizedEventId(
     "demand-event",
     uuidFromAuthorizationId(authorization.productDefectRemediationId),
   );
-}
-
-export function renderControllerProductDefectRemediationAuthorization(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseControllerProductDefectRemediationAuthorization(value),
-    "$authorization",
-  );
-}
-
-export function parseControllerProductDefectRemediationAuthorizationDocument(
-  textValue: unknown,
-): Readonly<ControllerProductDefectRemediationAuthorization> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(textValue, "$authorization");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$authorization", error);
-    }
-    throw error;
-  }
-  const authorization = parseControllerProductDefectRemediationAuthorization(json);
-  if (renderControllerProductDefectRemediationAuthorization(authorization) !== textValue) {
-    fail("representation", "$authorization");
-  }
-  return authorization;
 }

@@ -19,11 +19,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonObject,
   type JsonValue,
   JsonValueError,
@@ -178,8 +173,7 @@ export type ImplementationTargetResultReportErrorReason =
   | "git-object-id"
   | "text"
   | "time"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   input: "Implementation Target Result Report is not passive closed JSON data.",
@@ -191,7 +185,6 @@ const ERROR_MESSAGES = {
   text: "Implementation Target Result Report contains invalid human text or token text.",
   time: "Implementation Target Result Report contains an invalid time.",
   relation: "Implementation Target Result Report facts are inconsistent.",
-  representation: "Implementation Target Result Report bytes are not deterministic.",
 } as const satisfies Readonly<Record<ImplementationTargetResultReportErrorReason, string>>;
 
 export class ImplementationTargetResultReportError extends Error {
@@ -637,31 +630,4 @@ export function createImplementationTargetResultReport(
     ...basis,
     reportDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-export function implementationTargetResultReportContentDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseImplementationTargetResultReportContent(value));
-}
-
-export function renderImplementationTargetResultReport(value: unknown): string {
-  return renderDeterministicJsonDocument(parseImplementationTargetResultReport(value), "$report");
-}
-
-export function parseImplementationTargetResultReportDocument(
-  textValue: unknown,
-): Readonly<ImplementationTargetResultReport> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(textValue, "$report");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$report", error);
-    }
-    throw error;
-  }
-  const report = parseImplementationTargetResultReport(json);
-  if (renderImplementationTargetResultReport(report) !== textValue) {
-    fail("representation", "$report");
-  }
-  return report;
 }

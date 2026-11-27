@@ -14,11 +14,6 @@ import {
   Sha256Error,
 } from "../../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../../foundation/data/deterministic-json-document.js";
-import {
   type JsonObject,
   type JsonValue,
   JsonValueError,
@@ -73,8 +68,7 @@ export type DemandEventSourcingPersistedEventEnvelopeErrorReason =
   | "time"
   | "revision"
   | "digest"
-  | "state-version"
-  | "representation";
+  | "state-version";
 
 const ERROR_MESSAGES = {
   json: "Demand Event Sourcing persisted event is not passive JSON data.",
@@ -84,7 +78,6 @@ const ERROR_MESSAGES = {
   revision: "Demand Event Sourcing persisted event revision is invalid.",
   digest: "Demand Event Sourcing persisted event state digest is invalid.",
   "state-version": "Demand Event Sourcing persisted event state-model version is invalid.",
-  representation: "Demand Event Sourcing persisted event bytes are not deterministic.",
 } as const satisfies Readonly<Record<DemandEventSourcingPersistedEventEnvelopeErrorReason, string>>;
 
 export class DemandEventSourcingPersistedEventEnvelopeError extends Error {
@@ -227,32 +220,6 @@ export function parseDemandEventSourcingPersistedEventEnvelope(
     resultingStateModelVersion,
     resultingStateDigest,
   });
-}
-
-export function renderDemandEventSourcingPersistedEventEnvelope(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseDemandEventSourcingPersistedEventEnvelope(value),
-    "$event",
-  );
-}
-
-export function parseDemandEventSourcingPersistedEventEnvelopeDocument(
-  text: unknown,
-): Readonly<DemandEventSourcingPersistedEventEnvelope> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$event");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$event", error);
-    }
-    throw error;
-  }
-  const event = parseDemandEventSourcingPersistedEventEnvelope(json);
-  if (renderDemandEventSourcingPersistedEventEnvelope(event) !== text) {
-    fail("representation", "$event");
-  }
-  return event;
 }
 
 export function computeDemandEventSourcingPersistedEventEnvelopeDigest(

@@ -18,11 +18,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
@@ -154,8 +149,7 @@ export type ControllerImplementationReviewDecisionErrorReason =
   | "position"
   | "time"
   | "text"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   json: "Controller Implementation Review Decision is not passive JSON data.",
@@ -166,10 +160,9 @@ const ERROR_MESSAGES = {
   time: "Controller Implementation Review Decision contains an invalid decision time.",
   text: "Controller Implementation Review Decision contains invalid review text.",
   relation: "Controller Implementation Review Decision facts are inconsistent.",
-  representation: "Controller Implementation Review Decision bytes are not deterministic.",
 } as const satisfies Readonly<Record<ControllerImplementationReviewDecisionErrorReason, string>>;
 
-/** Controller审查决定准入、创建或确定性表示失败时的稳定错误。 */
+/** Controller审查决定准入或创建失败时的稳定错误。 */
 export class ControllerImplementationReviewDecisionError extends Error {
   override readonly name = "ControllerImplementationReviewDecisionError";
   readonly code = "wakeflow-controller-implementation-review-decision" as const;
@@ -527,30 +520,4 @@ export function createControllerImplementationReviewDecision(
     ...basis,
     decisionDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-export function renderControllerImplementationReviewDecision(value: unknown): string {
-  return renderDeterministicJsonDocument(
-    parseControllerImplementationReviewDecision(value),
-    "$decision",
-  );
-}
-
-export function parseControllerImplementationReviewDecisionDocument(
-  text: unknown,
-): Readonly<ControllerImplementationReviewDecision> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$decision");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$decision", error);
-    }
-    throw error;
-  }
-  const decision = parseControllerImplementationReviewDecision(json);
-  if (renderControllerImplementationReviewDecision(decision) !== text) {
-    fail("representation", "$decision");
-  }
-  return decision;
 }

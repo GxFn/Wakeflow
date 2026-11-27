@@ -9,11 +9,10 @@ import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
-  computeManagedEvidenceManifestDigest,
   createManagedEvidenceManifest,
   MANAGED_EVIDENCE_MANIFEST_KIND,
   MANAGED_EVIDENCE_PAYLOAD_LIMITS,
-  type ManagedEvidenceManifestDraft,
+  type ManagedEvidenceManifest,
   ManagedEvidenceManifestError,
   type ManagedEvidenceManifestErrorReason,
   parseManagedEvidenceManifest,
@@ -87,6 +86,12 @@ function fileManifest() {
   });
 }
 
+/** `createManagedEvidenceManifest` 的关闭草稿：Manifest 去掉 Wakeflow 自己补上的四项。 */
+type ManagedEvidenceManifestDraft = Omit<
+  ManagedEvidenceManifest,
+  "artifactKind" | "schemaVersion" | "capturedAt" | "manifestDigest"
+>;
+
 function treeDraft(): ManagedEvidenceManifestDraft {
   const manifest = treeManifest();
   return Object.freeze({
@@ -153,7 +158,6 @@ test("Managed Evidence Manifest闭合本地tree provenance与payload identity", 
   deepEqual(manifest.contentReview.opaqueFileRefs, ["screenshots/result.png"]);
   equal(Object.isFrozen(manifest), true);
   equal(Object.isFrozen(manifest.payload.treeManifest.files), true);
-  equal(computeManagedEvidenceManifestDigest(manifest), manifest.manifestDigest);
 
   const document = renderManagedEvidenceManifest(manifest);
   equal(document.endsWith("\n"), true);

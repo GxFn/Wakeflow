@@ -13,11 +13,7 @@ import {
 } from "../../contracts/generated/workspace/maintenance-execution-intent.generated.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
+import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
 import {
   type JsonValue,
   JsonValueError,
@@ -103,8 +99,7 @@ export type WakeflowMaintenanceExecutionIntentErrorReason =
   | "config"
   | "request"
   | "plan"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   input: "Wakeflow maintenance execution intent input is invalid.",
@@ -115,7 +110,6 @@ const ERROR_MESSAGES = {
   request: "Wakeflow maintenance execution intent Host Profile request is invalid.",
   plan: "Wakeflow maintenance execution intent plan sources are invalid.",
   relation: "Wakeflow maintenance execution intent fields are inconsistent.",
-  representation: "Wakeflow maintenance execution intent representation is invalid.",
 } as const satisfies Readonly<Record<WakeflowMaintenanceExecutionIntentErrorReason, string>>;
 
 /** Maintenance execution intent 准入失败的稳定、脱敏错误。 */
@@ -460,26 +454,6 @@ export function renderWakeflowMaintenanceExecutionIntent(value: unknown): string
     intentRepresentation(parseWakeflowMaintenanceExecutionIntent(value)),
     "$intent",
   );
-}
-
-/** 解析磁盘intent并拒绝任何表示漂移。 */
-export function parseWakeflowMaintenanceExecutionIntentDocument(
-  text: unknown,
-): Readonly<WakeflowMaintenanceExecutionIntent> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(text, "$intent");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", error.path, error);
-    }
-    throw error;
-  }
-  const intent = parseWakeflowMaintenanceExecutionIntent(json);
-  if (renderWakeflowMaintenanceExecutionIntent(intent) !== text) {
-    fail("representation", "$intent");
-  }
-  return intent;
 }
 
 /** 为一个operation生成exact intent动态资源声明。 */

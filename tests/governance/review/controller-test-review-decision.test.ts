@@ -7,8 +7,6 @@ import {
   ControllerTestReviewDecisionError,
   type CreateControllerTestReviewDecisionInput,
   createControllerTestReviewDecision,
-  parseControllerTestReviewDecisionDocument,
-  renderControllerTestReviewDecision,
 } from "../../../src/governance/review/controller-test-review-decision.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
@@ -41,11 +39,6 @@ test("ControllerTestReviewDecision接受完整Evidence与完成证据但不自�
   equal(decision.targetCompletion?.event, "stop");
   equal(Object.hasOwn(decision, "demandCompletion"), false);
   equal(controllerReviewDecisionEventId(decision), `demand-event_${DECISION_UUID}`);
-  equal(
-    parseControllerTestReviewDecisionDocument(renderControllerTestReviewDecision(decision))
-      .decisionDigest,
-    decision.decisionDigest,
-  );
   throws(
     () => createDecision({ ...testReviewDecisionBaseInput(), targetCompletion: null }),
     (error: unknown) =>

@@ -1,10 +1,6 @@
 import { equal, match } from "node:assert/strict";
 import { test } from "node:test";
-import {
-  compareUtcInstants,
-  parseUtcInstant,
-  type UtcInstant,
-} from "../../../src/foundation/time/utc-instant.js";
+import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
   readUtcWallClock,
   type UtcWallClock,
@@ -73,7 +69,6 @@ test("wall clock readings are uncached and may move backwards", () => {
   const second = readUtcWallClock(clock);
   equal(first, later);
   equal(second, earlier);
-  equal(compareUtcInstants(first, second), 1);
   equal(calls, 2);
 });
 

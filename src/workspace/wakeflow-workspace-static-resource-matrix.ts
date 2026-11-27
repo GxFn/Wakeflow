@@ -26,10 +26,8 @@ import {
 import { WAKEFLOW_HOST_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-host-runtime-resource-catalog.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
-  WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES,
   type WakeflowWorkspaceResourceDeclaration,
   WakeflowWorkspaceResourceDeclarationError,
-  type WakeflowWorkspaceResourceFamily,
   type WakeflowWorkspaceResourcePlacement,
 } from "./workspace-resource-declaration.js";
 import { WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG } from "./workspace-shared-runtime-resource-catalog.js";
@@ -102,7 +100,6 @@ const SHARED_STATIC_RESOURCE_CATALOG = Object.freeze([
   ...WAKEFLOW_SHARED_RUNTIME_STATIC_RESOURCE_CATALOG,
 ]) satisfies readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 
-const RESOURCE_FAMILY_SET = new Set<string>(WAKEFLOW_WORKSPACE_RESOURCE_FAMILIES);
 const HOST_ID_SET = new Set<string>(WAKEFLOW_WORKSPACE_HOST_IDS);
 
 function compareDeclarationIds(
@@ -389,27 +386,4 @@ export function findWakeflowWorkspaceStaticResourceByDeclarationId(
 ): Readonly<WakeflowWorkspaceResourceDeclaration> | null {
   const declarationId = queryText(declarationIdValue, "$/declarationId");
   return matrix.declarations.find((entry) => entry.declarationId === declarationId) ?? null;
-}
-
-/** 按资源 family 返回保持矩阵顺序的新冻结数组。 */
-export function selectWakeflowWorkspaceStaticResourcesByFamily(
-  matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>,
-  familyValue: unknown,
-): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const family = queryText(familyValue, "$/family");
-  if (!RESOURCE_FAMILY_SET.has(family)) fail("query", "$/family");
-  return Object.freeze(
-    matrix.declarations.filter(
-      (entry) => entry.family === (family as WakeflowWorkspaceResourceFamily),
-    ),
-  );
-}
-
-/** 按职责所有者 ID 返回保持矩阵顺序的新冻结数组。 */
-export function selectWakeflowWorkspaceStaticResourcesByOwner(
-  matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>,
-  ownerIdValue: unknown,
-): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const ownerId = queryText(ownerIdValue, "$/ownerId");
-  return Object.freeze(matrix.declarations.filter((entry) => entry.ownerId === ownerId));
 }

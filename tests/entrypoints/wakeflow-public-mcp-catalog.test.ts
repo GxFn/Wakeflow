@@ -37,10 +37,7 @@ import {
   createWakeflowPublicMcpServer,
   WakeflowPublicMcpServerConfigurationError,
 } from "../../src/entrypoints/wakeflow-public-mcp-server.js";
-import {
-  findWakeflowToolRegistration,
-  measureWakeflowToolCatalogBytes,
-} from "../../src/kernel/tool-registry.js";
+import { measureWakeflowToolCatalogBytes } from "../../src/kernel/tool-registry.js";
 import { useDisposableDurability } from "../support/disposable-durability.js";
 import {
   connectWakeflowMcpServerForTest,
@@ -326,7 +323,8 @@ test("官方MCP server只发布二十一个闭合Schema工具", async (t) => {
     // ADR-0004 选项 A：结果 Schema 只在服务端校验，不进 tools/list。
     equal(actual?.outputSchema, undefined);
     equal(
-      findWakeflowToolRegistration(WAKEFLOW_PUBLIC_TOOL_CATALOG, expected.name)?.resultSchema.$id,
+      WAKEFLOW_PUBLIC_TOOL_CATALOG.tools.find((tool) => tool.name === expected.name)?.resultSchema
+        .$id,
       expected.outputId,
     );
     deepEqual(actual?.annotations, expected.annotations);

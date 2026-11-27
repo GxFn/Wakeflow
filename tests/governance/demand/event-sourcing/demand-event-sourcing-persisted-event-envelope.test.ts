@@ -13,8 +13,6 @@ import {
   DemandEventSourcingPersistedEventEnvelopeError,
   type DemandEventSourcingPersistedEventEnvelopeErrorReason,
   parseDemandEventSourcingPersistedEventEnvelope,
-  parseDemandEventSourcingPersistedEventEnvelopeDocument,
-  renderDemandEventSourcingPersistedEventEnvelope,
 } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-persisted-event-envelope.js";
 import { prepareDemandEventStreamCommit } from "../../../../src/governance/demand/event-sourcing/demand-event-stream-commit.js";
 
@@ -75,7 +73,7 @@ function expectEnvelopeError(
   });
 }
 
-test("a committed Demand event round-trips through wire, document and digest", () => {
+test("a committed Demand event round-trips through wire and digest", () => {
   const event = committedEvent();
   equal(
     DEMAND_EVENT_SOURCING_PERSISTED_EVENT_ARTIFACT_KIND,
@@ -92,16 +90,11 @@ test("a committed Demand event round-trips through wire, document and digest", (
   equal(parsed.streamRevision, 1);
   equal(parsed.recordedAt, RECORDED_AT);
 
-  const text = renderDemandEventSourcingPersistedEventEnvelope(event);
-  equal(text, `${JSON.stringify(event, null, 2)}\n`);
-  deepEqual(parseDemandEventSourcingPersistedEventEnvelopeDocument(text), event);
-
   const digest = computeDemandEventSourcingPersistedEventEnvelopeDigest(event);
   equal(digest, computeCanonicalJsonSha256Digest(event));
   // Wire key order is not identity: the envelope is rebuilt in its own field order.
   const reversed = Object.fromEntries(Object.entries(wireOf()).reverse());
   equal(computeDemandEventSourcingPersistedEventEnvelopeDigest(reversed), digest);
-  equal(renderDemandEventSourcingPersistedEventEnvelope(reversed), text);
 });
 
 test("unknown eventType and eventVersion stay parseable routing facts with their data intact", () => {
@@ -239,33 +232,4 @@ test("a calendar-impossible instant passes the Schema pattern but is rejected as
     "time",
     "$/recordedAt",
   );
-});
-
-test("document parsing admits only the exact deterministic rendering of an envelope", () => {
-  const text = renderDemandEventSourcingPersistedEventEnvelope(committedEvent());
-  const parse = parseDemandEventSourcingPersistedEventEnvelopeDocument;
-  expectEnvelopeError(() => parse(42), "representation", "$event");
-  expectEnvelopeError(() => parse(undefined), "representation", "$event");
-  expectEnvelopeError(() => parse("{"), "representation", "$event");
-  expectEnvelopeError(() => parse(text.trimEnd()), "representation", "$event");
-  expectEnvelopeError(() => parse(`${text}\n`), "representation", "$event");
-  expectEnvelopeError(() => parse(JSON.stringify(JSON.parse(text))), "representation", "$event");
-  expectEnvelopeError(
-    () => parse(text.replace('"streamRevision": 1', '"streamRevision": 1 ')),
-    "representation",
-    "$event",
-  );
-  // Reordered keys are deterministic text, but not the envelope's own rendering.
-  const reordered = `${JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(text)).reverse()), null, 2)}\n`;
-  notEqual(reordered, text);
-  expectEnvelopeError(() => parse(reordered), "representation", "$event");
-  // Deterministic text that is not an envelope keeps the inner rejection.
-  expectEnvelopeError(
-    () => parse(`${JSON.stringify({ hello: "world" }, null, 2)}\n`),
-    "schema",
-    "$",
-  );
-  const impossible = text.replace("2026-08-26T10:00:00.000Z", "2026-02-30T10:00:00.000Z");
-  expectEnvelopeError(() => parse(impossible), "time", "$/recordedAt");
-  deepEqual(parse(text), committedEvent());
 });

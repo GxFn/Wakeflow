@@ -26,12 +26,6 @@ export function createRedactionBoundary(values: Iterable<string>): RedactionBoun
   return Object.freeze({ privateValues: admitted });
 }
 
-export function mergeRedactionBoundaries(
-  ...boundaries: readonly RedactionBoundary[]
-): RedactionBoundary {
-  return createRedactionBoundary(boundaries.flatMap((boundary) => [...boundary.privateValues]));
-}
-
 function isJsonArray(value: JsonArray | JsonObject): value is JsonArray {
   return Array.isArray(value);
 }
@@ -88,19 +82,6 @@ function findPrivateText(
   return isJsonArray(value)
     ? findPrivateInArray(value, boundary, path)
     : findPrivateInObject(value, boundary, path);
-}
-
-/** 返回第一个含私有值的结构路径，没有则返回 null。 */
-export function locatePrivateText(
-  value: JsonValue,
-  boundary: RedactionBoundary,
-  path = "$",
-): string | null {
-  return findPrivateText(value, boundary, path);
-}
-
-export function containsPrivateText(value: JsonValue, boundary: RedactionBoundary): boolean {
-  return findPrivateText(value, boundary, "$") !== null;
 }
 
 /** 公共输出含私有值即以 `output-boundary` 失败，路径指向命中的结构位置。 */

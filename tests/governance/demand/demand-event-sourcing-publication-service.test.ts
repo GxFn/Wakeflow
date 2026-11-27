@@ -40,11 +40,11 @@ import {
 import { assertNoActiveDemand } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import {
   DemandEventSourcingPublicationServiceError,
-  initializeDemandEventSourcingPublication,
   publishDemandFromPackage,
   readPendingDemandPublication,
   recoverDemandPublication,
 } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
+import { initializePublicationStorage } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-storage.js";
 import {
   createDemandEventSourcingPublicationTransaction,
   renderDemandEventSourcingPublicationTransaction,
@@ -218,7 +218,7 @@ function writeStageMarker(value: Awaited<ReturnType<typeof fixture>>, text: stri
 test("a stage that holds only the marker keeps its pod busy and recovers without any other record", async () => {
   const value = await fixture();
   try {
-    await initializeDemandEventSourcingPublication(value.workspaceRoot);
+    await initializePublicationStorage(value.workspaceRoot, undefined);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     // 标记是这次创建唯一落盘的记录（ADR-0031，5a 的 B 行）：根外面没有副本。
     const markerPath = writeStageMarker(
@@ -271,7 +271,7 @@ test("a stage that holds only the marker keeps its pod busy and recovers without
 test("the same request replayed over its own interrupted stage completes it; a different one is refused", async () => {
   const value = await fixture();
   try {
-    await initializeDemandEventSourcingPublication(value.workspaceRoot);
+    await initializePublicationStorage(value.workspaceRoot, undefined);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const markerPath = writeStageMarker(
       value,
@@ -310,7 +310,7 @@ test("the same request replayed over its own interrupted stage completes it; a d
 test("publication recovery 回收标记自己留下的 inactive 原子暂存，没有标记即没有可恢复的创建", async () => {
   const value = await fixture();
   try {
-    await initializeDemandEventSourcingPublication(value.workspaceRoot);
+    await initializePublicationStorage(value.workspaceRoot, undefined);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     mkdirSync(
       path.join(workspaceFile(value, demandPublicationStageRef(DEMAND_ID)), "transactions"),
@@ -382,7 +382,7 @@ test("recovery without publication storage performs no initialization effects", 
 test("published root marker is settled before normal authority load", async () => {
   const value = await fixture();
   try {
-    await initializeDemandEventSourcingPublication(value.workspaceRoot);
+    await initializePublicationStorage(value.workspaceRoot, undefined);
     const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
     const text = renderDemandEventSourcingPublicationTransaction(transaction);
 

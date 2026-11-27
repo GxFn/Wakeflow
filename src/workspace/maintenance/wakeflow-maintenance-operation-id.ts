@@ -6,7 +6,6 @@ import {
 import {
   createUuidV4,
   parseUuidV4,
-  type UuidV4,
   UuidV4Error,
   type UuidV4Factory,
 } from "../../foundation/identity/uuid-v4.js";
@@ -78,15 +77,6 @@ export function parseWakeflowMaintenanceOperationId(
     throw error;
   }
   return value as WakeflowMaintenanceOperationId;
-}
-
-/** 提取已经重新验证的 operation UUID，供 gate token 关联使用。 */
-export function wakeflowMaintenanceOperationUuid(value: unknown): UuidV4 {
-  const operationId = parseWakeflowMaintenanceOperationId(value);
-  return parseUuidV4(
-    operationId.slice(WAKEFLOW_MAINTENANCE_OPERATION_ID_PREFIX.length),
-    "$operationId",
-  );
 }
 
 /** 使用密码学 UUIDv4 源创建一个 maintenance operation ID。 */

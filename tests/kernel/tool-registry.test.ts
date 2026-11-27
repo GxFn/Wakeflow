@@ -4,7 +4,6 @@ import { test } from "node:test";
 import { isWakeflowError } from "../../src/kernel/error.js";
 import {
   createWakeflowToolCatalog,
-  findWakeflowToolRegistration,
   measureWakeflowToolCatalogBytes,
   publicToolDefinition,
   WAKEFLOW_TOOL_DESCRIPTION_MAXIMUM_BYTES,
@@ -68,8 +67,6 @@ test("tool catalog 准入唯一名字、绑定名与 Schema 身份，并按形�
   ]);
   equal(catalog.tools.length, 2);
   equal(Object.isFrozen(catalog.tools), true);
-  equal(findWakeflowToolRegistration(catalog, "wakeflow_example_read")?.shape, "read");
-  equal(findWakeflowToolRegistration(catalog, "wakeflow_missing"), null);
 
   const first = catalog.tools[0];
   if (first === undefined) throw new Error("catalog must keep its first tool");

@@ -1,21 +1,7 @@
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { WAKEFLOW_TEST_TARGET_PHASE_RULES } from "../../contracts/vocabulary/wakeflow-target-phases.js";
-import { types } from "node:util";
-
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
-import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  closeDemandOperationAuthorityContext,
-  DemandOperationAuthorityContextError,
-  openDemandOperationAuthorityContext,
-} from "../demand/demand-operation-authority-context.js";
 import type { LoadedDemandEventSourcingRootAuthority } from "../demand/event-sourcing/demand-event-sourcing-root-authority.js";
 import {
   currentTestTargetsOf,
@@ -28,11 +14,9 @@ import {
 } from "../demand/model/demand-authority.js";
 import type { DemandType } from "../demand/model/demand-identity.js";
 import type { LedgerAuthorityMemberReference } from "../ledger/ledger-authority-store.js";
-import {
-  type DemandResultReviewSnapshot,
-  DemandResultReviewSnapshotError,
-  type DemandResultReviewTarget,
-  readDemandResultReviewSnapshot,
+import type {
+  DemandResultReviewSnapshot,
+  DemandResultReviewTarget,
 } from "./demand-result-review-snapshot.js";
 
 /**
@@ -221,23 +205,10 @@ export interface DemandPostAcceptanceRoute {
   readonly routeDigest: Sha256Digest;
 }
 
-export type DemandPostAcceptanceRouteErrorReason =
-  | "input"
-  | "root"
-  | "config"
-  | "demand-authority"
-  | "review"
-  | "relation"
-  | "operation-failure";
+export type DemandPostAcceptanceRouteErrorReason = "relation";
 
 const ERROR_MESSAGES = {
-  input: "Demand post-acceptance route input is invalid.",
-  root: "Demand post-acceptance route root could not be held safely.",
-  config: "Demand post-acceptance route Config authority is invalid.",
-  "demand-authority": "Demand post-acceptance route Demand authority is invalid.",
-  review: "Demand post-acceptance route Review Snapshot is invalid.",
   relation: "Demand post-acceptance route sources are inconsistent.",
-  "operation-failure": "Demand post-acceptance route read failed.",
 } as const satisfies Readonly<Record<DemandPostAcceptanceRouteErrorReason, string>>;
 
 /** Accepted后路由无法由当前Authority与Review事实安全重建时的稳定错误。 */
@@ -628,126 +599,4 @@ export function buildDemandPostAcceptanceRoute(
     ...basis,
     routeDigest: computeCanonicalJsonSha256Digest(basis),
   });
-}
-
-function parseInput(
-  workspaceRootValue: unknown,
-  demandIdValue: unknown,
-  optionsValue: unknown,
-): Readonly<{
-  readonly workspaceRoot: RootedDirectory;
-  readonly demandId: WakeflowDurableId<"demand">;
-  readonly signal: AbortSignal | undefined;
-}> {
-  if (
-    typeof workspaceRootValue !== "object" ||
-    workspaceRootValue === null ||
-    types.isProxy(workspaceRootValue) ||
-    !(workspaceRootValue instanceof RootedDirectory)
-  ) {
-    fail("input");
-  }
-  let demandId: WakeflowDurableId<"demand">;
-  try {
-    demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input");
-    throw error;
-  }
-  let options: Readonly<Record<string, unknown>>;
-  try {
-    options = parsePlainRecord(optionsValue === undefined ? {} : optionsValue, "$options");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input");
-    throw error;
-  }
-  if (
-    Object.keys(options).some((key) => key !== "signal") ||
-    (options.signal !== undefined &&
-      (typeof options.signal !== "object" ||
-        options.signal === null ||
-        types.isProxy(options.signal) ||
-        !(options.signal instanceof AbortSignal)))
-  ) {
-    fail("input");
-  }
-  const signal = options.signal as AbortSignal | undefined;
-  throwIfAborted(signal);
-  return Object.freeze({
-    workspaceRoot: workspaceRootValue,
-    demandId,
-    signal,
-  });
-}
-
-function mapContextError(error: DemandOperationAuthorityContextError): never {
-  if (error.reason === "root") fail("root");
-  if (error.reason === "config" || error.reason === "stale-config") {
-    fail("config");
-  }
-  fail("demand-authority");
-}
-
-/** 路线依据的评审快照；读不出归为评审原因，中止原样上抛。 */
-async function readReviewSnapshot(
-  demandRoot: Parameters<typeof readDemandResultReviewSnapshot>[0],
-  signal: AbortSignal | undefined,
-): Promise<Readonly<DemandResultReviewSnapshot>> {
-  try {
-    return await readDemandResultReviewSnapshot(
-      demandRoot,
-      signal === undefined ? undefined : { signal },
-    );
-  } catch (error: unknown) {
-    if (error instanceof DemandResultReviewSnapshotError) {
-      fail("review");
-    }
-    throw error;
-  }
-}
-
-/**
- * 零写读取当前Demand的post-acceptance下一阶段路由；任何后续owner都必须重新复验其
- * `authorityDigest + reviewSnapshotDigest + observedEventStream`，不能把本读模型当成写许可。
- */
-export async function readDemandPostAcceptanceRoute(
-  workspaceRootValue: unknown,
-  demandIdValue: unknown,
-  optionsValue?: { readonly signal?: AbortSignal },
-): Promise<Readonly<DemandPostAcceptanceRoute>> {
-  const input = parseInput(workspaceRootValue, demandIdValue, optionsValue);
-  let context: Awaited<ReturnType<typeof openDemandOperationAuthorityContext>>;
-  try {
-    context = await openDemandOperationAuthorityContext(
-      input.workspaceRoot,
-      input.demandId,
-      input.signal,
-    );
-  } catch (error: unknown) {
-    if (error instanceof DemandOperationAuthorityContextError) {
-      mapContextError(error);
-    }
-    throw error;
-  }
-  let result: Readonly<DemandPostAcceptanceRoute> | undefined;
-  let failure: unknown;
-  try {
-    const snapshot = await readReviewSnapshot(context.demandRoot, input.signal);
-    result = buildDemandPostAcceptanceRoute(context.loaded, snapshot);
-  } catch (error: unknown) {
-    failure = error;
-  }
-  try {
-    await closeDemandOperationAuthorityContext(context);
-  } catch (error: unknown) {
-    if (failure === undefined) {
-      if (error instanceof DemandOperationAuthorityContextError) {
-        mapContextError(error);
-      }
-      failure = error;
-    }
-  }
-  if (failure !== undefined) throw failure;
-  if (result === undefined) fail("operation-failure");
-  return result;
 }

@@ -23,11 +23,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import {
-  DeterministicJsonDocumentError,
-  parseDeterministicJsonDocument,
-  renderDeterministicJsonDocument,
-} from "../../foundation/data/deterministic-json-document.js";
-import {
   type JsonValue,
   JsonValueError,
   parseJsonValue,
@@ -135,8 +130,7 @@ export type TargetResultErrorReason =
   | "time"
   | "claim"
   | "report"
-  | "relation"
-  | "representation";
+  | "relation";
 
 const ERROR_MESSAGES = {
   json: "Target Result is not passive JSON data.",
@@ -148,7 +142,6 @@ const ERROR_MESSAGES = {
   claim: "Target Result requires a valid delivery fence claim.",
   report: "Target Result requires a matching implementation or Test Report.",
   relation: "Target Result sources are inconsistent.",
-  representation: "Target Result bytes are not deterministic.",
 } as const satisfies Readonly<Record<TargetResultErrorReason, string>>;
 
 export class TargetResultError extends Error {
@@ -443,36 +436,4 @@ export function targetResultRecordedEventIdFromResult(
 ): WakeflowDurableId<"demand-event"> {
   const result = parseTargetResult(resultValue);
   return deriveDurableId("demand-event", eventPurposeOf(result), result.delivery.fence.claimId);
-}
-
-export function targetResultRecordedCommitIdFromResult(
-  resultValue: unknown,
-): WakeflowDurableId<"demand-event-commit"> {
-  const result = parseTargetResult(resultValue);
-  return deriveDurableId(
-    "demand-event-commit",
-    eventPurposeOf(result),
-    result.delivery.fence.claimId,
-  );
-}
-
-export function renderTargetResult(value: unknown): string {
-  return renderDeterministicJsonDocument(parseTargetResult(value), "$result");
-}
-
-export function parseTargetResultDocument(textValue: unknown): Readonly<TargetResult> {
-  let json: JsonValue;
-  try {
-    json = parseDeterministicJsonDocument(textValue, "$result");
-  } catch (error: unknown) {
-    if (error instanceof DeterministicJsonDocumentError) {
-      fail("representation", "$result", error);
-    }
-    throw error;
-  }
-  const result = parseTargetResult(json);
-  if (renderTargetResult(result) !== textValue) {
-    fail("representation", "$result");
-  }
-  return result;
 }

@@ -27,12 +27,6 @@ import {
 
 export const MANAGED_EVIDENCE_RESOURCE_OWNER_ID = "demand-managed-evidence" as const;
 
-type ManagedEvidenceResourceCatalog = readonly [
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
-  Readonly<WakeflowWorkspaceResourceDeclaration>,
-];
-
 function demandId(value: unknown): WakeflowDurableId<"demand"> {
   return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
 }
@@ -144,18 +138,4 @@ export function createManagedEvidencePublicationTransactionResourceDeclaration(
       recoveryStrategy: "owner-transaction-recovery",
     },
   );
-}
-
-/** 组合一次Evidence事务需要的容器、final tree与journal声明。 */
-export function createManagedEvidenceResourceCatalog(
-  demandValue: unknown,
-  evidenceValue: unknown,
-): ManagedEvidenceResourceCatalog {
-  const demand = demandId(demandValue);
-  const evidence = evidenceId(evidenceValue);
-  return Object.freeze([
-    createManagedEvidenceRootResourceDeclaration(demand),
-    createManagedEvidenceRecordResourceDeclaration(demand, evidence),
-    createManagedEvidencePublicationTransactionResourceDeclaration(demand),
-  ]);
 }

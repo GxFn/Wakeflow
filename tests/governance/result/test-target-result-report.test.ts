@@ -6,10 +6,7 @@ import {
   createTestTargetResultReport,
   deriveTestVerdict,
   parseTestTargetResultReport,
-  parseTestTargetResultReportDocument,
-  renderTestTargetResultReport,
   TestTargetResultReportError,
-  testTargetResultReportContentDigest,
 } from "../../../src/governance/result/test-target-result-report.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { fixtureMember } from "../../support/fixture-member.js";
@@ -68,14 +65,6 @@ test("TestTargetResultReport保存逐步记录并由Wakeflow派生整体判定",
   equal(Object.hasOwn(report, "repositoryChange"), false);
   equal(Object.hasOwn(report, "stepEvidence"), false);
   equal(Object.isFrozen(report.steps), true);
-  equal(
-    parseTestTargetResultReportDocument(renderTestTargetResultReport(report)).reportDigest,
-    report.reportDigest,
-  );
-  equal(
-    testTargetResultReportContentDigest(content),
-    testTargetResultReportContentDigest({ ...content }),
-  );
   const failed = createTestTargetResultReport(
     { ...content, steps: [fixtureMember(content.steps, 0), failedStep("ts-2")] },
     { clock: () => REPORTED_AT },

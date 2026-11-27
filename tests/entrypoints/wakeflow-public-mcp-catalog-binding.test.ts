@@ -3,10 +3,7 @@ import { test } from "node:test";
 
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 
-import {
-  WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS,
-  WAKEFLOW_PUBLIC_TOOL_CATALOG,
-} from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
+import { WAKEFLOW_PUBLIC_TOOL_CATALOG } from "../../src/entrypoints/wakeflow-public-mcp-catalog.js";
 import {
   registerWakeflowPublicMcpCatalog,
   type WakeflowPublicMcpExecutor,
@@ -41,7 +38,7 @@ test("登记表把二十一个工具绑定到同名executor，且只公开请求
 
   const calls: Array<Readonly<{ field: string; request: unknown }>> = [];
   const executors: Record<string, WakeflowPublicMcpExecutor<unknown>> = {};
-  for (const field of WAKEFLOW_PUBLIC_MCP_EXECUTOR_FIELDS) {
+  for (const { executor: field } of WAKEFLOW_PUBLIC_TOOL_CATALOG.tools) {
     executors[field] = async (request, context): Promise<never> => {
       equal(context.signal, signal);
       // 没有组合根提供写者戳时，执行上下文的 writer 固定为 null（C11）。

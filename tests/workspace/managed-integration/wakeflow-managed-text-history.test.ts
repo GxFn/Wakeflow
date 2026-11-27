@@ -12,7 +12,6 @@ import {
   historicalWakeflowManagedTextTargets,
   WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
   WAKEFLOW_GITIGNORE_BODY_HISTORY,
-  WAKEFLOW_MANAGED_TEXT_HISTORY_MAXIMUM,
   WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
   WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
   WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
@@ -187,9 +186,11 @@ test("历史表冻结且每张不超过 7 项，退役版本是 semver；没有�
     WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
     WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
   ];
+  // 转换层最多收 8 个 current 目标，其中一个是当前渲染。
+  const historyMaximum = 7;
   for (const table of tables) {
     equal(Object.isFrozen(table), true);
-    equal(table.length <= WAKEFLOW_MANAGED_TEXT_HISTORY_MAXIMUM, true);
+    equal(table.length <= historyMaximum, true);
     for (const entry of table) {
       equal(
         /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/u.test(entry.retiredIn),

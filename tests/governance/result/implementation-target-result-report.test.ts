@@ -9,10 +9,7 @@ import {
   ImplementationTargetResultReportError,
   implementationReportAnchorResults,
   implementationReportOutsideInstructions,
-  implementationTargetResultReportContentDigest,
   parseImplementationTargetResultReport,
-  parseImplementationTargetResultReportDocument,
-  renderImplementationTargetResultReport,
 } from "../../../src/governance/result/implementation-target-result-report.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
@@ -39,26 +36,10 @@ test("ImplementationTargetResultReport只保存Agent业务陈述并使用显式G
   equal(Object.hasOwn(report, "transport"), false);
   equal(Object.hasOwn(report, "claim"), false);
   equal(Object.isFrozen(report.repositoryChange.commits), true);
-  const document = renderImplementationTargetResultReport(report);
-  equal(parseImplementationTargetResultReportDocument(document).reportDigest, report.reportDigest);
 
   const later = createImplementationTargetResultReport(content, {
     clock: () => parseUtcInstant("2026-08-29T12:11:00.000Z"),
   });
-  equal(
-    implementationTargetResultReportContentDigest(content),
-    implementationTargetResultReportContentDigest({
-      outcome: later.outcome,
-      summary: later.summary,
-      repositoryChange: later.repositoryChange,
-      evidenceLocators: later.evidenceLocators,
-      verification: later.verification,
-      risks: later.risks,
-      anchorEvidence: later.anchorEvidence,
-      anchorResults: later.anchorResults,
-      outsideInstructions: later.outsideInstructions,
-    }),
-  );
   notEqual(later.reportDigest, report.reportDigest);
 });
 
@@ -129,16 +110,17 @@ test("记录版本 2（ADR-0030）：逐条锚点的结论与任务包之外收�
   // 两项都在摘要的基里：改一条结论就是另一份报告。
   const [first, ...rest] = content.anchorResults;
   if (first === undefined) throw new Error("fixture has no anchors");
-  const changed = createImplementationTargetResultReport({
-    ...content,
-    anchorResults: [{ ...first, status: "not-run", observed: "没有核对这一条。" }, ...rest],
-  });
-  notEqual(
-    implementationTargetResultReportContentDigest({ ...content }),
-    implementationTargetResultReportContentDigest({
+  const clock = () => parseUtcInstant("2026-08-29T12:10:00.000Z");
+  const changed = createImplementationTargetResultReport(
+    {
       ...content,
-      anchorResults: changed.anchorResults,
-    }),
+      anchorResults: [{ ...first, status: "not-run", observed: "没有核对这一条。" }, ...rest],
+    },
+    { clock },
+  );
+  notEqual(
+    createImplementationTargetResultReport(content, { clock }).reportDigest,
+    changed.reportDigest,
   );
   for (const [label, broken] of [
     ["duplicate anchor", { anchorResults: [first, first] }],
@@ -182,11 +164,8 @@ test("记录版本 1 原样读入（ADR-0030 决定 4）：1.4 之前写下的�
   equal(implementationReportAnchorResults(legacy), null);
   equal(implementationReportOutsideInstructions(legacy), null);
   equal(Object.hasOwn(legacy, "anchorResults"), false);
-  // 读回再写出是同一份字节：升级不替旧报告补任何成员。
-  equal(
-    renderImplementationTargetResultReport(legacy),
-    renderImplementationTargetResultReport(stored),
-  );
+  // 升级不替旧报告补任何成员。
+  deepEqual(Object.keys(legacy).sort(), Object.keys(stored).sort());
   // 自称版本 1 却带着新成员、或自称版本 2 却缺了它们，都不是合法的记录。
   for (const broken of [
     { ...stored, anchorResults: [] },

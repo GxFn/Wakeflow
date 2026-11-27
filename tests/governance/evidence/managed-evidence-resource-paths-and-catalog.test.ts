@@ -8,7 +8,9 @@ import {
 } from "../../../src/foundation/resource/resource-processing-contract.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
 import {
-  createManagedEvidenceResourceCatalog,
+  createManagedEvidencePublicationTransactionResourceDeclaration,
+  createManagedEvidenceRecordResourceDeclaration,
+  createManagedEvidenceRootResourceDeclaration,
   MANAGED_EVIDENCE_RESOURCE_OWNER_ID,
 } from "../../../src/governance/evidence/managed-evidence-resource-catalog.js";
 import {
@@ -53,6 +55,15 @@ function assertDeepFrozen(value: unknown): void {
   if (typeof value !== "object" || value === null) return;
   equal(Object.isFrozen(value), true);
   for (const child of Object.values(value)) assertDeepFrozen(child);
+}
+
+/** 一次Evidence事务涉及的三份声明：容器、final tree与journal。 */
+function evidenceDeclarations(demandId: string, evidenceId: string) {
+  return [
+    createManagedEvidenceRootResourceDeclaration(demandId),
+    createManagedEvidenceRecordResourceDeclaration(demandId, evidenceId),
+    createManagedEvidencePublicationTransactionResourceDeclaration(demandId),
+  ] as const;
 }
 
 test("Managed Evidence路径把final、payload、stage与Demand级journal明确分离", () => {
@@ -107,7 +118,7 @@ test("Managed Evidence路径拒绝别名、其他ID类型和宽松stage后缀", 
 
 test("Managed Evidence资源目录区分容器、Manifest闭合final tree与事务journal", () => {
   const demandRoot = demandFinalRootRef(DEMAND_ID);
-  const catalog = createManagedEvidenceResourceCatalog(DEMAND_ID, EVIDENCE_ID);
+  const catalog = evidenceDeclarations(DEMAND_ID, EVIDENCE_ID);
   deepEqual(
     catalog.map((entry) => ({
       declarationId: entry.declarationId,
@@ -186,7 +197,7 @@ test("Managed Evidence资源目录区分容器、Manifest闭合final tree与事�
     catalog.some((entry) => entry.placement.relativePath?.includes(".wakeflow-stage") === true),
     false,
   );
-  assertDeepFrozen(catalog);
+  for (const entry of catalog) assertDeepFrozen(entry);
 
   deepEqual(admitWakeflowResourceOperation(catalog[0].processing, "materialize-directory"), {
     kind: "directory-materialization",
@@ -214,8 +225,8 @@ test("Managed Evidence资源目录区分容器、Manifest闭合final tree与事�
 });
 
 test("不同Evidence拥有不同final/stage，但共享一个Demand事务槽位", () => {
-  const first = createManagedEvidenceResourceCatalog(DEMAND_ID, EVIDENCE_ID);
-  const second = createManagedEvidenceResourceCatalog(DEMAND_ID, ANOTHER_EVIDENCE_ID);
+  const first = evidenceDeclarations(DEMAND_ID, EVIDENCE_ID);
+  const second = evidenceDeclarations(DEMAND_ID, ANOTHER_EVIDENCE_ID);
   equal(first[0].placement.relativePath, second[0].placement.relativePath);
   equal(first[2].declarationId, second[2].declarationId);
   equal(first[2].placement.relativePath, second[2].placement.relativePath);

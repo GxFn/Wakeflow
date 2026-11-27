@@ -15,7 +15,6 @@ import {
   createWakeflowMaintenanceExecutionIntent,
   createWakeflowMaintenanceIntentResourceDeclaration,
   parseWakeflowMaintenanceExecutionIntent,
-  parseWakeflowMaintenanceExecutionIntentDocument,
   reconstructWakeflowMaintenanceExecutionFromIntent,
   renderWakeflowMaintenanceExecutionIntent,
   WakeflowMaintenanceExecutionIntentError,
@@ -109,7 +108,7 @@ test("compact intent reconstructs the exact plan and request after restart", () 
   );
 
   const text = renderWakeflowMaintenanceExecutionIntent(intent);
-  deepEqual(parseWakeflowMaintenanceExecutionIntentDocument(text), intent);
+  deepEqual(parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)), intent);
   equal(
     computeWakeflowMaintenanceExecutionIntentDigest(JSON.parse(text)),
     computeWakeflowMaintenanceExecutionIntentDigest(intent),
@@ -142,8 +141,8 @@ test("the completed-steps counter starts at zero, advances by one, stays outside
     false,
   );
   deepEqual(
-    parseWakeflowMaintenanceExecutionIntentDocument(
-      renderWakeflowMaintenanceExecutionIntent(advanced),
+    parseWakeflowMaintenanceExecutionIntent(
+      JSON.parse(renderWakeflowMaintenanceExecutionIntent(advanced)),
     ),
     advanced,
   );
@@ -307,13 +306,13 @@ test("intent carries the optional writer stamp, round-trips it and reconstructs 
     version: "1.2.0",
     manifestDigest: WRITER.manifestDigest,
   });
-  deepEqual(parseWakeflowMaintenanceExecutionIntentDocument(text), intent);
+  deepEqual(parseWakeflowMaintenanceExecutionIntent(JSON.parse(text)), intent);
   equal(
     computeWakeflowMaintenanceExecutionIntentDigest(JSON.parse(text)),
     computeWakeflowMaintenanceExecutionIntentDigest(intent),
   );
-  const legacy = parseWakeflowMaintenanceExecutionIntentDocument(
-    renderWakeflowMaintenanceExecutionIntent(unstamped),
+  const legacy = parseWakeflowMaintenanceExecutionIntent(
+    JSON.parse(renderWakeflowMaintenanceExecutionIntent(unstamped)),
   );
   equal(Object.hasOwn(legacy, "writer"), false);
 

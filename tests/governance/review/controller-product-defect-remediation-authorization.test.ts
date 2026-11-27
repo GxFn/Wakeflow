@@ -13,9 +13,7 @@ import {
   type CreateControllerProductDefectRemediationAuthorizationInput,
   createControllerProductDefectRemediationAuthorization,
   parseControllerProductDefectRemediationAuthorization,
-  parseControllerProductDefectRemediationAuthorizationDocument,
   productDefectRemediationAuthorizedEventId,
-  renderControllerProductDefectRemediationAuthorization,
 } from "../../../src/governance/review/controller-product-defect-remediation-authorization.js";
 import {
   type ControllerTestReviewDecision,
@@ -185,12 +183,6 @@ test("产品缺陷修复授权从决定的 remediation 与读侧基线派生失�
   equal(Object.isFrozen(authorization), true);
   equal(Object.isFrozen(authorization.source), true);
   equal(Object.isFrozen(authorization.affectedTargets[0]?.baseline), true);
-  equal(
-    parseControllerProductDefectRemediationAuthorizationDocument(
-      renderControllerProductDefectRemediationAuthorization(authorization),
-    ).authorizationDigest,
-    authorization.authorizationDigest,
-  );
 });
 
 test("修复授权在分配身份与时间前拒绝错误Decision、缺失基线与不闭合映射", () => {

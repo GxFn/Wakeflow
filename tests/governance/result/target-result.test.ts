@@ -7,12 +7,9 @@ import {
 import { createImplementationTargetResultReport } from "../../../src/governance/result/implementation-target-result-report.js";
 import {
   parseTargetResult,
-  parseTargetResultDocument,
-  renderTargetResult,
   type TargetResultDeliveryBinding,
   TargetResultError,
   targetResultIdForClaim,
-  targetResultRecordedCommitIdFromResult,
   targetResultRecordedEventIdFromResult,
 } from "../../../src/governance/result/target-result.js";
 import { deriveDurableId } from "../../../src/kernel/ids.js";
@@ -62,12 +59,7 @@ test("TargetResult闭合TaskPackage、投递信封、结局与Agent Report但不
     targetResultRecordedEventIdFromResult(result),
     deriveDurableId("demand-event", "target-result", claim.claimId),
   );
-  equal(
-    targetResultRecordedCommitIdFromResult(result),
-    deriveDurableId("demand-event-commit", "target-result", claim.claimId),
-  );
-  const document = renderTargetResult(result);
-  equal(parseTargetResultDocument(document).resultDigest, result.resultDigest);
+  equal(parseTargetResult(JSON.parse(JSON.stringify(result))).resultDigest, result.resultDigest);
 });
 
 test("completed TargetResult要求完整anchor mapping与TaskPackage commit policy", () => {
@@ -202,11 +194,7 @@ test("R5（§13.210）：取代的结果由同一声明的第二序号派生身�
     targetResultRecordedEventIdFromResult(second),
     deriveDurableId("demand-event", "target-result-supersede", claim.claimId),
   );
-  equal(
-    targetResultRecordedCommitIdFromResult(second),
-    deriveDurableId("demand-event-commit", "target-result-supersede", claim.claimId),
-  );
-  equal(parseTargetResultDocument(renderTargetResult(second)).supersedes, first.targetResultId);
+  equal(parseTargetResult(JSON.parse(JSON.stringify(second))).supersedes, first.targetResultId);
   const relation = (error: unknown) =>
     error instanceof TargetResultError && error.reason === "relation";
   throws(() => parseTargetResult({ ...first, supersedes: first.targetResultId }), relation);

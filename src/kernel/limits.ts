@@ -3,12 +3,11 @@ import type { JsonValue } from "../foundation/data/json-value.js";
 import { fail } from "./error.js";
 
 /**
- * Wakeflow Kernel / Limits：公共请求与结果、投递 prompt 字符数和分页条目数的上限表
- *（ADR-0013 决定 C 与节点评估 C3）。
+ * Wakeflow Kernel / Limits：公共请求与结果的上限表（ADR-0013 决定 C 与节点评估 C3）。
  *
  * 每个上限以用途命名而不是以工具命名。hook 观察记录、活动投影与 hook 目录等存储上限
  * 由各自的所有者模块定义，不在此表中。
- * 字节上限按规范 JSON 编码后的字节数度量，字符上限按 UTF-16 码元数度量。
+ * 字节上限按规范 JSON 编码后的字节数度量。
  */
 
 export const WAKEFLOW_LIMITS = Object.freeze({
@@ -19,10 +18,6 @@ export const WAKEFLOW_LIMITS = Object.freeze({
    * 现场最大的结果约 32 KiB，4 MiB 是对投影回归有意义的上限（§13.165 K7）；按工具的预算归 Q12。
    */
   publicResultBytes: 4 * 1024 * 1024,
-  /** 投递 prompt 与回调正文的字符数。 */
-  promptCharacters: 65_536,
-  /** 分页读取一页的最大条目数。 */
-  listPageItems: 256,
 } as const);
 
 /**
@@ -71,30 +66,5 @@ export function assertCanonicalTextWithinLimit(
 ): void {
   if (Buffer.byteLength(text, "utf8") > WAKEFLOW_LIMITS[limit]) {
     fail("output-boundary", BYTE_LIMIT_REASONS[limit], path);
-  }
-}
-
-/** 文本字符数超过命名上限即以 `capacity-exceeded` 失败。 */
-export function assertWithinCharacterLimit(
-  text: string,
-  limit: Extract<WakeflowLimitName, "promptCharacters">,
-  path = "$",
-): void {
-  if (text.length > WAKEFLOW_LIMITS[limit]) {
-    fail("capacity-exceeded", "prompt-characters", path);
-  }
-}
-
-/** 条目数超过命名上限即以 `capacity-exceeded` 失败。 */
-export function assertWithinItemLimit(
-  count: number,
-  limit: Extract<WakeflowLimitName, "listPageItems">,
-  path = "$",
-): void {
-  if (!Number.isSafeInteger(count) || count < 0) {
-    fail("invalid-request", "count-not-integer", path);
-  }
-  if (count > WAKEFLOW_LIMITS[limit]) {
-    fail("capacity-exceeded", "list-page-items", path);
   }
 }

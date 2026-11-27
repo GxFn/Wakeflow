@@ -1,4 +1,4 @@
-import { deepEqual, equal, notEqual } from "node:assert/strict";
+import { equal, notEqual } from "node:assert/strict";
 import { test } from "node:test";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
@@ -7,7 +7,6 @@ import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claud
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
   createWakeflowSupportMemoryAuthority,
-  parseWakeflowSupportMemoryAuthority,
   WakeflowSupportMemoryAuthorityError,
 } from "../../../src/workspace/support/wakeflow-support-memory-authority.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
@@ -82,7 +81,6 @@ test("Design whole-file memory is a thin English identity and role contract", ()
       bodyDigest: authority.bodyDigest,
     }),
   );
-  deepEqual(parseWakeflowSupportMemoryAuthority(authority), authority);
   assertDeepFrozen(authority);
 });
 
@@ -113,7 +111,7 @@ test("Test whole-file memory uses persisted Simplified Chinese and Test boundari
   notEqual(chinese.authorityDigest, english.authorityDigest);
 });
 
-test("whole-file memory encodes user text and rejects external or forged authority", () => {
+test("whole-file memory encodes user text and rejects an external surface", () => {
   const config = createMinimalWakeflowConfig();
   const surface = (
     config.topology as {
@@ -150,39 +148,5 @@ test("whole-file memory encodes user text and rejects external or forged authori
   if (externalError instanceof WakeflowSupportMemoryAuthorityError) {
     equal(externalError.reason, "surface");
     equal(externalError.path, "$surfaceId");
-  }
-
-  const forgedBody = authority.body.replace(
-    "Do not implement product code",
-    "Implement product code",
-  );
-  let forgedError: unknown;
-  try {
-    parseWakeflowSupportMemoryAuthority({
-      ...authority,
-      body: forgedBody,
-      bodyDigest: computeSha256Digest(encodeUtf8(forgedBody)),
-    });
-  } catch (error: unknown) {
-    forgedError = error;
-  }
-  equal(forgedError instanceof WakeflowSupportMemoryAuthorityError, true);
-  if (forgedError instanceof WakeflowSupportMemoryAuthorityError) {
-    equal(forgedError.reason, "authority");
-  }
-
-  let malformedError: unknown;
-  try {
-    parseWakeflowSupportMemoryAuthority({
-      ...authority,
-      body: authority.body.trimEnd(),
-    });
-  } catch (error: unknown) {
-    malformedError = error;
-  }
-  equal(malformedError instanceof WakeflowSupportMemoryAuthorityError, true);
-  if (malformedError instanceof WakeflowSupportMemoryAuthorityError) {
-    equal(malformedError.reason, "authority");
-    equal(malformedError.path, "$authority.body");
   }
 });

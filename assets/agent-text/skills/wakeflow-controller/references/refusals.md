@@ -68,7 +68,7 @@ Take identifiers only from a previous result. Read `wakeflow_status` or the boar
 Reduce what the request carries, or tell the user which bound was reached; do not split one record into several to get around it.
 
 - **delivery**: `prompt-capacity`
-- **kernel**: `index-bytes`, `list-page-items`, `projection-bytes`, `prompt-characters`
+- **kernel**: `index-bytes`, `projection-bytes`
 - **result-review**: `prompt-capacity`
 
 ## `recovery-required` - an earlier write was interrupted

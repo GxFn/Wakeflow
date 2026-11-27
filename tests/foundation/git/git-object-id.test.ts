@@ -1,11 +1,7 @@
 import { deepEqual, throws } from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  GitObjectIdError,
-  parseGitObjectId,
-  sameGitObjectId,
-} from "../../../src/foundation/git/git-object-id.js";
+import { GitObjectIdError, parseGitObjectId } from "../../../src/foundation/git/git-object-id.js";
 
 test("Git object ID显式区分完整SHA-1与SHA-256格式", () => {
   const sha1 = parseGitObjectId({ algorithm: "sha1", value: "a".repeat(40) });
@@ -15,9 +11,6 @@ test("Git object ID显式区分完整SHA-1与SHA-256格式", () => {
   });
   deepEqual(sha1, { algorithm: "sha1", value: "a".repeat(40) });
   deepEqual(sha256, { algorithm: "sha256", value: "b".repeat(64) });
-  if (!sameGitObjectId(sha256, { ...sha256 })) {
-    throw new Error("Expected equal Git object IDs.");
-  }
 });
 
 test("Git object ID拒绝缩写、大写、算法长度错配和额外字段", () => {

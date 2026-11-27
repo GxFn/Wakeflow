@@ -1,19 +1,14 @@
-import { deepEqual, equal, rejects } from "node:assert/strict";
+import { deepEqual, equal } from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
 import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../../src/foundation/crypto/canonical-json-sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
-import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { executeDemandEventSourcingCommand } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-command-handler.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
-import {
-  DemandPostAcceptanceRouteError,
-  readDemandPostAcceptanceRoute,
-} from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   cleanupTargetTaskPlanningWorkspaceFixture,
@@ -25,6 +20,7 @@ import {
   createControllerImplementationReviewDecisionServiceFixture,
   decideFixtureImplementation,
 } from "./controller-implementation-review-decision-service.fixture.js";
+import { readPostAcceptanceRoute } from "./demand-post-acceptance-route.fixture.js";
 
 useDisposableDurability();
 
@@ -58,7 +54,7 @@ async function inspectDemandInventory(workspacePath: string, demandId: string) {
 test("controller-only在全部产品Target accepted后只进入completion preflight", async () => {
   const fixture = await createControllerImplementationReviewDecisionServiceFixture();
   try {
-    const waiting = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+    const waiting = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
     equal(waiting.nextStage.status, "not-ready");
     if (waiting.nextStage.status !== "not-ready") {
       throw new Error("Expected not-ready route before acceptance.");
@@ -69,8 +65,8 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
 
     const decision = await acceptCurrentTarget(fixture);
     const before = await inspectDemandInventory(fixture.workspacePath, fixture.demandId);
-    const first = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
-    const second = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+    const first = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+    const second = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
     const after = await inspectDemandInventory(fixture.workspacePath, fixture.demandId);
     deepEqual(second, first);
     deepEqual(after, before);
@@ -90,14 +86,6 @@ test("controller-only在全部产品Target accepted后只进入completion prefli
     equal(routeDigest, computeCanonicalJsonSha256Digest(basis));
     equal(Object.hasOwn(first.nextStage, "testEnvironmentAuthority"), false);
     equal(/(?:TestCard|completionEvent|completeDemand)/u.test(JSON.stringify(first)), false);
-
-    await rejects(
-      readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId, {
-        extra: true,
-      } as never),
-      (error: unknown) =>
-        error instanceof DemandPostAcceptanceRouteError && error.reason === "input",
-    );
   } finally {
     await cleanupControllerImplementationReviewDecisionServiceFixture(fixture);
   }
@@ -109,7 +97,7 @@ test("real-environment只路由到Test planning并暴露需求包的环境Author
   });
   try {
     await acceptCurrentTarget(fixture);
-    const route = await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
+    const route = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId);
     equal(route.testingDecision.mode, "real-environment");
     equal(route.nextStage.status, "test-task-planning");
     if (route.nextStage.status !== "test-task-planning") {
@@ -135,10 +123,7 @@ test("real-environment只路由到Test planning并暴露需求包的环境Author
 test("尚未规划Target的非research Demand保持明确not-ready默认分支", async () => {
   const fixture = await createTargetTaskPlanningWorkspaceFixture();
   try {
-    const route = await readDemandPostAcceptanceRoute(
-      fixture.workspaceRoot,
-      fixture.request.demandId,
-    );
+    const route = await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.request.demandId);
     equal(route.nextStage.status, "not-ready");
     if (route.nextStage.status !== "not-ready") {
       throw new Error("Expected no-target not-ready route.");
@@ -177,7 +162,7 @@ test("尚未规划Target的非research Demand保持明确not-ready默认分支",
     } finally {
       await demandRoot.close();
     }
-    const cancelled = await readDemandPostAcceptanceRoute(
+    const cancelled = await readPostAcceptanceRoute(
       fixture.workspaceRoot,
       fixture.request.demandId,
     );
@@ -186,26 +171,6 @@ test("尚未规划Target的非research Demand保持明确not-ready默认分支",
       throw new Error("Expected cancelled not-ready route.");
     }
     equal(cancelled.nextStage.reason, "demand-cancelled");
-  } finally {
-    await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
-  }
-});
-
-test("Post-acceptance route拒绝非RootedDirectory与预取消读取", async () => {
-  await rejects(
-    readDemandPostAcceptanceRoute({}, "demand_22222222-2222-4222-8222-222222222222"),
-    (error: unknown) => error instanceof DemandPostAcceptanceRouteError && error.reason === "input",
-  );
-  const fixture = await createTargetTaskPlanningWorkspaceFixture();
-  const abort = new AbortController();
-  abort.abort();
-  try {
-    await rejects(
-      readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.request.demandId, {
-        signal: abort.signal,
-      }),
-      OperationAbortedError,
-    );
   } finally {
     await cleanupTargetTaskPlanningWorkspaceFixture(fixture);
   }

@@ -2,16 +2,12 @@ import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
-import {
-  parseTargetResultDocument,
-  renderTargetResult,
-} from "../../../src/governance/result/target-result.js";
+import { parseTargetResult } from "../../../src/governance/result/target-result.js";
 import {
   createTestTargetResult,
   TestTargetResultError,
 } from "../../../src/governance/result/test-target-result.js";
 import { createTestTargetResultReport } from "../../../src/governance/result/test-target-result-report.js";
-import { readDemandPostAcceptanceRoute } from "../../../src/governance/review/demand-post-acceptance-route.js";
 import { readDemandResultReviewSnapshot } from "../../../src/governance/review/demand-result-review-snapshot.js";
 import { inspectWorkClaim } from "../../../src/kernel/work-claims.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -30,6 +26,7 @@ import {
   TEST_RESULT_REPORTED_AT,
   testResultReportContent,
 } from "../review/controller-test-review-decision-service.fixture.js";
+import { readPostAcceptanceRoute } from "../review/demand-post-acceptance-route.fixture.js";
 import { deliveryBindingFromOutcome } from "./target-result.fixture.js";
 
 useDisposableDurability();
@@ -69,7 +66,7 @@ test("TestTargetResult闭合测试合同、attempt与投递结局并携带派生
     equal(result.report.steps.length, taskPackage.testContract.steps.length);
     equal(result.report.verdict, "pass");
     equal(Object.hasOwn(result, "controllerDecision"), false);
-    equal(parseTargetResultDocument(renderTargetResult(result)).resultDigest, result.resultDigest);
+    equal(parseTargetResult(JSON.parse(JSON.stringify(result))).resultDigest, result.resultDigest);
 
     const incompleteReport = createTestTargetResultReport(
       {
@@ -98,8 +95,7 @@ test("TestTargetResult闭合测试合同、attempt与投递结局并携带派生
       "absent",
     );
     equal(
-      (await readDemandPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId)).nextStage
-        .status,
+      (await readPostAcceptanceRoute(fixture.workspaceRoot, fixture.demandId)).nextStage.status,
       "test-result-review-planning",
     );
 

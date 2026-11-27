@@ -20,8 +20,6 @@ import {
   createWakeflowWorkspaceStaticResourceMatrix,
   findWakeflowWorkspaceStaticResourceByDeclarationId,
   parseWakeflowWorkspaceStaticResourceMatrix,
-  selectWakeflowWorkspaceStaticResourcesByFamily,
-  selectWakeflowWorkspaceStaticResourcesByOwner,
   WakeflowWorkspaceStaticResourceMatrixError,
 } from "../../src/workspace/wakeflow-workspace-static-resource-matrix.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
@@ -228,7 +226,7 @@ test("Static Resource Matrix rejects a duplicate logical placement", () => {
   }
 });
 
-test("Static Resource Matrix exposes only narrow frozen queries", () => {
+test("Static Resource Matrix exposes only a narrow lookup query", () => {
   const matrix = createWakeflowWorkspaceStaticResourceMatrix(codexWorkspaceHostResourceProfile);
   deepEqual(
     findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "workspace.config-authority"),
@@ -236,29 +234,15 @@ test("Static Resource Matrix exposes only narrow frozen queries", () => {
   );
   equal(findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "workspace.missing"), null);
 
-  const demand = selectWakeflowWorkspaceStaticResourcesByFamily(matrix, "demand");
-  deepEqual(
-    demand.map((entry) => entry.declarationId),
-    sorted(WAKEFLOW_DEMAND_STATIC_RESOURCE_CATALOG.map((entry) => entry.declarationId)),
-  );
-  equal(Object.isFrozen(demand), true);
-
-  const configOwner = selectWakeflowWorkspaceStaticResourcesByOwner(matrix, "config-authority");
-  deepEqual(
-    configOwner.map((entry) => entry.declarationId),
-    ["workspace.config-authority"],
-  );
-  equal(Object.isFrozen(configOwner), true);
-
   let invalidQuery: unknown;
   try {
-    selectWakeflowWorkspaceStaticResourcesByFamily(matrix, "unknown-family");
+    findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "");
   } catch (error: unknown) {
     invalidQuery = error;
   }
   equal(invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
   if (invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError) {
     equal(invalidQuery.reason, "query");
-    equal(invalidQuery.path, "$/family");
+    equal(invalidQuery.path, "$/declarationId");
   }
 });

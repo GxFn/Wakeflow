@@ -7063,3 +7063,13 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 0 档 `wf verify quick --changed`：154 个测试文件，789/789，回执 `.build/verification/run-aGAvwH/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
 
 **结论：批 3 完成，净减 144 行；三批合计 `src` 净减 1,046 行。批 4 要改拒绝原因的名字，先给用户清单。**
+
+### 13.300 1.4.5 批 4：`io-failure` 的 `<标签>-<原因>` 只有一个拼法，名字不变（2026-11-26）
+
+- **先清点，再改做法。** 计划里这一批要改掉一批拒绝原因的名字。开工前的只读清点量出改名换不来更多行数、还丢信息（数字在[计划](../reviews/2026-11-27-1.4.5-storage-plan.md)第 6 节），所以改成不改名：内核一个 `failIo(label, path, error)`，抛出的与各处今天抛出的逐字节相同。
+- **改了什么。** 19 个文件的 56 处模板点改调 `failIo`（其中 6 处的下层是别的模块的错误而不是基础层的）；`mapFoundationError` 只有最后一行改调它。提交见本节之前的 `refactor:` 提交：`src` 20 个文件 +108 / −175（净减 67 行），`tests` 一个文件 +30。比清点估的 105 到 150 行少，因为约 26 处换完仍然超过 100 列，要占两行。机械改动由 Opus 子代理做，我定规则、读了助手与两个文件的差异。
+- **没有动的。** 错误码不是 `io-failure` 的 7 处（四把锁、观察文件、两处需求包文档）、标签是算出来的一处（Pod 回执写入）、`*-changed` 那条可重试分支；另有 21 处把别的模块的错误拼成 `precondition-failed` 等原因的，以及 22 处预览阻塞码，都不是这条规则。
+- **对外。** 没有变化：`refusals:check` 189 个原因不变，已有测试没有改。
+- **验证。** 第 0 档 `wf verify quick --changed`：224 个测试文件，1,225/1,225，回执 `.build/verification/run-9KsAfU/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
+
+**结论：批 4 完成，净减 67 行；四批合计 `src` 净减 1,113 行。**

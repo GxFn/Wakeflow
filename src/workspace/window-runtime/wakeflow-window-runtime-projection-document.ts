@@ -18,7 +18,7 @@ import {
 import { StrictTextFileError } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 
 /**
  * Wakeflow Workspace / Window Runtime：窗口运行投影文档的落盘与零写检查。
@@ -83,9 +83,8 @@ export async function inspectWakeflowWindowRuntimeProjectionDocument(
     if (
       error instanceof StableFileReadError &&
       (error.reason === "root-scope" || error.reason === "input")
-    ) {
-      fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
-    }
+    )
+      failIo("projection-read", "$projection", error);
     if (
       error instanceof StableFileReadError ||
       error instanceof StrictTextFileError ||
@@ -130,9 +129,7 @@ export async function publishWakeflowWindowRuntimeProjectionDocument(
       ...options,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
-    }
+    if (error instanceof StableFileReadError) failIo("projection-read", "$projection", error);
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("io-failure", "projection-read-unsafe", "$projection", { cause: error });
     }
@@ -156,9 +153,8 @@ export async function publishWakeflowWindowRuntimeProjectionDocument(
       disposition = "replaced";
     }
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `projection-write-${error.reason}`, "$projection", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError)
+      failIo("projection-write", "$projection", error);
     throw error;
   }
   return Object.freeze({

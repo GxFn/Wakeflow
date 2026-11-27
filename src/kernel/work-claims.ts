@@ -39,7 +39,7 @@ import {
   UtcInstantError,
   type UtcInstant,
 } from "../foundation/time/utc-instant.js";
-import { fail, isWakeflowError } from "./error.js";
+import { fail, failIo, isWakeflowError } from "./error.js";
 import { deriveDurableId } from "./ids.js";
 import type { WakeflowHostId } from "../contracts/vocabulary/wakeflow-host-id.js";
 import { parseUuidV4 } from "../foundation/identity/uuid-v4.js";
@@ -348,9 +348,8 @@ export async function takeWorkClaim(
   try {
     await materializeDirectoryPath(root, WORK_CLAIMS_ROOT_REF, { mode: DIRECTORY_MODE, ...signal });
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `claim-directory-${error.reason}`, "$claim", { cause: error });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("claim-directory", "$claim", error);
     throw error;
   }
   const document = renderWorkClaim(claim);
@@ -362,9 +361,7 @@ export async function takeWorkClaim(
     return Object.freeze({ disposition: "created" as const, claim });
   } catch (error: unknown) {
     if (!(error instanceof DurableAtomicFileWriteError) || error.reason !== "target-exists") {
-      if (error instanceof DurableAtomicFileWriteError) {
-        fail("io-failure", `claim-write-${error.reason}`, "$claim", { cause: error });
-      }
+      if (error instanceof DurableAtomicFileWriteError) failIo("claim-write", "$claim", error);
       throw error;
     }
   }
@@ -410,9 +407,7 @@ export async function releaseWorkClaim(
       ...signal,
     });
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail("io-failure", `claim-release-${error.reason}`, "$claim", { cause: error });
-    }
+    if (error instanceof ExactRegularFileUnlinkError) failIo("claim-release", "$claim", error);
     throw error;
   }
   return Object.freeze({ disposition: "released" as const, claim: inspected.claim });

@@ -63,7 +63,7 @@ import {
   readDemandResultReviewSnapshot,
 } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_DEMAND_TREE_CAPACITY } from "../../kernel/limits.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
@@ -332,7 +332,7 @@ function mapDemandTreeReadError(error: StableResourceTreeReadError): never {
       retryable: true,
     });
   }
-  fail("io-failure", `demand-root-read-${error.reason}`, "$request.demandId", { cause: error });
+  failIo("demand-root-read", "$request.demandId", error);
 }
 
 /** `resourcePath` 的祖先目录里当前树还没有的个数：记录会把它们一并建出来。 */

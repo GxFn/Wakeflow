@@ -197,6 +197,14 @@ export function fail(
 }
 
 /**
+ * 把下层的 I/O 失败报成 `io-failure`：原因是固定标签接下层错误的 `reason`（`locator-read-not-found`），
+ * 下层错误留作 cause，不可重试，没有 details。这个拼法只写在这里（1.4.5 批 4）。
+ */
+export function failIo(label: string, path: string, error: { readonly reason: string }): never {
+  fail("io-failure", `${label}-${error.reason}`, path, { cause: error });
+}
+
+/**
  * 以阻塞项拒绝：第一个阻塞项冒号前的阻塞码是原因，全部阻塞项按 `blocker`、`blocker2`… 进入公开
  * details（至多 8 个）。details 的值只能是短标识，所以带别的字符的阻塞项（例如 Unicode 章节锚点
  * `section-anchor-unknown:性能约束`）只留下阻塞码（§13.131 审查）。

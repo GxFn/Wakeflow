@@ -48,7 +48,7 @@ import {
   type LoadedLedgerAuthorityRecord,
 } from "../../governance/ledger/ledger-authority-store.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceLock } from "../../kernel/workspace-locks.js";
 import { KernelFileLockError } from "../../foundation/filesystem/kernel-file-lock.js";
 import { LEDGER_RECORD_PUBLICATION_LOCK_TIMEOUT_MILLISECONDS } from "../../governance/ledger/ledger-authority-storage-policy.js";
@@ -205,7 +205,7 @@ function mapStoreError(error: unknown): never {
     if (error.reason === "timeout") {
       fail("concurrency-conflict", "ledger-lock", "$ledger", { cause: error, retryable: true });
     }
-    fail("io-failure", `ledger-lock-${error.reason}`, "$ledger", { cause: error });
+    failIo("ledger-lock", "$ledger", error);
   }
   if (error instanceof LedgerAuthorityStoreError) {
     switch (error.reason) {
@@ -219,7 +219,7 @@ function mapStoreError(error: unknown): never {
         fail("recovery-required", "ledger-publication", "$ledger", { cause: error });
         break;
       default:
-        fail("io-failure", `ledger-${error.reason}`, "$ledger", { cause: error });
+        failIo("ledger", "$ledger", error);
     }
   }
   throw error;
@@ -304,9 +304,8 @@ async function readSurfaceDocument(
     if (
       error instanceof StableFileReadError &&
       (error.reason === "io-failure" || error.reason === "close-failure")
-    ) {
-      fail("io-failure", `package-document-${error.reason}`, requestPath, { cause: error });
-    }
+    )
+      failIo("package-document", requestPath, error);
     if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
       fail("invalid-request", `package-document-${error.reason}`, requestPath, { cause: error });
     }

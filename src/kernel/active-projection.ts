@@ -50,7 +50,7 @@ import { currentUserIdOrNull } from "../foundation/node/current-user.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
-import { fail } from "./error.js";
+import { fail, failIo } from "./error.js";
 import { withWorkspaceLock } from "./workspace-locks.js";
 import {
   demandProjectionIndexRef,
@@ -228,9 +228,8 @@ async function createLayoutDirectory(
     });
     return created.node;
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `active-layout-${error.reason}`, errorPath, { cause: error });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("active-layout", errorPath, error);
     throw error;
   }
 }
@@ -1122,7 +1121,7 @@ function mapWriteError(error: DurableAtomicFileWriteError): never {
   ) {
     fail("io-failure", "projection-contended", "$projection", { cause: error, retryable: true });
   }
-  fail("io-failure", `projection-write-${error.reason}`, "$projection", { cause: error });
+  failIo("projection-write", "$projection", error);
 }
 
 async function ensureProjectionDirectories(
@@ -1141,11 +1140,8 @@ async function ensureProjectionDirectories(
         ...signalOptions(signal),
       });
     } catch (error: unknown) {
-      if (error instanceof DurableDirectoryMaterializationError) {
-        fail("io-failure", `projection-directory-${error.reason}`, `$projection/${directory}`, {
-          cause: error,
-        });
-      }
+      if (error instanceof DurableDirectoryMaterializationError)
+        failIo("projection-directory", `$projection/${directory}`, error);
       throw error;
     }
   }
@@ -1199,9 +1195,8 @@ async function listDemandProjectionDirectories(
         .sort(),
     );
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `projection-listing-${error.reason}`, "$projection", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError)
+      failIo("projection-listing", "$projection", error);
     throw error;
   }
 }
@@ -1268,11 +1263,8 @@ async function unlinkMember(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail("io-failure", `projection-retire-${error.reason}`, `$projection/${directory}`, {
-        cause: error,
-      });
-    }
+    if (error instanceof ExactRegularFileUnlinkError)
+      failIo("projection-retire", `$projection/${directory}`, error);
     throw error;
   }
 }
@@ -1377,7 +1369,7 @@ function mapLockError(error: KernelFileLockError): never {
   if (error.reason === "timeout") {
     fail("io-failure", "projection-contended", "$projection", { cause: error, retryable: true });
   }
-  fail("io-failure", `projection-lock-${error.reason}`, "$projection", { cause: error });
+  failIo("projection-lock", "$projection", error);
 }
 
 function receiptOf(

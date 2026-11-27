@@ -45,7 +45,7 @@ import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-j
 import { truncateToCodePoints } from "../foundation/text/bounded-text.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
-import { fail, WakeflowError } from "./error.js";
+import { fail, failIo, WakeflowError } from "./error.js";
 import {
   REQUIREMENT_BOARD_INDEX_REF,
   REQUIREMENT_BOARD_ROOT_REF,
@@ -402,9 +402,7 @@ async function readSource(
     );
     return Object.freeze({ state, digest: computeRequirementClaimStateDigest(state), read });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      fail("io-failure", `claim-state-read-${error.reason}`, "$claimState", { cause: error });
-    }
+    if (error instanceof StableFileReadError) failIo("claim-state-read", "$claimState", error);
     if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
       fail("io-failure", "claim-state-read", "$claimState", { cause: error });
     }
@@ -460,9 +458,7 @@ export async function listRequirementClaimStates(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `board-listing-${error.reason}`, "$board", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError) failIo("board-listing", "$board", error);
     throw error;
   }
   if (listing === null) return Object.freeze({ states: Object.freeze([]), skipped: 0 });
@@ -488,9 +484,8 @@ export async function materializeRequirementBoardRoot(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `board-directory-${error.reason}`, "$board", { cause: error });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("board-directory", "$board", error);
     throw error;
   }
 }
@@ -521,9 +516,8 @@ export async function createRequirementClaimStateFile(
         { mode: FILE_MODE, ...signalOptions(signal) },
       );
     } catch (error: unknown) {
-      if (error instanceof DurableAtomicFileWriteError) {
-        fail("io-failure", `claim-state-write-${error.reason}`, "$claimState", { cause: error });
-      }
+      if (error instanceof DurableAtomicFileWriteError)
+        failIo("claim-state-write", "$claimState", error);
       throw error;
     }
     return "created";
@@ -573,7 +567,7 @@ export async function replaceRequirementClaimStateFile(
             retryable: true,
           });
         }
-        fail("io-failure", `claim-state-write-${error.reason}`, "$claimState", { cause: error });
+        failIo("claim-state-write", "$claimState", error);
       }
       throw error;
     }
@@ -728,9 +722,8 @@ export async function publishRequirementBoardIndex(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
-      fail("io-failure", `board-index-read-${error.reason}`, "$boardIndex", { cause: error });
-    }
+    if (error instanceof StableFileReadError || error instanceof StrictTextFileError)
+      failIo("board-index-read", "$boardIndex", error);
     throw error;
   }
   const document = renderRequirementBoardIndex(
@@ -757,9 +750,8 @@ export async function publishRequirementBoardIndex(
       });
     }
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `board-index-write-${error.reason}`, "$boardIndex", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError)
+      failIo("board-index-write", "$boardIndex", error);
     throw error;
   }
   return computeSha256Digest(bytes);

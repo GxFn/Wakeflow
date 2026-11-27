@@ -37,7 +37,7 @@ import {
   LedgerAuthorityStoreError,
 } from "../../governance/ledger/ledger-authority-store.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 import type { PublicationTransactionEnvelope } from "../../kernel/publication-transaction.js";
 import { deriveNextProjection, type NextProjection } from "../../kernel/next-projection.js";
 import { readRequirementClaimState } from "../../kernel/requirement-board.js";
@@ -213,9 +213,7 @@ export async function demandRootExists(root: RootedDirectory, demandId: string):
   try {
     return (await root.inspectResourceOrNull(demandFinalRootRef(demandId), "$demandRoot")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) {
-      fail("io-failure", `demand-root-${error.reason}`, "$demandRoot", { cause: error });
-    }
+    if (error instanceof RootedDirectoryError) failIo("demand-root", "$demandRoot", error);
     throw error;
   }
 }

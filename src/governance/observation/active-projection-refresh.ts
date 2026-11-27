@@ -13,7 +13,7 @@ import {
   publishActiveProjection,
   renderActiveProjectionFiles,
 } from "../../kernel/active-projection.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import { buildActiveProjectionFacts } from "./active-projection-facts.js";
 import {
@@ -72,9 +72,8 @@ async function readSnapshot(
   try {
     return await readWakeflowConfigAuthoritySnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
-    if (error instanceof WakeflowConfigAuthoritySnapshotError) {
-      fail("io-failure", `config-${error.reason}`, "$request.root", { cause: error });
-    }
+    if (error instanceof WakeflowConfigAuthoritySnapshotError)
+      failIo("config", "$request.root", error);
     throw error;
   }
 }

@@ -13,7 +13,7 @@ import {
 } from "../foundation/filesystem/rooted-read-write-scope.js";
 import { readStableResourceDirectoryOrNull } from "../foundation/filesystem/stable-directory-read.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
-import { fail, isWakeflowError } from "./error.js";
+import { fail, failIo, isWakeflowError } from "./error.js";
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { parsePlainRecord } from "../foundation/data/passive-own-data.js";
 import {
@@ -71,9 +71,7 @@ async function assertNoMaintenanceReservation(root: RootedDirectory): Promise<vo
   try {
     busy = await isWorkspaceLockHeld(root, "maintenance-gate");
   } catch (error: unknown) {
-    if (error instanceof KernelFileLockError) {
-      fail("io-failure", `maintenance-gate-${error.reason}`, "$workspace", { cause: error });
-    }
+    if (error instanceof KernelFileLockError) failIo("maintenance-gate", "$workspace", error);
     throw error;
   }
   if (busy) fail("concurrency-conflict", "maintenance-busy", "$workspace", { retryable: true });

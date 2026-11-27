@@ -47,7 +47,7 @@ import { OperationAbortedError } from "../foundation/node/abort-signal.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../foundation/time/utc-instant.js";
-import { fail } from "./error.js";
+import { fail, failIo } from "./error.js";
 import {
   HOST_HOOK_FILE_NAME_PATTERN as FILE_NAME_PATTERN,
   partitionedHostHookRef,
@@ -809,11 +809,8 @@ async function materializeHostHookDirectory(
       },
     );
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `observation-directory-${error.reason}`, "$observation", {
-        cause: error,
-      });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("observation-directory", "$observation", error);
     throw error;
   }
 }
@@ -835,9 +832,8 @@ async function createHostHookObservationFile(
     if (error instanceof DurableAtomicFileWriteError && error.reason === "target-exists") {
       return false;
     }
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `observation-write-${error.reason}`, "$observation", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError)
+      failIo("observation-write", "$observation", error);
     throw error;
   }
 }
@@ -1199,12 +1195,9 @@ async function scanObservations(
     );
     await flush();
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) {
-      fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
-    }
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
-    }
+    if (error instanceof RootedDirectoryError) failIo("observation-scope", "$observations", error);
+    if (error instanceof StableDirectoryReadError)
+      failIo("observation-listing", "$observations", error);
     throw error;
   }
   return Object.freeze({ ...counts });
@@ -1314,12 +1307,9 @@ export async function listHostHookStageResidue(
       options.signal === undefined ? {} : { signal: options.signal },
     );
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) {
-      fail("io-failure", `observation-scope-${error.reason}`, "$observations", { cause: error });
-    }
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `observation-listing-${error.reason}`, "$observations", { cause: error });
-    }
+    if (error instanceof RootedDirectoryError) failIo("observation-scope", "$observations", error);
+    if (error instanceof StableDirectoryReadError)
+      failIo("observation-listing", "$observations", error);
     throw error;
   }
   return Object.freeze(

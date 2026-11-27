@@ -18,7 +18,7 @@ import {
 import { OperationAbortedError, signalOptions } from "../../foundation/node/abort-signal.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import { demandArchivePageRef, LEDGER_HISTORY_INDEX_REF } from "../../kernel/layout.js";
 import { createLedgerReadingPageResourceDeclaration } from "../ledger/ledger-resource-catalog.js";
 import { readArchivedReviewSnapshot } from "./archived-demand-observation.js";
@@ -186,9 +186,8 @@ async function readPageOrNull(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
-      fail("io-failure", `reading-page-read-${error.reason}`, "$ledger", { cause: error });
-    }
+    if (error instanceof StableFileReadError || error instanceof StrictTextFileError)
+      failIo("reading-page-read", "$ledger", error);
     throw error;
   }
 }
@@ -244,9 +243,8 @@ async function publishPage(
       });
     }
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `reading-page-write-${error.reason}`, "$ledger", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError)
+      failIo("reading-page-write", "$ledger", error);
     throw error;
   }
   return "written";

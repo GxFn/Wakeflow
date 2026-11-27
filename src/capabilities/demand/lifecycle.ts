@@ -55,7 +55,7 @@ import {
 import { readDemandResultReviewSnapshot } from "../../governance/review/demand-result-review-snapshot.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { refreshLedgerReadingPagesQuietly } from "../../governance/observation/ledger-reading-pages.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {
   DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
   demandArchiveRef,
@@ -405,9 +405,8 @@ function mapCommandError(error: unknown): never {
     }
     fail("precondition-failed", `command-${error.reason}`, "$demandRoot", { cause: error });
   }
-  if (error instanceof DemandEventSourcingRepositoryError) {
-    fail("io-failure", `repository-${error.reason}`, "$demandRoot", { cause: error });
-  }
+  if (error instanceof DemandEventSourcingRepositoryError)
+    failIo("repository", "$demandRoot", error);
   throw error;
 }
 

@@ -39,7 +39,7 @@ import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtim
 import { decodeUtf8, encodeUtf8, Utf8Error } from "../../foundation/text/utf8.js";
 import { DEMAND_REBUILDABLE_DIRECTORY_REFS } from "../../governance/demand/demand-interruption.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {
   demandArchiveRef,
   demandArchivesRootRef,
@@ -121,7 +121,7 @@ export function mapFoundationError(error: unknown, label: string, path: string):
   ) {
     fail("concurrency-conflict", `${label}-${reason}`, path, { cause: error, retryable: true });
   }
-  fail("io-failure", `${label}-${reason}`, path, { cause: error });
+  failIo(label, path, error as { readonly reason: string });
 }
 
 export function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {

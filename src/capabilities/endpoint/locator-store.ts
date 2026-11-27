@@ -37,7 +37,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 import { hostWindowLocatorsRootRef } from "../../kernel/layout.js";
 import type {
   WakeflowWindowLocator,
@@ -226,9 +226,7 @@ async function readLocatorSource(
       read,
     };
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      fail("io-failure", `locator-read-${error.reason}`, "$locator", { cause: error });
-    }
+    if (error instanceof StableFileReadError) failIo("locator-read", "$locator", error);
     // 私有定位器文件损坏：归入记录形状失败，而不是让基础层错误以 unexpected 逃出。
     if (
       error instanceof DeterministicJsonDocumentError ||
@@ -283,9 +281,8 @@ export async function writeWindowLocator(
       ...options,
     });
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `locator-directory-${error.reason}`, "$locator", { cause: error });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("locator-directory", "$locator", error);
     throw error;
   }
   const bytes = encodeUtf8(renderWindowLocatorRecord(record), "$locator");
@@ -306,9 +303,7 @@ export async function writeWindowLocator(
       });
     }
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `locator-write-${error.reason}`, "$locator", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError) failIo("locator-write", "$locator", error);
     throw error;
   }
   return ref;
@@ -330,9 +325,7 @@ export async function retireWindowLocator(
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail("io-failure", `locator-retire-${error.reason}`, "$locator", { cause: error });
-    }
+    if (error instanceof ExactRegularFileUnlinkError) failIo("locator-retire", "$locator", error);
     throw error;
   }
   return "retired";

@@ -41,7 +41,7 @@ import {
 import type { RequirementRecord } from "../../governance/ledger/ledger-authority-record.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions } from "../../kernel/command-shell.js";
-import { fail, WakeflowError } from "../../kernel/error.js";
+import { fail, failIo, WakeflowError } from "../../kernel/error.js";
 import {
   runPublicationTransaction,
   type PublicationTransactionEnvelope,
@@ -148,7 +148,7 @@ export async function loadPackage(
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
       if (error.reason === "not-found") return null;
-      fail("io-failure", `ledger-${error.reason}`, "$ledger", { cause: error });
+      failIo("ledger", "$ledger", error);
     }
     throw error;
   }
@@ -359,7 +359,7 @@ function mapPublicationError(error: unknown): never {
         fail("precondition-failed", `publication-${error.reason}`, "$request", { cause: error });
         break;
       default:
-        fail("io-failure", `publication-${error.reason}`, "$demandRoot", { cause: error });
+        failIo("publication", "$demandRoot", error);
     }
   }
   throw error;

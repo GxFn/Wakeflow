@@ -30,7 +30,7 @@ import {
 } from "../../foundation/filesystem/stable-file-read.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import { fail } from "../../kernel/error.js";
+import { failIo } from "../../kernel/error.js";
 import { DELIVERY_PROMPT_MAXIMUM_CHARACTERS } from "../../kernel/prompt-digest.js";
 import {
   type DemandPermitPromptKind,
@@ -85,9 +85,8 @@ export async function materializeDeliveryPermitPrompt(
       ...signal,
     });
   } catch (error: unknown) {
-    if (error instanceof DurableDirectoryMaterializationError) {
-      fail("io-failure", `permit-directory-${error.reason}`, "$permit", { cause: error });
-    }
+    if (error instanceof DurableDirectoryMaterializationError)
+      failIo("permit-directory", "$permit", error);
     throw error;
   }
   const current = await readCurrentPermitPrompt(demandRoot, ref, signal);
@@ -112,9 +111,7 @@ export async function materializeDeliveryPermitPrompt(
     });
     return "replaced";
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `permit-write-${error.reason}`, "$permit", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError) failIo("permit-write", "$permit", error);
     throw error;
   }
 }
@@ -130,9 +127,7 @@ async function readCurrentPermitPrompt(
       ...signal,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      fail("io-failure", `permit-read-${error.reason}`, "$permit", { cause: error });
-    }
+    if (error instanceof StableFileReadError) failIo("permit-read", "$permit", error);
     throw error;
   }
 }

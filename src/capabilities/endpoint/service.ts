@@ -46,7 +46,7 @@ import { parseUtcInstant, type UtcInstant } from "../../foundation/time/utc-inst
 import { readUtcWallClock, type UtcWallClock } from "../../foundation/time/wall-clock.js";
 import { afterMutationRefresh } from "../../governance/observation/active-projection-refresh.js";
 import { commandShellExecutionOptions, runCommandShell } from "../../kernel/command-shell.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 import {
   isHelperObservationFileReference,
   readHelperObservationFile,
@@ -400,7 +400,7 @@ function mapBindingStoreError(error: unknown): never {
     if (error.reason === "recovery-required") {
       fail("recovery-required", "binding-store", "$request.windowId", { cause: error });
     }
-    fail("io-failure", `binding-${error.reason}`, "$request.windowId", { cause: error });
+    failIo("binding", "$request.windowId", error);
   }
   throw error;
 }
@@ -1281,9 +1281,8 @@ async function applyReplace(
       },
     );
   } catch (error: unknown) {
-    if (error instanceof DurableAtomicFileWriteError) {
-      fail("io-failure", `binding-replace-${error.reason}`, "$request.windowId", { cause: error });
-    }
+    if (error instanceof DurableAtomicFileWriteError)
+      failIo("binding-replace", "$request.windowId", error);
     throw error;
   }
   const summary = await recordWorktree(context, replacement, worktree, observation.observedAt);
@@ -1308,9 +1307,8 @@ async function applyDecommission(
       ...signalOptions(context.signal),
     });
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail("io-failure", `binding-retire-${error.reason}`, "$request.windowId", { cause: error });
-    }
+    if (error instanceof ExactRegularFileUnlinkError)
+      failIo("binding-retire", "$request.windowId", error);
     throw error;
   }
   return Object.freeze({ disposition: "decommissioned" as const, binding: null, worktree: null });
@@ -1483,11 +1481,8 @@ async function writeClaimReleaseReceipt(
     if (
       error instanceof DurableAtomicFileWriteError ||
       error instanceof DurableDirectoryMaterializationError
-    ) {
-      fail("io-failure", `claim-release-receipt-${error.reason}`, "$request.windowId", {
-        cause: error,
-      });
-    }
+    )
+      failIo("claim-release-receipt", "$request.windowId", error);
     throw error;
   }
 }

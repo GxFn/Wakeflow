@@ -61,7 +61,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../foundation/time/utc-instant.js";
-import { fail } from "./error.js";
+import { fail, failIo } from "./error.js";
 import {
   hostPodReceiptsRootRef,
   parseWakeflowHostId,
@@ -668,9 +668,7 @@ export async function listPodWorktreeReceipts(
       ...signalOptions(options.signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `receipt-listing-${error.reason}`, "$receipt", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError) failIo("receipt-listing", "$receipt", error);
     throw error;
   }
   if (listing === null) return Object.freeze([]);
@@ -764,9 +762,7 @@ export async function listPodReceiptDirectories(
         .sort(),
     );
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `receipt-listing-${error.reason}`, "$receipt", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError) failIo("receipt-listing", "$receipt", error);
     throw error;
   }
 }
@@ -789,9 +785,7 @@ export async function retirePodWorktreeReceipt(
     });
     return true;
   } catch (error: unknown) {
-    if (error instanceof ExactRegularFileUnlinkError) {
-      fail("io-failure", `receipt-retire-${error.reason}`, "$receipt", { cause: error });
-    }
+    if (error instanceof ExactRegularFileUnlinkError) failIo("receipt-retire", "$receipt", error);
     throw error;
   }
 }

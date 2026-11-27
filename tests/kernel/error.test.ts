@@ -1,3 +1,8 @@
+/**
+ * 0 级纯逻辑测试：`src/kernel/error.ts` 这个唯一的错误类型（ADR-0013 决定 D）——封闭码、原因与路径的
+ * 词法核验，`fail` 与 `failIo`（1.4.5 批 4），cause 链投影（§13.165 G3），旧错误类与中止的边界翻译
+ * （§13.166；1.4.5 批 1），details 的短标识约束与 `failWithBlockers`（§13.131）。
+ */
 import { deepEqual, equal, ok, throws } from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -7,6 +12,7 @@ import {
 import { OperationAbortedError, throwIfAborted } from "../../src/foundation/node/abort-signal.js";
 import {
   fail,
+  failIo,
   failWithBlockers,
   isWakeflowError,
   toWakeflowError,
@@ -114,6 +120,30 @@ test("fail 抛出内核错误，toWakeflowError 把陌生异常包成 unexpected
   equal((wrapped.cause as Error).message.includes("leaked"), true);
   const original = new WakeflowError("not-found", "demand");
   equal(toWakeflowError(original), original);
+});
+
+test("failIo 报 io-failure：原因是标签接下层 reason，下层错误是 cause 并投影为 causeReason，不可重试、没有 details（1.4.5 批 4）", () => {
+  class StoreError extends Error {
+    readonly reason = "commit-uncertain";
+  }
+  const cause = new StoreError("/Users/someone/private locator");
+  throws(
+    () => failIo("locator-write", "$locator", cause),
+    (error: unknown) => {
+      if (!isWakeflowError(error)) return false;
+      equal(error.cause, cause);
+      equal(error.details, null);
+      equal(error.message.includes("/Users"), false);
+      deepEqual(error.toPublicDetails(), {
+        code: "io-failure",
+        reason: "locator-write-commit-uncertain",
+        path: "$locator",
+        retryable: false,
+        causeReason: "commit-uncertain",
+      });
+      return true;
+    },
+  );
 });
 
 test("中止只在边界翻一次：OperationAbortedError 成为 io-failure/aborted/$signal，不可重试、没有 details 与 cause（1.4.5 批 1）", () => {

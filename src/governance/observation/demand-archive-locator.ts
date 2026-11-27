@@ -24,7 +24,7 @@ import {
   type UtcInstant,
   UtcInstantError,
 } from "../../foundation/time/utc-instant.js";
-import { fail } from "../../kernel/error.js";
+import { fail, failIo } from "../../kernel/error.js";
 import { demandArchiveRef, demandArchivesRootRef } from "../../kernel/layout.js";
 import { LEDGER_ARCHIVES_ROOT_REF } from "../ledger/ledger-authority-paths.js";
 import type { DemandArchiveEvent } from "./demand-archive-measures.js";
@@ -428,9 +428,7 @@ export async function listArchivedDemandIds(
         .sort(),
     );
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError) failIo("archive-list", "$archive", error);
     throw error;
   }
 }
@@ -502,12 +500,8 @@ async function readManifest(
     );
     return read.value;
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      fail("io-failure", `archive-manifest-${error.reason}`, "$archive/manifest", { cause: error });
-    }
-    if (error instanceof StrictTextFileError) {
-      fail("io-failure", `archive-manifest-${error.reason}`, "$archive/manifest", { cause: error });
-    }
+    if (error instanceof StableFileReadError || error instanceof StrictTextFileError)
+      failIo("archive-manifest", "$archive/manifest", error);
     if (error instanceof DeterministicJsonDocumentError) {
       fail("precondition-failed", "archive-manifest", "$archive/manifest", { cause: error });
     }
@@ -528,9 +522,7 @@ export async function locateLatestDemandArchive(
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
-    }
+    if (error instanceof StableDirectoryReadError) failIo("archive-list", "$archive", error);
     throw error;
   }
   if (listing === null) return null;

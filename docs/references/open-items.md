@@ -916,6 +916,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
 - **L14** [低 / 缺陷] 一份源文件含三个字面 NUL 字节，ripgrep 递归搜索时整份跳过（2026-11-27，`.build/research/reports/2026-11-27-layering/r1-error-classes.md`；本机核对过）
   - 事实：`src/workspace/managed-integration/wakeflow-external-instruction-body-authority.ts` 第 176–183 行的字符串字面量用原始的 NUL 字节作连接符，`file` 把整份文件认作 `data`。`rg` 递归搜索目录时不加 `-a` 就静默跳过它（`rg -l function src/workspace/managed-integration/` 列不出这份文件，加 `-a` 才列出）；直接点名这份文件时照常搜。按 r1，此前凡是用 `rg` 做的清点（包括更早的报告）都漏了它。
   - 状态：不在计划里；修法是一行，把原始字节换成 `"\0"` 转义。
+  - **已修（2026-11-27，`6fbb47db`）**：三处换成 `\u0000` 转义，运行时的值相同
 
 - **L15** [低 / 债务] 旧错误家族表要每个新的 `wakeflow-*` 码手工登记，漏登已让完整门失败六次（2026-11-27，`.build/research/reports/2026-11-27-layering/r1-error-classes.md`；门日志逐节核对过）
   - 事实：`src/kernel/legacy-error-families.ts` 有 193 项，`tests/kernel/legacy-error-families.test.ts` 要求与源码里的错误码逐一相等；配置、工作区、治理、宿主四层的码除 `wakeflow-maintenance-writer` 之外都登记为 `precondition-failed`。漏登或被格式器折行藏起的码让完整门失败过：§13.171（格式器折行）、§13.215（`wakeflow-maintenance-writer`）、§13.222（`wakeflow-workspace-host-transport`）、§13.225、§13.242、§13.261。r1 数的是五次，没有算 §13.222。§13.242 记着这类按路径清点 `src` 的测试只在完整门里跑到。
@@ -925,6 +926,7 @@ H1 的新发布准入与 H4 的完成全集门已在 §13.141 修复，H9 在 §
   - 事实：解析暂存名、判断写者死活、判断是否与目标成对，基础层有一份（`foundation/filesystem/durable-atomic-file-stage-recovery.ts:298-363`），之上还有 Demand 暂存残留（`demand-stage-residue.ts:110-160`）、hook 观察（`kernel/hook-observations.ts`，约 115 行）与活动守卫（`demand-active-guard.ts:220-243`）三份，合计约 664 行。列目录时跳过暂存名的有六处，看板那一处写死前缀、没有用 `hasDurableAtomicFileStagePrefix`（`kernel/requirement-board.ts:134`）。`DemandFileEventSnapshotStore.recoverPublicationStages`（`demand-file-event-snapshot-store.ts:374-396`）只有一条测试调用。
   - 风险：各份对链接数 1 或 2、权限位、create 与 replace、属主不明的处理没有对照列过；hook 与 Demand 两份各出过现场事故（B13、1.4.1 段 1b），合并时接受的集合一变就是行为变化。
   - 状态：计划主题 D（四份收成一份，连同八个"读之前清死暂存"的包装）；r5 的意见是先逐份列出接受的集合再收。
+  - **更正（2026-11-27，§13.302）**：动手时发现四份并不等价——一份要求权限与目录的文件模式完全相等、没有字节上限，一份只认 0600 的 `create` 暂存并加了 10 分钟的时间门槛，一份完全不查节点。合并会改变行为，所以没有合并。同一个概念三种判定口径是否本该一致，另行判断
 
 - **L17** [低 / 缺口] 架构检查不定 24% 跨切片导入边的方向，中间层的次序没有写成规则（2026-11-27，`.build/research/reports/2026-11-27-layering/r3-structure.md`；脚本把 `.dependency-cruiser.cjs` 的规则套在真实导入图上算，没有改动检查）
   - 事实：手写 `src` 的 3,039 条跨切片模块边里 716 条（24%）没有规则定方向，主要是能力层到治理层 168、基础层切片之间 166、治理层切片之间 160、工作区切片之间 120、能力层到工作区 60。中间层的次序（能力层在治理、工作区、配置之上；宿主层与配置层不引治理层）今天反向边是 0，但哪条规则都没写。切片级的循环没人查：治理层 7 对、工作区 4 对切片互相引用，治理层的每一对里都有 demand（模块级没有环）。

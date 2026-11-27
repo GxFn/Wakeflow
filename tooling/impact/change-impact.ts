@@ -58,7 +58,7 @@ export interface ChangeImpactReport {
 
 const TIER_TWO_OWNERS: ReadonlySet<string> = new Set(["foundation", "kernel", "contracts"]);
 const TIER_TWO_FILE_PATTERN =
-  /^(?:tests\/scenarios\/|tooling\/testing\/|biome\.json$|knip\.json$|tsconfig[^/]*\.json$|tests\/tsconfig\.json$|tooling\/tsconfig\.json$)/u;
+  /^(?:tests\/scenarios\/|tooling\/testing\/|biome\.json$|knip\.ts$|tsconfig[^/]*\.json$|tests\/tsconfig\.json$|tooling\/tsconfig\.json$)/u;
 const TIER_ONE_CATEGORIES: readonly ImpactCategory[] = [
   "runtime",
   "hosts",
@@ -120,7 +120,7 @@ const RULES: readonly Readonly<{ pattern: RegExp; category: ImpactCategory }>[] 
   { pattern: /^\.github\//u, category: "ci" },
   {
     pattern:
-      /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|biome\.json|knip\.json|\.dependency-cruiser\.cjs)$/u,
+      /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|biome\.json|knip\.ts|\.dependency-cruiser\.cjs)$/u,
     category: "toolchain",
   },
   {

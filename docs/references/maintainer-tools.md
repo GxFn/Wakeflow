@@ -17,7 +17,7 @@ npm run wf -- verify artifact
 
 | 档位 | 实际执行 | 范围 |
 | --- | --- | --- |
-| quick | typecheck、架构、lint、format、knip，加明确列出的聚焦测试 | 全仓静态检查和所选测试；不会自动选择相关测试 |
+| quick | typecheck、架构、lint、format、knip（默认与生产两种模式），加明确列出的聚焦测试 | 全仓静态检查和所选测试；不会自动选择相关测试 |
 | gate | 现有 `npm test` | 完整源码门；没有替换或缩减既有测试清单 |
 | artifact | `build:check`，然后 `smoke:artifacts` | 双制品完整性、五幕合成环境冒烟，加 lab 的 dual-product 与 worktree 四个实验（§13.206 D2）；不是原生会话验收 |
 
@@ -219,7 +219,7 @@ npm run --silent wf -- ci export --summary "<verify-stdout-summary.json>"
 npm run --silent wf -- ci verify --bundle "<exported-report-directory>"
 ```
 
-export 仅接受标准验证 summary 指向的私有回执，重验测试事件摘要和统计，检查完整通过所需阶段、退出码与输入一致性；完整与否按回执记下的事实判定：gate 一个阶段加通过的测试记录，artifact 两个阶段，quick 五个静态阶段加聚焦测试，而 `verify quick --changed` 选中零个测试的回执（`selection.tests` 为空）以五个静态阶段、无测试记录为完整，照常导出（open-items W35）。输出 `.build/ci/report-…/report.json` 和 `manifest.json`，只包含允许的版本/平台、时间、状态、摘要、计数、受限相对测试文件名，以及模型 seed/次数。原始命令、case 名、异常、日志、聊天句柄和任意环境字段不会被复制。失败结果也可导出，导出成功与验证通过是两个字段。
+export 仅接受标准验证 summary 指向的私有回执，重验测试事件摘要和统计，检查完整通过所需阶段、退出码与输入一致性；完整与否按回执记下的事实判定：gate 一个阶段加通过的测试记录，artifact 两个阶段，quick 六个静态阶段加聚焦测试，而 `verify quick --changed` 选中零个测试的回执（`selection.tests` 为空）以六个静态阶段、无测试记录为完整，照常导出（open-items W35）。输出 `.build/ci/report-…/report.json` 和 `manifest.json`，只包含允许的版本/平台、时间、状态、摘要、计数、受限相对测试文件名，以及模型 seed/次数。原始命令、case 名、异常、日志、聊天句柄和任意环境字段不会被复制。失败结果也可导出，导出成功与验证通过是两个字段。
 
 CI 即使失败也尝试导出，但只上传这两种文件，保留 14 天；原始 verification / live / lab 目录不上传。下载后用 `ci verify` 硬校验文件集合和 SHA-256，字节不符直接非零退出。摘要证明字节一致，不证明执行者或来源；bundle 校验始终注明 origin unverified，不能转成发布认证或原生通过。独立图谱仍维持自己的严格检查，本次没有把图谱接进根构建依赖。
 

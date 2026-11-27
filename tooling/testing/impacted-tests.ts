@@ -43,7 +43,7 @@ const SOURCE_ROOTS = ["src", "tooling", "tests"] as const;
 const FULL_GATE_PATTERNS: readonly Readonly<{ pattern: RegExp; reason: string }>[] = [
   { pattern: /^src\/contracts\/(?:schemas|generated)\//u, reason: "schema-or-generated-contract" },
   {
-    pattern: /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|biome\.json|knip\.json)$/u,
+    pattern: /^(?:package(?:-lock)?\.json|tsconfig[^/]*\.json|biome\.json|knip\.ts)$/u,
     reason: "toolchain-input",
   },
   { pattern: /^\.dependency-cruiser\.cjs$/u, reason: "architecture-rules" },

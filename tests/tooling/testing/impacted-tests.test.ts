@@ -170,7 +170,7 @@ test("Schema、工具链输入与运行器改动建议完整门；agent 文本�
   const root = fixture(t);
   write(root, "src/contracts/schemas/x.schema.json", "{}\n");
   write(root, "assets/agent-text/README.md", "# x\n");
-  write(root, "knip.json", "{}\n");
+  write(root, "knip.ts", "export default {};\n");
   write(root, "tooling/testing/impacted-tests.ts", "export const x = 1;\n");
   const selection = selectImpactedTests(root);
   equal(selection.fullGateRecommended, true);

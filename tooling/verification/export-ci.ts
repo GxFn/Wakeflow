@@ -13,6 +13,7 @@ const STAGES = [
   "lint",
   "format:check",
   "check:unused",
+  "check:unused:production",
   "focused-tests",
   "gate",
   "build:check",
@@ -86,18 +87,21 @@ function selectedTestCount(receipt: Record<string, unknown>): number | null {
   return integer(selection.tests.length);
 }
 
+/** quick 的静态阶段：`STAGES` 里聚焦测试之前的那些。 */
+const QUICK_STATIC_STAGES = STAGES.slice(0, STAGES.indexOf("focused-tests"));
+
 /**
  * 完整通过所需的阶段与测试记录，按回执记下的事实判定：gate 一个阶段加通过的测试记录；artifact
- * 两个阶段、不看记录；quick 五个静态阶段加聚焦测试，而 `--changed` 选中零个测试的回执
- * （`selection.tests` 为空）合法地只有五个静态阶段、没有测试记录（open-items W35）。
+ * 两个阶段、不看记录；quick 全部静态阶段加聚焦测试，而 `--changed` 选中零个测试的回执
+ * （`selection.tests` 为空）合法地只有静态阶段、没有测试记录（open-items W35）。
  */
 function completenessRule(profile: string, receipt: Record<string, unknown>) {
   if (profile === "gate") return { stages: ["gate"], tests: "passed" as const };
   if (profile === "artifact")
     return { stages: ["build:check", "smoke:artifacts"], tests: "ignored" as const };
   return selectedTestCount(receipt) === 0
-    ? { stages: STAGES.slice(0, 5), tests: "absent" as const }
-    : { stages: STAGES.slice(0, 6), tests: "passed" as const };
+    ? { stages: QUICK_STATIC_STAGES, tests: "absent" as const }
+    : { stages: [...QUICK_STATIC_STAGES, "focused-tests"], tests: "passed" as const };
 }
 
 function testSummary(receipt: Record<string, unknown>, directory: string) {

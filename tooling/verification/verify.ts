@@ -41,10 +41,14 @@ function stagesFor(request: VerificationRequest, files: readonly string[]) {
   if (files.length === 0 && request.changed !== true)
     throw new Error("Quick verification requires explicit test files.");
   return [
-    ...["typecheck", "check:architecture", "lint", "format:check", "check:unused"].map((name) => ({
-      name,
-      args: ["run", name],
-    })),
+    ...[
+      "typecheck",
+      "check:architecture",
+      "lint",
+      "format:check",
+      "check:unused",
+      "check:unused:production",
+    ].map((name) => ({ name, args: ["run", name] })),
     // 没有受影响的测试时只跑静态检查；回执里的 selection 说明为什么没有测试阶段。
     ...(files.length === 0
       ? []

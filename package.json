@@ -24,7 +24,7 @@
     "helpers:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/helper-assets.js check --repo-root .",
     "refusals:build": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/refusal-reference.js build --repo-root .",
     "refusals:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/codegen/refusal-reference.js check --repo-root .",
-    "check:typescript": "npm run typecheck && npm run check:architecture && npm run lint && npm run format:check && npm run check:unused && npm run test:typescript && npm run schema:check && npm run helpers:check && npm run refusals:check && npm run build:check",
+    "check:typescript": "npm run typecheck && npm run check:architecture && npm run lint && npm run format:check && npm run check:unused && npm run check:unused:production && npm run test:typescript && npm run schema:check && npm run helpers:check && npm run refusals:check && npm run build:check",
     "release:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/release/check-release-consistency.js --require-main --require-clean --require-tag --require-remote --require-remote-gate",
     "test": "npm run check:typescript",
     "scenario:acceptance": "npm run test:typescript:focused -- tests/scenarios",
@@ -33,6 +33,7 @@
     "format": "biome format --write src tests tooling",
     "format:check": "biome format src tests tooling",
     "check:unused": "knip --no-progress",
+    "check:unused:production": "knip --production --no-progress",
     "install:check": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/artifacts/inspect-local-installation.js",
     "wf": "tsc -b tooling/tsconfig.json --pretty false && node .build/tooling/cli.js"
   },

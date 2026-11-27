@@ -55,6 +55,7 @@ function fixture(t: TestContext, body = "test('ok',()=>{});", testScript = "node
         lint: "node noop.mjs",
         "format:check": "node noop.mjs",
         "check:unused": "node noop.mjs",
+        "check:unused:production": "node noop.mjs",
         "build:check": "node noop.mjs",
         "smoke:artifacts": "node noop.mjs",
       },
@@ -187,7 +188,7 @@ test("an already cancelled verification never runs its command and still leaves 
   throws(() => proposeTestDurations(root, path.join(root, result.receipt)), /full-gate/u);
 });
 
-test("a quick --changed run that selects no tests records five static stages without a test record and exports as complete", async (t) => {
+test("a quick --changed run that selects no tests records the static stages without a test record and exports as complete", async (t) => {
   const root = fixture(t);
   const result = await verifyRepository(root, {
     profile: "quick",
@@ -204,7 +205,14 @@ test("a quick --changed run that selects no tests records five static stages wit
   deepEqual(receipt.selection.tests, []);
   deepEqual(
     receipt.stages.map((stage: { name: string }) => stage.name),
-    ["typecheck", "check:architecture", "lint", "format:check", "check:unused"],
+    [
+      "typecheck",
+      "check:architecture",
+      "lint",
+      "format:check",
+      "check:unused",
+      "check:unused:production",
+    ],
   );
   const summaryFile = path.join(root, ".build/summary.json");
   writeFileSync(summaryFile, JSON.stringify(result));
@@ -214,9 +222,9 @@ test("a quick --changed run that selects no tests records five static stages wit
     readFileSync(path.join(root, exported.directory, "report.json"), "utf8"),
   );
   equal(report.tests, null);
-  equal(report.stages.length, 5);
+  equal(report.stages.length, 6);
   equal(verifyCiBundle(path.join(root, exported.directory)).integrity, "matched");
-  // The same five stages under a selection that named a test are still an incomplete run.
+  // The same static stages under a selection that named a test are still an incomplete run.
   receipt.selection.tests = ["tests/case.test.ts"];
   writeFileSync(path.join(root, result.receipt), JSON.stringify(receipt));
   throws(() => exportCiVerification(root, summaryFile), /Incomplete verification/u);

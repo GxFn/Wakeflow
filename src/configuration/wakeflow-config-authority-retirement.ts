@@ -1,4 +1,5 @@
 import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   DurableResourceRenameError,
   renameResourceDurably,
@@ -38,48 +39,30 @@ import {
  * 两个文件同时在即 destination-exists，由人处置。调用方（维护事务）持有维护 gate。
  */
 
-export type WakeflowConfigAuthorityRetirementErrorReason =
-  | "input"
-  | "unsupported-platform"
-  | "root-scope"
-  | "root-policy"
-  | "source"
-  | "conflict"
-  | "destination-exists"
-  | "lock"
-  | "commit-uncertain"
-  | "retirement-failure";
+/** 退役的原因；替换合同里同名的原因按原名过桥（mapReplacementContractError），所以要一份运行时清单。 */
+const RETIREMENT_REASONS = [
+  "input",
+  "unsupported-platform",
+  "root-scope",
+  "root-policy",
+  "source",
+  "conflict",
+  "destination-exists",
+  "lock",
+  "commit-uncertain",
+  "retirement-failure",
+] as const;
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow config authority retirement input is invalid.",
-  "unsupported-platform": "Wakeflow config authority retirement requires POSIX ownership facts.",
-  "root-scope": "Wakeflow config authority retirement lost its workspace root scope.",
-  "root-policy": "Wakeflow config authority retirement requires a current-user workspace root.",
-  source: "Wakeflow config authority retirement source is unavailable.",
-  conflict: "Wakeflow config authority changed before retirement.",
-  "destination-exists": "Wakeflow detached config file already exists beside the config.",
-  lock: "Wakeflow config authority retirement could not take the config lock.",
-  "commit-uncertain": "Wakeflow config authority retirement commit outcome is uncertain.",
-  "retirement-failure": "Wakeflow config authority retirement failed.",
-} as const satisfies Readonly<Record<WakeflowConfigAuthorityRetirementErrorReason, string>>;
+export type WakeflowConfigAuthorityRetirementErrorReason = (typeof RETIREMENT_REASONS)[number];
 
 /** Config 退役失败的稳定、脱敏错误。 */
-export class WakeflowConfigAuthorityRetirementError extends Error {
-  override readonly name = "WakeflowConfigAuthorityRetirementError";
-  readonly code = "wakeflow-config-authority-retirement" as const;
-  readonly reason: WakeflowConfigAuthorityRetirementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowConfigAuthorityRetirementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowConfigAuthorityRetirementError extends ModuleError<WakeflowConfigAuthorityRetirementErrorReason> {
+  static override readonly code = "wakeflow-config-authority-retirement";
 }
+
+const fail: Fail<WakeflowConfigAuthorityRetirementErrorReason> = failWith(
+  WakeflowConfigAuthorityRetirementError,
+);
 
 export interface WakeflowConfigAuthorityRetirementReceipt {
   readonly disposition: "current" | "retired";
@@ -87,19 +70,7 @@ export interface WakeflowConfigAuthorityRetirementReceipt {
   readonly detached: Readonly<WakeflowDetachedConfigRecord>;
 }
 
-const REASONS = new Set<string>(Object.keys(ERROR_MESSAGES));
-
-function fail(
-  reason: WakeflowConfigAuthorityRetirementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowConfigAuthorityRetirementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const REASONS = new Set<string>(RETIREMENT_REASONS);
 
 /** 替换合同的准入错误按同名原因过桥，其余归为 retirement-failure。 */
 function mapReplacementContractError(error: WakeflowConfigAuthorityReplacementError): never {

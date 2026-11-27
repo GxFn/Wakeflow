@@ -9,6 +9,7 @@ import {
   type Sha256Digest,
 } from "../foundation/crypto/sha256.js";
 import { parsePlainRecord, pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import type { DurableAtomicFileReplaceResult } from "../foundation/filesystem/durable-atomic-file-write.js";
 import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
@@ -83,44 +84,13 @@ export type WakeflowConfigAuthorityReplacementErrorReason =
   | "replacement-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow config authority replacement input is invalid.",
-  "unsupported-platform":
-    "Wakeflow config authority replacement requires reliable local POSIX ownership semantics.",
-  "root-scope": "Wakeflow config authority replacement lost its workspace root scope.",
-  "root-policy": "Wakeflow config authority replacement requires a current-user workspace root.",
-  config: "Wakeflow config authority replacement requires one strict desired model.",
-  capacity: "Wakeflow config authority replacement exceeds its recoverable byte limit.",
-  placement: "Wakeflow config authority replacement declares an unsafe root placement.",
-  "source-invalid": "Current Wakeflow config authority cannot be loaded strictly.",
-  "source-policy": "Current Wakeflow config authority violates replacement source policy.",
-  "program-identity": "Wakeflow config authority replacement cannot change program identity.",
-  conflict: "Wakeflow config authority no longer matches its expected source.",
-  "lock-timeout": "Wakeflow config authority replacement lock acquisition timed out.",
-  "lock-unsafe": "Wakeflow config authority replacement lock is unsafe.",
-  "recovery-required":
-    "Wakeflow config authority replacement residue cannot be recovered automatically.",
-  "replacement-failure": "Wakeflow config authority could not be replaced safely.",
-  "commit-uncertain": "Replaced Wakeflow config authority could not be proven exact.",
-} as const satisfies Readonly<Record<WakeflowConfigAuthorityReplacementErrorReason, string>>;
-
 /** Config replacement 与显式恢复的稳定、脱敏错误。 */
-export class WakeflowConfigAuthorityReplacementError extends Error {
-  override readonly name = "WakeflowConfigAuthorityReplacementError";
-  readonly code = "wakeflow-config-authority-replacement" as const;
-  readonly reason: WakeflowConfigAuthorityReplacementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowConfigAuthorityReplacementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowConfigAuthorityReplacementError extends ModuleError<WakeflowConfigAuthorityReplacementErrorReason> {
+  static override readonly code = "wakeflow-config-authority-replacement";
 }
+
+export const failWakeflowConfigAuthorityReplacement: Fail<WakeflowConfigAuthorityReplacementErrorReason> =
+  failWith(WakeflowConfigAuthorityReplacementError);
 
 export interface ParsedWakeflowConfigAuthorityReplacementOptions {
   readonly acquireTimeoutMilliseconds: number;
@@ -140,18 +110,6 @@ export interface PreparedWakeflowConfigAuthorityDesired {
   readonly bytes: Uint8Array;
   readonly sourceDigest: Sha256Digest;
   readonly configDigest: Sha256Digest;
-}
-
-export function failWakeflowConfigAuthorityReplacement(
-  reason: WakeflowConfigAuthorityReplacementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowConfigAuthorityReplacementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 export function assertWakeflowConfigAuthorityRoot(

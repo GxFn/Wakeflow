@@ -7,6 +7,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   ExactRegularFileUnlinkError,
   unlinkRegularFileExactly,
@@ -95,42 +96,14 @@ export type ClaudeCodeWindowTransportRetirementErrorReason =
   | "source-stale"
   | "effect";
 
-const ERROR_MESSAGES = {
-  operation: "Claude Code window transport retirement operation is invalid.",
-  plan: "Claude Code window transport retirement no longer matches its plan.",
-  "source-stale": "Claude Code window transport retirement source changed since the plan.",
-  effect: "Claude Code window transport retirement could not complete safely.",
-} as const satisfies Readonly<Record<ClaudeCodeWindowTransportRetirementErrorReason, string>>;
-
 /** 退役计划或执行失败的稳定、脱敏错误；维护 capability 把它映射成 owner 失败。 */
-export class ClaudeCodeWindowTransportRetirementError extends Error {
-  override readonly name = "ClaudeCodeWindowTransportRetirementError";
-  readonly code = "wakeflow-claude-code-window-transport-retirement" as const;
-  readonly reason: ClaudeCodeWindowTransportRetirementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodeWindowTransportRetirementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ClaudeCodeWindowTransportRetirementError extends ModuleError<ClaudeCodeWindowTransportRetirementErrorReason> {
+  static override readonly code = "wakeflow-claude-code-window-transport-retirement";
 }
 
-function fail(
-  reason: ClaudeCodeWindowTransportRetirementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodeWindowTransportRetirementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<ClaudeCodeWindowTransportRetirementErrorReason> = failWith(
+  ClaudeCodeWindowTransportRetirementError,
+);
 
 export interface ClaudeCodeWindowTransportRetirementPlan {
   /** 期望 Config 换了窗口传输：宿主贡献按它退役旧登记，并且不为被退役的窗口另出投影操作。 */

@@ -11,6 +11,7 @@ import {
   parseDenseArray,
   parsePlainRecord,
 } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   createUuidV4,
   deriveUuidV4,
@@ -81,34 +82,14 @@ export type WakeflowFreshConfigSelectionErrorReason =
   | "id-collision"
   | "config";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow Fresh Config selection input is invalid.",
-  shape: "Wakeflow Fresh Config selection has an invalid shape.",
-  capacity: "Wakeflow Fresh Config selection exceeds its entity capacity.",
-  "selection-key": "Wakeflow Fresh Config selection key is invalid or duplicated.",
-  reference: "Wakeflow Fresh Config selection contains an unresolved logical reference.",
-  "id-source": "Wakeflow Fresh Config durable identity source failed.",
-  "id-collision": "Wakeflow Fresh Config generated duplicate UUID identities.",
-  config: "Wakeflow Fresh Config selection does not form a valid Config model.",
-} as const satisfies Readonly<Record<WakeflowFreshConfigSelectionErrorReason, string>>;
-
 /** Fresh Config selection 编译失败的稳定、脱敏错误。 */
-export class WakeflowFreshConfigSelectionError extends Error {
-  override readonly name = "WakeflowFreshConfigSelectionError";
-  readonly code = "wakeflow-fresh-config-selection" as const;
-  readonly reason: WakeflowFreshConfigSelectionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowFreshConfigSelectionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowFreshConfigSelectionError extends ModuleError<WakeflowFreshConfigSelectionErrorReason> {
+  static override readonly code = "wakeflow-fresh-config-selection";
 }
+
+const fail: Fail<WakeflowFreshConfigSelectionErrorReason> = failWith(
+  WakeflowFreshConfigSelectionError,
+);
 
 interface ParsedOptions {
   readonly uuidFactory: UuidV4Factory | undefined;
@@ -123,18 +104,6 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "storage",
   "topology",
 ]);
-
-function fail(
-  reason: WakeflowFreshConfigSelectionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowFreshConfigSelectionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
 
 function record(value: unknown, path: string): Readonly<Record<string, unknown>> {
   try {

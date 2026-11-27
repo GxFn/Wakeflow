@@ -20,6 +20,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -92,39 +93,14 @@ export type ClaudeCodePortableSettingsOperationExecutionErrorReason =
   | "owner"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Claude portable settings operation execution input is invalid.",
-  config: "Claude portable settings operation Config is invalid.",
-  profile: "Claude portable settings operation Host Profile is invalid.",
-  operation: "Claude portable settings operation is invalid.",
-  "authority-changed": "Claude portable settings root authority changed.",
-  placement: "Claude portable settings operation placement is unavailable.",
-  "root-open": "Claude portable settings operation root could not be opened.",
-  "source-stale": "Claude portable settings operation source is stale.",
-  "transition-blocked": "Claude portable settings operation transition is blocked.",
-  owner: "Claude portable settings single-root owner failed.",
-  "close-failure": "Claude portable settings operation root could not be closed.",
-} as const satisfies Readonly<
-  Record<ClaudeCodePortableSettingsOperationExecutionErrorReason, string>
->;
-
 /** Claude portable settings 单 operation 执行失败的稳定、脱敏错误。 */
-export class ClaudeCodePortableSettingsOperationExecutionError extends Error {
-  override readonly name = "ClaudeCodePortableSettingsOperationExecutionError";
-  readonly code = "wakeflow-claude-code-portable-settings-operation-execution" as const;
-  readonly reason: ClaudeCodePortableSettingsOperationExecutionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodePortableSettingsOperationExecutionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ClaudeCodePortableSettingsOperationExecutionError extends ModuleError<ClaudeCodePortableSettingsOperationExecutionErrorReason> {
+  static override readonly code = "wakeflow-claude-code-portable-settings-operation-execution";
 }
+
+const fail: Fail<ClaudeCodePortableSettingsOperationExecutionErrorReason> = failWith(
+  ClaudeCodePortableSettingsOperationExecutionError,
+);
 
 interface ParsedRequest {
   readonly model: WakeflowConfigModel;
@@ -132,18 +108,6 @@ interface ParsedRequest {
   readonly operation: Readonly<ClaudeCodePortableSettingsOperation>;
   readonly recoveringAffectedOperation: boolean;
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: ClaudeCodePortableSettingsOperationExecutionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodePortableSettingsOperationExecutionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function digest(value: unknown, path: string): Sha256Digest {

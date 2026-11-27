@@ -14,6 +14,7 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULES as WAKEFLOW_LEGACY_BROAD_BASH_PERMISSION_RULE_LIST } from "../../workspace/wakeflow-legacy-residue-scan.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../../workspace/workspace-host-resource-profile.js";
@@ -169,16 +170,11 @@ export interface ClaudeCodePortableSettingsTransition {
 export type ClaudeCodePortableSettingsTransitionErrorReason = "input";
 
 /** Claude Code portable settings transition 输入失败的稳定、脱敏错误。 */
-export class ClaudeCodePortableSettingsTransitionError extends Error {
-  override readonly name = "ClaudeCodePortableSettingsTransitionError";
-  readonly code = "wakeflow-claude-code-portable-settings-transition" as const;
-  readonly reason: ClaudeCodePortableSettingsTransitionErrorReason;
-  readonly path: string;
+export class ClaudeCodePortableSettingsTransitionError extends ModuleError<ClaudeCodePortableSettingsTransitionErrorReason> {
+  static override readonly code = "wakeflow-claude-code-portable-settings-transition";
 
   constructor(path: string) {
-    super("Claude Code portable settings transition input is invalid.");
-    this.reason = "input";
-    this.path = path;
+    super("input", path);
   }
 }
 

@@ -29,6 +29,7 @@ import {
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -204,46 +205,14 @@ export type ClaudeCodeStatuslineSettingsOperationErrorReason =
   | "root-open"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Claude statusline settings operation input is invalid.",
-  operation: "Claude statusline settings operation payload is invalid.",
-  "settings-unreadable": "Claude local settings could not be read as a JSON object.",
-  "source-stale": "Claude local settings changed since the plan was made.",
-  write: "Claude local settings could not be written safely.",
-  placement: "Claude support surface root could not be resolved.",
-  "root-open": "Claude support surface root could not be opened.",
-  "close-failure": "Claude support surface root could not be closed.",
-} as const satisfies Readonly<Record<ClaudeCodeStatuslineSettingsOperationErrorReason, string>>;
-
 /** 状态栏设置操作失败的稳定、脱敏错误。 */
-export class ClaudeCodeStatuslineSettingsOperationError extends Error {
-  override readonly name = "ClaudeCodeStatuslineSettingsOperationError";
-  readonly code = "wakeflow-claude-code-statusline-settings-operation" as const;
-  readonly reason: ClaudeCodeStatuslineSettingsOperationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodeStatuslineSettingsOperationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ClaudeCodeStatuslineSettingsOperationError extends ModuleError<ClaudeCodeStatuslineSettingsOperationErrorReason> {
+  static override readonly code = "wakeflow-claude-code-statusline-settings-operation";
 }
 
-function fail(
-  reason: ClaudeCodeStatuslineSettingsOperationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodeStatuslineSettingsOperationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<ClaudeCodeStatuslineSettingsOperationErrorReason> = failWith(
+  ClaudeCodeStatuslineSettingsOperationError,
+);
 
 function assertRoot(root: unknown): asserts root is RootedDirectory {
   if (

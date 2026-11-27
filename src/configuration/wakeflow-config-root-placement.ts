@@ -1,5 +1,6 @@
 import nodePath from "node:path";
 
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   AbsoluteDirectoryPlacementError,
   type AbsoluteDirectoryPlacementObservation,
@@ -55,51 +56,19 @@ export type WakeflowConfigRootPlacementErrorReason =
   | "physical-overlap"
   | "inspection-failure";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow config placement input is invalid.",
-  "root-scope": "Wakeflow workspace root changed during placement admission.",
-  "lexical-overlap": "Wakeflow configured roots overlap lexically.",
-  symlink: "Wakeflow configured root contains a symbolic link.",
-  "not-directory": "Wakeflow configured root contains a non-directory node.",
-  alias: "Wakeflow configured root does not use its canonical physical spelling.",
-  "physical-overlap": "Wakeflow configured roots overlap physically.",
-  "inspection-failure": "Wakeflow configured roots could not be inspected safely.",
-} as const satisfies Readonly<Record<WakeflowConfigRootPlacementErrorReason, string>>;
-
 /** 配置根目录位置准入失败时返回的稳定、脱敏错误。 */
-export class WakeflowConfigRootPlacementError extends Error {
-  override readonly name = "WakeflowConfigRootPlacementError";
-  readonly code = "wakeflow-config-root-placement" as const;
-  readonly reason: WakeflowConfigRootPlacementErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowConfigRootPlacementErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowConfigRootPlacementError extends ModuleError<WakeflowConfigRootPlacementErrorReason> {
+  static override readonly code = "wakeflow-config-root-placement";
 }
+
+const fail: Fail<WakeflowConfigRootPlacementErrorReason> = failWith(
+  WakeflowConfigRootPlacementError,
+);
 
 interface PlannedRoot {
   readonly key: string;
   readonly configuredPath: WakeflowConfigPlacement;
   readonly absolutePath: string;
-}
-
-function fail(
-  reason: WakeflowConfigRootPlacementErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowConfigRootPlacementError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {

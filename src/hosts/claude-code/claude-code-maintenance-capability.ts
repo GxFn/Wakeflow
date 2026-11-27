@@ -1,4 +1,5 @@
 import type { JsonValue } from "../../foundation/data/json-value.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
   ExecuteWakeflowHostMaintenanceOperationRequest,
@@ -107,42 +108,14 @@ const PORTABLE_SETTINGS_OWNER_ID = "claude-code-portable-settings" as const;
 
 export type ClaudeCodeMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner" | "profile";
 
-const ERROR_MESSAGES = {
-  gate: "Claude Code maintenance capability requires the active matching gate.",
-  operation: "Claude Code maintenance capability operation is invalid.",
-  owner: "Claude Code maintenance capability owner failed.",
-  profile: "Claude Code maintenance capability does not provide this Host Profile's assets.",
-} as const satisfies Readonly<Record<ClaudeCodeMaintenanceCapabilityErrorReason, string>>;
-
 /** Claude Code maintenance capability 失败的稳定、脱敏错误。 */
-class ClaudeCodeMaintenanceCapabilityError extends Error {
-  override readonly name = "ClaudeCodeMaintenanceCapabilityError";
-  readonly code = "wakeflow-claude-code-maintenance-capability" as const;
-  readonly reason: ClaudeCodeMaintenanceCapabilityErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodeMaintenanceCapabilityErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+class ClaudeCodeMaintenanceCapabilityError extends ModuleError<ClaudeCodeMaintenanceCapabilityErrorReason> {
+  static override readonly code = "wakeflow-claude-code-maintenance-capability";
 }
 
-function fail(
-  reason: ClaudeCodeMaintenanceCapabilityErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodeMaintenanceCapabilityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<ClaudeCodeMaintenanceCapabilityErrorReason> = failWith(
+  ClaudeCodeMaintenanceCapabilityError,
+);
 
 /** 资产读不出（目录、符号链接、超过 256 KiB、权限不足）时宿主贡献报出的 blocker。 */
 export const CLAUDE_CODE_STATUSLINE_ASSET_BLOCKER = "claude-statusline-asset-unreadable" as const;

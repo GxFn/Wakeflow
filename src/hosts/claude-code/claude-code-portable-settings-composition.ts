@@ -16,6 +16,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   RootedDirectory,
   RootedDirectoryError,
@@ -136,33 +137,14 @@ export type ClaudeCodePortableSettingsCompositionErrorReason =
   | "inspection"
   | "close-failure";
 
-const ERROR_MESSAGES = {
-  input: "Claude portable settings composition input is invalid.",
-  config: "Claude portable settings composition Config is invalid.",
-  profile: "Claude portable settings composition Host Profile is invalid.",
-  placement: "Claude portable settings composition root placement is invalid.",
-  "root-open": "Claude portable settings composition root could not be opened.",
-  inspection: "Claude portable settings composition source inspection failed.",
-  "close-failure": "Claude portable settings composition root could not be closed.",
-} as const satisfies Readonly<Record<ClaudeCodePortableSettingsCompositionErrorReason, string>>;
-
 /** Claude portable settings composition 失败的稳定、脱敏错误。 */
-class ClaudeCodePortableSettingsCompositionError extends Error {
-  override readonly name = "ClaudeCodePortableSettingsCompositionError";
-  readonly code = "wakeflow-claude-code-portable-settings-composition" as const;
-  readonly reason: ClaudeCodePortableSettingsCompositionErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodePortableSettingsCompositionErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+class ClaudeCodePortableSettingsCompositionError extends ModuleError<ClaudeCodePortableSettingsCompositionErrorReason> {
+  static override readonly code = "wakeflow-claude-code-portable-settings-composition";
 }
+
+const fail: Fail<ClaudeCodePortableSettingsCompositionErrorReason> = failWith(
+  ClaudeCodePortableSettingsCompositionError,
+);
 
 interface ParsedRequest {
   readonly action: ClaudeCodePortableSettingsCompositionAction;
@@ -171,18 +153,6 @@ interface ParsedRequest {
     readonly hostId: "claude-code";
   };
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: ClaudeCodePortableSettingsCompositionErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodePortableSettingsCompositionError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function parseRequestConfig(value: unknown): WakeflowConfigModel {

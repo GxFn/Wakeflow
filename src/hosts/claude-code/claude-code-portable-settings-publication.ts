@@ -6,6 +6,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { ModuleError } from "../../foundation/error/module-error.js";
 import {
   DurableAtomicFileStageRecoveryError,
   recoverDurableAtomicFileStagesForTargets,
@@ -101,23 +102,9 @@ export type ClaudeCodePortableSettingsPublicationErrorReason =
   | "recovery-required"
   | "operation-failure";
 
-const ERROR_MESSAGES = {
-  input: "Claude Code portable settings publication input is invalid.",
-  "directory-policy": "Claude Code settings directory violates its node policy.",
-  "source-policy": "Claude Code portable settings source violates its node policy.",
-  "transition-blocked": "Claude Code portable settings transition is blocked.",
-  "source-changed": "Claude Code portable settings source changed before publication.",
-  "root-scope": "Claude Code portable settings publication lost root scope.",
-  "recovery-required": "Claude Code portable settings publication requires recovery.",
-  "operation-failure": "Claude Code portable settings publication failed.",
-} as const satisfies Readonly<Record<ClaudeCodePortableSettingsPublicationErrorReason, string>>;
-
 /** Claude Code portable settings 发布失败的稳定、脱敏错误。 */
-export class ClaudeCodePortableSettingsPublicationError extends Error {
-  override readonly name = "ClaudeCodePortableSettingsPublicationError";
-  readonly code = "wakeflow-claude-code-portable-settings-publication" as const;
-  readonly reason: ClaudeCodePortableSettingsPublicationErrorReason;
-  readonly path: string;
+export class ClaudeCodePortableSettingsPublicationError extends ModuleError<ClaudeCodePortableSettingsPublicationErrorReason> {
+  static override readonly code = "wakeflow-claude-code-portable-settings-publication";
   readonly transitionReason: ClaudeCodePortableSettingsTransitionReason | null;
 
   constructor(
@@ -126,9 +113,7 @@ export class ClaudeCodePortableSettingsPublicationError extends Error {
     transitionReason: ClaudeCodePortableSettingsTransitionReason | null = null,
     options?: ErrorOptions,
   ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path, options);
     this.transitionReason = transitionReason;
   }
 }

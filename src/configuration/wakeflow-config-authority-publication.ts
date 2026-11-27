@@ -1,5 +1,6 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -70,52 +71,17 @@ export type WakeflowConfigAuthorityPublicationErrorReason =
   | "publication-failure"
   | "commit-uncertain";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow config authority publication input is invalid.",
-  "unsupported-platform":
-    "Wakeflow config authority publication requires reliable local POSIX ownership semantics.",
-  "root-scope": "Wakeflow config authority publication lost its workspace root scope.",
-  "root-policy": "Wakeflow config authority publication requires a current-user workspace root.",
-  config: "Wakeflow config authority publication requires one strict model.",
-  capacity: "Wakeflow config authority publication exceeds its recoverable byte limit.",
-  placement: "Wakeflow config authority publication declares an unsafe root placement.",
-  "target-exists": "Wakeflow config authority already exists.",
-  "publication-failure": "Wakeflow config authority could not be published safely.",
-  "commit-uncertain": "Published Wakeflow config authority could not be proven exact.",
-} as const satisfies Readonly<Record<WakeflowConfigAuthorityPublicationErrorReason, string>>;
-
 /** Config 首次发布失败时返回的稳定、脱敏错误。 */
-export class WakeflowConfigAuthorityPublicationError extends Error {
-  override readonly name = "WakeflowConfigAuthorityPublicationError";
-  readonly code = "wakeflow-config-authority-publication" as const;
-  readonly reason: WakeflowConfigAuthorityPublicationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: WakeflowConfigAuthorityPublicationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class WakeflowConfigAuthorityPublicationError extends ModuleError<WakeflowConfigAuthorityPublicationErrorReason> {
+  static override readonly code = "wakeflow-config-authority-publication";
 }
+
+const fail: Fail<WakeflowConfigAuthorityPublicationErrorReason> = failWith(
+  WakeflowConfigAuthorityPublicationError,
+);
 
 interface ParsedOptions {
   readonly signal: AbortSignal | undefined;
-}
-
-function fail(
-  reason: WakeflowConfigAuthorityPublicationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new WakeflowConfigAuthorityPublicationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
 }
 
 function assertRoot(value: unknown): asserts value is RootedDirectory {

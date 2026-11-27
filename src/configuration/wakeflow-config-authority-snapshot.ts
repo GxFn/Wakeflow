@@ -1,6 +1,7 @@
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../foundation/data/deterministic-json-document.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../foundation/data/passive-own-data.js";
+import { ModuleError } from "../foundation/error/module-error.js";
 import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
 import type { FileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import {
@@ -101,27 +102,9 @@ export type WakeflowConfigAuthoritySnapshotErrorReason =
   | "placement"
   | "load-failure";
 
-const ERROR_MESSAGES = {
-  input: "Wakeflow config authority snapshot input is invalid.",
-  "root-scope": "Wakeflow config workspace root could not be held stable.",
-  source: "Wakeflow canonical config source is unavailable or unsafe.",
-  "source-policy": "Wakeflow canonical config source violates its node policy.",
-  "source-changed": "Wakeflow canonical config changed during snapshot loading.",
-  encoding: "Wakeflow canonical config is not strict UTF-8 text.",
-  json: "Wakeflow canonical config is not valid JSON.",
-  representation: "Wakeflow canonical config does not use its deterministic domain representation.",
-  config: "Wakeflow canonical config is not the strict public authority.",
-  "config-version": "Wakeflow canonical config uses a schema version this build does not read.",
-  placement: "Wakeflow canonical config declares unsafe root placements.",
-  "load-failure": "Wakeflow config authority snapshot failed closed.",
-} as const satisfies Readonly<Record<WakeflowConfigAuthoritySnapshotErrorReason, string>>;
-
 /** 配置权威快照失败时返回的稳定、脱敏错误。 */
-export class WakeflowConfigAuthoritySnapshotError extends Error {
-  override readonly name = "WakeflowConfigAuthoritySnapshotError";
-  readonly code = "wakeflow-config-authority-snapshot" as const;
-  readonly reason: WakeflowConfigAuthoritySnapshotErrorReason;
-  readonly path: string;
+export class WakeflowConfigAuthoritySnapshotError extends ModuleError<WakeflowConfigAuthoritySnapshotErrorReason> {
+  static override readonly code = "wakeflow-config-authority-snapshot";
   /** `config-version` 时文件里写的 schemaVersion；其余原因为 null。 */
   readonly schemaVersion: number | null;
 
@@ -130,9 +113,7 @@ export class WakeflowConfigAuthoritySnapshotError extends Error {
     path: string,
     schemaVersion: number | null = null,
   ) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path);
     this.schemaVersion = schemaVersion;
   }
 }

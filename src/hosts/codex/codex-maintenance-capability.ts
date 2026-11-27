@@ -1,3 +1,4 @@
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import type {
   ExecuteWakeflowHostMaintenanceOperationRequest,
@@ -33,33 +34,12 @@ const CODEX_MAINTENANCE_CAPABILITY_ID = "codex-maintenance" as const;
 
 export type CodexMaintenanceCapabilityErrorReason = "gate" | "operation" | "owner";
 
-const ERROR_MESSAGES = {
-  gate: "Codex maintenance capability requires the active matching gate.",
-  operation: "Codex maintenance capability operation is invalid.",
-  owner: "Codex maintenance capability owner failed.",
-} as const satisfies Readonly<Record<CodexMaintenanceCapabilityErrorReason, string>>;
-
 /** Codex maintenance capability 失败的稳定、脱敏错误。 */
-export class CodexMaintenanceCapabilityError extends Error {
-  override readonly name = "CodexMaintenanceCapabilityError";
-  readonly code = "wakeflow-codex-maintenance-capability" as const;
-  readonly reason: CodexMaintenanceCapabilityErrorReason;
-  readonly path: string;
-
-  constructor(reason: CodexMaintenanceCapabilityErrorReason, path: string, options?: ErrorOptions) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class CodexMaintenanceCapabilityError extends ModuleError<CodexMaintenanceCapabilityErrorReason> {
+  static override readonly code = "wakeflow-codex-maintenance-capability";
 }
 
-function fail(reason: CodexMaintenanceCapabilityErrorReason, path: string, cause?: unknown): never {
-  throw new CodexMaintenanceCapabilityError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<CodexMaintenanceCapabilityErrorReason> = failWith(CodexMaintenanceCapabilityError);
 
 /** Codex 当前唯一、闭合的宿主维护端口实现。 */
 export const codexMaintenanceCapability: Readonly<WakeflowHostMaintenanceCapability> =

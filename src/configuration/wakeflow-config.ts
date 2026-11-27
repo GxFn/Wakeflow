@@ -27,6 +27,7 @@ import {
 import { computeCanonicalJsonSha256Digest } from "../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { type JsonValue, JsonValueError, parseJsonValue } from "../foundation/data/json-value.js";
+import { ModuleError } from "../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../foundation/schema/runtime-json-schema.js";
 
 /**
@@ -269,23 +270,9 @@ export type WakeflowConfigErrorReason =
   | "placement"
   | "version";
 
-const ERROR_MESSAGES = {
-  "json-value": "Wakeflow config input is not passive JSON data.",
-  schema: "Wakeflow config does not satisfy the public Schema.",
-  identifier: "Wakeflow config contains an invalid typed identifier.",
-  "identifier-collision": "Wakeflow config durable identifiers collide.",
-  reference: "Wakeflow config contains an unresolved typed reference.",
-  topology: "Wakeflow config topology relationships are inconsistent.",
-  placement: "Wakeflow config contains a non-canonical placement.",
-  version: "Wakeflow config uses a schema version this build does not read.",
-} as const satisfies Readonly<Record<WakeflowConfigErrorReason, string>>;
-
 /** 配置内存模型失败的稳定、脱敏错误。 */
-export class WakeflowConfigError extends Error {
-  override readonly name = "WakeflowConfigError";
-  readonly code = "wakeflow-config" as const;
-  readonly reason: WakeflowConfigErrorReason;
-  readonly path: string;
+export class WakeflowConfigError extends ModuleError<WakeflowConfigErrorReason> {
+  static override readonly code = "wakeflow-config";
   /** `version` 时文件里写的 schemaVersion；其余原因为 null。 */
   readonly schemaVersion: number | null;
 
@@ -294,9 +281,7 @@ export class WakeflowConfigError extends Error {
     path: string,
     schemaVersion: number | null = null,
   ) {
-    super(ERROR_MESSAGES[reason]);
-    this.reason = reason;
-    this.path = path;
+    super(reason, path);
     this.schemaVersion = schemaVersion;
   }
 }

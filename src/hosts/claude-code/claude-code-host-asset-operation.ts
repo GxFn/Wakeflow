@@ -6,6 +6,7 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
+import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -77,43 +78,14 @@ export type ClaudeCodeHostAssetOperationErrorReason =
   | "source-stale"
   | "write";
 
-const ERROR_MESSAGES = {
-  input: "Claude host asset operation input is invalid.",
-  operation: "Claude host asset operation payload is invalid.",
-  read: "Claude host asset could not be read safely.",
-  "source-stale": "Claude host asset changed since the plan was made.",
-  write: "Claude host asset could not be written safely.",
-} as const satisfies Readonly<Record<ClaudeCodeHostAssetOperationErrorReason, string>>;
-
 /** 宿主资产操作失败的稳定、脱敏错误。 */
-export class ClaudeCodeHostAssetOperationError extends Error {
-  override readonly name = "ClaudeCodeHostAssetOperationError";
-  readonly code = "wakeflow-claude-code-host-asset-operation" as const;
-  readonly reason: ClaudeCodeHostAssetOperationErrorReason;
-  readonly path: string;
-
-  constructor(
-    reason: ClaudeCodeHostAssetOperationErrorReason,
-    path: string,
-    options?: ErrorOptions,
-  ) {
-    super(ERROR_MESSAGES[reason], options);
-    this.reason = reason;
-    this.path = path;
-  }
+export class ClaudeCodeHostAssetOperationError extends ModuleError<ClaudeCodeHostAssetOperationErrorReason> {
+  static override readonly code = "wakeflow-claude-code-host-asset-operation";
 }
 
-function fail(
-  reason: ClaudeCodeHostAssetOperationErrorReason,
-  path: string,
-  cause?: unknown,
-): never {
-  throw new ClaudeCodeHostAssetOperationError(
-    reason,
-    path,
-    cause === undefined ? undefined : { cause },
-  );
-}
+const fail: Fail<ClaudeCodeHostAssetOperationErrorReason> = failWith(
+  ClaudeCodeHostAssetOperationError,
+);
 
 const ASSET_MAXIMUM_BYTES = parseByteCount(256 * 1024, "$asset.maximumBytes");
 const ASSET_MODE = 0o600;

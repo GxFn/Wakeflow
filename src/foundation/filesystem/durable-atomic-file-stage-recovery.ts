@@ -126,7 +126,7 @@ function parentDirectoryRef(resourcePath: PortableResourcePath): PortableResourc
 
 /**
  * 目标集合的范围：非空且有上限、不重复、同一个父目录——这几条是元素之间的关系，类型表达不了，
- * 所以留着；每个路径的词法由目标摘要的计算复验（本层的路径规则），数组本身不再被动准入。
+ * 所以留着；目标摘要的计算拒绝占用暂存保留前缀的名字，路径与数组本身是类型化的。
  */
 function targetScopeOf(resourcePaths: readonly PortableResourcePath[]): Readonly<TargetScope> {
   if (

@@ -4,7 +4,10 @@ import {
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import type {
   RequirementDemandType,
   RequirementDocumentRole,
@@ -489,7 +492,11 @@ async function loadExistingRecord(
   requirementId: string,
 ): Promise<Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>> | null> {
   try {
-    return await context.store.loadRequirement(requirementId, signalOptions(context.signal));
+    // 请求与计划里的需求身份是字符串：换成类型化身份在这里做一次（此前 Ledger 门面自己做）。
+    return await context.store.loadRequirement(
+      parseWakeflowDurableIdOfKind(requirementId, "requirement", "$requirementId"),
+      signalOptions(context.signal),
+    );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError && error.reason === "not-found") return null;
     mapStoreError(error);

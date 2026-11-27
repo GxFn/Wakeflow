@@ -58,8 +58,7 @@ export type WakeflowWorkspaceStaticResourceMatrixErrorReason =
   | "scope"
   | "declaration-id-collision"
   | "placement-collision"
-  | "digest"
-  | "query";
+  | "digest";
 
 /** 静态资源矩阵组合或唯一性准入失败的稳定、脱敏错误。 */
 export class WakeflowWorkspaceStaticResourceMatrixError extends ModuleError<WakeflowWorkspaceStaticResourceMatrixErrorReason> {
@@ -342,18 +341,10 @@ export function parseWakeflowWorkspaceStaticResourceMatrix(
   });
 }
 
-function queryText(value: unknown, path: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    fail("query", path);
-  }
-  return value;
-}
-
 /** 按全局声明 ID 查找一个静态资源；不存在时返回 `null`。 */
 export function findWakeflowWorkspaceStaticResourceByDeclarationId(
   matrix: Readonly<WakeflowWorkspaceStaticResourceMatrix>,
-  declarationIdValue: unknown,
+  declarationId: string,
 ): Readonly<WakeflowWorkspaceResourceDeclaration> | null {
-  const declarationId = queryText(declarationIdValue, "$/declarationId");
   return matrix.declarations.find((entry) => entry.declarationId === declarationId) ?? null;
 }

@@ -775,9 +775,14 @@ function deriveSupersedeBlockers(
   return [];
 }
 
+/** 请求里的投递身份：Schema 已按领域文法核过，这里换成类型化身份（值进入的地方）。 */
+function requestDeliveryId(value: string): WakeflowDurableId<"target-delivery"> {
+  return parseWakeflowDurableIdOfKind(value, "target-delivery", "$request.deliveryId");
+}
+
 async function loadEnvelope(
   repository: DemandEventSourcingRepository,
-  deliveryId: string,
+  deliveryId: WakeflowDurableId<"target-delivery">,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DeliveryEnvelope>> {
   try {
@@ -800,7 +805,7 @@ async function assertEarlierGenerationFence(
 ): Promise<void> {
   try {
     const outcomes = await repository.findDeliveryOutcomeRecordedEvents(
-      input.deliveryId,
+      requestDeliveryId(input.deliveryId),
       signalOptions(signal),
     );
     const known = outcomes.some(
@@ -815,7 +820,7 @@ async function assertEarlierGenerationFence(
 
 async function loadTaskPackage(
   repository: DemandEventSourcingRepository,
-  taskPackageId: string,
+  taskPackageId: WakeflowDurableId<"task-package">,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<TaskPackage>> {
   try {
@@ -901,7 +906,9 @@ async function readEvidenceMember(
     });
   }
   const record = await loadManagedEvidenceRecord(root, plan.evidenceId, signal);
-  const member = await readManagedEvidencePayloadMember(root, record, plan.memberRef, {
+  // 成员路径是报告原文：在这里解析，失败（PortableResourcePathError）归为定位符非法。
+  const memberRef = parsePortableResourcePath(plan.memberRef, "$memberRef");
+  const member = await readManagedEvidencePayloadMember(root, record, memberRef, {
     maximumBytes: PAYLOAD_READ_LIMIT,
     ...signal,
   });
@@ -1210,7 +1217,7 @@ function intervalHolds(from: UtcInstant, until: UtcInstant): boolean {
 async function observeTargetSessionPrompts(
   context: SliceContext,
   repository: DemandEventSourcingRepository,
-  deliveryId: string,
+  deliveryId: WakeflowDurableId<"target-delivery">,
   result: Readonly<TargetResult>,
 ): Promise<Readonly<TargetSessionPromptObservation>> {
   const until = result.report.reportedAt;
@@ -1328,7 +1335,11 @@ async function executeImport(
       "$request.report",
     );
   }
-  const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+  const envelope = await loadEnvelope(
+    repository,
+    requestDeliveryId(input.deliveryId),
+    options.signal,
+  );
   if (envelope.workType !== input.report.workType) {
     fail("precondition-failed", "work-type", "$request.report.workType");
   }
@@ -1352,7 +1363,7 @@ async function executeImport(
   const sessionPrompts = await observeTargetSessionPrompts(
     context,
     repository,
-    input.deliveryId,
+    envelope.deliveryId,
     result,
   );
   const command = parseDemandEventSourcingCommand({
@@ -1391,7 +1402,11 @@ function importResult(
       callbackId: callback.callbackId,
       permit: {
         prompt: callback.portablePrompt,
-        promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", callback.callbackId),
+        promptRef: deliveryPermitPromptRef(
+          outcome.commandResult.aggregate.demandId,
+          "callback",
+          callback.callbackId,
+        ),
         promptDigest: callback.promptDigest,
         hostAction: {
           effect: "send-prompt-to-window",

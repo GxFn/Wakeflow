@@ -56,7 +56,6 @@ export interface WakeflowHostCapabilityLayoutMaterializationResult {
 }
 
 export type WakeflowHostCapabilityLayoutMaterializationErrorReason =
-  | "input"
   | "authority"
   | "prerequisite"
   | "strict-absent"

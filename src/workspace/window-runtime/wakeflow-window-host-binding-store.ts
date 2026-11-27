@@ -350,7 +350,7 @@ export async function createWakeflowWindowHostBindingInStore(
     await createFileAtomically(
       root,
       authority.bindingRef,
-      encodeUtf8(renderWakeflowWindowHostBinding(binding, authority.identityProfile), "$binding"),
+      encodeUtf8(renderWakeflowWindowHostBinding(binding), "$binding"),
       {
         mode: 0o600,
         ...(context.signal === undefined ? {} : { signal: context.signal }),

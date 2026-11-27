@@ -102,7 +102,6 @@ export interface InspectManagedEvidenceRecordSetInventoryOptions {
 }
 
 export type ManagedEvidenceRecordSetInventoryErrorReason =
-  | "input"
   | "root-scope"
   | "tree-shape"
   | "node-policy"

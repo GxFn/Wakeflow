@@ -24,11 +24,6 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
-import {
-  PassiveOwnDataError,
-  parseDenseArray,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
@@ -48,7 +43,6 @@ import {
   computeDemandIdentityDigest,
   type DemandIdentity,
   type DemandType,
-  parseDemandIdentity,
 } from "./demand-identity.js";
 
 /**
@@ -95,7 +89,6 @@ export interface AdmittedDemandAuthority {
 }
 
 export type DemandAuthorityErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "identifier"
@@ -130,7 +123,6 @@ const REQUIRED_ROLES = Object.freeze({
 } as const satisfies Readonly<Record<DemandType, readonly string[]>>);
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const DRAFT_FIELDS = Object.freeze(["authorityRefs", "testingDecision"] as const);
 
 const validateWire = createRuntimeJsonSchemaValidator<DemandAuthorityWire>(
   WAKEFLOW_DEMAND_AUTHORITY_SCHEMA,
@@ -302,44 +294,21 @@ export function parseDemandAuthority(
   return authority;
 }
 
-/** 从 Identity 和字段集合严格受限的草稿创建强制 Authority，并规范化引用顺序。 */
+/**
+ * 创建 Authority 的草稿：成员引用来自已加载的账本记录，测试决策是需求包记录里的文本，
+ * 两者由 `createDemandAuthority` 的那一次解析（Schema、文本、身份关系）认定。
+ */
+export interface DemandAuthorityDraft {
+  readonly authorityRefs: readonly Readonly<LedgerAuthorityMemberReference>[];
+  readonly testingDecision: Readonly<DemandTestingDecision>;
+}
+
+/** 从 Identity 和草稿创建强制 Authority，并规范化引用顺序。 */
 export function createDemandAuthority(
-  identityValue: unknown,
-  draft: unknown,
+  identity: Readonly<DemandIdentity>,
+  draft: Readonly<DemandAuthorityDraft>,
 ): Readonly<DemandAuthority> {
-  const identity = parseDemandIdentity(identityValue);
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(draft, "$draft");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== DRAFT_FIELDS.length ||
-    keys.some((key, index) => key !== DRAFT_FIELDS[index])
-  ) {
-    fail("input", "$draft");
-  }
-  let draftRefs: readonly unknown[];
-  try {
-    draftRefs = parseDenseArray(record.authorityRefs, 32, "$/authorityRefs");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$/authorityRefs", error);
-    throw error;
-  }
-  const parsedDraftRefs = draftRefs.map((value, index) => {
-    try {
-      return parseLedgerAuthorityMemberReference(value);
-    } catch (error: unknown) {
-      if (error instanceof LedgerAuthorityStoreError) {
-        fail("reference", `$/authorityRefs/${index}`, error);
-      }
-      throw error;
-    }
-  });
-  const sortedRefs = [...parsedDraftRefs].sort((left, right) => {
+  const sortedRefs = [...draft.authorityRefs].sort((left, right) => {
     const leftKey = referenceLocationKey(left);
     const rightKey = referenceLocationKey(right);
     return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
@@ -351,7 +320,7 @@ export function createDemandAuthority(
       demandId: identity.demandId,
       identityDigest: computeDemandIdentityDigest(identity),
       authorityRefs: sortedRefs,
-      testingDecision: record.testingDecision,
+      testingDecision: draft.testingDecision,
     },
     identity,
   );

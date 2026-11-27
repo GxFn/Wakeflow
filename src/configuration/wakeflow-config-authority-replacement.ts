@@ -8,11 +8,7 @@ import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.j
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { settleStagesOfDeadWriters, withWorkspaceLock } from "../kernel/workspace-locks.js";
-import {
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "./wakeflow-config.js";
+import type { WakeflowConfigModel } from "./wakeflow-config.js";
 import {
   assertCurrentUserWakeflowConfigAuthorityRoot,
   assertWakeflowConfigAuthorityDesiredPlacements,
@@ -21,9 +17,7 @@ import {
   failWakeflowConfigAuthorityReplacement as fail,
   mapWakeflowConfigAuthorityLockError,
   matchesWakeflowConfigAuthorityExpectation,
-  type ParsedWakeflowConfigAuthorityExpectation,
   type PreparedWakeflowConfigAuthorityDesired,
-  parseWakeflowConfigAuthorityExpectation,
   prepareWakeflowConfigAuthorityDesired,
   readCurrentWakeflowConfigAuthority,
   sameWakeflowConfigAuthoritySource,
@@ -111,7 +105,7 @@ function assertReplacementReadback(
 async function replaceUnderLock(
   root: RootedDirectory,
   desired: Readonly<PreparedWakeflowConfigAuthorityDesired>,
-  expected: Readonly<ParsedWakeflowConfigAuthorityExpectation>,
+  expected: Readonly<WakeflowConfigAuthoritySnapshot>,
   signal: AbortSignal | undefined,
   expectedUserId: bigint,
   markCommitted: () => void,
@@ -154,31 +148,24 @@ async function replaceUnderLock(
   });
 }
 
-function parseDesiredModel(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    fail("config", "$config", error);
-  }
-}
-
-/** 在 Config 专属短锁内执行当前值检查、幂等判断和基于精确源预期的替换。 */
+/**
+ * 在 Config 专属短锁内执行当前值检查、幂等判断和基于精确源预期的替换。目标模型与预期快照都是
+ * 类型化的（调用方已解析请求里的配置、读过当前权威）；两者第一次相遇的关系在这里核对。
+ */
 export async function replaceWakeflowConfigAuthority(
   root: RootedDirectory,
-  desiredModelValue: unknown,
-  expectedSnapshotValue: unknown,
+  desiredModel: WakeflowConfigModel,
+  expected: Readonly<WakeflowConfigAuthoritySnapshot>,
   options: WakeflowConfigAuthorityReplacementOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityReplacementReceipt>> {
   const { signal } = options;
   throwIfAborted(signal);
   const expectedUserId = currentWakeflowConfigAuthorityUserId();
-  const desired = prepareWakeflowConfigAuthorityDesired(parseDesiredModel(desiredModelValue));
-  const expected = parseWakeflowConfigAuthorityExpectation(expectedSnapshotValue, expectedUserId);
+  const desired = prepareWakeflowConfigAuthorityDesired(desiredModel);
   if (expected.workspaceRoot !== root.absolutePath) {
     fail("conflict", "$expected.workspaceRoot");
   }
-  if (desired.model.program.programId !== expected.programId) {
+  if (desired.model.program.programId !== expected.model.program.programId) {
     fail("program-identity", "$/program/programId");
   }
   await assertCurrentUserWakeflowConfigAuthorityRoot(root, expectedUserId);

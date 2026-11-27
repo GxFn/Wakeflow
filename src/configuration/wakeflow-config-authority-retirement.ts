@@ -1,4 +1,4 @@
-import { parseSha256Digest, type Sha256Digest, Sha256Error } from "../foundation/crypto/sha256.js";
+import type { Sha256Digest } from "../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import {
   DurableResourceRenameError,
@@ -214,15 +214,6 @@ async function retireUnderLock(
   return Object.freeze({ disposition: "retired", configDigest: expected, detached: after });
 }
 
-function parseExpectedDigest(value: unknown): Sha256Digest {
-  try {
-    return parseSha256Digest(value, "$expectedConfigDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("input", "$expectedConfigDigest", error);
-    throw error;
-  }
-}
-
 /** 锁内外的失败归类：自己的错误原样抛，合同错误过桥，锁错误按是否已提交归为 lock 或 commit-uncertain。 */
 function mapRetirementFailure(error: unknown, committed: boolean): never {
   if (
@@ -239,13 +230,15 @@ function mapRetirementFailure(error: unknown, committed: boolean): never {
   fail(committed ? "commit-uncertain" : "retirement-failure", "$config");
 }
 
-/** 在 Config 专属短锁内把带期望摘要的配置文件改名为退役文件；已退役即幂等 current。 */
+/**
+ * 在 Config 专属短锁内把带期望摘要的配置文件改名为退役文件；已退役即幂等 current。期望摘要是
+ * 调用方从预览拿到的类型化值。
+ */
 export async function retireWakeflowConfigAuthority(
   root: RootedDirectory,
-  expectedConfigDigestValue: unknown,
+  expected: Sha256Digest,
   options: WakeflowConfigAuthorityReplacementOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityRetirementReceipt>> {
-  const expected = parseExpectedDigest(expectedConfigDigestValue);
   const { signal } = options;
   let expectedUserId: bigint;
   try {

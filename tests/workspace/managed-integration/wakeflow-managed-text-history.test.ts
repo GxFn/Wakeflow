@@ -187,13 +187,14 @@ test("仓库 `.gitignore` 的 1.4.4 历史渲染重算出带四条根锁规则�
 });
 
 test("历史表冻结且每张不超过 7 项，退役版本是 semver；没有登记历史的组件用夹具输入算历史正文得到空集", () => {
-  const tables: readonly (readonly WakeflowManagedTextHistoricalRender<readonly unknown[]>[])[] = [
-    WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
-    WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
-    WAKEFLOW_GITIGNORE_BODY_HISTORY,
-    WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
-    WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
-  ];
+  const tables: readonly (readonly Pick<WakeflowManagedTextHistoricalRender<[]>, "retiredIn">[])[] =
+    [
+      WAKEFLOW_PROGRAM_INSTRUCTION_BODY_HISTORY,
+      WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY,
+      WAKEFLOW_GITIGNORE_BODY_HISTORY,
+      WAKEFLOW_SUPPORT_GITIGNORE_BODY_HISTORY,
+      WAKEFLOW_SUPPORT_MEMORY_BODY_HISTORY,
+    ];
   // 转换层最多收 8 个 current 目标，其中一个是当前渲染。
   const historyMaximum = 7;
   for (const table of tables) {

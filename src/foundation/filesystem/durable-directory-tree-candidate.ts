@@ -234,14 +234,10 @@ async function syncExistingMemberFile(
 /** 在尚不存在的候选路径创建目录树，并验证其清单闭合且已采用最终权限位。 */
 export async function createDirectoryTreeCandidateDurably(
   root: RootedDirectory,
-  candidateRootPathValue: unknown,
+  candidateRootPath: PortableResourcePath,
   files: readonly DirectoryTreeCandidateFileInput[],
   options: DirectoryTreeCandidateOptions,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
-  const candidateRootPath = parseDirectoryTreeCandidatePath(
-    candidateRootPathValue,
-    "$candidateRootPath",
-  );
   const prepared = prepareDirectoryTreeCandidate(files, options);
   const signal = prepared.options.signal;
   const signalOption = signal === undefined ? {} : { signal };
@@ -300,14 +296,10 @@ export async function createDirectoryTreeCandidateDurably(
  */
 export async function settleDirectoryTreeCandidateDurably(
   root: RootedDirectory,
-  candidateRootPathValue: unknown,
+  candidateRootPath: PortableResourcePath,
   files: readonly DirectoryTreeCandidateFileInput[],
   options: DirectoryTreeCandidateOptions,
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
-  const candidateRootPath = parseDirectoryTreeCandidatePath(
-    candidateRootPathValue,
-    "$candidateRootPath",
-  );
   const prepared = prepareDirectoryTreeCandidate(files, options);
   const signal = prepared.options.signal;
   const signalOption = signal === undefined ? {} : { signal };

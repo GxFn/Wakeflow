@@ -101,7 +101,6 @@ export interface ClaudeCodePortableSettingsInspection {
 }
 
 export type ClaudeCodePortableSettingsPublicationErrorReason =
-  | "input"
   | "directory-policy"
   | "source-policy"
   | "transition-blocked"

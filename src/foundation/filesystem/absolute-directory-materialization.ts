@@ -65,7 +65,7 @@ const fail: Fail<AbsoluteDirectoryMaterializationErrorReason> = failWith(
   AbsoluteDirectoryMaterializationError,
 );
 
-async function inspect(value: unknown, path: string) {
+async function inspect(value: string, path: string) {
   try {
     return await inspectAbsoluteDirectoryPlacement(value, path);
   } catch (error: unknown) {
@@ -163,7 +163,7 @@ async function materializeUnderAncestor(
 
 /** 从最近安全祖先开始，持久且幂等地物化一个规范绝对目录位置。 */
 export async function materializeAbsoluteDirectoryPlacement(
-  value: unknown,
+  value: string,
   options: AbsoluteDirectoryMaterializationOptions,
 ): Promise<Readonly<AbsoluteDirectoryMaterializationResult>> {
   throwIfAborted(options.signal);

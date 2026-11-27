@@ -1,8 +1,6 @@
 import {
   buildWakeflowConfigIndexes,
   computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigIndexes,
   type WakeflowConfigModel,
   type WakeflowConfigPlacement,
@@ -13,11 +11,9 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 import { WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS } from "./wakeflow-window-runtime-desired-topology.js";
 
@@ -100,7 +96,7 @@ export interface WakeflowWindowLaunchIntentSet {
   readonly launchSetDigest: Sha256Digest;
 }
 
-type WakeflowWindowLaunchIntentErrorReason = "config" | "profile" | "capacity" | "relation";
+type WakeflowWindowLaunchIntentErrorReason = "capacity" | "relation";
 
 /** Window launch intent 编译失败的稳定、脱敏错误。 */
 export class WakeflowWindowLaunchIntentError extends ModuleError<WakeflowWindowLaunchIntentErrorReason> {
@@ -108,26 +104,6 @@ export class WakeflowWindowLaunchIntentError extends ModuleError<WakeflowWindowL
 }
 
 const fail: Fail<WakeflowWindowLaunchIntentErrorReason> = failWith(WakeflowWindowLaunchIntentError);
-
-function parseConfig(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-}
-
-function parseProfile(value: unknown): Readonly<WakeflowWorkspaceHostResourceProfile> {
-  try {
-    return parseWakeflowWorkspaceHostResourceProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
 
 function rootForWindow(
   model: WakeflowConfigModel,
@@ -273,13 +249,11 @@ export function computeWakeflowWindowLaunchExecutionDigest(
   });
 }
 
-/** 从完整Config和当前Host Profile生成按windowId排序的launch intent集合。 */
+/** 从完整Config和当前Host Profile（都是类型化的）生成按windowId排序的launch intent集合。 */
 export function compileWakeflowWindowLaunchIntents(
-  configValue: unknown,
-  profileValue: unknown,
+  model: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowWindowLaunchIntentSet> {
-  const model = parseConfig(configValue);
-  const profile = parseProfile(profileValue);
   if (model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
     fail("capacity", "$/topology/windows");
   }

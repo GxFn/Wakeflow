@@ -89,9 +89,7 @@ export interface WakeflowSupportMemoryInspection {
 }
 
 export type WakeflowSupportMemoryInspectionErrorReason =
-  | "input"
   | "config"
-  | "profile"
   | "catalog"
   | "surface"
   | "placement"

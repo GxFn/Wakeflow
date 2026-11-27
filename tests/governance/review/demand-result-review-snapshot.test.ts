@@ -118,14 +118,6 @@ test("Demand Result Review Snapshot从同一Event Stream零写重建当前审查
   }
 });
 
-test("Demand Result Review Snapshot拒绝非RootedDirectory", async () => {
-  await rejects(
-    readDemandResultReviewSnapshot({}),
-    (error: unknown) =>
-      error instanceof DemandResultReviewSnapshotError && error.reason === "input",
-  );
-});
-
 test("归档评审快照把未初始化的事件存储归为operation-failure而不是stream", async () => {
   const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "wakeflow-archived-review-empty-"));
   const root = await RootedDirectory.open(fixtureRoot);

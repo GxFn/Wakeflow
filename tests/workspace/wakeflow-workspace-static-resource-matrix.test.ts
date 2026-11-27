@@ -233,16 +233,5 @@ test("Static Resource Matrix exposes only a narrow lookup query", () => {
     WAKEFLOW_CONFIG_AUTHORITY_RESOURCE_DECLARATION,
   );
   equal(findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "workspace.missing"), null);
-
-  let invalidQuery: unknown;
-  try {
-    findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, "");
-  } catch (error: unknown) {
-    invalidQuery = error;
-  }
-  equal(invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError, true);
-  if (invalidQuery instanceof WakeflowWorkspaceStaticResourceMatrixError) {
-    equal(invalidQuery.reason, "query");
-    equal(invalidQuery.path, "$/declarationId");
-  }
+  equal(findWakeflowWorkspaceStaticResourceByDeclarationId(matrix, ""), null);
 });

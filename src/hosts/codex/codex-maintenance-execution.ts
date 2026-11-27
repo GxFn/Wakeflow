@@ -1,10 +1,12 @@
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { WakeflowMaintenanceExecutionPlan } from "../../workspace/maintenance/wakeflow-maintenance-execution-plan.js";
 import { previewWakeflowMaintenanceExecution } from "../../workspace/maintenance/wakeflow-maintenance-execution-preview.js";
 import {
   executeWakeflowMaintenanceExecutionTransaction,
   recoverWakeflowMaintenanceExecutionTransaction,
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
+import type { WakeflowMaintenanceOperationId } from "../../workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import type { WakeflowStaticMaterializationPreviewRequest } from "../../workspace/maintenance/wakeflow-static-materialization-preview-contract.js";
 import { codexMaintenanceCapability } from "./codex-maintenance-capability.js";
 
@@ -27,7 +29,7 @@ export async function previewCodexMaintenanceExecution(
 /** 执行已经确认且重新验证后的 Codex 聚合维护计划。 */
 export async function executeCodexMaintenanceExecution(
   root: RootedDirectory,
-  plan: unknown,
+  plan: Readonly<WakeflowMaintenanceExecutionPlan>,
   request: WakeflowStaticMaterializationPreviewRequest,
   options: WakeflowMaintenanceExecutionTransactionOptions = {},
 ) {
@@ -43,7 +45,7 @@ export async function executeCodexMaintenanceExecution(
 /** 只凭 operation ID 与私有 intent 恢复同一 Codex 维护事务。 */
 export async function recoverCodexMaintenanceExecution(
   root: RootedDirectory,
-  operationId: unknown,
+  operationId: WakeflowMaintenanceOperationId,
   options: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ) {
   return recoverWakeflowMaintenanceExecutionTransaction(

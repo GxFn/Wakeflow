@@ -53,12 +53,7 @@ export interface WakeflowSupportMemoryAuthority {
   readonly authorityDigest: Sha256Digest;
 }
 
-export type WakeflowSupportMemoryAuthorityErrorReason =
-  | "input"
-  | "config"
-  | "profile"
-  | "surface"
-  | "text";
+export type WakeflowSupportMemoryAuthorityErrorReason = "surface" | "text";
 
 /** Support whole-file memory 权威准入失败的稳定、脱敏错误。 */
 export class WakeflowSupportMemoryAuthorityError extends ModuleError<WakeflowSupportMemoryAuthorityErrorReason> {

@@ -92,9 +92,6 @@ export interface WakeflowManagedSupportRootInspection {
 }
 
 export type WakeflowManagedSupportRootMaterializationErrorReason =
-  | "input"
-  | "config"
-  | "profile"
   | "catalog"
   | "surface"
   | "placement"

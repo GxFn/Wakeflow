@@ -22,8 +22,6 @@ import {
 } from "./ledger-authority-paths.js";
 import {
   type LedgerAuthorityRecord,
-  LedgerAuthorityRecordError,
-  parseLedgerAuthorityRecord,
   renderLedgerAuthorityRecord,
 } from "./ledger-authority-record.js";
 import {
@@ -128,21 +126,15 @@ function candidateOptions(signal: AbortSignal | undefined) {
   });
 }
 
-function parsePublicationRecord(value: unknown): Readonly<LedgerAuthorityRecord> {
-  try {
-    return parseLedgerAuthorityRecord(value);
-  } catch (error: unknown) {
-    if (error instanceof LedgerAuthorityRecordError) fail("input", "$record", error);
-    throw error;
-  }
-}
-
+/**
+ * 记录是本编解码签发的类型化值（`createRequirementRecord` 从请求里的文档建出），不再复验；成员字节来自
+ * 请求文档，`parseMembers` 仍对照记录核对它们。
+ */
 function preparePublication(
-  recordValue: unknown,
+  record: Readonly<LedgerAuthorityRecord>,
   membersValue: readonly LedgerAuthorityMemberInput[],
   signal: AbortSignal | undefined,
 ): Readonly<PreparedPublication> {
-  const record = parsePublicationRecord(recordValue);
   const members = parseMembers(membersValue, record);
   const recordBytes = encodeUtf8(renderLedgerAuthorityRecord(record));
   if (recordBytes.byteLength > LEDGER_AUTHORITY_RECORD_MAXIMUM_BYTES) {
@@ -280,11 +272,11 @@ async function stageCandidate(
  */
 export async function publishLedgerAuthorityRecord(
   root: RootedDirectory,
-  recordValue: unknown,
+  record: Readonly<LedgerAuthorityRecord>,
   membersValue: readonly LedgerAuthorityMemberInput[],
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LedgerAuthorityPublicationResult>> {
-  const prepared = preparePublication(recordValue, membersValue, signal);
+  const prepared = preparePublication(record, membersValue, signal);
   if ((await ledgerPublicationResourceNodeOrNull(root, prepared.plan.finalRootRef)) !== null) {
     const loaded = await loadExactPublishedLedgerRecord(root, prepared.plan, signal);
     return Object.freeze({ wroteAuthority: false, loaded });

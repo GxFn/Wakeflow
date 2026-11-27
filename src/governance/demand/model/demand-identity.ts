@@ -22,10 +22,6 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../../foundation/schema/runtime-json-schema.js";
 import {
@@ -71,12 +67,26 @@ export interface DemandIdentity {
   readonly podId: WakeflowDurableId<"pod">;
 }
 
+/**
+ * 创建身份的草稿。三个标识和三段文本仍是请求里的原样字符串，由 `createDemandIdentity` 的那一次
+ * 解析认定（标识格式、NFC 与控制字符）；来源谱系已经是解析过的引用。
+ */
+export interface DemandIdentityDraft {
+  readonly programId: string;
+  readonly demandId: string;
+  readonly title: string;
+  readonly goal: string;
+  readonly completionDefinition: string;
+  readonly demandType: DemandType;
+  readonly source: Readonly<RequirementLineageReference>;
+  readonly podId: string;
+}
+
 export interface CreateDemandIdentityOptions {
   readonly clock?: UtcWallClock;
 }
 
 export type DemandIdentityErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "identifier"
@@ -103,16 +113,6 @@ const validateWire = createRuntimeJsonSchemaValidator<DemandIdentityWire>(
 );
 // biome-ignore lint/suspicious/noControlCharactersInRegex: the pattern exists to reject control characters in record text
 const CONTROL_EXCEPT_LF_PATTERN = /\r|[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/u;
-const DRAFT_FIELDS = Object.freeze([
-  "completionDefinition",
-  "demandId",
-  "demandType",
-  "goal",
-  "podId",
-  "programId",
-  "source",
-  "title",
-] as const);
 const DRAFT_VALIDATION_INSTANT = parseUtcInstant(
   "1970-01-01T00:00:00.000Z",
   "$draftValidationInstant",
@@ -195,37 +195,23 @@ function readCreationTime(options: CreateDemandIdentityOptions): UtcInstant {
   }
 }
 
-/** 从不含协议头和时间、字段集合严格受限的草稿创建 `DemandIdentity`。 */
+/** 从不含协议头和时间的草稿创建 `DemandIdentity`；草稿在读时钟之前经过一次完整解析。 */
 export function createDemandIdentity(
-  draft: unknown,
+  draft: Readonly<DemandIdentityDraft>,
   options: CreateDemandIdentityOptions = {},
 ): Readonly<DemandIdentity> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(draft, "$draft");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$draft", error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== DRAFT_FIELDS.length ||
-    keys.some((key, index) => key !== DRAFT_FIELDS[index])
-  ) {
-    fail("input", "$draft");
-  }
   const admitted = parseDemandIdentity({
     artifactKind: DEMAND_IDENTITY_ARTIFACT_KIND,
     schemaVersion: DEMAND_IDENTITY_SCHEMA_VERSION,
-    programId: record.programId,
-    demandId: record.demandId,
+    programId: draft.programId,
+    demandId: draft.demandId,
     createdAt: DRAFT_VALIDATION_INSTANT,
-    title: record.title,
-    goal: record.goal,
-    completionDefinition: record.completionDefinition,
-    demandType: record.demandType,
-    source: record.source,
-    podId: record.podId,
+    title: draft.title,
+    goal: draft.goal,
+    completionDefinition: draft.completionDefinition,
+    demandType: draft.demandType,
+    source: draft.source,
+    podId: draft.podId,
   });
   return Object.freeze({
     ...admitted,

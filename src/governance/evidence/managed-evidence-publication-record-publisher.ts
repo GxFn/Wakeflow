@@ -66,7 +66,6 @@ export interface ManagedEvidencePublicationRecordResult {
 }
 
 export type ManagedEvidencePublicationRecordPublisherErrorReason =
-  | "input"
   | "journal"
   | "root-scope"
   | "stage-missing"
@@ -208,7 +207,6 @@ function admitFinalPublish(transaction: Readonly<ManagedEvidencePublicationTrans
 }
 
 function mapPublicationError(error: DurableDirectoryTreePublicationError): never {
-  if (error.reason === "input") fail("input", error.path);
   if (error.reason === "destination-exists") {
     fail("destination-exists", "$final");
   }

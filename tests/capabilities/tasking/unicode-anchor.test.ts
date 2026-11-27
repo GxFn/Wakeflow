@@ -2,6 +2,7 @@ import { deepEqual, equal } from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { inspectDemandEventSourcingRootInventory } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-root-inventory.js";
@@ -62,11 +63,14 @@ test("需求包含自定义 Unicode 章节 性能约束 时，引用该锚点的
       fixture,
       async (root) =>
         (
-          await new TaskPackageProjectionStore(root).load(committed.targetTask.taskPackageId, {
-            expectedTaskPackageDigest: parseSha256Digest(
-              committed.taskPackageProjection.taskPackageDigest,
-            ),
-          })
+          await new TaskPackageProjectionStore(root).load(
+            parseWakeflowDurableIdOfKind(committed.targetTask.taskPackageId, "task-package"),
+            {
+              expectedTaskPackageDigest: parseSha256Digest(
+                committed.taskPackageProjection.taskPackageDigest,
+              ),
+            },
+          )
         ).taskPackage,
     );
     if (taskPackage.workType !== "implementation")

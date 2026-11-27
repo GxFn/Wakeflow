@@ -1,6 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { executeDemandCreationRequest } from "../../../src/capabilities/demand/service.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import type { ManagedEvidenceCapturePlan } from "../../../src/governance/evidence/managed-evidence-capture-plan.js";
 import type { ManagedEvidenceCapturePreview } from "../../../src/governance/evidence/managed-evidence-capture-planning-service.js";
@@ -20,12 +24,15 @@ export const EVIDENCE_CAPTURED_AT = parseUtcInstant("2026-09-01T21:00:00.000Z");
  * 由需求包与看板认领状态确定性派生的 Demand 标识（demand 切片 `deriveDemandCreationIds`）；
  * fixture 创建后校验，认领状态形状一变这里就会报出新值。
  */
-export const EVIDENCE_DEMAND_ID = "demand_045ce1b0-e5b4-43d8-b494-a945624228a8";
+export const EVIDENCE_DEMAND_ID = parseWakeflowDurableIdOfKind(
+  "demand_045ce1b0-e5b4-43d8-b494-a945624228a8",
+  "demand",
+);
 
 export interface ManagedEvidenceCapturePlanningWorkspaceFixture {
   readonly publication: Readonly<DemandEventSourcingPublicationWorkspaceFixture>;
   /** 由需求包与认领状态确定性派生；同一 fixture 每次得到同一个标识。 */
-  readonly demandId: string;
+  readonly demandId: WakeflowDurableId<"demand">;
   readonly repositoryRoot: string;
   readonly designRoot: string;
 }
@@ -55,7 +62,7 @@ export async function createManagedEvidenceCapturePlanningWorkspaceFixture(): Pr
     if (created.kind !== "WakeflowDemandCreationMutation") {
       throw new Error("Expected a Demand creation mutation.");
     }
-    const demandId = created.publication.demandId;
+    const demandId = parseWakeflowDurableIdOfKind(created.publication.demandId, "demand");
     if (demandId !== EVIDENCE_DEMAND_ID) {
       throw new Error(`EVIDENCE_DEMAND_ID drifted; derived ${demandId}`);
     }

@@ -7,10 +7,7 @@ import {
   hostRuntimeRootRef,
   hostWindowLocatorsRootRef,
 } from "../kernel/layout.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "./workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 
 /** Wakeflow Workspace：共享 hosts 根与当前宿主命名空间的可移植路径词汇。 */
 
@@ -31,8 +28,9 @@ export function wakeflowHostIdentityRootRef(
 }
 
 /** 窗口定位器目录 `identity/window-locators`：与 locator store 同一内核常量（复审 J5）。 */
-export function wakeflowHostWindowLocatorsRootRef(profileValue: unknown): PortableResourcePath {
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
+export function wakeflowHostWindowLocatorsRootRef(
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+): PortableResourcePath {
   return hostWindowLocatorsRootRef(profile.hostId);
 }
 

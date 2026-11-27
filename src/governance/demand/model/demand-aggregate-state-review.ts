@@ -1,9 +1,5 @@
 import type { ControllerProductDefectRemediationAuthorization } from "../../review/controller-product-defect-remediation-authorization.js";
-import {
-  type ControllerReviewDecision,
-  ControllerReviewDecisionError,
-  parseControllerReviewDecision,
-} from "../../review/controller-review-decision.js";
+import type { ControllerReviewDecision } from "../../review/controller-review-decision.js";
 import {
   type DemandAggregateState,
   type DemandTargetTaskState,
@@ -155,19 +151,9 @@ function decideImplementationTargetReview(
 }
 
 export function decideTargetResultReviewInDemandAggregateState(
-  currentValue: unknown,
-  decisionValue: unknown,
+  current: Readonly<DemandAggregateState>,
+  decision: Readonly<ControllerReviewDecision>,
 ): Readonly<DemandAggregateState> {
-  const current = parseDemandAggregateState(currentValue);
-  let decision: Readonly<ControllerReviewDecision>;
-  try {
-    decision = parseControllerReviewDecision(decisionValue);
-  } catch (error: unknown) {
-    if (error instanceof ControllerReviewDecisionError) {
-      fail("controller-review-decision", "$decision", error);
-    }
-    throw error;
-  }
   const target = current.targetTasks.find((entry) => entry.targetTaskId === decision.targetTaskId);
   const duplicateDecision = current.targetTasks.some((entry) => {
     if (!("currentDelivery" in entry) || !("reviewDecision" in entry.currentDelivery)) {

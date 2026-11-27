@@ -79,12 +79,7 @@ export interface WakeflowExternalInstructionBodyAuthority {
   readonly envelopeTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
-export type WakeflowExternalInstructionBodyAuthorityErrorReason =
-  | "input"
-  | "config"
-  | "profile"
-  | "target"
-  | "text";
+export type WakeflowExternalInstructionBodyAuthorityErrorReason = "input" | "target" | "text";
 
 /** 外部指令正文权威准入失败的稳定、脱敏错误。 */
 export class WakeflowExternalInstructionBodyAuthorityError extends ModuleError<WakeflowExternalInstructionBodyAuthorityErrorReason> {

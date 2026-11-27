@@ -34,7 +34,7 @@ function expectRecordError(
 }
 
 test("fresh Window Runtime projections are deterministic and explicitly unregistered", () => {
-  const config = createMinimalWakeflowConfig();
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const left = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     config,
     codexWorkspaceHostResourceProfile,
@@ -100,7 +100,7 @@ test("fresh Window Runtime projections are deterministic and explicitly unregist
   );
 
   const authority = compileWakeflowFreshWindowRuntimeAuthority(
-    parseWakeflowConfig(config),
+    config,
     codexWorkspaceHostResourceProfile,
   );
   equal(authority.layoutDeclarations.length, 6);
@@ -110,7 +110,7 @@ test("fresh Window Runtime projections are deterministic and explicitly unregist
 });
 
 test("projection set changes only with runtime topology or current host", () => {
-  const baselineValue = createMinimalWakeflowConfig();
+  const baselineValue = parseWakeflowConfig(createMinimalWakeflowConfig());
   const baseline = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     baselineValue,
     codexWorkspaceHostResourceProfile,
@@ -126,7 +126,7 @@ test("projection set changes only with runtime topology or current host", () => 
   if (controller === undefined) throw new Error("Expected Controller window.");
   controller.displayName = "总控窗口";
   const sameRuntime = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-    textChanged,
+    parseWakeflowConfig(textChanged),
     codexWorkspaceHostResourceProfile,
   );
   equal(sameRuntime.projectionSetDigest, baseline.projectionSetDigest);
@@ -141,7 +141,7 @@ test("projection set changes only with runtime topology or current host", () => 
   if (design === undefined) throw new Error("Expected Design surface.");
   design.path = "DesignMoved";
   const moved = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-    movedValue,
+    parseWakeflowConfig(movedValue),
     codexWorkspaceHostResourceProfile,
   );
   notEqual(moved.projectionSetDigest, baseline.projectionSetDigest);
@@ -159,7 +159,7 @@ test("projection set changes only with runtime topology or current host", () => 
 
 test("persisted unregistered projection rejects relation, digest, and representation drift", () => {
   const set = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-    createMinimalWakeflowConfig(),
+    parseWakeflowConfig(createMinimalWakeflowConfig()),
     codexWorkspaceHostResourceProfile,
   );
   const entry = set.entries[0];

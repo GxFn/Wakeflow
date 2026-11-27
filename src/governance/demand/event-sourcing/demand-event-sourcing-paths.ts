@@ -251,10 +251,9 @@ export function demandPermitPromptKindRootRef(kind: DemandPermitPromptKind): Por
 /** 一个许可的 prompt 文件（相对 Demand 私有根）；身份必须是 target-delivery 这一类。 */
 export function demandPermitPromptRef(
   kind: DemandPermitPromptKind,
-  permitId: unknown,
+  permitId: WakeflowDurableId<"target-delivery">,
 ): PortableResourcePath {
-  const parsed = parseWakeflowDurableIdOfKind(permitId, "target-delivery", "$permitId");
-  return parsePortableResourcePath(`${demandPermitPromptKindRootRef(kind)}/${parsed}.txt`);
+  return parsePortableResourcePath(`${demandPermitPromptKindRootRef(kind)}/${permitId}.txt`);
 }
 
 /** 从严格文件名恢复许可身份；别的名字都不是许可 prompt。 */

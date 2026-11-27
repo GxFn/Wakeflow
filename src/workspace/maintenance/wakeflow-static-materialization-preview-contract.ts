@@ -1,8 +1,4 @@
-import {
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import {
   parseSha256Digest,
@@ -115,17 +111,20 @@ export interface WakeflowStaticMaterializationPreview {
   readonly planDigest: Sha256Digest;
 }
 
+/**
+ * 组合根交来的预览请求：目标配置已由请求入口解析（`invalid-request/desired-config`），Host Profile
+ * 是宿主模块加载时解析的常量，所以整个请求是类型化的，不再准入。
+ */
 export interface WakeflowStaticMaterializationPreviewRequest {
   readonly action: WakeflowStaticMaterializationAction;
-  readonly desiredConfig: unknown | null;
-  readonly currentHostProfile: unknown;
-  readonly hostProfiles: readonly unknown[];
-  readonly signal?: AbortSignal;
+  readonly desiredConfig: WakeflowConfigModel | null;
+  readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
+  readonly signal?: AbortSignal | undefined;
 }
 
 export type WakeflowStaticMaterializationPreviewErrorReason =
   | "input"
-  | "config"
   | "profile"
   | "root-scope"
   | "inspection";
@@ -133,14 +132,6 @@ export type WakeflowStaticMaterializationPreviewErrorReason =
 /** 静态物化 preview 构建失败的稳定、脱敏错误。 */
 export class WakeflowStaticMaterializationPreviewError extends ModuleError<WakeflowStaticMaterializationPreviewErrorReason> {
   static override readonly code = "wakeflow-static-materialization-preview";
-}
-
-export interface ParsedWakeflowStaticMaterializationPreviewRequest {
-  readonly action: WakeflowStaticMaterializationAction;
-  readonly desiredConfig: WakeflowConfigModel | null;
-  readonly currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  readonly hostProfiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[];
-  readonly signal: AbortSignal | undefined;
 }
 
 export const failWakeflowStaticMaterializationPreview: Fail<WakeflowStaticMaterializationPreviewErrorReason> =
@@ -154,7 +145,7 @@ export function parseWakeflowStaticMaterializationHostProfiles(
   currentHostProfileValue: unknown,
   hostProfileValues: readonly unknown[],
 ): Readonly<
-  Pick<ParsedWakeflowStaticMaterializationPreviewRequest, "currentHostProfile" | "hostProfiles">
+  Pick<WakeflowStaticMaterializationPreviewRequest, "currentHostProfile" | "hostProfiles">
 > {
   let currentHostProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   try {
@@ -195,37 +186,6 @@ export function parseWakeflowStaticMaterializationHostProfiles(
     failWakeflowStaticMaterializationPreview("profile", "$request.currentHostProfile");
   }
   return Object.freeze({ currentHostProfile, hostProfiles: Object.freeze(parsedProfiles) });
-}
-
-/**
- * 把组合根交来的已类型化请求变成执行用的模型。`action` 与 `signal` 已经有类型，直接使用；请求接口里
- * `desiredConfig` 与两份 profile 仍声明为 `unknown`，所以这里还要解析一次——接口在 A-spec 第 2 步收紧
- * 之后这一步随之删掉。
- */
-export function admitWakeflowStaticMaterializationPreviewRequest({
-  action,
-  desiredConfig: desiredConfigValue,
-  currentHostProfile,
-  hostProfiles,
-  signal,
-}: WakeflowStaticMaterializationPreviewRequest): Readonly<ParsedWakeflowStaticMaterializationPreviewRequest> {
-  let desiredConfig: WakeflowConfigModel | null = null;
-  if (desiredConfigValue !== null) {
-    try {
-      desiredConfig = parseWakeflowConfig(desiredConfigValue);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowConfigError) {
-        failWakeflowStaticMaterializationPreview("config", error.path, error);
-      }
-      throw error;
-    }
-  }
-  return Object.freeze({
-    action,
-    desiredConfig,
-    ...parseWakeflowStaticMaterializationHostProfiles(currentHostProfile, hostProfiles),
-    signal,
-  });
 }
 
 // A current profile whose declarations do not compile is a profile mismatch,

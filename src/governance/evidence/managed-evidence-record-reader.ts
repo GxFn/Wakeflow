@@ -1,8 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { LoadedArtifactTreeFile } from "../../foundation/artifact/loaded-artifact-tree-identity.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
@@ -14,8 +10,6 @@ import {
 import {
   joinPortableResourcePath,
   type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
@@ -116,26 +110,6 @@ const fail: Fail<ManagedEvidenceRecordReaderErrorReason> = failWith(
 );
 
 const ISSUED_RECORDS = new WeakSet<object>();
-
-function parseEvidenceId(value: unknown): WakeflowDurableId<"evidence"> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, "evidence", "$evidenceId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", "$evidenceId", error);
-    throw error;
-  }
-}
-
-function parseMemberRef(value: unknown): PortableResourcePath {
-  try {
-    return parsePortableResourcePath(value, "$memberRef");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$memberRef", error);
-    }
-    throw error;
-  }
-}
 
 function currentUserId(): bigint | null {
   if (typeof process.geteuid !== "function") return null;
@@ -286,10 +260,9 @@ function sameRecord(
 /** 稳定加载一份final record的Manifest与顶层节点；payload内容保持deferred。 */
 export async function loadManagedEvidenceRecord(
   rootValue: RootedDirectory,
-  evidenceIdValue: unknown,
+  evidenceId: WakeflowDurableId<"evidence">,
   options: LoadManagedEvidenceRecordOptions = {},
 ): Promise<Readonly<LoadedManagedEvidenceRecord>> {
-  const evidenceId = parseEvidenceId(evidenceIdValue);
   throwIfAborted(options.signal);
   let address: ReturnType<typeof managedEvidenceRecordAddress>;
   try {
@@ -400,11 +373,10 @@ function mapMemberReadError(error: StableFileReadError): never {
 export async function readManagedEvidencePayloadMember(
   rootValue: RootedDirectory,
   recordValue: Readonly<LoadedManagedEvidenceRecord>,
-  memberRefValue: unknown,
+  memberRef: PortableResourcePath,
   options: ReadManagedEvidencePayloadMemberOptions,
 ): Promise<Readonly<ManagedEvidencePayloadMemberReadResult>> {
   assertRecordCapability(recordValue);
-  const memberRef = parseMemberRef(memberRefValue);
   throwIfAborted(options.signal);
   const before = await requireCurrentRecord(rootValue, recordValue, options.signal);
   const member = memberDescriptor(before, memberRef);

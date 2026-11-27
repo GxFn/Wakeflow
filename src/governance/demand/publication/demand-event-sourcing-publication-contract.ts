@@ -45,7 +45,6 @@ export interface StoredDemandEventSourcingPublicationTransaction {
 }
 
 export type DemandEventSourcingPublicationServiceErrorReason =
-  | "input"
   | "root-scope"
   | "authority"
   | "package-not-found"

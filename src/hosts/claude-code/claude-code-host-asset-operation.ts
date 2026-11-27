@@ -70,7 +70,6 @@ export interface ClaudeCodeHostAssetOperationResult {
 }
 
 export type ClaudeCodeHostAssetOperationErrorReason =
-  | "input"
   | "operation"
   | "read"
   | "source-stale"

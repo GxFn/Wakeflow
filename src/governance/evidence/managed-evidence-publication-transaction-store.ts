@@ -37,7 +37,6 @@ import {
   MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_MAXIMUM_BYTES,
   type ManagedEvidencePublicationTransaction,
   ManagedEvidencePublicationTransactionError,
-  parseManagedEvidencePublicationTransaction,
   parseManagedEvidencePublicationTransactionDocument,
   renderManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
@@ -234,19 +233,10 @@ function mapCreateError(error: DurableAtomicFileWriteError): never {
 /** 严格absent-only创建并同步完整journal；现存exact journal也必须走显式恢复。 */
 export async function createManagedEvidencePublicationTransactionJournal(
   root: RootedDirectory,
-  transactionValue: unknown,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
   options: ManagedEvidencePublicationTransactionStoreOptions = {},
 ): Promise<Readonly<StoredManagedEvidencePublicationTransaction>> {
   throwIfAborted(options.signal);
-  let transaction: Readonly<ManagedEvidencePublicationTransaction>;
-  try {
-    transaction = parseManagedEvidencePublicationTransaction(transactionValue);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction", error);
-    }
-    throw error;
-  }
   admitMutation(transaction, "exclusive-create");
   const text = renderManagedEvidencePublicationTransaction(transaction);
   const bytes = encodeUtf8(text, "$transaction");

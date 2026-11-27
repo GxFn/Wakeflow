@@ -25,7 +25,7 @@ export type MonotonicMoment = bigint & {
 };
 
 /** monotonic clock 来源失败的稳定分类。 */
-export type MonotonicClockErrorReason = "clock-type" | "clock-failure" | "clock-result";
+export type MonotonicClockErrorReason = "clock-failure" | "clock-result";
 
 /**
  * monotonic clock 来源或结果失败的稳定错误。

@@ -44,6 +44,7 @@ export type {
   DemandLifecycle,
   DemandManagedEvidenceSummary,
   DemandPendingTestRetest,
+  DemandSupplementPackage,
   DemandTargetTaskState,
 } from "./demand-aggregate-state-model.js";
 export { currentTestTargetsOf, DemandAggregateStateError } from "./demand-aggregate-state-model.js";

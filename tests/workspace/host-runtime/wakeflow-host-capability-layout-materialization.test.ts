@@ -12,6 +12,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { materializeDirectoryPath } from "../../../src/foundation/filesystem/durable-directory-materialization.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -26,20 +27,24 @@ import {
   type WakeflowHostCapabilityLayoutMaterializationErrorReason,
 } from "../../../src/workspace/host-runtime/wakeflow-host-capability-layout-materialization.js";
 import { publishFreshWakeflowWindowRuntime } from "../../../src/workspace/window-runtime/wakeflow-window-runtime-fresh-publication.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../../../src/workspace/workspace-host-resource-profile.js";
 import { createMinimalWakeflowConfig } from "../../configuration/wakeflow-config.fixture.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 
 useDisposableDurability();
 
-async function fixture(t: TestContext, profile: unknown) {
+async function fixture(t: TestContext, profile: Readonly<WakeflowWorkspaceHostResourceProfile>) {
   const absolutePath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-host-capability-layout-"));
   const root = await RootedDirectory.open(absolutePath);
   await materializeDirectoryPath(root, parsePortableResourcePath(".wakeflow-local/runtime"), {
     mode: 0o700,
   });
-  await publishFreshWakeflowWindowRuntime(root, createMinimalWakeflowConfig(), profile, {
-    recoveringFreshPublication: false,
-  });
+  await publishFreshWakeflowWindowRuntime(
+    root,
+    parseWakeflowConfig(createMinimalWakeflowConfig()),
+    profile,
+    { recoveringFreshPublication: false },
+  );
   t.after(async () => {
     await root.close();
     rmSync(absolutePath, { recursive: true, force: true });

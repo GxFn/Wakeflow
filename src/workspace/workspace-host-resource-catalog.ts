@@ -7,10 +7,7 @@ import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRootRef,
 } from "./window-runtime/wakeflow-window-runtime-paths.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-} from "./workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "./workspace-host-resource-profile.js";
 import {
   wakeflowHostIdentityRootRef,
   wakeflowHostProjectionsRootRef,
@@ -137,11 +134,10 @@ export function hostProfileHasOperationSurface(
   return profile.surfaces.statuslineAsset !== null || profile.surfaces.helperAsset !== null;
 }
 
-/** 把一个严格 Host Profile 编译为确定性、冻结的静态资源目录。 */
+/** 把一个严格 Host Profile（宿主模块加载时解析）编译为确定性、冻结的静态资源目录。 */
 export function createWakeflowWorkspaceHostResourceCatalog(
-  profileValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): WakeflowWorkspaceHostResourceCatalog {
-  const profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
   const prefix = `host-runtime.${profile.hostId}`;
   const declarations: Readonly<WakeflowWorkspaceResourceDeclaration>[] = [
     privateDirectoryDeclaration(`${prefix}.root`, "host-runtime-layout", hostRuntimeRef(profile)),

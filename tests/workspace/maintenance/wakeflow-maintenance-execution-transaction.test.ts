@@ -15,7 +15,10 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import {
+  parseWakeflowConfig,
+  type WakeflowConfigModel,
+} from "../../../src/configuration/wakeflow-config.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
@@ -34,7 +37,10 @@ import {
   type WakeflowMaintenanceExecutionTransactionOptions,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-execution-transaction.js";
 import { withWakeflowMaintenanceGate } from "../../../src/workspace/maintenance/wakeflow-maintenance-gate.js";
-import { parseWakeflowMaintenanceOperationId } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import {
+  parseWakeflowMaintenanceOperationId,
+  type WakeflowMaintenanceOperationId,
+} from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
 import {
   previewWakeflowStaticMaterialization,
   type WakeflowStaticMaterializationPreview,
@@ -75,7 +81,7 @@ async function fixture(t: TestContext) {
 }
 
 function request(
-  desiredConfig: unknown,
+  desiredConfig: WakeflowConfigModel | null,
   action: "fresh-initialize" | "reconfigure" | "reconcile" = "fresh-initialize",
   currentHostProfile: (typeof PROFILES)[number] = codexWorkspaceHostResourceProfile,
 ) {
@@ -127,7 +133,7 @@ async function executeSharedMaintenanceTransaction(
 
 async function recoverSharedMaintenanceTransaction(
   root: RootedDirectory,
-  operationId: unknown,
+  operationId: WakeflowMaintenanceOperationId,
   options: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ) {
   return recoverWakeflowMaintenanceExecutionTransaction(root, operationId, undefined, options);

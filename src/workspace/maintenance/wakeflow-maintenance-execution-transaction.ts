@@ -38,13 +38,12 @@ import {
   type WakeflowMaintenanceExecutionIntentSource,
   WakeflowMaintenanceExecutionIntentStoreError,
 } from "./wakeflow-maintenance-execution-intent-store.js";
-import {
-  parseWakeflowMaintenanceExecutionPlan,
-  type WakeflowMaintenanceExecutionPlan,
-  type WakeflowMaintenanceExecutionStep,
+import type {
+  WakeflowMaintenanceExecutionPlan,
+  WakeflowMaintenanceExecutionStep,
 } from "./wakeflow-maintenance-execution-plan.js";
 import {
-  previewParsedWakeflowMaintenanceExecution,
+  previewWakeflowMaintenanceExecution,
   WakeflowMaintenanceExecutionPreviewError,
 } from "./wakeflow-maintenance-execution-preview.js";
 import {
@@ -55,21 +54,17 @@ import {
 } from "./wakeflow-maintenance-gate.js";
 import {
   createWakeflowMaintenanceOperationId,
-  parseWakeflowMaintenanceOperationId,
   type WakeflowMaintenanceOperationId,
-  WakeflowMaintenanceOperationIdError,
   wakeflowMaintenanceIntentRef,
 } from "./wakeflow-maintenance-operation-id.js";
 import type { WakeflowMaintenanceWriter } from "./wakeflow-maintenance-writer.js";
 import {
-  admitWakeflowStaticMaterializationPreviewRequest,
   isWakeflowDetachAction,
-  type ParsedWakeflowStaticMaterializationPreviewRequest,
   type WakeflowStaticMaterializationPreviewRequest,
   wakeflowStaticMaterializationActionUsesCurrentConfig,
 } from "./wakeflow-static-materialization-preview-contract.js";
 import {
-  executeParsedWakeflowStaticMaterializationStep,
+  executeWakeflowStaticMaterializationStep,
   WakeflowStaticMaterializationStepExecutionError,
 } from "./wakeflow-static-materialization-step-executor.js";
 
@@ -203,18 +198,6 @@ function assertNotAborted(
   if (signal?.aborted === true) fail("aborted", "$signal", operationId);
 }
 
-/** 恢复入口的 operation ID 仍声明为 `unknown`（宿主组合根直接转交，签名留到 A-spec 第 2 步）。 */
-function admittedOperationId(value: unknown): WakeflowMaintenanceOperationId {
-  try {
-    return parseWakeflowMaintenanceOperationId(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceOperationIdError) {
-      fail("input", "$operationId");
-    }
-    throw error;
-  }
-}
-
 function effectiveSignal(
   requestSignal: AbortSignal | undefined,
   optionSignal: AbortSignal | undefined,
@@ -225,9 +208,9 @@ function effectiveSignal(
   return optionSignal ?? requestSignal;
 }
 
-/** 带上本次执行的取消信号，换回宿主门面所用的请求形状。 */
+/** 请求换上本次执行的取消信号。 */
 function requestWithSignal(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   signal: AbortSignal | undefined,
 ): Readonly<WakeflowStaticMaterializationPreviewRequest> {
   return Object.freeze({
@@ -237,14 +220,6 @@ function requestWithSignal(
     hostProfiles: request.hostProfiles,
     ...(signal === undefined ? {} : { signal }),
   });
-}
-
-/** 已解析请求换上本次执行的取消信号。 */
-function parsedRequestWithSignal(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
-  signal: AbortSignal | undefined,
-): Readonly<ParsedWakeflowStaticMaterializationPreviewRequest> {
-  return Object.freeze({ ...request, signal });
 }
 
 async function currentConfigSnapshot(
@@ -290,7 +265,7 @@ function parseCapability(
 
 function assertRequestMatchesPlan(
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
 ): void {
   if (
     request.action !== plan.sharedPreview.action ||
@@ -350,7 +325,7 @@ async function assertTerminalConfig(
  * reconcile 也是当前 Config；fresh 与 reconfigure 是期望 Config。
  */
 function hostConfigForExecution(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   operationId: WakeflowMaintenanceOperationId,
 ): WakeflowConfigModel {
@@ -380,7 +355,7 @@ async function executeStep(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   stepId: string,
@@ -391,7 +366,7 @@ async function executeStep(
   if (step === undefined) fail("step", `$step:${stepId}`, context.operationId);
   if (step.boundary === "shared-static") {
     try {
-      const executed = await executeParsedWakeflowStaticMaterializationStep(
+      const executed = await executeWakeflowStaticMaterializationStep(
         root,
         context,
         plan.sharedPreview,
@@ -458,7 +433,7 @@ async function advanceIntent(
   context: Readonly<WakeflowMaintenanceGateContext>,
   sourceValue: Readonly<WakeflowMaintenanceExecutionIntentSource>,
   plan: Readonly<WakeflowMaintenanceExecutionPlan>,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   sourceConfig: WakeflowConfigModel | null,
   capability: Readonly<WakeflowHostMaintenanceCapability> | undefined,
   recovery: boolean,
@@ -534,26 +509,27 @@ function intentStoreFailureReason(
     : "intent";
 }
 
-/** 执行一份重新验证后的聚合维护计划；尚不暴露为公共 maintenance apply。 */
+/**
+ * 执行一份重新验证后的聚合维护计划。计划与请求是类型化的（能力层由同一请求预览得到计划）；两者的
+ * 关系、请求与选项里的取消信号的关系在这里核对，计划在门前与门内各重推一次。
+ */
 export async function executeWakeflowMaintenanceExecutionTransaction(
   root: RootedDirectory,
-  planValue: unknown,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
+  plan: Readonly<WakeflowMaintenanceExecutionPlan>,
+  requestValue: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
   options: WakeflowMaintenanceExecutionTransactionOptions = {},
 ): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
   const { uuidFactory, writer = null } = options;
-  const plan = parseWakeflowMaintenanceExecutionPlan(planValue);
-  const admitted = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
-  const signal = effectiveSignal(admitted.signal, options.signal);
+  const signal = effectiveSignal(requestValue.signal, options.signal);
   throwIfAborted(signal);
-  const request = parsedRequestWithSignal(admitted, signal);
+  const request = requestWithSignal(requestValue, signal);
   assertRequestMatchesPlan(plan, request);
   if (plan.status !== "ready") fail("plan-blocked", "$plan");
   const capability = parseCapability(plan, capabilityValue);
-  let rederived: Awaited<ReturnType<typeof previewParsedWakeflowMaintenanceExecution>>;
+  let rederived: Awaited<ReturnType<typeof previewWakeflowMaintenanceExecution>>;
   try {
-    rederived = await previewParsedWakeflowMaintenanceExecution(root, request, capability);
+    rederived = await previewWakeflowMaintenanceExecution(root, request, capability);
   } catch (error: unknown) {
     if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
       fail("plan-stale", "$plan", null);
@@ -587,7 +563,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
     intent = createWakeflowMaintenanceExecutionIntent(
       operationId,
       plan,
-      requestWithSignal(request, signal),
+      request,
       desiredConfig,
       writer,
     );
@@ -603,7 +579,7 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
   }
   const reconstructed = reconstructWakeflowMaintenanceExecutionFromIntent(intent);
   const intentPlan = reconstructed.plan;
-  const intentRequest = parsedRequestWithSignal(reconstructed.request, signal);
+  const intentRequest = requestWithSignal(reconstructed.request, signal);
   try {
     return await withWakeflowMaintenanceGate(
       root,
@@ -614,9 +590,9 @@ export async function executeWakeflowMaintenanceExecutionTransaction(
         ...gateOptions(options, signal),
       },
       async (context) => {
-        let lockedPlan: Awaited<ReturnType<typeof previewParsedWakeflowMaintenanceExecution>>;
+        let lockedPlan: Awaited<ReturnType<typeof previewWakeflowMaintenanceExecution>>;
         try {
-          lockedPlan = await previewParsedWakeflowMaintenanceExecution(
+          lockedPlan = await previewWakeflowMaintenanceExecution(
             root,
             request,
             capability,
@@ -747,16 +723,15 @@ function assertRecoveryConfigState(
 }
 
 /**
- * 只凭operation ID、磁盘intent和固定宿主capability恢复同一事务。
+ * 只凭operation ID、磁盘intent和固定宿主capability恢复同一事务。operation ID 由请求入口解析。
  */
 export async function recoverWakeflowMaintenanceExecutionTransaction(
   root: RootedDirectory,
-  operationIdValue: unknown,
+  operationId: WakeflowMaintenanceOperationId,
   capabilityValue?: Readonly<WakeflowHostMaintenanceCapability>,
   options: Omit<WakeflowMaintenanceExecutionTransactionOptions, "uuidFactory"> = {},
 ): Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>> {
   const { signal, writer = null } = options;
-  const operationId = admittedOperationId(operationIdValue);
   assertNotAborted(signal, operationId);
   try {
     // 先回收这次操作的 intent 自己留下的、写者已经不在的原子写暂存；属主还活着或说不清的不动，恢复不往下走。

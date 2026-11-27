@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import { computeSha256Digest, type Sha256Digest } from "../crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
@@ -16,8 +14,8 @@ import { type ByteCount, parseByteCount } from "../numeric/byte-count.js";
  */
 
 export interface WholeFileContentTransitionRequest {
-  readonly currentContents: readonly unknown[];
-  readonly desiredContent: unknown;
+  readonly currentContents: readonly Uint8Array[];
+  readonly desiredContent: Uint8Array;
 }
 
 export interface WholeFileContentTransition {
@@ -49,17 +47,8 @@ const MAXIMUM_ADMITTED_CURRENT_CONTENTS = 8;
 
 const fail: Fail<WholeFileContentTransitionErrorReason> = failWith(WholeFileContentTransitionError);
 
-function snapshotBytes(value: unknown, path: string): Readonly<ContentSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !ArrayBuffer.isView(value) ||
-    !(value instanceof Uint8Array) ||
-    value.buffer instanceof SharedArrayBuffer
-  ) {
-    fail("input", path);
-  }
+/** 私有副本、长度与摘要：先复制，调用方之后改它自己的数组不影响比较。字节类型由签名保证。 */
+function snapshotBytes(value: Uint8Array, path: string): Readonly<ContentSnapshot> {
   const bytes = Buffer.from(value);
   return Object.freeze({
     bytes,
@@ -91,8 +80,7 @@ function assertDistinctCurrentContents(current: readonly Readonly<ContentSnapsho
 }
 
 /**
- * 请求的记录与数组形状由类型保证，不再被动准入；内容在类型上仍是 `unknown`（签名被别的层调用，
- * 第一步不收紧），所以每份内容照旧经 `snapshotBytes` 复制并准入。当前内容的份数上限与两两不同是
+ * 请求与内容都是类型化的，每份内容只经 `snapshotBytes` 复制。当前内容的份数上限与两两不同是
  * 类型表达不了的规则，留着。
  */
 function snapshotRequest(request: WholeFileContentTransitionRequest): Readonly<{
@@ -114,7 +102,7 @@ function snapshotRequest(request: WholeFileContentTransitionRequest): Readonly<{
 
 /** 计划一份 absent/current/replace 的整文件字节转换，不执行任何 I/O。 */
 export function planWholeFileContentTransition(
-  sourceValue: unknown | null,
+  sourceValue: Uint8Array | null,
   requestValue: WholeFileContentTransitionRequest,
 ): Readonly<WholeFileContentTransition> {
   const request = snapshotRequest(requestValue);

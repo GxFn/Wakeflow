@@ -3,6 +3,7 @@ import { type Fail, failWith, ModuleError } from "../foundation/error/module-err
 import {
   admitWakeflowResourceOperation,
   type WakeflowResourceOperation,
+  type WakeflowResourceOperationRecipe,
   WakeflowResourceProcessingContractError,
 } from "../foundation/resource/resource-processing-contract.js";
 import {
@@ -32,8 +33,6 @@ export interface WakeflowWorkspaceStaticResourceOperationContext {
 }
 
 export type WakeflowWorkspaceStaticResourceOperationContextErrorReason =
-  | "input"
-  | "matrix"
   | "matrix-changed"
   | "declaration-not-found"
   | "operation";
@@ -50,7 +49,7 @@ const fail: Fail<WakeflowWorkspaceStaticResourceOperationContextErrorReason> = f
 export interface WakeflowWorkspaceStaticResourceOperationRequest {
   readonly expectedMatrixDigest: Sha256Digest;
   readonly declarationId: string;
-  readonly recipe: string;
+  readonly recipe: WakeflowResourceOperationRecipe;
 }
 
 /** 把一个静态矩阵声明与调用方选择的唯一 recipe 绑定为冻结上下文。 */

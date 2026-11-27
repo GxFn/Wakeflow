@@ -7,11 +7,7 @@ import {
 } from "./durable-directory-tree-candidate.js";
 import { DurableResourceRenameError, renameResourceDurably } from "./durable-resource-rename.js";
 import { type FileNodeSnapshot, sameFileNodeSnapshot } from "./file-node-snapshot.js";
-import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-} from "./portable-resource-path.js";
+import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import { throwIfAborted } from "../node/abort-signal.js";
 
@@ -41,7 +37,6 @@ export interface DurableDirectoryTreePublicationResult {
 }
 
 export type DurableDirectoryTreePublicationErrorReason =
-  | "input"
   | "source-changed"
   | "source-conflict"
   | "destination-exists"
@@ -69,15 +64,6 @@ export class DurableDirectoryTreePublicationError extends ModuleError<DurableDir
 const fail: Fail<DurableDirectoryTreePublicationErrorReason> = failWith(
   DurableDirectoryTreePublicationError,
 );
-
-function parsePath(value: unknown, path: string): PortableResourcePath {
-  try {
-    return parsePortableResourcePath(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) fail("input", path, error);
-    throw error;
-  }
-}
 
 function mapCandidateError(error: DurableDirectoryTreeCandidateError, afterCommit: boolean): never {
   if (afterCommit) fail("commit-uncertain", "$destinationResourcePath");
@@ -121,14 +107,10 @@ function mapRenameError(error: DurableResourceRenameError): never {
 export async function publishDirectoryTreeCandidateDurably(
   root: RootedDirectory,
   candidate: Readonly<DirectoryTreeCandidateResult>,
-  destinationResourcePathValue: unknown,
+  destinationResourcePath: PortableResourcePath,
   options: DurableDirectoryTreePublicationOptions = {},
 ): Promise<Readonly<DurableDirectoryTreePublicationResult>> {
   throwIfAborted(options.signal);
-  const destinationResourcePath = parsePath(
-    destinationResourcePathValue,
-    "$destinationResourcePath",
-  );
 
   let inspected: Awaited<ReturnType<typeof inspectDirectoryTreeCandidate>>;
   try {

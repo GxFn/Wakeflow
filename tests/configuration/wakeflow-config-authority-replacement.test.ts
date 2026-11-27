@@ -16,6 +16,7 @@ import { test } from "node:test";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
+  type WakeflowConfigModel,
 } from "../../src/configuration/wakeflow-config.js";
 import { publishWakeflowConfigAuthority } from "../../src/configuration/wakeflow-config-authority-publication.js";
 import {
@@ -64,10 +65,15 @@ function createWorkspace(): WorkspaceFixture {
   };
 }
 
-function changedConfig(displayName: string): Record<string, unknown> {
+function changedConfig(displayName: string, programId?: string): WakeflowConfigModel {
   const value = createMinimalWakeflowConfig();
   (value.program as Record<string, unknown>).displayName = displayName;
-  return value;
+  if (programId !== undefined) (value.program as Record<string, unknown>).programId = programId;
+  return parseWakeflowConfig(value);
+}
+
+function minimalConfig(): WakeflowConfigModel {
+  return parseWakeflowConfig(createMinimalWakeflowConfig());
 }
 
 async function expectReplacementError(
@@ -91,7 +97,7 @@ test("Config authority replacement 在exact source下替换并支持旧请求幂
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
+    const source = await publishWakeflowConfigAuthority(root, minimalConfig());
     const desired = changedConfig("Changed Program");
     const replaced = await replaceWakeflowConfigAuthority(root, desired, source.authority);
 
@@ -121,7 +127,7 @@ test("Config authority replacement 先结算配置文件的死暂存，然后照
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
+    const source = await publishWakeflowConfigAuthority(root, minimalConfig());
     // 上一个替换配置的进程死在写到一半：内核已经收走它的锁，它替换用的暂存还留着。
     const bytes = Buffer.from("{}\n");
     const stage = issueDurableAtomicFileStageAddress(
@@ -153,14 +159,8 @@ test("Config authority replacement 拒绝stale、跨root与program identity变�
   const secondFixture = createWorkspace();
   const secondRoot = await RootedDirectory.open(secondFixture.workspaceRoot);
   try {
-    const firstSource = await publishWakeflowConfigAuthority(
-      firstRoot,
-      createMinimalWakeflowConfig(),
-    );
-    const secondSource = await publishWakeflowConfigAuthority(
-      secondRoot,
-      createMinimalWakeflowConfig(),
-    );
+    const firstSource = await publishWakeflowConfigAuthority(firstRoot, minimalConfig());
+    const secondSource = await publishWakeflowConfigAuthority(secondRoot, minimalConfig());
     const firstDesired = changedConfig("First replacement");
     await replaceWakeflowConfigAuthority(firstRoot, firstDesired, firstSource.authority);
     const before = readFileSync(firstFixture.configPath, "utf8");
@@ -188,9 +188,10 @@ test("Config authority replacement 拒绝stale、跨root与program identity变�
     equal(readFileSync(firstFixture.configPath, "utf8"), before);
 
     const current = await readWakeflowConfigAuthoritySnapshot(firstRoot);
-    const changedProgram = changedConfig("Changed identity");
-    (changedProgram.program as Record<string, unknown>).programId =
-      "program_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const changedProgram = changedConfig(
+      "Changed identity",
+      "program_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    );
     await expectReplacementError(
       () => replaceWakeflowConfigAuthority(firstRoot, changedProgram, current),
       "program-identity",
@@ -208,7 +209,7 @@ test("Config authority replacement 通过专属锁串行并发writer", async () 
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
+    const source = await publishWakeflowConfigAuthority(root, minimalConfig());
     const first = changedConfig("Concurrent A");
     const second = changedConfig("Concurrent B");
     const outcomes = await Promise.allSettled([
@@ -252,7 +253,7 @@ test("Config authority replacement 拒绝不满足P1的current source", async ()
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const source = await publishWakeflowConfigAuthority(root, createMinimalWakeflowConfig());
+    const source = await publishWakeflowConfigAuthority(root, minimalConfig());
     chmodSync(fixture.configPath, 0o600);
     const before = readFileSync(fixture.configPath, "utf8");
     await expectReplacementError(

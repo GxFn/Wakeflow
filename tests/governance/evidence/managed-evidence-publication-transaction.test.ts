@@ -168,7 +168,8 @@ test("Publication transaction拒绝capture、record与Event Sourcing关系被分
         eventId: IDS.event,
         commitId: IDS.commit,
       }),
-    "capture-plan",
+    // 草稿是类型化的计划，不再重解析；被替换的摘要由组装后的关系检查拒绝。
+    "relation",
   );
   expectTransactionError(
     () =>

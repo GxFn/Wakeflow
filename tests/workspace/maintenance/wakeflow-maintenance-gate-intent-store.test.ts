@@ -31,6 +31,7 @@ import {
   parseWakeflowMaintenanceOperationId,
   wakeflowMaintenanceIntentRef,
 } from "../../../src/workspace/maintenance/wakeflow-maintenance-operation-id.js";
+import type { WakeflowMaintenanceWriter } from "../../../src/workspace/maintenance/wakeflow-maintenance-writer.js";
 import {
   computeWakeflowStaticMaterializationPreviewDigest,
   parseWakeflowStaticMaterializationPreview,
@@ -116,7 +117,7 @@ async function publishIntent(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
   plan: ReturnType<typeof preview>,
-  writer?: unknown,
+  writer?: Readonly<WakeflowMaintenanceWriter>,
 ) {
   const intent = createWakeflowMaintenanceExecutionIntent(
     context.operationId,

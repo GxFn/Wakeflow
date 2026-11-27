@@ -1,3 +1,5 @@
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
   type WakeflowWorkspaceResourceDeclaration,
@@ -12,10 +14,10 @@ import { compileWakeflowWindowRuntimeUnregisteredProjectionSet } from "./wakeflo
  */
 
 export function createWakeflowWindowRuntimeProjectionResourceCatalog(
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const set = compileWakeflowWindowRuntimeUnregisteredProjectionSet(configValue, profileValue);
+  const set = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, profile);
   return Object.freeze(
     set.entries.map((entry) =>
       parseWakeflowWorkspaceResourceDeclaration({

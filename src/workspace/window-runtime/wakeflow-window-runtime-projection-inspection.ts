@@ -1,8 +1,5 @@
-import {
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
@@ -11,11 +8,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import { throwIfAborted } from "../../foundation/node/abort-signal.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import type { WakeflowWindowHostBinding } from "./wakeflow-window-host-binding.js";
 import {
   inspectWakeflowWindowHostBindingInventory,
@@ -26,11 +19,7 @@ import {
   compileWakeflowWindowHostBindingStoreAuthority,
   WakeflowWindowHostBindingStoreAuthorityError,
 } from "./wakeflow-window-host-binding-store-authority.js";
-import {
-  parseWakeflowWindowHostIdentityProfile,
-  type WakeflowWindowHostIdentityProfile,
-  WakeflowWindowHostIdentityProfileError,
-} from "./wakeflow-window-host-identity-profile.js";
+import type { WakeflowWindowHostIdentityProfile } from "./wakeflow-window-host-identity-profile.js";
 import { wakeflowWindowRuntimeProjectionRootRef } from "./wakeflow-window-runtime-paths.js";
 import {
   inspectWakeflowWindowRuntimeProjectionDocument,
@@ -52,12 +41,7 @@ import {
  * 合同缝之一，本身不写任何东西。宿主运行时根未发布或 Binding inventory 读不出时整组不可观察。
  */
 
-export type WakeflowWindowRuntimeProjectionErrorReason =
-  | "input"
-  | "profile"
-  | "topology"
-  | "plan"
-  | "effect";
+export type WakeflowWindowRuntimeProjectionErrorReason = "input" | "topology" | "plan" | "effect";
 
 /** 窗口运行投影观察与维护失败的稳定、脱敏错误。 */
 export class WakeflowWindowRuntimeProjectionError extends ModuleError<WakeflowWindowRuntimeProjectionErrorReason> {
@@ -74,7 +58,7 @@ export interface WakeflowWindowRuntimeProjectionInputs {
 }
 
 export interface WakeflowWindowRuntimeProjectionExpectedEntry {
-  readonly windowId: string;
+  readonly windowId: WakeflowDurableId<"window">;
   readonly registered: boolean;
   readonly target: Readonly<WakeflowWindowRuntimeProjectionDocumentTarget>;
 }
@@ -95,10 +79,8 @@ export interface WakeflowWindowRuntimeProjectionInspectedEntry {
   readonly currentDigest: Sha256Digest | null;
 }
 
-export interface InspectWakeflowWindowRuntimeProjectionSetRequest {
-  readonly config: unknown;
-  readonly resourceProfile: unknown;
-  readonly identityProfile: unknown;
+export interface InspectWakeflowWindowRuntimeProjectionSetRequest
+  extends WakeflowWindowRuntimeProjectionInputs {
   readonly signal?: AbortSignal;
 }
 
@@ -117,41 +99,6 @@ export type WakeflowWindowRuntimeProjectionSetInspection =
     }>
   | Readonly<{ readonly status: "runtime-missing" }>
   | Readonly<{ readonly status: "inventory-unavailable" }>;
-
-/**
- * 三份输入在这几个入口的请求里仍声明为 `unknown`（宿主与 pod 能力直接调用，签名留到 A-spec 第 2 步）：
- * 解析一次，并核对两份 profile 是同一宿主。根已经是 `RootedDirectory`，不再检查。
- */
-export function parseWakeflowWindowRuntimeProjectionInputs(
-  configValue: unknown,
-  resourceProfileValue: unknown,
-  identityProfileValue: unknown,
-): WakeflowWindowRuntimeProjectionInputs {
-  let config: WakeflowConfigModel;
-  try {
-    config = parseWakeflowConfig(configValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError)
-      failWindowRuntimeProjection("input", error.path, error);
-    throw error;
-  }
-  try {
-    const resourceProfile = parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
-    const identityProfile = parseWakeflowWindowHostIdentityProfile(identityProfileValue);
-    if (resourceProfile.hostId !== identityProfile.hostId) {
-      failWindowRuntimeProjection("profile", "$profiles");
-    }
-    return Object.freeze({ config, resourceProfile, identityProfile });
-  } catch (error: unknown) {
-    if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError ||
-      error instanceof WakeflowWindowHostIdentityProfileError
-    ) {
-      failWindowRuntimeProjection("profile", error.path, error);
-    }
-    throw error;
-  }
-}
 
 async function resourcePresent(
   root: RootedDirectory,
@@ -234,7 +181,7 @@ export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
   inputs: WakeflowWindowRuntimeProjectionInputs,
   inventory: Readonly<WakeflowWindowHostBindingInventory>,
 ): readonly Readonly<WakeflowWindowRuntimeProjectionExpectedEntry>[] {
-  const { config, resourceProfile, identityProfile } = inputs;
+  const { config, resourceProfile } = inputs;
   let unregistered: ReturnType<typeof compileWakeflowWindowRuntimeUnregisteredProjectionSet>;
   try {
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
@@ -252,7 +199,6 @@ export function compileWakeflowWindowRuntimeProjectionExpectedEntries(
           ? entry
           : compileWakeflowWindowRuntimeRegisteredProjectionEntry(
               resourceProfile,
-              identityProfile,
               entry.projection,
               binding,
             );
@@ -296,14 +242,9 @@ export async function inspectWakeflowWindowRuntimeProjectionSet(
   request: InspectWakeflowWindowRuntimeProjectionSetRequest,
 ): Promise<WakeflowWindowRuntimeProjectionSetInspection> {
   throwIfAborted(request.signal);
-  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
-    request.config,
-    request.resourceProfile,
-    request.identityProfile,
-  );
   const expected = await resolveWakeflowWindowRuntimeProjectionExpectedEntries(
     rootValue,
-    inputs,
+    request,
     request.signal,
   );
   if (expected.kind !== "entries") return Object.freeze({ status: expected.kind });

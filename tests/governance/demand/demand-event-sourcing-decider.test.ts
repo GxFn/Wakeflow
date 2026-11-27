@@ -8,6 +8,7 @@ import {
   DemandEventSourcingDecisionError,
   decideDemandEventSourcingCommand,
   evolveDemandEventSourcingState,
+  parseDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { computeDemandAggregateStateDigest } from "../../../src/governance/demand/model/demand-aggregate-state.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
@@ -190,9 +191,10 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
     }),
     preparedAt: parseUtcInstant("2026-08-29T12:16:00.000Z"),
   });
+  // 返工信封与 reworkSource 的对应关系在命令准入时核对（命令由 parse 建出，decide 收已准入的命令）。
   throws(
     () =>
-      decideDemandEventSourcingCommand(reworkRequested, {
+      parseDemandEventSourcingCommand({
         commandType: "delivery.prepare-delivery",
         commandVersion: 1,
         eventId: parseWakeflowDurableIdOfKind(
@@ -208,7 +210,7 @@ test("Demand Event Sourcing decider 只产生业务事件，持久化位置由 S
   );
   throws(
     () =>
-      decideDemandEventSourcingCommand(reworkRequested, {
+      parseDemandEventSourcingCommand({
         commandType: "delivery.prepare-delivery",
         commandVersion: 1,
         eventId: parseWakeflowDurableIdOfKind(

@@ -77,7 +77,7 @@ test("symlink and non-directory path segments fail closed", async () => {
 });
 
 test("input requires one normalized non-root absolute path", async () => {
-  for (const value of ["relative", "/", "/tmp/../tmp", " /tmp", null]) {
+  for (const value of ["relative", "/", "/tmp/../tmp", " /tmp"]) {
     await expectPlacementError(
       () => inspectAbsoluteDirectoryPlacement(value, "$.placement"),
       "input",

@@ -21,11 +21,9 @@ import {
   type WakeflowMaintenanceExecutionPlan,
 } from "./wakeflow-maintenance-execution-plan.js";
 import type { WakeflowMaintenanceGateContext } from "./wakeflow-maintenance-gate.js";
-import { previewParsedWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
+import { previewWakeflowStaticMaterialization } from "./wakeflow-static-materialization-preview.js";
 import {
-  admitWakeflowStaticMaterializationPreviewRequest,
   isWakeflowDetachAction,
-  type ParsedWakeflowStaticMaterializationPreviewRequest,
   WakeflowStaticMaterializationPreviewError,
   type WakeflowStaticMaterializationPreviewRequest,
 } from "./wakeflow-static-materialization-preview-contract.js";
@@ -38,10 +36,8 @@ import {
  */
 
 export type WakeflowMaintenanceExecutionPreviewErrorReason =
-  | "input"
   | "shared-preview"
   | "source-config"
-  | "capability"
   | "contribution";
 
 /** 聚合维护 preview 失败的稳定、脱敏错误。 */
@@ -59,7 +55,7 @@ const fail: Fail<WakeflowMaintenanceExecutionPreviewErrorReason> = failWith(
  */
 async function resolveHostConfig(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   sharedPreview: Readonly<{
     readonly currentConfigDigest: Sha256Digest | null;
     readonly desiredConfigDigest: Sha256Digest | null;
@@ -75,7 +71,7 @@ async function resolveHostConfig(
 /** 当前 Config 的稳定快照，摘要必须等于共享预览记下的那一个；预览没记（null）时快照也必须不在。 */
 async function resolveSnapshotConfig(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   expectedDigest: Sha256Digest | null,
 ): Promise<WakeflowConfigModel | null> {
   throwIfAborted(request.signal);
@@ -99,36 +95,20 @@ async function resolveSnapshotConfig(
   return snapshot.model;
 }
 
-/** 构建共享静态步骤与当前宿主操作合并后的唯一 preview-only 计划。 */
+/**
+ * 构建共享静态步骤与当前宿主操作合并后的唯一 preview-only 计划。请求是类型化的；聚合事务在门前与
+ * 门内各重推一次计划，用的是同一个请求。
+ */
 export async function previewWakeflowMaintenanceExecution(
   root: RootedDirectory,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
-  capability?: Readonly<WakeflowHostMaintenanceCapability>,
-  gateContext?: Readonly<WakeflowMaintenanceGateContext>,
-): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
-  let request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
-  try {
-    request = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("input", error.path, error);
-    }
-    throw error;
-  }
-  return previewParsedWakeflowMaintenanceExecution(root, request, capability, gateContext);
-}
-
-/** 同上，请求已经准入过一次（聚合事务在门前与门内各重推一次计划，不再各解析一遍）。 */
-export async function previewParsedWakeflowMaintenanceExecution(
-  root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   capability?: Readonly<WakeflowHostMaintenanceCapability>,
   gateContext?: Readonly<WakeflowMaintenanceGateContext>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionPlan>> {
   throwIfAborted(request.signal);
-  let sharedPreview: Awaited<ReturnType<typeof previewParsedWakeflowStaticMaterialization>>;
+  let sharedPreview: Awaited<ReturnType<typeof previewWakeflowStaticMaterialization>>;
   try {
-    sharedPreview = await previewParsedWakeflowStaticMaterialization(
+    sharedPreview = await previewWakeflowStaticMaterialization(
       root,
       request,
       gateContext === undefined ? {} : { gateContext },

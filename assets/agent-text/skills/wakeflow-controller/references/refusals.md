@@ -49,7 +49,7 @@ The reason names the condition; `path` names the request field or the state it c
 - **requirement**: `design-surface-alias`, `design-surface-root`, `ledger-root`, `ledger-root-alias`, `ledger-root-missing`, `plan-drift`, `record-conflict`
 - **result-review**: `authority-<reason>`, `binding-changed`, `binding-host`, `binding-missing`, `binding-store`, `commit-empty`, `commit-kind`, `controller-authority`, `decision-rejected`, `delivery-host`, `fence-mismatch`, `lifecycle-<lifecycle>`, `outcome-missing`, `outcome-rejected`, `pod-unknown`, `record-<reason>`, `review-unit-stale`, `task-package-missing`, `window-unknown`, `work-type`, `worktree-branch-required`
 - **tasking**: `authority-<reason>`, `authority-reference-unknown`, `commit-not-planning`, `decision-rejected`, `requirement-member-drift`, `requirement-member-missing`, `requirement-record-<reason>`, `requirement-record-drift`, `research-demand-has-no-implementation`
-- **workspace**: `config`, `launch-intent`, `plan-stale`
+- **workspace**: `launch-intent`, `plan-stale`
 
 ## `not-found` - the identifier names nothing here
 

@@ -198,7 +198,10 @@ function mapHandlerError(error: unknown): never {
 type LoadedPackage = Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>;
 
 /** 一份需求包记录的谱系：源需求的身份引用，或并入的 supplement 包（两者同形）。 */
-type PackageLineage = Readonly<{ readonly requirementId: string; readonly recordDigest: string }>;
+type PackageLineage = Readonly<{
+  readonly requirementId: WakeflowDurableId<"requirement">;
+  readonly recordDigest: string;
+}>;
 
 async function loadRequirementPackage(
   context: SliceContext,

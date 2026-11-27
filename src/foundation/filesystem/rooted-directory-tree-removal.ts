@@ -33,7 +33,6 @@ import { RootedResourceParentHandle } from "./rooted-resource-parent-handle.js";
  */
 
 export type RootedDirectoryTreeRemovalErrorReason =
-  | "input"
   | "not-found"
   | "not-directory"
   | "inspection-failure"
@@ -42,7 +41,6 @@ export type RootedDirectoryTreeRemovalErrorReason =
   | "durability-failure";
 
 const ERROR_MESSAGES = {
-  input: "Rooted directory tree removal input is invalid.",
   "not-found": "Rooted directory tree does not exist.",
   "not-directory": "Rooted directory tree target is not a directory.",
   "inspection-failure": "Rooted directory tree target could not be inspected.",

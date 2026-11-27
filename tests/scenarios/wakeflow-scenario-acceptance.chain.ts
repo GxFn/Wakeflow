@@ -37,6 +37,7 @@ import {
 import { WAKEFLOW_TARGET_TASK_PLANNING_PUBLIC_TOOL_NAME } from "../../src/capabilities/tasking/contract.js";
 import { WAKEFLOW_MAINTENANCE_PUBLIC_TOOL_NAME } from "../../src/capabilities/workspace/maintain-workspace.js";
 import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../src/contracts/identity/wakeflow-durable-id.js";
 import { createClaudeCodeWakeflowMcpServer } from "../../src/entrypoints/claude-code-wakeflow-mcp.js";
 import {
   runWakeflowHookObserver,
@@ -1843,7 +1844,7 @@ async function loadTaskPackage(
   );
   try {
     const planned = await new DemandEventSourcingRepository(demandRoot).findTargetTaskPlannedEvent(
-      taskPackageId,
+      parseWakeflowDurableIdOfKind(taskPackageId, "task-package"),
     );
     if (planned === null) throw new Error("planned task package missing");
     return planned.event.data.taskPackage;

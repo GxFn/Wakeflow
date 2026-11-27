@@ -91,7 +91,6 @@ export interface WakeflowGitignoreInspection {
 }
 
 export type WakeflowGitignoreInspectionErrorReason =
-  | "input"
   | "context"
   | "authority"
   | "source"

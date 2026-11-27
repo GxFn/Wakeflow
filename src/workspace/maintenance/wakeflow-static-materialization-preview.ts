@@ -20,6 +20,7 @@ import {
   WakeflowConfigRootPlacementError,
   type WakeflowConfigRootPlacementReport,
 } from "../../configuration/wakeflow-config-root-placement.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
@@ -128,11 +129,9 @@ import {
 } from "./wakeflow-maintenance-gate.js";
 import { WAKEFLOW_MAINTENANCE_STATIC_RESOURCE_CATALOG } from "./wakeflow-maintenance-resource-catalog.js";
 import {
-  admitWakeflowStaticMaterializationPreviewRequest,
   computeWakeflowStaticMaterializationPreviewDigest,
   failWakeflowStaticMaterializationPreview as fail,
   isWakeflowDetachAction,
-  type ParsedWakeflowStaticMaterializationPreviewRequest,
   parseWakeflowStaticMaterializationPreview,
   type WakeflowStaticMaterializationPreview,
   type WakeflowStaticMaterializationPreviewRequest,
@@ -414,7 +413,7 @@ function ledgerPlacement(report: Readonly<WakeflowConfigRootPlacementReport>) {
 }
 
 async function inspectLedgerParticipant(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   report: Readonly<WakeflowConfigRootPlacementReport>,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
@@ -509,7 +508,7 @@ function supportGitignoreStep(
 /** 支撑面根里 `.gitignore` 托管块的只读检查；用户改动或未知正文只报告。 */
 async function inspectSupportGitignore(
   supportRoot: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   authority: NonNullable<ReturnType<typeof createWakeflowSupportGitignoreBodyAuthority>>,
   surfaceId: string,
   dependsOn: readonly string[],
@@ -550,8 +549,8 @@ async function inspectSupportGitignore(
  * （§13.97 D10、§13.111 D1；§13.120 D2）。制品固定携带两份 profile，正文只依赖 Config 与 profile。
  */
 function peerHostProfiles(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
-): ParsedWakeflowStaticMaterializationPreviewRequest["hostProfiles"] {
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
+): WakeflowStaticMaterializationPreviewRequest["hostProfiles"] {
   return request.hostProfiles.filter(
     (profile) => profile.hostId !== request.currentHostProfile.hostId,
   );
@@ -559,7 +558,7 @@ function peerHostProfiles(
 
 async function inspectSupportMemories(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   current: WakeflowConfigModel | null,
   desired: WakeflowConfigModel,
   report: Readonly<WakeflowConfigRootPlacementReport>,
@@ -786,7 +785,7 @@ async function inspectSupportMemories(
 
 async function inspectExternalInstructions(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   current: WakeflowConfigModel | null,
   desired: WakeflowConfigModel,
   report: Readonly<WakeflowConfigRootPlacementReport>,
@@ -906,7 +905,7 @@ async function requirementBoardRootAbsent(root: RootedDirectory): Promise<boolea
 /** 需求看板目录缺失时由维护重建空看板（能力卡 1 §1.4 的 TODO 板修复）；存在即不触碰。 */
 async function planRequirementBoardRepair(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
 ): Promise<void> {
@@ -949,7 +948,7 @@ function localProtocolStep(
  */
 async function planHostCapabilityLayoutRepair(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel | null,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
@@ -1026,7 +1025,7 @@ async function planHostCapabilityLayoutRepair(
 }
 
 function planFreshActiveWorkspaceProjection(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   desired: WakeflowConfigModel,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
@@ -1066,7 +1065,7 @@ function planFreshActiveWorkspaceProjection(
  */
 interface PreviewWorkingSet {
   readonly rootValue: RootedDirectory;
-  readonly request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
+  readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
   readonly matrix: ReturnType<typeof createWakeflowWorkspaceStaticResourceMatrix>;
   readonly core: Readonly<WakeflowWorkspaceCoreLayoutInspection>;
   readonly current: Awaited<ReturnType<typeof currentSnapshot>>;
@@ -1528,22 +1527,10 @@ async function planDesiredResources(
   planConfigPublication(working, desired);
 }
 
+/** 共享静态物化预览；请求是类型化的（见请求接口）。 */
 export async function previewWakeflowStaticMaterialization(
   rootValue: RootedDirectory,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
-  optionsValue: WakeflowStaticMaterializationPreviewOptions = {},
-): Promise<Readonly<WakeflowStaticMaterializationPreview>> {
-  return previewParsedWakeflowStaticMaterialization(
-    rootValue,
-    admitWakeflowStaticMaterializationPreviewRequest(requestValue),
-    optionsValue,
-  );
-}
-
-/** 同上，请求已经由调用方准入过一次（聚合 preview 不再为共享 preview 再解析一遍）。 */
-export async function previewParsedWakeflowStaticMaterialization(
-  rootValue: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   optionsValue: WakeflowStaticMaterializationPreviewOptions = {},
 ): Promise<Readonly<WakeflowStaticMaterializationPreview>> {
   throwIfAborted(request.signal);
@@ -1578,7 +1565,7 @@ export async function previewParsedWakeflowStaticMaterialization(
 // ---- 退出路径（ADR-0024）------------------------------------------------------------------------
 
 /** 当前宿主与对等宿主：外部指令文件按宿主各一份，detach 把每份里的托管块都删。 */
-function allHostProfiles(request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>) {
+function allHostProfiles(request: Readonly<WakeflowStaticMaterializationPreviewRequest>) {
   return [request.currentHostProfile, ...peerHostProfiles(request)];
 }
 
@@ -1589,7 +1576,7 @@ function allHostProfiles(request: Readonly<ParsedWakeflowStaticMaterializationPr
  */
 async function planManagedBlockRemovals(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   config: WakeflowConfigModel,
   repositoryId: string | null,
   report: Readonly<WakeflowConfigRootPlacementReport>,
@@ -1692,7 +1679,7 @@ async function planManagedBlockRemovals(
 /** 一处托管块的删除检查：块在且正文已知出一步；块或文件不在无步骤；正文未知按 targetKey 阻塞。 */
 async function planManagedBlockRemoval(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   input: Readonly<{
     readonly stepId: string;
     readonly ownerId: string;
@@ -1744,7 +1731,7 @@ async function planManagedBlockRemoval(
  */
 async function planWorkspaceRootBlockRemovals(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   config: WakeflowConfigModel,
   blockers: Set<string>,
   steps: WakeflowStaticMaterializationStep[],
@@ -1820,8 +1807,8 @@ async function planWorkspaceRootBlockRemovals(
 
 async function projectionFileExists(
   root: RootedDirectory,
-  profile: ParsedWakeflowStaticMaterializationPreviewRequest["currentHostProfile"],
-  windowId: string,
+  profile: WakeflowStaticMaterializationPreviewRequest["currentHostProfile"],
+  windowId: WakeflowDurableId<"window">,
 ): Promise<boolean> {
   try {
     return (
@@ -1839,7 +1826,7 @@ async function projectionFileExists(
 /** 被分离窗口（detach-workspace 为全部窗口）在任一宿主还有投影文件时出一步退役；都不在即无步骤。 */
 async function planWindowProjectionRetirement(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   config: WakeflowConfigModel,
   repositoryId: string | null,
   steps: WakeflowStaticMaterializationStep[],
@@ -1904,7 +1891,7 @@ function detachedRepositoryOf(current: WakeflowConfigModel, desired: WakeflowCon
  */
 async function planDetach(
   root: RootedDirectory,
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   core: Readonly<WakeflowWorkspaceCoreLayoutInspection>,
   current: Readonly<WakeflowConfigAuthoritySnapshot> | null,
   blockers: Set<string>,
@@ -1977,7 +1964,7 @@ async function planDetach(
 
 /** 排序、冻结并自摘要：所有写步骤按"布局 → integration → whole-file → 退出路径 → Config 收尾"排序。 */
 function assemblePreview(
-  request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
   matrix: ReturnType<typeof createWakeflowWorkspaceStaticResourceMatrix>,
   core: Readonly<WakeflowWorkspaceCoreLayoutInspection>,
   current: Readonly<WakeflowConfigAuthoritySnapshot> | null,

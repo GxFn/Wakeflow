@@ -6,6 +6,7 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import {
   decideDemandEventSourcingCommand,
   evolveDemandEventSourcingState,
+  parseDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import {
@@ -90,14 +91,17 @@ test("续接边界随事件持久化：旧形状的续接事件重放得到与�
   equal(replayed.continuation?.historicalTestTargetIds, undefined);
 
   // 续接决策从续接前状态算出边界并写进事件；归约器只照抄事件携带的边界。
-  const decided = decideDemandEventSourcingCommand(completed, {
-    commandType: "lifecycle.continue-demand",
-    commandVersion: 1,
-    eventId: CONTINUED_EVENT_ID,
-    demandId: completed.demandId,
-    recordedAt: RECORDED_AT,
-    continuation: CONTINUATION,
-  });
+  const decided = decideDemandEventSourcingCommand(
+    completed,
+    parseDemandEventSourcingCommand({
+      commandType: "lifecycle.continue-demand",
+      commandVersion: 1,
+      eventId: CONTINUED_EVENT_ID,
+      demandId: completed.demandId,
+      recordedAt: RECORDED_AT,
+      continuation: CONTINUATION,
+    }),
+  );
   const event = decided[0];
   if (event?.eventType !== "lifecycle.demand-continued") throw new Error("continued event missing");
   deepEqual(event.data.historicalTestTargetIds, testTargetIds);
@@ -125,14 +129,17 @@ test("supplement 包随 requirement-supplement 续接并入（Q7 裁决）：事
     recordDigest: `sha256:${digit.repeat(64)}`,
   });
   const continueWith = (state: Readonly<DemandAggregateState>, continuation: Readonly<object>) => {
-    const decided = decideDemandEventSourcingCommand(state, {
-      commandType: "lifecycle.continue-demand",
-      commandVersion: 1,
-      eventId: CONTINUED_EVENT_ID,
-      demandId: state.demandId,
-      recordedAt: RECORDED_AT,
-      continuation,
-    });
+    const decided = decideDemandEventSourcingCommand(
+      state,
+      parseDemandEventSourcingCommand({
+        commandType: "lifecycle.continue-demand",
+        commandVersion: 1,
+        eventId: CONTINUED_EVENT_ID,
+        demandId: state.demandId,
+        recordedAt: RECORDED_AT,
+        continuation,
+      }),
+    );
     const event = decided[0];
     if (event?.eventType !== "lifecycle.demand-continued")
       throw new Error("continued event missing");

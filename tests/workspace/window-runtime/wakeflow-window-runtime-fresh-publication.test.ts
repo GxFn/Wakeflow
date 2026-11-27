@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import {
@@ -59,7 +60,7 @@ async function expectPublicationError(
 
 test("Fresh Window Runtime publishes exact empty identity and unregistered projections", async (t) => {
   const value = await fixture(t);
-  const config = createMinimalWakeflowConfig();
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const created = await publishFreshWakeflowWindowRuntime(
     value.root,
     config,
@@ -105,7 +106,7 @@ test("Fresh Window Runtime publishes exact empty identity and unregistered proje
 
 test("Fresh Window Runtime recovery fills missing exact files and rejects foreign identity", async (t) => {
   const value = await fixture(t);
-  const config = createMinimalWakeflowConfig();
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   await publishFreshWakeflowWindowRuntime(value.root, config, codexWorkspaceHostResourceProfile, {
     recoveringFreshPublication: false,
   });

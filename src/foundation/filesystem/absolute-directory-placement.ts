@@ -62,9 +62,9 @@ function normalizeErrorPath(value: unknown): string {
   return typeof value === "string" && value.length > 0 ? value : "$directory";
 }
 
-function parseAbsolutePath(value: unknown, path: string): string {
+/** 规范绝对目录位置的规则（位置来自配置文档，类型表达不了）。 */
+function parseAbsolutePath(value: string, path: string): string {
   if (
-    typeof value !== "string" ||
     value.length === 0 ||
     value !== value.trim() ||
     !value.isWellFormed() ||
@@ -171,7 +171,7 @@ async function inspectStablePresentDirectory(
  * 文件系统真实路径；结果为`missing`时，最近已存在祖先提供同等的稳定拼写事实。
  */
 export async function inspectAbsoluteDirectoryPlacement(
-  value: unknown,
+  value: string,
   errorPath?: string,
 ): Promise<Readonly<AbsoluteDirectoryPlacementObservation>> {
   const path = normalizeErrorPath(errorPath);

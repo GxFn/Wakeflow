@@ -46,9 +46,9 @@ function normalizeErrorPath(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-function parseAbsolutePath(value: unknown, path: string): string {
+/** 规范绝对路径的规则（路径来自持久回执、环境或拼接，类型表达不了）。 */
+function parseAbsolutePath(value: string, path: string): string {
   if (
-    typeof value !== "string" ||
     value.length === 0 ||
     value !== value.trim() ||
     !value.isWellFormed() ||
@@ -87,7 +87,7 @@ export interface AbsoluteNodeObservationOptions {
  * `follow: true` 跟随链接观察目标（`stat`）；`realPath` 两种情况下都是规范路径。
  */
 export async function observeAbsoluteNode(
-  value: unknown,
+  value: string,
   options: AbsoluteNodeObservationOptions = {},
 ): Promise<AbsoluteNodeObservation> {
   const { follow = false, errorPath } = options;
@@ -118,7 +118,7 @@ export async function observeAbsoluteNode(
  * `maximumBytes` 返回 null；其余失败为 `read-failure`。
  */
 export async function readAbsoluteRegularFileText(
-  value: unknown,
+  value: string,
   maximumBytes: number,
   errorPath?: string,
 ): Promise<string | null> {
@@ -141,7 +141,7 @@ export async function readAbsoluteRegularFileText(
  * 不返回、以 `truncated` 计数。目录不存在（含中途不是目录）为 null；其余失败为 `inspection-failure`。
  */
 export async function listAbsoluteDirectoryEntryNames(
-  value: unknown,
+  value: string,
   maximumEntries: number,
   errorPath?: string,
 ): Promise<Readonly<{ readonly names: readonly string[]; readonly truncated: number }> | null> {

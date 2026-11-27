@@ -116,20 +116,13 @@ function mapLockError(error: KernelFileLockError): never {
 }
 
 /**
- * 解析一个仍在当前 gate callback 内有效的 context，并验证它属于指定 Workspace 根。
+ * 运行时活性：context 仍在当前 gate callback 里、属于指定 Workspace 根（签发登记是运行时证明，保留）。
  */
 export function assertWakeflowMaintenanceGateContext(
-  value: unknown,
+  context: Readonly<WakeflowMaintenanceGateContext>,
   root: RootedDirectory,
-): asserts value is Readonly<WakeflowMaintenanceGateContext> {
-  // 只剩运行时活性：context 仍在门的回调里、属于这个根。`typeof` 只为让 `unknown` 能进 WeakSet，
-  // 签名在第 2 步收紧后一起删。
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !ACTIVE_CONTEXTS.has(value) ||
-    CONTEXT_ROOTS.get(value) !== root
-  ) {
+): void {
+  if (!ACTIVE_CONTEXTS.has(context) || CONTEXT_ROOTS.get(context) !== root) {
     fail("input", "$context");
   }
 }

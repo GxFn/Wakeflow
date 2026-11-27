@@ -334,10 +334,9 @@ export async function inspectWorkClaim(
  */
 export async function takeWorkClaim(
   root: RootedDirectory,
-  claimValue: unknown,
+  claim: Readonly<WorkClaim>,
   options: Signal = {},
 ): Promise<Readonly<TakeWorkClaimResult>> {
-  const claim = parseWorkClaim(claimValue);
   const signal = signalOptions(options.signal);
   try {
     await materializeDirectoryPath(root, WORK_CLAIMS_ROOT_REF, { mode: DIRECTORY_MODE, ...signal });

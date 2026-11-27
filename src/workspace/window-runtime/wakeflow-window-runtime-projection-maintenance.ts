@@ -1,12 +1,9 @@
-import {
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import {
   createFileAtomically,
@@ -30,10 +27,7 @@ import { isWakeflowError } from "../../kernel/error.js";
 import { withWorkspaceOperationScope } from "../../kernel/workspace-operation-scope.js";
 import type { WakeflowHostMaintenanceOperationInput } from "../maintenance/wakeflow-host-maintenance-contribution.js";
 import type { WakeflowStaticMaterializationAction } from "../maintenance/wakeflow-static-materialization-preview-contract.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
   wakeflowHostIdentityRootRef,
@@ -48,6 +42,7 @@ import {
   compileWakeflowWindowHostBindingStoreAuthority,
   WakeflowWindowHostBindingStoreAuthorityError,
 } from "./wakeflow-window-host-binding-store-authority.js";
+import type { WakeflowWindowHostIdentityProfile } from "./wakeflow-window-host-identity-profile.js";
 import {
   wakeflowWindowHostBindingRootRef,
   wakeflowWindowRuntimeProjectionRef,
@@ -62,7 +57,6 @@ import {
   compileWakeflowWindowRuntimeProjectionExpectedEntries,
   failWindowRuntimeProjection,
   inspectWakeflowWindowRuntimeProjectionEntries,
-  parseWakeflowWindowRuntimeProjectionInputs,
   resolveWakeflowWindowRuntimeProjectionExpectedEntries,
   type WakeflowWindowRuntimeProjectionExpectedEntries,
   type WakeflowWindowRuntimeProjectionExpectedEntry,
@@ -95,11 +89,9 @@ const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNSAFE_BLOCKER =
 const WAKEFLOW_WINDOW_RUNTIME_PROJECTION_UNAVAILABLE_BLOCKER =
   "window-runtime-projection-unavailable" as const;
 
-export interface PlanWakeflowWindowRuntimeProjectionMaintenanceRequest {
+export interface PlanWakeflowWindowRuntimeProjectionMaintenanceRequest
+  extends WakeflowWindowRuntimeProjectionInputs {
   readonly action: WakeflowStaticMaterializationAction;
-  readonly config: unknown;
-  readonly resourceProfile: unknown;
-  readonly identityProfile: unknown;
   readonly signal?: AbortSignal;
 }
 
@@ -108,10 +100,8 @@ export interface WakeflowWindowRuntimeProjectionMaintenancePlan {
   readonly blockerCodes: readonly string[];
 }
 
-export interface ExecuteWakeflowWindowRuntimeProjectionOperationRequest {
-  readonly config: unknown;
-  readonly resourceProfile: unknown;
-  readonly identityProfile: unknown;
+export interface ExecuteWakeflowWindowRuntimeProjectionOperationRequest
+  extends WakeflowWindowRuntimeProjectionInputs {
   readonly operationId: string;
   readonly targetKey: string;
   readonly targetDigest: Sha256Digest;
@@ -150,11 +140,7 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(
   request: PlanWakeflowWindowRuntimeProjectionMaintenanceRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionMaintenancePlan>> {
   throwIfAborted(request.signal);
-  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
-    request.config,
-    request.resourceProfile,
-    request.identityProfile,
-  );
+  const inputs: WakeflowWindowRuntimeProjectionInputs = request;
   // fresh 由共享步整体发布投影；detach-workspace 的共享步整体退役投影（ADR-0024），宿主不再补发。
   if (request.action === "fresh-initialize" || request.action === "detach-workspace") {
     return Object.freeze({ operations: Object.freeze([]), blockerCodes: Object.freeze([]) });
@@ -207,8 +193,8 @@ export async function planWakeflowWindowRuntimeProjectionMaintenance(
 }
 
 export interface RefreshWakeflowWindowRuntimeProjectionsRequest {
-  readonly resourceProfile: unknown;
-  readonly identityProfile: unknown;
+  readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
   readonly signal?: AbortSignal;
 }
 
@@ -310,11 +296,11 @@ export async function refreshWakeflowWindowRuntimeProjections(
       }
       throw error;
     }
-    return parseWakeflowWindowRuntimeProjectionInputs(
-      snapshot.model,
-      request.resourceProfile,
-      request.identityProfile,
-    );
+    return Object.freeze({
+      config: snapshot.model,
+      resourceProfile: request.resourceProfile,
+      identityProfile: request.identityProfile,
+    });
   };
   try {
     return await withWorkspaceOperationScope(
@@ -368,8 +354,8 @@ export async function refreshWakeflowWindowRuntimeProjections(
 }
 
 export interface EnsureWakeflowWindowRuntimeSkeletonRequest {
-  readonly config: unknown;
-  readonly resourceProfile: unknown;
+  readonly config: WakeflowConfigModel;
+  readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   readonly signal?: AbortSignal;
 }
 
@@ -389,23 +375,7 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
   request: EnsureWakeflowWindowRuntimeSkeletonRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeSkeletonReceipt>> {
   throwIfAborted(request.signal);
-  let config: WakeflowConfigModel;
-  try {
-    config = parseWakeflowConfig(request.config);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError)
-      failWindowRuntimeProjection("input", error.path, error);
-    throw error;
-  }
-  let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWindowRuntimeProjection("profile", error.path, error);
-    }
-    throw error;
-  }
+  const { config, resourceProfile } = request;
   let unregistered: ReturnType<typeof compileWakeflowWindowRuntimeUnregisteredProjectionSet>;
   try {
     unregistered = compileWakeflowWindowRuntimeUnregisteredProjectionSet(config, resourceProfile);
@@ -486,8 +456,8 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
 }
 
 export interface RetireWakeflowWindowRuntimeProjectionsRequest {
-  readonly resourceProfile: unknown;
-  readonly windowIds: readonly unknown[];
+  readonly resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
+  readonly windowIds: readonly WakeflowDurableId<"window">[];
   readonly signal?: AbortSignal;
 }
 
@@ -507,15 +477,7 @@ export async function retireWakeflowWindowRuntimeProjections(
   request: RetireWakeflowWindowRuntimeProjectionsRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionRetirementReceipt>> {
   throwIfAborted(request.signal);
-  let resourceProfile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    resourceProfile = parseWakeflowWorkspaceHostResourceProfile(request.resourceProfile);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      failWindowRuntimeProjection("profile", error.path, error);
-    }
-    throw error;
-  }
+  const { resourceProfile } = request;
   let retired = 0;
   let absent = 0;
   for (const windowId of request.windowIds) {
@@ -554,12 +516,7 @@ export async function executeWakeflowWindowRuntimeProjectionOperation(
   request: ExecuteWakeflowWindowRuntimeProjectionOperationRequest,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionOperationReceipt>> {
   throwIfAborted(request.signal);
-  const inputs = parseWakeflowWindowRuntimeProjectionInputs(
-    request.config,
-    request.resourceProfile,
-    request.identityProfile,
-  );
-  return withCurrentProjectionEntries(rootValue, inputs, request.signal, async (expected) => {
+  return withCurrentProjectionEntries(rootValue, request, request.signal, async (expected) => {
     if (expected.kind !== "entries") failWindowRuntimeProjection("plan", "$operation");
     const entry = expected.entries.find((candidate) => candidate.windowId === request.targetKey);
     if (

@@ -19,11 +19,9 @@ import {
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { createWakeflowWorkspaceStaticResourceMatrix } from "../wakeflow-workspace-static-resource-matrix.js";
 import {
-  parseWakeflowWorkspaceHostResourceProfile,
   WAKEFLOW_WORKSPACE_HOST_IDS,
   type WakeflowWorkspaceHostId,
   type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
 } from "../workspace-host-resource-profile.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
@@ -66,12 +64,7 @@ export interface WakeflowGitignoreExactOutsideClassification {
   readonly exactNegatedRules: readonly WakeflowGitignoreRule[];
 }
 
-export type WakeflowGitignoreBodyAuthorityErrorReason =
-  | "input"
-  | "profile-set"
-  | "path"
-  | "authority"
-  | "outside";
+export type WakeflowGitignoreBodyAuthorityErrorReason = "profile-set" | "path" | "authority";
 
 /** Gitignore body authority 准入失败的稳定、脱敏错误。 */
 export class WakeflowGitignoreBodyAuthorityError extends ModuleError<WakeflowGitignoreBodyAuthorityErrorReason> {
@@ -147,14 +140,13 @@ function coveredByPrivateRoot(resourcePath: PortableResourcePath): boolean {
   );
 }
 
-function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
-  let values: readonly unknown[];
-  try {
-    values = parseDenseArray(value, WAKEFLOW_WORKSPACE_HOST_IDS.length, "$profiles");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$profiles", error);
-    throw error;
-  }
+/**
+ * 宿主画像集合的关系：每个宿主恰好一份，按宿主词汇排序。画像本身是类型化的（宿主常量，或维护意图
+ * 读盘时已逐个解析）；集合规则类型表达不了，留着。
+ */
+function profileSet(
+  values: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
+): readonly Readonly<WakeflowWorkspaceHostResourceProfile>[] {
   if (values.length !== WAKEFLOW_WORKSPACE_HOST_IDS.length) {
     fail("profile-set", "$profiles");
   }
@@ -162,16 +154,7 @@ function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostR
     WakeflowWorkspaceHostId,
     Readonly<WakeflowWorkspaceHostResourceProfile>
   >();
-  for (const [index, value] of values.entries()) {
-    let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-    try {
-      profile = parseWakeflowWorkspaceHostResourceProfile(value);
-    } catch (error: unknown) {
-      if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-        fail("input", `$/profiles/${index}`, error);
-      }
-      throw error;
-    }
+  for (const profile of values) {
     if (byHostId.has(profile.hostId)) fail("profile-set", "$profiles");
     byHostId.set(profile.hostId, profile);
   }
@@ -189,9 +172,9 @@ function parseProfiles(value: unknown): readonly Readonly<WakeflowWorkspaceHostR
 
 /** 从完整宿主画像集合生成唯一、确定性的 Gitignore 正文权威。 */
 export function createWakeflowGitignoreBodyAuthority(
-  profileValues: unknown,
+  profileValues: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
 ): Readonly<WakeflowGitignoreBodyAuthority> {
-  const profiles = parseProfiles(profileValues);
+  const profiles = profileSet(profileValues);
   const rules = new Set<WakeflowGitignoreRule>([
     rootRule(ACTIVE_ROOT_REF, true),
     rootRule(LOCAL_ROOT_REF, true),

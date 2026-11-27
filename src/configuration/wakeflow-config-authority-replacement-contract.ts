@@ -1,16 +1,6 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-} from "../contracts/identity/wakeflow-durable-id.js";
-import {
-  computeSha256Digest,
-  parseSha256Digest,
-  type Sha256Digest,
-} from "../foundation/crypto/sha256.js";
-import { pickOwnDataProperties } from "../foundation/data/passive-own-data.js";
+import { computeSha256Digest, type Sha256Digest } from "../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../foundation/error/module-error.js";
 import type { DurableAtomicFileReplaceResult } from "../foundation/filesystem/durable-atomic-file-write.js";
-import { parseDurableAtomicFileReplaceOptions } from "../foundation/filesystem/durable-atomic-file-write-contract.js";
 import { sameFileNodeSnapshot } from "../foundation/filesystem/file-node-snapshot.js";
 import type { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
@@ -30,7 +20,6 @@ import {
 import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
-  WAKEFLOW_CONFIG_FILE_REF,
   WAKEFLOW_CONFIG_MAXIMUM_BYTES,
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
@@ -90,13 +79,6 @@ export class WakeflowConfigAuthorityReplacementError extends ModuleError<Wakeflo
 export const failWakeflowConfigAuthorityReplacement: Fail<WakeflowConfigAuthorityReplacementErrorReason> =
   failWith(WakeflowConfigAuthorityReplacementError);
 
-export interface ParsedWakeflowConfigAuthorityExpectation {
-  readonly workspaceRoot: string;
-  readonly source: Readonly<StableFileSource>;
-  readonly configDigest: Sha256Digest;
-  readonly programId: WakeflowDurableId<"program">;
-}
-
 export interface PreparedWakeflowConfigAuthorityDesired {
   readonly model: WakeflowConfigModel;
   readonly bytes: Uint8Array;
@@ -126,95 +108,6 @@ export async function assertCurrentUserWakeflowConfigAuthorityRoot(
     }
     failWakeflowConfigAuthorityReplacement("root-scope", "$root", error);
   }
-}
-
-export function parseWakeflowConfigAuthorityExpectation(
-  value: unknown,
-  expectedUserId: bigint,
-): Readonly<ParsedWakeflowConfigAuthorityExpectation> {
-  // 四层投影在一个 try 里取出：任何一层的形状问题都是同一个 input 拒绝；const 让类型随键集合推导。
-  const { projected, programProjected, sourceProjected } = (() => {
-    try {
-      const projected = pickOwnDataProperties(
-        value,
-        ["configDigest", "model", "source", "workspaceRoot"] as const,
-        "$expected",
-      );
-      const modelProjected = pickOwnDataProperties(
-        projected.model,
-        ["program"] as const,
-        "$/expected/model",
-      );
-      const programProjected = pickOwnDataProperties(
-        modelProjected.program,
-        ["programId"] as const,
-        "$/expected/model/program",
-      );
-      const sourceProjected = pickOwnDataProperties(
-        projected.source,
-        ["byteCount", "digest", "node", "resourcePath"] as const,
-        "$/expected/source",
-      );
-      return { projected, programProjected, sourceProjected };
-    } catch (cause: unknown) {
-      return failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
-    }
-  })();
-  if (
-    typeof projected.workspaceRoot !== "string" ||
-    projected.configDigest === undefined ||
-    programProjected.programId === undefined ||
-    sourceProjected.byteCount === undefined ||
-    sourceProjected.digest === undefined ||
-    sourceProjected.node === undefined ||
-    sourceProjected.resourcePath === undefined
-  ) {
-    failWakeflowConfigAuthorityReplacement("input", "$expected");
-  }
-  let configDigest: Sha256Digest;
-  try {
-    configDigest = parseSha256Digest(projected.configDigest, "$/expected/configDigest");
-  } catch (cause: unknown) {
-    failWakeflowConfigAuthorityReplacement("input", "$/expected/configDigest", cause);
-  }
-  let programId: WakeflowDurableId<"program">;
-  try {
-    programId = parseWakeflowDurableIdOfKind(
-      programProjected.programId,
-      "program",
-      "$/expected/model/program/programId",
-    );
-  } catch (cause: unknown) {
-    failWakeflowConfigAuthorityReplacement("input", "$/expected/model/program/programId", cause);
-  }
-  let source: Readonly<StableFileSource>;
-  try {
-    source = parseDurableAtomicFileReplaceOptions({
-      mode: WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
-      expected: {
-        byteCount: sourceProjected.byteCount,
-        digest: sourceProjected.digest,
-        node: sourceProjected.node,
-        resourcePath: sourceProjected.resourcePath,
-      },
-    }).expected;
-  } catch (cause: unknown) {
-    failWakeflowConfigAuthorityReplacement("input", "$expected", cause);
-  }
-  if (
-    source.resourcePath !== WAKEFLOW_CONFIG_FILE_REF ||
-    source.node.linkCount !== 1n ||
-    source.node.permissionBits !== WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE ||
-    source.node.userId !== expectedUserId
-  ) {
-    failWakeflowConfigAuthorityReplacement("source-policy", "$/expected/source");
-  }
-  return Object.freeze({
-    workspaceRoot: projected.workspaceRoot,
-    source,
-    configDigest,
-    programId,
-  });
 }
 
 export function prepareWakeflowConfigAuthorityDesired(
@@ -323,16 +216,19 @@ export function sameWakeflowConfigAuthoritySource(
   );
 }
 
+/**
+ * 调用方的预期是它先前读到的权威快照（读取方已经核对过来源政策），按值与当前快照比较。
+ */
 export function matchesWakeflowConfigAuthorityExpectation(
   root: RootedDirectory,
   current: Readonly<WakeflowConfigAuthoritySnapshot>,
-  expected: Readonly<ParsedWakeflowConfigAuthorityExpectation>,
+  expected: Readonly<WakeflowConfigAuthoritySnapshot>,
 ): boolean {
   return (
     expected.workspaceRoot === root.absolutePath &&
     current.workspaceRoot === root.absolutePath &&
     current.configDigest === expected.configDigest &&
-    current.model.program.programId === expected.programId &&
+    current.model.program.programId === expected.model.program.programId &&
     sameWakeflowConfigAuthoritySource(current.source, expected.source)
   );
 }

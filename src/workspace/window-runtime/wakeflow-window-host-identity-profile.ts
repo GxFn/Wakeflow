@@ -172,12 +172,11 @@ export function parseWakeflowWindowHostIdentityProfile(
   });
 }
 
-/** 使用当前宿主画像准入一个 Agent 回传的不透明窗口 handle。 */
+/** 使用当前宿主画像（模块加载时解析）准入一个 Agent 回传或记录里读出的不透明窗口 handle。 */
 export function parseWakeflowWindowHostHandle(
-  profileValue: unknown,
+  profile: Readonly<WakeflowWindowHostIdentityProfile>,
   value: unknown,
 ): Readonly<WakeflowWindowHostHandle> {
-  const profile = parseWakeflowWindowHostIdentityProfile(profileValue);
   const parsed = record(value, "$handle");
   exactFields(parsed, HANDLE_FIELDS, "$handle");
   if (parsed.kind !== profile.handleKind) fail("handle", "$handle.kind");

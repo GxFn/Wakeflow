@@ -20,12 +20,7 @@ const UTF8_DECODER = new TextDecoder("utf-8", {
 const UTF8_ENCODER = new TextEncoder();
 
 /** UTF-8 转换失败的稳定分类。 */
-export type Utf8ErrorReason =
-  | "bytes-type"
-  | "decode-failure"
-  | "text-type"
-  | "ill-formed-text"
-  | "encode-failure";
+export type Utf8ErrorReason = "decode-failure" | "ill-formed-text" | "encode-failure";
 
 /**
  * UTF-8 解码或编码失败的稳定错误。

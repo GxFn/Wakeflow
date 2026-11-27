@@ -1,6 +1,7 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
@@ -76,9 +77,10 @@ async function loadPackage(
     fixture,
     async (root) =>
       (
-        await new TaskPackageProjectionStore(root).load(taskPackageId, {
-          expectedTaskPackageDigest: parseSha256Digest(digest),
-        })
+        await new TaskPackageProjectionStore(root).load(
+          parseWakeflowDurableIdOfKind(taskPackageId, "task-package"),
+          { expectedTaskPackageDigest: parseSha256Digest(digest) },
+        )
       ).taskPackage,
   );
 }

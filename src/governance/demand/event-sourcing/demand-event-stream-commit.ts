@@ -199,7 +199,6 @@ export type DemandEventStreamCommitErrorReason =
   | "position"
   | "digest"
   | "event"
-  | "aggregate"
   | "relation"
   | "event-version"
   | "state-version"
@@ -377,8 +376,11 @@ export function parseDemandEventStreamCommitDocument(
   return commit;
 }
 
-export function computeDemandEventStreamCommitDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandEventStreamCommit(value));
+/** 提交是本编解码签发或读回的类型化值；规范 JSON 摘要自己做 JSON 准入。 */
+export function computeDemandEventStreamCommitDigest(
+  commit: Readonly<DemandEventStreamCommit>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(commit);
 }
 
 /** 一条命令产生的全部未提交事件及其提交身份；写者戳省略与 `null` 同义（不盖戳）。 */

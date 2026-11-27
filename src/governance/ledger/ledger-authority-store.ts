@@ -1,7 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   inspectLedgerAuthorityLayout,
@@ -14,15 +11,14 @@ import {
   resolveLoadedLedgerAuthorityMemberReference,
 } from "./ledger-authority-reader.js";
 import type { RequirementRecord } from "./ledger-authority-record.js";
-import {
-  throwLedgerAuthorityStoreError as fail,
-  type InitializeLedgerAuthorityStoreOptions,
-  type LedgerAuthorityMemberInput,
-  type LedgerAuthorityMemberReference,
-  type LedgerAuthorityPublicationResult,
-  type LedgerAuthorityStoreOptions,
-  type LoadedLedgerAuthorityRecord,
-  type ResolvedLedgerAuthorityMember,
+import type {
+  InitializeLedgerAuthorityStoreOptions,
+  LedgerAuthorityMemberInput,
+  LedgerAuthorityMemberReference,
+  LedgerAuthorityPublicationResult,
+  LedgerAuthorityStoreOptions,
+  LoadedLedgerAuthorityRecord,
+  ResolvedLedgerAuthorityMember,
 } from "./ledger-authority-store-contract.js";
 import { publishLedgerAuthorityRecord } from "./ledger-record-publisher.js";
 
@@ -58,31 +54,19 @@ export class LedgerAuthorityStore {
   }
 
   async loadRequirement(
-    requirementIdValue: unknown,
+    requirementId: WakeflowDurableId<"requirement">,
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LoadedLedgerAuthorityRecord<RequirementRecord>>> {
-    const signal = options?.signal;
-    let requirementId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
-    try {
-      requirementId = parseWakeflowDurableIdOfKind(
-        requirementIdValue,
-        "requirement",
-        "$requirementId",
-      );
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$requirementId", error);
-      throw error;
-    }
-    return loadLedgerAuthorityRecord(this.#root, requirementId, signal);
+    return loadLedgerAuthorityRecord(this.#root, requirementId, options?.signal);
   }
 
   /** 整体发布一条不可变记录目录树，或幂等复用完全一致的已有记录。 */
   async publish(
-    recordValue: Readonly<RequirementRecord> | unknown,
+    record: Readonly<RequirementRecord>,
     membersValue: readonly LedgerAuthorityMemberInput[],
     options?: LedgerAuthorityStoreOptions,
   ): Promise<Readonly<LedgerAuthorityPublicationResult<RequirementRecord>>> {
-    return publishLedgerAuthorityRecord(this.#root, recordValue, membersValue, options?.signal);
+    return publishLedgerAuthorityRecord(this.#root, record, membersValue, options?.signal);
   }
 
   async resolveMemberReference(

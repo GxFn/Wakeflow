@@ -115,12 +115,8 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
     equal(Object.isFrozen(plan.directories), true);
     equal(Object.isFrozen(plan.files), true);
 
-    const created = await createDirectoryTreeCandidateDurably(
-      root,
-      "transactions/.requirement.stage",
-      FILES,
-      OPTIONS,
-    );
+    const candidateRef = parsePortableResourcePath("transactions/.requirement.stage");
+    const created = await createDirectoryTreeCandidateDurably(root, candidateRef, FILES, OPTIONS);
     equal(created.plan.treeDigest, plan.treeDigest);
     equal(created.rootNode.kind, "directory");
     equal(created.rootNode.permissionBits, 0o755);
@@ -131,12 +127,9 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
     equal(statSync(path.join(candidatePath, "design/requirement.md")).mode & 0o777, 0o644);
     equal(readFileSync(path.join(candidatePath, "record.json"), "utf8"), '{"kind":"record"}\n');
 
-    const inspected = await inspectDirectoryTreeCandidate(
-      root,
-      "transactions/.requirement.stage",
-      plan,
-      { expectedRootNode: created.rootNode },
-    );
+    const inspected = await inspectDirectoryTreeCandidate(root, candidateRef, plan, {
+      expectedRootNode: created.rootNode,
+    });
     equal(inspected.plan.treeDigest, plan.treeDigest);
     equal(inspected.rootNode.permissionBits, 0o755);
 
@@ -144,7 +137,7 @@ test("durable directory tree candidate closes exact bytes, modes, and inventory"
       mode: 0o644,
     });
     await expectCandidateError(
-      () => inspectDirectoryTreeCandidate(root, "transactions/.requirement.stage", plan),
+      () => inspectDirectoryTreeCandidate(root, candidateRef, plan),
       "tree-conflict",
     );
   } finally {
@@ -242,8 +235,8 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
   chmodSync(path.join(rootPath, "transactions"), 0o700);
   const root = await RootedDirectory.open(rootPath);
   try {
-    const stageRef = "transactions/.resume.stage";
-    await createDirectoryAtomically(root, parsePortableResourcePath(stageRef), { mode: 0o755 });
+    const stageRef = parsePortableResourcePath("transactions/.resume.stage");
+    await createDirectoryAtomically(root, stageRef, { mode: 0o755 });
     await createFileCandidateDurably(
       root,
       parsePortableResourcePath(`${stageRef}/record.json`),
@@ -266,8 +259,8 @@ test("directory tree candidate retry fills only missing exact nodes", async () =
       "# Requirement\n",
     );
 
-    const conflictRef = "transactions/.conflict.stage";
-    await createDirectoryAtomically(root, parsePortableResourcePath(conflictRef), { mode: 0o755 });
+    const conflictRef = parsePortableResourcePath("transactions/.conflict.stage");
+    await createDirectoryAtomically(root, conflictRef, { mode: 0o755 });
     await createFileCandidateDurably(
       root,
       parsePortableResourcePath(`${conflictRef}/record.json`),
@@ -414,7 +407,7 @@ test("a real-durability tree publication of F = 3, D = 1 syncs F + D + 2 times w
       recordTreeEvents(t, async () => {
         const candidate = await createDirectoryTreeCandidateDurably(
           root,
-          entry.stage,
+          parsePortableResourcePath(entry.stage),
           THREE_FILES,
           OPTIONS,
         );
@@ -498,9 +491,9 @@ test("settling a partial candidate on a real-durability root syncs each existing
   mkdirSync(path.join(rootPath, "stage"), { mode: 0o700 });
   const root = await RootedDirectory.open(rootPath, "$root", { durability: "fsync" });
   t.after(() => root.close());
-  const stageRef = "stage/.partial.stage";
+  const stageRef = parsePortableResourcePath("stage/.partial.stage");
   // 中断留下的半成品：候选根目录与 a.txt 已在盘上，sub/、b.txt 与 sub/c.txt 还没有。
-  await createDirectoryAtomically(root, parsePortableResourcePath(stageRef), { mode: 0o755 });
+  await createDirectoryAtomically(root, stageRef, { mode: 0o755 });
   await createFileCandidateDurably(
     root,
     parsePortableResourcePath(`${stageRef}/a.txt`),

@@ -116,8 +116,10 @@ async function assertOnlyEnvelopeOf(
 ): Promise<void> {
   await withFixtureDemandRoot(fixture, async (root) => {
     const repository = new DemandEventSourcingRepository(root);
-    ok((await repository.findDeliveryPreparedEvent(committedDeliveryId)) !== null);
-    equal(await repository.findDeliveryPreparedEvent(loserDeliveryId), null);
+    const deliveryId = (value: string) =>
+      parseWakeflowDurableIdOfKind(value, "target-delivery", "$deliveryId");
+    ok((await repository.findDeliveryPreparedEvent(deliveryId(committedDeliveryId))) !== null);
+    equal(await repository.findDeliveryPreparedEvent(deliveryId(loserDeliveryId)), null);
   });
 }
 

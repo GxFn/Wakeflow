@@ -1,5 +1,3 @@
-import { types } from "node:util";
-
 import {
   computeSha256Digest,
   parseSha256Digest,
@@ -7,7 +5,6 @@ import {
   Sha256Error,
 } from "../../foundation/crypto/sha256.js";
 import { Sha256Hasher, Sha256HasherError } from "../../foundation/crypto/sha256-hasher.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   createFileByteRange,
@@ -39,7 +36,6 @@ const MARKER_PATTERN =
   /^<!-- wakeflow:managed-content:v1:(begin|end) component=([a-z][a-z0-9-]{0,127}) owner=([a-z][a-z0-9_-]{0,127}) digest=(sha256:[0-9a-f]{64}) sep=([01]) -->$/u;
 
 export type WakeflowManagedTextEnvelopeErrorReason =
-  | "input"
   | "capacity"
   | "hash-failure"
   | "utf8"
@@ -162,21 +158,6 @@ function copyBytes(value: Uint8Array): Buffer {
   }
 }
 
-/** 源字节仍声明为 `unknown` 的入口（另一分区直接调用，签名留到 A-spec 第 2 步）先收窄再复制。 */
-function snapshotBytes(value: unknown): Buffer {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !ArrayBuffer.isView(value) ||
-    !(value instanceof Uint8Array) ||
-    value.buffer instanceof SharedArrayBuffer
-  ) {
-    fail("input", "$source");
-  }
-  return copyBytes(value);
-}
-
 function decodeSource(bytes: Uint8Array): void {
   try {
     decodeUtf8(bytes, "$source");
@@ -251,65 +232,15 @@ function assertBodyProfile(body: string, path: string): void {
   }
 }
 
-function inputRecord(
-  value: unknown,
-  path: string,
-  expectedKeys: readonly string[],
-): Readonly<Record<string, unknown>> {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", path, error);
-    throw error;
-  }
-  const keys = Object.keys(record).sort();
-  if (
-    keys.length !== expectedKeys.length ||
-    keys.some((key, index) => key !== expectedKeys[index])
-  ) {
-    fail("input", path);
-  }
-  return record;
-}
-
-function parseIdentityRecord(
-  value: unknown,
-  path: string,
-): Readonly<WakeflowManagedTextEnvelopeIdentity> {
-  const record = inputRecord(value, path, ["component", "owner"]);
-  if (typeof record.component !== "string" || !COMPONENT_PATTERN.test(record.component)) {
-    fail("identity", `${path}.component`);
-  }
-  if (typeof record.owner !== "string" || !OWNER_PATTERN.test(record.owner)) {
-    fail("identity", `${path}.owner`);
-  }
-  return Object.freeze({
-    component: record.component,
-    owner: record.owner,
-  });
-}
-
-/** 验证并快照一份严格 managed-text 目标；不读取或重组任何源字节。 */
-function parseWakeflowManagedTextEnvelopeTarget(
-  value: unknown,
-): Readonly<WakeflowManagedTextEnvelopeTarget> {
-  const record = inputRecord(value, "$target", ["body", "component", "owner"]);
-  const identity = parseIdentityRecord(
-    {
-      component: record.component,
-      owner: record.owner,
-    },
-    "$target",
-  );
-  if (typeof record.body !== "string" || !record.body.isWellFormed()) {
-    fail("body-profile", "$target.body");
-  }
-  assertBodyProfile(record.body, "$target.body");
-  return Object.freeze({
-    ...identity,
-    body: record.body,
-  });
+/**
+ * 目标的文法：标记里的 component / owner 词法与正文规范（NFC、单个结尾换行、无 CR）。目标是类型化的
+ * （正文权威或历史渲染给出），这些字符串规则类型表达不了，留着；结果另由标记重读核对。
+ */
+function assertTargetGrammar(target: Readonly<WakeflowManagedTextEnvelopeTarget>): void {
+  if (!COMPONENT_PATTERN.test(target.component)) fail("identity", "$target.component");
+  if (!OWNER_PATTERN.test(target.owner)) fail("identity", "$target.owner");
+  if (!target.body.isWellFormed()) fail("body-profile", "$target.body");
+  assertBodyProfile(target.body, "$target.body");
 }
 
 function inspectSnapshot(source: Buffer): Readonly<WakeflowManagedTextEnvelopeInspection> {
@@ -426,11 +357,11 @@ function resultBytes(
  * 在完整源字节上插入或更新一个 exact owned envelope；调用方仍负责来源权威准入。
  */
 export function recomposeWakeflowManagedTextEnvelope(
-  sourceValue: unknown,
-  targetValue: unknown,
+  sourceValue: Uint8Array,
+  target: Readonly<WakeflowManagedTextEnvelopeTarget>,
 ): Readonly<WakeflowManagedTextRecompositionResult> {
-  const source = snapshotBytes(sourceValue);
-  const target = parseWakeflowManagedTextEnvelopeTarget(targetValue);
+  const source = copyBytes(sourceValue);
+  assertTargetGrammar(target);
   const current = inspectSnapshot(source);
   if (
     current.kind === "managed" &&
@@ -472,10 +403,10 @@ export function recomposeWakeflowManagedTextEnvelope(
  * 调用方必须先验证当前 body digest 属于可移除的已知渲染。
  */
 export function removeWakeflowManagedTextEnvelope(
-  sourceValue: unknown,
+  sourceValue: Uint8Array,
   identity: Readonly<WakeflowManagedTextEnvelopeIdentity>,
 ): Readonly<WakeflowManagedTextRemovalResult> {
-  const source = snapshotBytes(sourceValue);
+  const source = copyBytes(sourceValue);
   const current = inspectSnapshot(source);
   if (
     current.kind !== "managed" ||

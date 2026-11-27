@@ -1,8 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import type { RootedDirectory } from "../../../foundation/filesystem/rooted-directory.js";
@@ -933,23 +929,10 @@ export class DemandEventSourcingRepository {
    * 反向扩展成 TaskPackage 内容。
    */
   async findTargetTaskPlannedEvent(
-    taskPackageIdValue: unknown,
+    taskPackageId: WakeflowDurableId<"task-package">,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedTargetTaskPlannedEvent> | null> {
     const signal = options?.signal;
-    let taskPackageId: WakeflowDurableId<"task-package">;
-    try {
-      taskPackageId = parseWakeflowDurableIdOfKind(
-        taskPackageIdValue,
-        "task-package",
-        "$taskPackageId",
-      );
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) {
-        fail("input", "$taskPackageId", error);
-      }
-      throw error;
-    }
     const found = await this.#findUniqueEvent(
       "tasking.target-task-planned",
       (event) =>
@@ -981,17 +964,10 @@ export class DemandEventSourcingRepository {
 
   /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按投递身份定位唯一 prepared 事件（信封）。 */
   async findDeliveryPreparedEvent(
-    deliveryIdValue: unknown,
+    deliveryId: WakeflowDurableId<"target-delivery">,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedDeliveryPreparedEvent> | null> {
     const signal = options?.signal;
-    let deliveryId: WakeflowDurableId<"target-delivery">;
-    try {
-      deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId", error);
-      throw error;
-    }
     const found = await this.#findUniqueEvent(
       "delivery.delivery-prepared",
       (event) =>
@@ -1026,17 +1002,10 @@ export class DemandEventSourcingRepository {
 
   /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按投递身份收集全部 outcome 事件（按流修订号升序）。 */
   async findDeliveryOutcomeRecordedEvents(
-    deliveryIdValue: unknown,
+    deliveryId: WakeflowDurableId<"target-delivery">,
     options?: { readonly signal?: AbortSignal },
   ): Promise<readonly Readonly<LocatedDeliveryOutcomeRecordedEvent>[]> {
     const signal = options?.signal;
-    let deliveryId: WakeflowDurableId<"target-delivery">;
-    try {
-      deliveryId = parseWakeflowDurableIdOfKind(deliveryIdValue, "target-delivery", "$deliveryId");
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$deliveryId", error);
-      throw error;
-    }
     const aggregate = await this.#currentAggregate(signal);
     if (aggregate === null) return Object.freeze([]);
     const located: Readonly<LocatedDeliveryOutcomeRecordedEvent>[] = [];
@@ -1069,17 +1038,10 @@ export class DemandEventSourcingRepository {
 
   /** 从当前聚合（快照加尾部）与身份索引定位（索引不可用时退回完整读取），按Action/Claim身份定位唯一TargetResult Event。 */
   async findTargetResultRecordedEvent(
-    claimIdValue: unknown,
+    claimId: WakeflowDurableId<"work-claim">,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<LocatedTargetResultRecordedEvent> | null> {
     const signal = options?.signal;
-    let claimId: WakeflowDurableId<"work-claim">;
-    try {
-      claimId = parseWakeflowDurableIdOfKind(claimIdValue, "work-claim", "$claimId");
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$claimId", error);
-      throw error;
-    }
     const found = await this.#findUniqueEvent(
       "result.target-result-recorded",
       (event) =>
@@ -1211,17 +1173,10 @@ export class DemandEventSourcingRepository {
 
   /** 仅为命令重试解析 `commitId`；普通加载不会因此扫描历史。 */
   async findCommitById(
-    commitIdValue: unknown,
+    commitId: WakeflowDurableId<"demand-event-commit">,
     options?: { readonly signal?: AbortSignal },
   ): Promise<Readonly<DemandEventStreamCommit> | null> {
     const signal = options?.signal;
-    let commitId: WakeflowDurableId<"demand-event-commit">;
-    try {
-      commitId = parseWakeflowDurableIdOfKind(commitIdValue, "demand-event-commit", "$commitId");
-    } catch (error: unknown) {
-      if (error instanceof WakeflowDurableIdError) fail("input", "$commitId", error);
-      throw error;
-    }
     const located = await this.#eventStore.readIndex(
       null,
       signal === undefined ? undefined : { signal },

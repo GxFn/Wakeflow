@@ -1,3 +1,4 @@
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   parseWakeflowWorkspaceResourceDeclaration,
@@ -14,10 +15,10 @@ import { wakeflowWindowHostBindingRef } from "./wakeflow-window-runtime-paths.js
  * endpoint 服务在 Binding 存储锁内直接执行，不经本声明的配方准入。
  */
 export function createWakeflowWindowHostBindingResourceCatalog(
-  configValue: unknown,
+  config: WakeflowConfigModel,
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): readonly Readonly<WakeflowWorkspaceResourceDeclaration>[] {
-  const topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, profile);
+  const topology = compileWakeflowWindowRuntimeDesiredTopology(config, profile);
   if (!profile.surfaces.windowIdentity) return Object.freeze([]);
   return Object.freeze(
     topology.windows.map((window) =>

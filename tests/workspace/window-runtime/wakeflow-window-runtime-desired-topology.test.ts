@@ -48,7 +48,7 @@ test("Window Runtime desired topology compiles only stable logical facts", () =>
 });
 
 test("desired topology ignores presentation and display text but tracks placement and host", () => {
-  const baselineValue = createMinimalWakeflowConfig();
+  const baselineValue = config();
   const baseline = compileWakeflowWindowRuntimeDesiredTopology(
     baselineValue,
     codexWorkspaceHostResourceProfile,
@@ -65,7 +65,7 @@ test("desired topology ignores presentation and display text but tracks placemen
   if (designWindow === undefined) throw new Error("Expected Design window.");
   designWindow.displayName = "设计窗口";
   const textChanged = compileWakeflowWindowRuntimeDesiredTopology(
-    presentationChanged,
+    parseWakeflowConfig(presentationChanged),
     codexWorkspaceHostResourceProfile,
   );
   equal(textChanged.desiredTopologyDigest, baseline.desiredTopologyDigest);
@@ -80,7 +80,7 @@ test("desired topology ignores presentation and display text but tracks placemen
   if (designSurface === undefined) throw new Error("Expected Design surface.");
   designSurface.path = "DesignMoved";
   const moved = compileWakeflowWindowRuntimeDesiredTopology(
-    placementChanged,
+    parseWakeflowConfig(placementChanged),
     codexWorkspaceHostResourceProfile,
   );
   notEqual(moved.desiredTopologyDigest, baseline.desiredTopologyDigest);

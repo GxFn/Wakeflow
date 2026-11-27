@@ -366,7 +366,6 @@ for (const [resourceProfile, identityProfile] of [
             );
             const entry = compileWakeflowWindowRuntimeRegisteredProjectionEntry(
               resourceProfile,
-              identityProfile,
               source.projection,
               binding,
             );

@@ -799,6 +799,7 @@ export function parseTaskPackageDocument(text: unknown): Readonly<TaskPackage> {
 }
 
 /** 计算 TaskPackage 领域值的 Canonical JSON SHA-256 摘要。 */
-export function computeTaskPackageDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseTaskPackage(value));
+/** 任务包是本编解码签发或读回的类型化值；规范 JSON 摘要自己做 JSON 准入。 */
+export function computeTaskPackageDigest(taskPackage: Readonly<TaskPackage>): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(taskPackage);
 }

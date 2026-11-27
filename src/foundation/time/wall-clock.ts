@@ -16,7 +16,7 @@ import { parseUtcInstant, type UtcInstant, UtcInstantError } from "./utc-instant
 export type UtcWallClock = () => UtcInstant;
 
 /** UTC wall clock 来源失败的稳定分类。 */
-export type UtcWallClockErrorReason = "clock-type" | "clock-failure" | "clock-result";
+export type UtcWallClockErrorReason = "clock-failure" | "clock-result";
 
 /**
  * UTC wall clock 来源或结果失败的稳定错误。

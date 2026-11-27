@@ -1,8 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
@@ -144,17 +140,6 @@ export class TaskPackageProjectionStoreError extends ModuleError<TaskPackageProj
 }
 
 const fail: Fail<TaskPackageProjectionStoreErrorReason> = failWith(TaskPackageProjectionStoreError);
-
-function parseTaskPackageId(value: unknown): WakeflowDurableId<"task-package"> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, "task-package", "$taskPackageId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$taskPackageId", error);
-    }
-    throw error;
-  }
-}
 
 async function projectionNodeOrNull(
   root: RootedDirectory,
@@ -315,10 +300,9 @@ export class TaskPackageProjectionStore {
 
   /** 按事件派生摘要预期快速读取一份已有 TaskPackage 投影。 */
   async load(
-    taskPackageIdValue: unknown,
+    taskPackageId: WakeflowDurableId<"task-package">,
     options: LoadTaskPackageProjectionOptions,
   ): Promise<Readonly<LoadedTaskPackageProjection>> {
-    const taskPackageId = parseTaskPackageId(taskPackageIdValue);
     return loadProjection(
       this.#root,
       taskPackageId,
@@ -331,10 +315,9 @@ export class TaskPackageProjectionStore {
    * 从唯一规划事件幂等创建或复验 TaskPackage 投影；缺失事件时没有任何写入副作用。
    */
   async materialize(
-    taskPackageIdValue: unknown,
+    taskPackageId: WakeflowDurableId<"task-package">,
     options: MaterializeTaskPackageProjectionOptions = {},
   ): Promise<Readonly<TaskPackageProjectionMaterializationReceipt>> {
-    const taskPackageId = parseTaskPackageId(taskPackageIdValue);
     const { signal } = options;
     let located: Awaited<ReturnType<DemandEventSourcingRepository["findTargetTaskPlannedEvent"]>>;
     try {

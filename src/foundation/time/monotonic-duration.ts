@@ -22,7 +22,7 @@ export type MonotonicDuration = bigint & {
 };
 
 /** monotonic duration 失败的稳定分类。 */
-export type MonotonicDurationErrorReason = "moment-type" | "moment-order" | "milliseconds";
+export type MonotonicDurationErrorReason = "moment-order" | "milliseconds";
 
 /**
  * 单调时刻差值或时长转换失败时返回的稳定错误。

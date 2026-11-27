@@ -8,6 +8,7 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import {
   applyCompletion,
@@ -33,7 +34,7 @@ function plantDeadStage(scenario: LifecycleOrderCase, targetRef: string, paired:
   const bytes = Buffer.from("{}\n");
   const address = issueDurableAtomicFileStageAddress(
     "create",
-    targetRef,
+    parsePortableResourcePath(targetRef),
     computeSha256Digest(bytes),
     0o600,
   );
@@ -62,7 +63,7 @@ function pairExistingTaskPackage(scenario: LifecycleOrderCase): string {
   const member = path.join(directory, name);
   const address = issueDurableAtomicFileStageAddress(
     "create",
-    `artifacts/task-packages/${name}`,
+    parsePortableResourcePath(`artifacts/task-packages/${name}`),
     computeSha256Digest(readFileSync(member)),
     statSync(member).mode & 0o777,
   );

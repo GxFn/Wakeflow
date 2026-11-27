@@ -1,9 +1,7 @@
-import { types } from "node:util";
-
 import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
-import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   type AuditedDemandTargetResultHistory,
   DemandEventSourcingRepository,
@@ -168,17 +166,6 @@ export class DemandResultReviewSnapshotError extends Error {
 
 function fail(reason: DemandResultReviewSnapshotErrorReason, cause?: unknown): never {
   throw new DemandResultReviewSnapshotError(reason, cause === undefined ? undefined : { cause });
-}
-
-function assertRoot(value: unknown): asserts value is RootedDirectory {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !(value instanceof RootedDirectory)
-  ) {
-    fail("input");
-  }
 }
 
 function lexicalCompare(left: string, right: string): -1 | 0 | 1 {
@@ -491,14 +478,13 @@ export function buildDemandResultReviewSnapshotFromHistory(
  * 完整审计一个已经打开的Demand Event Sourcing根，并返回零写的当前结果审查快照。
  */
 export async function readDemandResultReviewSnapshot(
-  rootValue: unknown,
+  root: RootedDirectory,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandResultReviewSnapshot>> {
-  assertRoot(rootValue);
   const signal = options?.signal;
   let sources: Readonly<AuditedDemandTargetResultHistory>;
   try {
-    sources = await new DemandEventSourcingRepository(rootValue).auditTargetResultHistory(
+    sources = await new DemandEventSourcingRepository(root).auditTargetResultHistory(
       signal === undefined ? undefined : { signal },
     );
   } catch (error: unknown) {

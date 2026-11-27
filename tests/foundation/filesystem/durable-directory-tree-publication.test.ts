@@ -18,6 +18,7 @@ import {
   type DurableDirectoryTreePublicationErrorReason,
   publishDirectoryTreeCandidateDurably,
 } from "../../../src/foundation/filesystem/durable-directory-tree-publication.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
@@ -73,8 +74,10 @@ async function expectPublicationError(
 test("closed directory tree candidate publishes through one durable rename", async () => {
   const { rootPath, root } = await fixture();
   try {
-    const sourceRef = "transactions/.requirement.stage";
-    const finalRef = "requirements/requirement_11111111-1111-4111-8111-111111111111";
+    const sourceRef = parsePortableResourcePath("transactions/.requirement.stage");
+    const finalRef = parsePortableResourcePath(
+      "requirements/requirement_11111111-1111-4111-8111-111111111111",
+    );
     const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
     const published = await publishDirectoryTreeCandidateDurably(root, candidate, finalRef);
 
@@ -98,8 +101,10 @@ test("closed directory tree candidate publishes through one durable rename", asy
 test("publication preserves a candidate when final exists or source drifted", async () => {
   const { rootPath, root } = await fixture();
   try {
-    const existingSource = "transactions/.existing.stage";
-    const existingFinal = "requirements/requirement_22222222-2222-4222-8222-222222222222";
+    const existingSource = parsePortableResourcePath("transactions/.existing.stage");
+    const existingFinal = parsePortableResourcePath(
+      "requirements/requirement_22222222-2222-4222-8222-222222222222",
+    );
     const existingCandidate = await createDirectoryTreeCandidateDurably(
       root,
       existingSource,
@@ -113,8 +118,10 @@ test("publication preserves a candidate when final exists or source drifted", as
     );
     equal(existsSync(path.join(rootPath, ...existingSource.split("/"))), true);
 
-    const changedSource = "transactions/.changed.stage";
-    const changedFinal = "requirements/requirement_33333333-3333-4333-8333-333333333333";
+    const changedSource = parsePortableResourcePath("transactions/.changed.stage");
+    const changedFinal = parsePortableResourcePath(
+      "requirements/requirement_33333333-3333-4333-8333-333333333333",
+    );
     const changedCandidate = await createDirectoryTreeCandidateDurably(
       root,
       changedSource,
@@ -139,8 +146,10 @@ test("publication preserves a candidate when final exists or source drifted", as
 test("publication cancellation before commit preserves the complete candidate", async () => {
   const { rootPath, root } = await fixture();
   try {
-    const sourceRef = "transactions/.cancelled.stage";
-    const finalRef = "requirements/requirement_44444444-4444-4444-8444-444444444444";
+    const sourceRef = parsePortableResourcePath("transactions/.cancelled.stage");
+    const finalRef = parsePortableResourcePath(
+      "requirements/requirement_44444444-4444-4444-8444-444444444444",
+    );
     const candidate = await createDirectoryTreeCandidateDurably(root, sourceRef, FILES, OPTIONS);
     const controller = new AbortController();
     controller.abort();
@@ -162,7 +171,6 @@ test("publication cancellation before commit preserves the complete candidate", 
 test("commitUncertain is true exactly for the reasons raised after the commit rename", () => {
   // The table lists the whole reason union: a new reason that is not decided here fails the typecheck.
   const expected = {
-    input: false,
     "source-changed": false,
     "source-conflict": false,
     "destination-exists": false,

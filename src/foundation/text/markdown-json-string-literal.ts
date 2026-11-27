@@ -13,7 +13,7 @@ import { ModuleError } from "../error/module-error.js";
  * 列表或完整文档。
  */
 
-export type MarkdownJsonStringLiteralErrorReason = "input" | "unicode";
+export type MarkdownJsonStringLiteralErrorReason = "unicode";
 
 /** Markdown JSON 数据字面量准入失败的稳定、脱敏错误。 */
 export class MarkdownJsonStringLiteralError extends ModuleError<MarkdownJsonStringLiteralErrorReason> {
@@ -33,11 +33,8 @@ function escapeBmpCodeUnit(character: string): string {
 }
 
 /** 把一个严格 Unicode 字符串渲染为不会改变 Markdown 结构的内联 JSON 数据。 */
-export function renderMarkdownJsonStringLiteral(value: unknown, errorPath?: string): string {
+export function renderMarkdownJsonStringLiteral(value: string, errorPath?: string): string {
   const path = normalizedPath(errorPath);
-  if (typeof value !== "string") {
-    throw new MarkdownJsonStringLiteralError("input", path);
-  }
   if (!value.isWellFormed() || value.normalize("NFC") !== value) {
     throw new MarkdownJsonStringLiteralError("unicode", path);
   }

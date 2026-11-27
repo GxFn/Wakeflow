@@ -26,7 +26,6 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
-import { PassiveOwnDataError, parsePlainRecord } from "../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import {
@@ -44,7 +43,6 @@ import {
   createManagedEvidenceCapturePlan,
   type ManagedEvidenceCapturePlan,
   ManagedEvidenceCapturePlanError,
-  parseManagedEvidenceCapturePlan,
 } from "./managed-evidence-capture-plan.js";
 import {
   type ManagedEvidenceManifest,
@@ -94,13 +92,11 @@ export interface ManagedEvidencePublicationTransaction {
 }
 
 export type ManagedEvidencePublicationTransactionErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "identifier"
   | "position"
   | "digest"
-  | "capture-plan"
   | "manifest"
   | "record-plan"
   | "event-sourcing"
@@ -126,7 +122,6 @@ const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const CREATE_FIELDS = Object.freeze(["capturePlan", "commitId", "eventId"] as const);
 
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
@@ -303,35 +298,18 @@ export function parseManagedEvidencePublicationTransaction(
   return transaction;
 }
 
-/** 从已确认capture plan和一次性Event/Commit ID生成完整持久事务。 */
+/** 创建事务的草稿：一份已确认的 capture plan 与一次性 Event/Commit ID。 */
+export interface ManagedEvidencePublicationTransactionDraft {
+  readonly capturePlan: Readonly<ManagedEvidenceCapturePlan>;
+  readonly eventId: WakeflowDurableId<"demand-event">;
+  readonly commitId: WakeflowDurableId<"demand-event-commit">;
+}
+
+/** 从已确认capture plan和一次性Event/Commit ID生成完整持久事务；组装结果经过一次完整解析。 */
 export function createManagedEvidencePublicationTransaction(
-  value: unknown,
+  draft: Readonly<ManagedEvidencePublicationTransactionDraft>,
 ): Readonly<ManagedEvidencePublicationTransaction> {
-  let input: Readonly<Record<string, unknown>>;
-  try {
-    input = parsePlainRecord(value, "$input");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$input", error);
-    throw error;
-  }
-  const actual = Object.keys(input).sort();
-  if (
-    actual.length !== CREATE_FIELDS.length ||
-    actual.some((key, index) => key !== CREATE_FIELDS[index])
-  ) {
-    fail("input", "$input");
-  }
-  let capturePlan: Readonly<ManagedEvidenceCapturePlan>;
-  try {
-    capturePlan = parseManagedEvidenceCapturePlan(input.capturePlan);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidenceCapturePlanError) {
-      fail("capture-plan", "$/capturePlan", error);
-    }
-    throw error;
-  }
-  const eventId = parseId(input.eventId, "demand-event", "$/eventId");
-  const commitId = parseId(input.commitId, "demand-event-commit", "$/commitId");
+  const { capturePlan, eventId, commitId } = draft;
   const command = buildEventSourcingCommand(capturePlan.manifest, eventId);
   const recordTreePlan = deriveRecordTreePlan(capturePlan.manifest);
   return parseManagedEvidencePublicationTransaction({
@@ -394,9 +372,9 @@ export function parseManagedEvidencePublicationTransactionDocument(
   return transaction;
 }
 
-export function computeManagedEvidencePublicationTransactionDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(
-    parseManagedEvidencePublicationTransaction(value),
-    "$transaction",
-  );
+/** 事务是本编解码签发或读回的类型化值；规范 JSON 摘要自己做 JSON 准入。 */
+export function computeManagedEvidencePublicationTransactionDigest(
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(transaction, "$transaction");
 }

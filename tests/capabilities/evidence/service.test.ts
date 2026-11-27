@@ -390,7 +390,7 @@ async function leaveJournal(
 ) {
   const capturePlan = readyCapturePlan(
     await new ManagedEvidenceCapturePlanningService(fixture.publication.workspaceRoot).preview(
-      fixture.demandId,
+      parseWakeflowDurableIdOfKind(fixture.demandId, "demand"),
       fileSelection("artifacts/test-run/logs/report.txt"),
       CLOCK,
     ),

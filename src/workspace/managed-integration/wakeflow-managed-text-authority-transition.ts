@@ -36,7 +36,6 @@ interface WakeflowManagedTextAuthorityTransitionRequest {
 }
 
 export type WakeflowManagedTextAuthorityTransitionErrorReason =
-  | "input"
   | "target"
   | "envelope"
   | "relation"

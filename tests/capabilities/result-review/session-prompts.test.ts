@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -73,7 +74,9 @@ async function storedSessionPrompts(
   claimId: string,
 ): Promise<unknown> {
   const stored = await withFixtureDemandRoot(fixture, (demandRoot) =>
-    new DemandEventSourcingRepository(demandRoot).findTargetResultRecordedEvent(claimId),
+    new DemandEventSourcingRepository(demandRoot).findTargetResultRecordedEvent(
+      parseWakeflowDurableIdOfKind(claimId, "work-claim"),
+    ),
   );
   return plain(stored?.event.data.sessionPrompts ?? null);
 }

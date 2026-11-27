@@ -1,3 +1,4 @@
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { readStrictTextFile } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
@@ -25,7 +26,10 @@ interface CoveragePackage {
 async function coveragePackage(
   store: LedgerAuthorityStore,
   ledgerRoot: RootedDirectory,
-  lineage: Readonly<{ readonly requirementId: string; readonly recordDigest: string }>,
+  lineage: Readonly<{
+    readonly requirementId: WakeflowDurableId<"requirement">;
+    readonly recordDigest: string;
+  }>,
   requirementId: string | null,
   options: { readonly signal?: AbortSignal },
 ): Promise<CoveragePackage> {

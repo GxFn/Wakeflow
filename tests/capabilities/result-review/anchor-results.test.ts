@@ -1,6 +1,7 @@
 import { deepEqual, equal, rejects } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
 import {
@@ -105,7 +106,7 @@ test("导入核对逐条锚点的结论：缺项、多项、漏掉整项与文�
 
     const stored = await withFixtureDemandRoot(fixture, (demandRoot) =>
       new DemandEventSourcingRepository(demandRoot).findTargetResultRecordedEvent(
-        imported.result.delivery.fence.claimId,
+        parseWakeflowDurableIdOfKind(imported.result.delivery.fence.claimId, "work-claim"),
       ),
     );
     equal(stored?.storedEvent.eventVersion, 2);

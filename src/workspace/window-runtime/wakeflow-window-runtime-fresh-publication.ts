@@ -1,4 +1,4 @@
-import { parseWakeflowConfig, WakeflowConfigError } from "../../configuration/wakeflow-config.js";
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
@@ -44,11 +44,7 @@ import {
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
 import { settleStagesOfDeadWritersStrictly } from "../../kernel/workspace-locks.js";
 import { WAKEFLOW_RUNTIME_ROOT_REF } from "../maintenance/wakeflow-maintenance-resource-catalog.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import {
   WAKEFLOW_HOST_RUNTIME_PROFILES_ROOT_REF,
   wakeflowHostIdentityRootRef,
@@ -95,7 +91,6 @@ interface WakeflowFreshWindowRuntimePublicationResult {
 }
 
 type WakeflowFreshWindowRuntimePublicationErrorReason =
-  | "input"
   | "authority"
   | "strict-absent"
   | "prefix-conflict"
@@ -356,30 +351,25 @@ async function createMissingProjections(
   return created;
 }
 
-/** 独占发布 Fresh host-local Window Runtime，或恢复同一 exact 未注册集合。 */
+/**
+ * 独占发布 Fresh host-local Window Runtime，或恢复同一 exact 未注册集合。Config 与 Profile 是类型化的
+ * （目标配置由请求入口解析，Profile 是宿主常量）。
+ */
 export async function publishFreshWakeflowWindowRuntime(
   rootValue: RootedDirectory,
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   { recoveringFreshPublication, signal }: WakeflowFreshWindowRuntimePublicationOptions,
 ): Promise<Readonly<WakeflowFreshWindowRuntimePublicationResult>> {
   throwIfAborted(signal);
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
   let authority: Readonly<WakeflowFreshWindowRuntimeAuthority>;
   try {
-    // Config 与 Profile 在这个入口仍声明为 `unknown`（另一分区直接调用，签名留到 A-spec 第 2 步）：解析一次。
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-    authority = compileWakeflowFreshWindowRuntimeAuthority(
-      parseWakeflowConfig(configValue),
-      profile,
-    );
+    authority = compileWakeflowFreshWindowRuntimeAuthority(config, profile);
   } catch (error: unknown) {
     if (
       error instanceof WakeflowFreshWindowRuntimeAuthorityError ||
       error instanceof WakeflowWindowRuntimeDesiredTopologyError ||
-      error instanceof WakeflowWorkspaceHostResourceProfileError ||
-      error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError ||
-      error instanceof WakeflowConfigError
+      error instanceof WakeflowWindowRuntimeUnregisteredProjectionRecordError
     ) {
       fail("authority", error.path, error);
     }

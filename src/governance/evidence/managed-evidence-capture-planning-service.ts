@@ -1,11 +1,7 @@
 import pLimit from "p-limit";
 
 import type { WakeflowConfigAuthoritySnapshot } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { isEvidenceKind } from "../../contracts/vocabulary/evidence-kinds.js";
 import {
   inspectLoadedArtifactTree,
@@ -200,15 +196,6 @@ function fail(reason: ManagedEvidenceCapturePlanningServiceErrorReason, cause?: 
     ownString(cause, "reason"),
     cause === undefined ? undefined : { cause },
   );
-}
-
-function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", error);
-    throw error;
-  }
 }
 
 /**
@@ -827,12 +814,12 @@ export class ManagedEvidenceCapturePlanningService {
    * 读时钟，否则返回完整 capture plan。
    */
   async preview(
-    demandIdValue: unknown,
+    demandId: WakeflowDurableId<"demand">,
     selectionValue: unknown,
     options: ManagedEvidenceCapturePlanningOptions = {},
   ): Promise<ManagedEvidenceCapturePreview> {
     throwIfAborted(options.signal);
-    const demandId = parseDemandId(demandIdValue);
+    // 选择是请求里的原始子对象（Schema 表达不了来源种类与 kind 的关系），在这里解析一次。
     const selection = parseSelection(selectionValue);
     let context: Readonly<DemandOperationAuthorityContext> | undefined;
     let result: ManagedEvidenceCapturePreview | undefined;

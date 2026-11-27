@@ -1,18 +1,8 @@
 import { constants as fileSystemConstants } from "node:fs";
-import { types } from "node:util";
 
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-  pickOwnDataProperties,
-} from "../data/passive-own-data.js";
+import { PassiveOwnDataError, pickOwnDataProperties } from "../data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../error/module-error.js";
-import {
-  type ByteCount,
-  ByteCountError,
-  byteCountFromBigInt,
-  parseByteCount,
-} from "../numeric/byte-count.js";
+import { type ByteCount, ByteCountError, byteCountFromBigInt } from "../numeric/byte-count.js";
 
 /**
  * Wakeflow Foundation / Filesystem：Node.js 文件系统节点的物理快照。
@@ -58,15 +48,10 @@ export interface FileNodeSnapshot {
 }
 
 /** 文件系统节点快照失败的稳定分类。 */
-export type FileNodeSnapshotErrorReason =
-  | "stat-shape"
-  | "stat-field"
-  | "stat-size"
-  | "snapshot-shape"
-  | "snapshot-field";
+export type FileNodeSnapshotErrorReason = "stat-shape" | "stat-field" | "stat-size";
 
 /**
- * 节点 Stats 准入或快照复验失败的稳定错误。
+ * 节点 Stats 准入失败的稳定错误。
  *
  * 错误不回显设备号、inode、所有者、权限位、大小或时间值。
  */
@@ -86,32 +71,6 @@ const STAT_FIELDS = Object.freeze([
   "mtimeNs",
   "ctimeNs",
 ] as const);
-
-const SNAPSHOT_FIELDS = Object.freeze([
-  "kind",
-  "deviceId",
-  "inodeId",
-  "rawMode",
-  "permissionBits",
-  "linkCount",
-  "userId",
-  "groupId",
-  "specialDeviceId",
-  "byteCount",
-  "modifiedAtNanoseconds",
-  "changedAtNanoseconds",
-] as const);
-
-const FILE_NODE_KINDS: ReadonlySet<string> = new Set<FileNodeKind>([
-  "file",
-  "directory",
-  "symbolic-link",
-  "fifo",
-  "socket",
-  "character-device",
-  "block-device",
-  "unknown",
-]);
 
 const FILE_TYPE_MASK = BigInt(fileSystemConstants.S_IFMT);
 const PERMISSION_MASK = 0o777n;
@@ -213,90 +172,6 @@ export function createFileNodeSnapshot(
   });
 }
 
-function readSnapshotBigInt(
-  record: Readonly<Record<string, unknown>>,
-  field: string,
-  path: string,
-  nonNegative = false,
-): bigint {
-  const value = record[field];
-  if (typeof value !== "bigint" || (nonNegative && value < 0n)) {
-    fail("snapshot-field", fieldPath(path, field));
-  }
-  return value;
-}
-
-function parseFileNodeSnapshot(value: unknown, path: string): FileNodeSnapshot {
-  let record: Readonly<Record<string, unknown>>;
-  try {
-    record = parsePlainRecord(value, path);
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("snapshot-shape", path, error);
-    throw error;
-  }
-
-  const keys = Object.keys(record).sort();
-  const expectedKeys = [...SNAPSHOT_FIELDS].sort();
-  if (
-    keys.length !== expectedKeys.length ||
-    keys.some((key, index) => key !== expectedKeys[index])
-  ) {
-    fail("snapshot-shape", path);
-  }
-
-  const kind = record.kind;
-  if (typeof kind !== "string" || !FILE_NODE_KINDS.has(kind)) {
-    fail("snapshot-field", fieldPath(path, "kind"));
-  }
-  const deviceId = readSnapshotBigInt(record, "deviceId", path, true);
-  const inodeId = readSnapshotBigInt(record, "inodeId", path, true);
-  const rawMode = readSnapshotBigInt(record, "rawMode", path, true);
-  const linkCount = readSnapshotBigInt(record, "linkCount", path, true);
-  const userId = readSnapshotBigInt(record, "userId", path);
-  const groupId = readSnapshotBigInt(record, "groupId", path);
-  const specialDeviceId = readSnapshotBigInt(record, "specialDeviceId", path, true);
-  const modifiedAtNanoseconds = readSnapshotBigInt(record, "modifiedAtNanoseconds", path);
-  const changedAtNanoseconds = readSnapshotBigInt(record, "changedAtNanoseconds", path);
-
-  let admittedByteCount: ByteCount;
-  try {
-    admittedByteCount = parseByteCount(record.byteCount, fieldPath(path, "byteCount"));
-  } catch (error: unknown) {
-    if (error instanceof ByteCountError) {
-      fail("snapshot-field", fieldPath(path, "byteCount"), error);
-    }
-    throw error;
-  }
-  const admittedPermissionBits = record.permissionBits;
-  if (
-    typeof admittedPermissionBits !== "number" ||
-    !Number.isSafeInteger(admittedPermissionBits) ||
-    admittedPermissionBits < 0 ||
-    admittedPermissionBits > Number(PERMISSION_MASK) ||
-    admittedPermissionBits !== permissionBits(rawMode)
-  ) {
-    fail("snapshot-field", fieldPath(path, "permissionBits"));
-  }
-  if (kind !== fileNodeKind(rawMode)) {
-    fail("snapshot-field", fieldPath(path, "kind"));
-  }
-
-  return {
-    kind: kind as FileNodeKind,
-    deviceId,
-    inodeId,
-    rawMode,
-    permissionBits: admittedPermissionBits,
-    linkCount,
-    userId,
-    groupId,
-    specialDeviceId,
-    byteCount: admittedByteCount,
-    modifiedAtNanoseconds,
-    changedAtNanoseconds,
-  };
-}
-
 /**
  * 判断两个快照是否仍指向同一物理节点，仅比较 `deviceId` 与 `inodeId`。
  *
@@ -322,34 +197,6 @@ export function sameFileNodeSnapshot(left: FileNodeSnapshot, right: FileNodeSnap
     left.modifiedAtNanoseconds === right.modifiedAtNanoseconds &&
     left.changedAtNanoseconds === right.changedAtNanoseconds
   );
-}
-
-/**
- * 准入调用方给的节点预期：冻结、不是 Proxy、与自身逐项相同的完整快照。不满足时调用 `reject`
- * 抛调用方自己的输入错误；快照复验本身拒绝它时，复验的错误作为 `reject` 的 `cause`。
- *
- * 1.4.5 层次计划 A 第一步之后只剩一个调用方：`parseDurableAtomicFileReplaceOptions`，配置层用它
- * 解析一份尚未类型化的替换预期（附录 B）；第二步把那里类型化以后，两者与这里的复验一起删掉。
- */
-export function admitFrozenFileNodeSnapshot(
-  value: unknown,
-  reject: (cause?: FileNodeSnapshotError) => never,
-): Readonly<FileNodeSnapshot> {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    types.isProxy(value) ||
-    !Object.isFrozen(value)
-  ) {
-    reject();
-  }
-  try {
-    parseFileNodeSnapshot(value, "$left");
-  } catch (error: unknown) {
-    if (error instanceof FileNodeSnapshotError) reject(error);
-    throw error;
-  }
-  return value as Readonly<FileNodeSnapshot>;
 }
 
 /**

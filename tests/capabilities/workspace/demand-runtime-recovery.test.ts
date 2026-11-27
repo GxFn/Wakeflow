@@ -20,6 +20,7 @@ import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { demandEventAppendCandidateRef } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import { parseDemandEventCommitSequence } from "../../../src/governance/demand/event-sourcing/demand-event-stream-position.js";
 import { demandFinalRootRef } from "../../../src/governance/demand/publication/demand-publication-paths.js";
@@ -196,7 +197,7 @@ function plantStage(
 ) {
   const address = issueDurableAtomicFileStageAddress(
     "create",
-    targetRef,
+    parsePortableResourcePath(targetRef),
     computeSha256Digest(bytes),
     0o600,
   );

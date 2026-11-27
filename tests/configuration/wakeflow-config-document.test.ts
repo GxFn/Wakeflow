@@ -19,7 +19,10 @@ useDisposableDurability();
 test("minimal config renders in its one explicit domain field order", () => {
   const value = createMinimalWakeflowConfig();
   const reordered = Object.fromEntries(Object.entries(value).reverse());
-  equal(renderWakeflowConfig(reordered), serializeWakeflowConfigFixture(value));
+  equal(
+    renderWakeflowConfig(parseWakeflowConfig(reordered)),
+    serializeWakeflowConfigFixture(value),
+  );
 });
 
 test("optional nested fields survive representation normalization", () => {
@@ -54,7 +57,7 @@ test("optional nested fields survive representation normalization", () => {
     },
   };
 
-  const rendered = renderWakeflowConfig(value);
+  const rendered = renderWakeflowConfig(parseWakeflowConfig(value));
   const parsed = parseDeterministicJsonDocument(rendered);
   const model = parseWakeflowConfig(parsed);
   equal(model.hosts?.["claude-code"]?.windowTransport, "desktop");

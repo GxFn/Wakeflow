@@ -94,19 +94,15 @@ async function readCandidateTree(
 /**
  * 稳定判断候选目录是计划的安全子集，还是已经达到清单闭合状态。
  *
- * 计划是类型化的（由计划器生成，或由日志读取方从磁盘解析），不再复验；候选根路径仍按本层的路径
- * 规则解析一次（参数还是 `unknown`，别的层调用它）。
+ * 计划与候选根路径都是类型化的（由计划器生成，或由日志读取方从磁盘解析），不再复验；稳定读取
+ * 目录树时文件系统原语自己核对路径。
  */
 export async function inspectDirectoryTreeCandidateProgress(
   root: RootedDirectory,
-  candidateRootPathValue: unknown,
+  candidateRootPath: PortableResourcePath,
   plan: Readonly<DirectoryTreeCandidatePlan>,
   options: InspectDirectoryTreeCandidateOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateProgress>> {
-  const candidateRootPath = parseDirectoryTreeCandidatePath(
-    candidateRootPathValue,
-    "$candidateRootPath",
-  );
   const { expectedRootNode, signal } = options;
   throwIfAborted(signal);
   const tree = await readCandidateTree(root, candidateRootPath, plan, expectedRootNode, signal);
@@ -182,13 +178,13 @@ export async function inspectDirectoryTreeCandidateProgress(
 /** 稳定读取候选目录，并证明实际目录项与持久化计划完全一致。 */
 export async function inspectDirectoryTreeCandidate(
   root: RootedDirectory,
-  candidateRootPathValue: unknown,
+  candidateRootPath: PortableResourcePath,
   plan: Readonly<DirectoryTreeCandidatePlan>,
   options: InspectDirectoryTreeCandidateOptions = {},
 ): Promise<Readonly<DirectoryTreeCandidateResult>> {
   const progress = await inspectDirectoryTreeCandidateProgress(
     root,
-    candidateRootPathValue,
+    candidateRootPath,
     plan,
     options,
   );

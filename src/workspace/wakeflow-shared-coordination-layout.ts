@@ -71,7 +71,6 @@ export interface WakeflowSharedCoordinationLayoutMaterializationResult {
 }
 
 export type WakeflowSharedCoordinationLayoutErrorReason =
-  | "input"
   | "authority"
   | "strict-absent"
   | "layout"

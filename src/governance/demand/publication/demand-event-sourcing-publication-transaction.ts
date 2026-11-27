@@ -29,10 +29,6 @@ import {
   JsonValueError,
   parseJsonValue,
 } from "../../../foundation/data/json-value.js";
-import {
-  PassiveOwnDataError,
-  parsePlainRecord,
-} from "../../../foundation/data/passive-own-data.js";
 import { type Fail, failWith, ModuleError } from "../../../foundation/error/module-error.js";
 import {
   type PortableResourcePath,
@@ -134,15 +130,6 @@ const validateWire = createRuntimeJsonSchemaValidator<TransactionWire>(
     WAKEFLOW_UTC_INSTANT_SCHEMA,
   ],
 );
-const CREATE_FIELDS = Object.freeze([
-  "authority",
-  "commitId",
-  "eventId",
-  "expectedClaimStateDigest",
-  "identity",
-  "recordedAt",
-] as const);
-
 function parseDigest(value: unknown, path: string): Sha256Digest {
   try {
     return parseSha256Digest(value, path);
@@ -304,39 +291,29 @@ export function parseDemandEventSourcingPublicationTransaction(
   });
 }
 
+/**
+ * 发布输入：身份与权威记录是它们的编解码签发的类型化值；事件与提交身份、记录时间与看板摘要来自
+ * 能力层的计划（字符串），在这里各解析一次（事件身份与时间经命令解析）。
+ */
+export interface DemandEventSourcingPublicationTransactionDraft {
+  readonly identity: Readonly<DemandIdentity>;
+  readonly authority: Readonly<DemandAuthority>;
+  readonly eventId: string;
+  readonly commitId: string;
+  readonly recordedAt: string;
+  readonly expectedClaimStateDigest: string;
+}
+
 /** 从已经确认的发布输入生成不含可变阶段的完整恢复计划。 */
 export function createDemandEventSourcingPublicationTransaction(
-  value: unknown,
+  input: Readonly<DemandEventSourcingPublicationTransactionDraft>,
 ): Readonly<DemandEventSourcingPublicationTransaction> {
-  let input: Readonly<Record<string, unknown>>;
-  try {
-    input = parsePlainRecord(value, "$input");
-  } catch (error: unknown) {
-    if (error instanceof PassiveOwnDataError) fail("input", "$input", error);
-    throw error;
-  }
-  const keys = Object.keys(input).sort();
-  if (
-    keys.length !== CREATE_FIELDS.length ||
-    keys.some((key, index) => key !== CREATE_FIELDS[index])
-  ) {
-    fail("input", "$input");
-  }
-  let identity: Readonly<DemandIdentity>;
-  let authority: Readonly<DemandAuthority>;
+  const { identity, authority } = input;
   let commitId: WakeflowDurableId<"demand-event-commit">;
   try {
-    identity = parseDemandIdentity(input.identity);
-    authority = parseDemandAuthority(input.authority, identity);
     commitId = parseWakeflowDurableIdOfKind(input.commitId, "demand-event-commit", "$/commitId");
   } catch (error: unknown) {
-    if (
-      error instanceof DemandIdentityError ||
-      error instanceof DemandAuthorityError ||
-      error instanceof WakeflowDurableIdError
-    ) {
-      fail("input", "$input", error);
-    }
+    if (error instanceof WakeflowDurableIdError) fail("input", "$input", error);
     throw error;
   }
   const identityDigest = computeDemandIdentityDigest(identity);

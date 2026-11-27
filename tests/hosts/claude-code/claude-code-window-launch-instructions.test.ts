@@ -66,7 +66,7 @@ function intentFor(
   profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   windowId: string,
 ): Readonly<WakeflowWindowLaunchIntent> {
-  const intent = compileWakeflowWindowLaunchIntents(raw, profile).intents.find(
+  const intent = compileWakeflowWindowLaunchIntents(parseWakeflowConfig(raw), profile).intents.find(
     (entry) => entry.windowId === windowId,
   );
   if (intent === undefined) throw new Error(`Expected a launch intent for ${windowId}.`);

@@ -3,16 +3,8 @@ import {
   type WakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
-import {
-  parseWakeflowDurableIdOfKind,
-  type WakeflowDurableId,
-  WakeflowDurableIdError,
-} from "../../contracts/identity/wakeflow-durable-id.js";
-import {
-  parseSha256Digest,
-  type Sha256Digest,
-  Sha256Error,
-} from "../../foundation/crypto/sha256.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { ownString } from "../../foundation/data/own-string.js";
 import type { DirectoryTreeCandidateRetirementReceipt } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
 import {
@@ -51,8 +43,6 @@ import {
 import {
   computeManagedEvidencePublicationTransactionDigest,
   type ManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  parseManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
 import {
   appendManagedEvidencePublicationEvent,
@@ -135,7 +125,6 @@ export type ManagedEvidencePublicationEffectAuthority =
   | "unknown";
 
 export type ManagedEvidencePublicationApplicationServiceErrorReason =
-  | "input"
   | "transaction"
   | "config"
   | "demand"
@@ -150,7 +139,6 @@ export type ManagedEvidencePublicationApplicationServiceErrorReason =
   | "operation-failure";
 
 const ERROR_MESSAGES = {
-  input: "Managed evidence publication application input is invalid.",
   transaction: "Managed evidence publication transaction is invalid.",
   config: "Managed evidence publication Config no longer matches its plan.",
   demand: "Managed evidence publication Demand no longer matches its plan.",
@@ -212,42 +200,6 @@ function fail(
 
 function assertNotAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) fail("aborted");
-}
-
-function parseApplyInput(
-  transactionValue: unknown,
-  transactionDigestValue: unknown,
-): Readonly<{
-  readonly transaction: Readonly<ManagedEvidencePublicationTransaction>;
-  readonly transactionDigest: Sha256Digest;
-}> {
-  let transaction: ReturnType<typeof parseManagedEvidencePublicationTransaction>;
-  let transactionDigest: ReturnType<typeof parseSha256Digest>;
-  try {
-    transaction = parseManagedEvidencePublicationTransaction(transactionValue);
-    transactionDigest = parseSha256Digest(transactionDigestValue, "$transactionDigest");
-  } catch (error: unknown) {
-    if (
-      error instanceof ManagedEvidencePublicationTransactionError ||
-      error instanceof Sha256Error
-    ) {
-      fail("transaction", error);
-    }
-    throw error;
-  }
-  if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
-    fail("transaction");
-  }
-  return Object.freeze({ transaction, transactionDigest });
-}
-
-function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
-  try {
-    return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
-  } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) fail("input", error);
-    throw error;
-  }
 }
 
 function sameExpectedAggregate(
@@ -496,17 +448,19 @@ export class ManagedEvidencePublicationApplicationService {
     this.#workspaceRoot = workspaceRoot;
   }
 
-  /** 应用一份exact Transaction；现存journal始终转交显式recover。 */
+  /**
+   * 应用一份exact Transaction；现存journal始终转交显式recover。事务是本编解码签发的类型化值；
+   * 它与调用方给的摘要的关系仍核对。
+   */
   async apply(
-    transactionValue: unknown,
-    transactionDigestValue: unknown,
+    transaction: Readonly<ManagedEvidencePublicationTransaction>,
+    transactionDigest: Sha256Digest,
     options: ManagedEvidencePublicationApplicationOptions = {},
   ): Promise<Readonly<ManagedEvidencePublicationCompletionResult>> {
     assertNotAborted(options.signal);
-    const { transaction, transactionDigest } = parseApplyInput(
-      transactionValue,
-      transactionDigestValue,
-    );
+    if (computeManagedEvidencePublicationTransactionDigest(transaction) !== transactionDigest) {
+      fail("transaction");
+    }
     let context: Readonly<DemandOperationAuthorityContext> | undefined;
     let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationCompletionResult> | undefined;
@@ -635,11 +589,10 @@ export class ManagedEvidencePublicationApplicationService {
    * 恢复固定journal：目标Commit存在时前向完成；Commit缺失且CAS已过期时安全退休。
    */
   async recover(
-    demandIdValue: unknown,
+    demandId: WakeflowDurableId<"demand">,
     options: ManagedEvidencePublicationApplicationOptions = {},
   ): Promise<Readonly<ManagedEvidencePublicationRecoveryResult>> {
     assertNotAborted(options.signal);
-    const demandId = parseDemandId(demandIdValue);
     let roots: Readonly<RecoveryRoots> | undefined;
     let sourceRoot: RootedDirectory | null | undefined;
     let result: Readonly<ManagedEvidencePublicationRecoveryResult> | undefined;

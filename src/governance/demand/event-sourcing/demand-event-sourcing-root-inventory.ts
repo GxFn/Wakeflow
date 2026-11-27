@@ -91,7 +91,6 @@ export interface DemandEventSourcingRootInventory {
 }
 
 export type DemandEventSourcingRootInventoryErrorReason =
-  | "input"
   | "root-scope"
   | "tree-shape"
   | "node-policy"

@@ -13,16 +13,11 @@ import { type Fail, failWith, ModuleError } from "../../foundation/error/module-
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
-import {
-  parseWakeflowWindowHostBinding,
-  type WakeflowWindowHostBinding,
-} from "./wakeflow-window-host-binding.js";
+import type { WakeflowWindowHostBinding } from "./wakeflow-window-host-binding.js";
 import type { WakeflowWindowHostBindingId } from "./wakeflow-window-host-binding-id.js";
 import type { WakeflowWindowRuntimeLogicalRoot } from "./wakeflow-window-runtime-desired-topology.js";
 import {
@@ -30,7 +25,6 @@ import {
   wakeflowWindowRuntimeProjectionRef,
 } from "./wakeflow-window-runtime-paths.js";
 import {
-  parseWakeflowWindowRuntimeUnregisteredProjection,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_KIND,
   WAKEFLOW_WINDOW_RUNTIME_PROJECTION_VERSION,
   type WakeflowWindowRuntimeUnregisteredProjection,
@@ -85,7 +79,7 @@ export interface WakeflowWindowRuntimeRegisteredProjectionEntry {
   readonly documentDigest: Sha256Digest;
 }
 
-type WakeflowWindowRuntimeRegisteredProjectionErrorReason = "input" | "schema" | "source";
+type WakeflowWindowRuntimeRegisteredProjectionErrorReason = "schema" | "source";
 
 /** Registered projection 编译或准入失败的稳定、脱敏错误。 */
 export class WakeflowWindowRuntimeRegisteredProjectionError extends ModuleError<WakeflowWindowRuntimeRegisteredProjectionErrorReason> {
@@ -136,26 +130,15 @@ function assertSources(
   }
 }
 
-/** 从当前 topology 投影与私有 Binding 编译脱敏 registered 投影。 */
+/**
+ * 从当前 topology 投影与私有 Binding 编译脱敏 registered 投影。三份来源都是类型化的（profile 是宿主
+ * 常量，投影由本层编译，Binding 由记录读取方解析）；它们之间的关系在这里核对。
+ */
 function compileWakeflowWindowRuntimeRegisteredProjection(
-  profileValue: unknown,
-  identityProfileValue: unknown,
-  unregisteredValue: unknown,
-  bindingValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  source: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
+  binding: Readonly<WakeflowWindowHostBinding>,
 ): Readonly<WakeflowWindowRuntimeRegisteredProjection> {
-  let profile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  let source: Readonly<WakeflowWindowRuntimeUnregisteredProjection>;
-  let binding: Readonly<WakeflowWindowHostBinding>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-    source = parseWakeflowWindowRuntimeUnregisteredProjection(unregisteredValue);
-    binding = parseWakeflowWindowHostBinding(bindingValue, identityProfileValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("input", "$profile", error);
-    }
-    fail("input", "$sources", error);
-  }
   assertSources(profile, source, binding);
   const reason = Object.freeze({
     code: "root-unobserved" as const,
@@ -198,21 +181,19 @@ function compileWakeflowWindowRuntimeRegisteredProjection(
 
 /** 编译一份带资源引用、确定性文档和物理字节摘要的 registered 投影目标。 */
 export function compileWakeflowWindowRuntimeRegisteredProjectionEntry(
-  profileValue: unknown,
-  identityProfileValue: unknown,
-  unregisteredValue: unknown,
-  bindingValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  unregistered: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
+  binding: Readonly<WakeflowWindowHostBinding>,
 ): Readonly<WakeflowWindowRuntimeRegisteredProjectionEntry> {
   const projection = compileWakeflowWindowRuntimeRegisteredProjection(
-    profileValue,
-    identityProfileValue,
-    unregisteredValue,
-    bindingValue,
+    profile,
+    unregistered,
+    binding,
   );
   const document = renderDeterministicJsonDocument(projection, "$windowRuntimeProjection");
   return Object.freeze({
     windowId: projection.windowId,
-    resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
+    resourceRef: wakeflowWindowRuntimeProjectionRef(profile, projection.windowId),
     projection,
     document,
     documentDigest: computeSha256Digest(encodeUtf8(document, "$windowRuntimeProjection")),

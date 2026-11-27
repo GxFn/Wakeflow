@@ -17,6 +17,7 @@ import { type TestContext, test } from "node:test";
 import {
   computeWakeflowConfigDigest,
   parseWakeflowConfig,
+  type WakeflowConfigModel,
 } from "../../../src/configuration/wakeflow-config.js";
 import { publishWakeflowConfigAuthority } from "../../../src/configuration/wakeflow-config-authority-publication.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
@@ -85,7 +86,7 @@ function desiredConfig(language: "en" | "zh-Hans" = "en") {
 
 function request(
   action: "fresh-initialize" | "reconfigure" | "reconcile",
-  desired: unknown | null,
+  desired: WakeflowConfigModel | null,
 ) {
   return Object.freeze({
     action,

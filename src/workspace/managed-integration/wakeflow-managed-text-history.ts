@@ -1,3 +1,4 @@
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import { createWakeflowGitignoreBodyAuthority } from "./wakeflow-gitignore-body-authority.js";
 import type { WakeflowManagedTextEnvelopeTarget } from "./wakeflow-managed-text-envelope.js";
 
@@ -35,7 +36,9 @@ export type WakeflowExternalInstructionHistoryInputs = readonly [
   profileValue: unknown,
   targetValue: unknown,
 ];
-export type WakeflowHostProfilesHistoryInputs = readonly [profileValues: unknown];
+export type WakeflowHostProfilesHistoryInputs = readonly [
+  profiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
+];
 export type WakeflowSupportMemoryHistoryInputs = readonly [
   configValue: unknown,
   profileValue: unknown,
@@ -54,8 +57,10 @@ export const WAKEFLOW_EXTERNAL_INSTRUCTION_BODY_HISTORY: readonly WakeflowManage
  * 1.4.4 之前的仓库 `.gitignore` 托管块：工作区根上有四个锁文件——配置的、重组 `.gitignore` 的、每个宿主
  * 一个的重组程序指令的——托管块逐一忽略它们。ADR-0033 把锁搬进私有的锁目录，这四条规则随之消失。
  */
-function gitignoreBodyWithRootLockRules(profileValues: unknown): string {
-  const current = createWakeflowGitignoreBodyAuthority(profileValues);
+function gitignoreBodyWithRootLockRules(
+  profiles: readonly Readonly<WakeflowWorkspaceHostResourceProfile>[],
+): string {
+  const current = createWakeflowGitignoreBodyAuthority(profiles);
   const rules = new Set<string>([
     ...current.rules,
     "/.wakeflow-config-authority.lock",

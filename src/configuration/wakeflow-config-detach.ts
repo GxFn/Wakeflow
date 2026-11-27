@@ -1,3 +1,4 @@
+import type { WakeflowDurableId } from "../contracts/identity/wakeflow-durable-id.js";
 import { parseWakeflowConfig, type WakeflowConfigModel } from "./wakeflow-config.js";
 import { renderWakeflowConfig } from "./wakeflow-config-document.js";
 
@@ -44,7 +45,7 @@ interface WirePod {
 export function wakeflowDetachedWindowIds(
   model: WakeflowConfigModel,
   repositoryId: string | null,
-): readonly string[] {
+): readonly WakeflowDurableId<"window">[] {
   return Object.freeze(
     model.topology.windows
       .filter(
@@ -52,7 +53,7 @@ export function wakeflowDetachedWindowIds(
           repositoryId === null ||
           (window.root.kind === "repository" && window.root.repositoryId === repositoryId),
       )
-      .map((window) => String(window.windowId))
+      .map((window) => window.windowId)
       .sort(),
   );
 }
@@ -75,11 +76,12 @@ export function deriveWakeflowDetachRepositoryConfig(
     pods: WirePod[];
   };
   const windowIds = wakeflowDetachedWindowIds(model, repositoryId);
+  const removedWindowIds = new Set<string>(windowIds);
   document.topology.repositories = document.topology.repositories.filter(
     (entry) => entry.repositoryId !== repositoryId,
   );
   document.topology.windows = document.topology.windows.filter(
-    (window) => !windowIds.includes(window.windowId),
+    (window) => !removedWindowIds.has(window.windowId),
   );
   // worktree pod 对该仓库的检出记录随仓库离开配置，推导才过文法；这样的 pod 本身由能力层以
   // detach-pod-open 阻塞，推导出的期望 Config 不会被发布。

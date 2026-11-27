@@ -60,7 +60,10 @@ function windowIdsOf(fixture: DetachFixture, repositoryId: string): readonly str
 function projectionPath(fixture: DetachFixture, windowId: string): string {
   return path.join(
     fixture.root,
-    wakeflowWindowRuntimeProjectionRef(codexWorkspaceHostResourceProfile, windowId),
+    wakeflowWindowRuntimeProjectionRef(
+      codexWorkspaceHostResourceProfile,
+      parseWakeflowDurableIdOfKind(windowId, "window"),
+    ),
   );
 }
 

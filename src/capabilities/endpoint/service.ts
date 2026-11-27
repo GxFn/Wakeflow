@@ -1043,7 +1043,6 @@ async function refreshProjection(
       ? entry
       : compileWakeflowWindowRuntimeRegisteredProjectionEntry(
           context.facade.resourceProfile,
-          context.facade.identityProfile,
           entry.projection,
           binding,
         );
@@ -1220,10 +1219,7 @@ async function applyReplace(
     await replaceFileAtomically(
       context.root,
       bindingRef,
-      encodeUtf8(
-        renderWakeflowWindowHostBinding(replacement, context.facade.identityProfile),
-        "$binding",
-      ),
+      encodeUtf8(renderWakeflowWindowHostBinding(replacement), "$binding"),
       {
         mode: BINDING_FILE_MODE,
         expected: {

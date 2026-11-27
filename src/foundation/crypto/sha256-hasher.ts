@@ -35,7 +35,6 @@ export interface Sha256HashResult {
 /** 增量 SHA-256 失败的稳定分类。 */
 export type Sha256HasherErrorReason =
   | "initialization-failure"
-  | "input-type"
   | "byte-count-overflow"
   | "update-failure"
   | "digest-failure"

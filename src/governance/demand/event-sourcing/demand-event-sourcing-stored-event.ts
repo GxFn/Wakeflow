@@ -34,7 +34,6 @@ export type DemandEventSourcingStoredEvent = DemandEventSourcingPersistedEventEn
 export type DemandEventSourcingStoredEventErrorReason =
   | "json"
   | "schema"
-  | "event"
   | "revision"
   | "digest"
   | "state-version"

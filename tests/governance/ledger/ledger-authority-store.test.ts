@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
@@ -49,7 +50,7 @@ import {
 
 useDisposableDurability();
 
-const REQUIREMENT_ID = FIXTURE_REQUIREMENT_ID;
+const REQUIREMENT_ID = parseWakeflowDurableIdOfKind(FIXTURE_REQUIREMENT_ID, "requirement");
 const OTHER_REQUIREMENT_ID = "requirement_22222222-2222-4222-8222-222222222222";
 const THIRD_REQUIREMENT_ID = "requirement_33333333-3333-4333-8333-333333333333";
 const UNRELATED_REQUIREMENT_ID = "requirement_44444444-4444-4444-8444-444444444444";

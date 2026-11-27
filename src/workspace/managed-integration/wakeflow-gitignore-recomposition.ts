@@ -47,7 +47,7 @@ function failInspectionBeforeCommit(error: unknown): never {
   if (error instanceof OperationAbortedError) throw error;
   if (error instanceof WakeflowGitignoreInspectionError) {
     if (error.reason === "target-capacity") fail("capacity", "$target", error);
-    if (error.reason === "input" || error.reason === "context" || error.reason === "authority") {
+    if (error.reason === "context" || error.reason === "authority") {
       fail("input", error.path, error);
     }
     if (error.reason === "git" || error.reason === "git-repository") {

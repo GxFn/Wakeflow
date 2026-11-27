@@ -19,6 +19,7 @@ import path from "node:path";
 import { type TestContext, test } from "node:test";
 
 import { computeSha256Digest } from "../../src/foundation/crypto/sha256.js";
+import { parsePortableResourcePath } from "../../src/foundation/filesystem/portable-resource-path.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
@@ -377,7 +378,7 @@ test("上一个写者死在链接之后：状态文件带着死暂存的第二�
   // 死写者留下的那一对：暂存名的属主已经释放，暂存与状态文件是同一个节点的两个链接。
   const address = issueDurableAtomicFileStageAddress(
     "create",
-    `.wakeflow-active/current/board/${REQUIREMENT}.json`,
+    parsePortableResourcePath(`.wakeflow-active/current/board/${REQUIREMENT}.json`),
     computeSha256Digest(readFileSync(stateFile)),
     0o600,
   );

@@ -5,7 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
-import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import {
+  parseWakeflowConfig,
+  type WakeflowConfigModel,
+} from "../../../src/configuration/wakeflow-config.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { OperationAbortedError } from "../../../src/foundation/node/abort-signal.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
@@ -47,7 +50,7 @@ async function fixture(t: TestContext) {
   return Object.freeze({ absolutePath, root });
 }
 
-function request(desiredConfig: unknown) {
+function request(desiredConfig: WakeflowConfigModel) {
   return Object.freeze({
     action: "fresh-initialize" as const,
     desiredConfig,
@@ -206,9 +209,10 @@ test("whole-owned root accepts existing only while replaying an affected step", 
   );
 });
 
-test("step executor observes cancellation before decoding plan payloads", async (t) => {
+test("step executor observes cancellation before looking up the step", async (t) => {
   const workspace = await fixture(t);
   const desired = desiredConfig();
+  const preview = await previewWakeflowStaticMaterialization(workspace.root, request(desired));
   const core = await inspectWakeflowWorkspaceCoreLayout(workspace.root);
   await withWakeflowMaintenanceGate(
     workspace.root,
@@ -224,7 +228,7 @@ test("step executor observes cancellation before decoding plan payloads", async 
         await executeWakeflowStaticMaterializationStep(
           workspace.root,
           context,
-          { invalid: true },
+          preview,
           request(desired),
           "invalid:step",
           {

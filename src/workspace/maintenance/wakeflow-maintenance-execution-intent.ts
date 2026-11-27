@@ -33,7 +33,6 @@ import {
 } from "./wakeflow-host-maintenance-contribution.js";
 import {
   createWakeflowMaintenanceExecutionPlan,
-  parseWakeflowMaintenanceExecutionPlan,
   type WakeflowMaintenanceExecutionPlan,
   WakeflowMaintenanceExecutionPlanError,
 } from "./wakeflow-maintenance-execution-plan.js";
@@ -49,8 +48,6 @@ import {
   WakeflowMaintenanceWriterError,
 } from "./wakeflow-maintenance-writer.js";
 import {
-  admitWakeflowStaticMaterializationPreviewRequest,
-  type ParsedWakeflowStaticMaterializationPreviewRequest,
   parseWakeflowStaticMaterializationHostProfiles,
   parseWakeflowStaticMaterializationPreview,
   type WakeflowStaticMaterializationPreview,
@@ -95,7 +92,6 @@ export interface WakeflowMaintenanceExecutionIntent {
 }
 
 export type WakeflowMaintenanceExecutionIntentErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "operation"
@@ -307,35 +303,16 @@ export function parseWakeflowMaintenanceExecutionIntent(
 }
 
 /**
- * 从已确认计划、原preview请求与resolved desired Config创建恢复意图；`writerValue` 是可选写者戳。
+ * 从已确认计划、原preview请求与resolved desired Config创建恢复意图；`writer` 是可选写者戳。参数都是
+ * 类型化的；三者的关系在这里核对，组好的记录再经本编解码的读取解析一次（构造即读回）。
  */
 export function createWakeflowMaintenanceExecutionIntent(
-  operationIdValue: unknown,
-  planValue: unknown,
-  requestValue: WakeflowStaticMaterializationPreviewRequest,
-  desiredConfigValue: unknown,
-  writerValue?: unknown,
+  operationId: WakeflowMaintenanceOperationId,
+  plan: Readonly<WakeflowMaintenanceExecutionPlan>,
+  request: Readonly<WakeflowStaticMaterializationPreviewRequest>,
+  desiredConfig: WakeflowConfigModel,
+  writer: Readonly<WakeflowMaintenanceWriter> | null = null,
 ): Readonly<WakeflowMaintenanceExecutionIntent> {
-  const writer = normalizeWriter(writerValue, "$writer", "input");
-  let plan: Readonly<WakeflowMaintenanceExecutionPlan>;
-  try {
-    plan = parseWakeflowMaintenanceExecutionPlan(planValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceExecutionPlanError) {
-      fail("plan", error.path, error);
-    }
-    throw error;
-  }
-  let request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
-  try {
-    request = admitWakeflowStaticMaterializationPreviewRequest(requestValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowStaticMaterializationPreviewError) {
-      fail("request", "$request", error);
-    }
-    throw error;
-  }
-  const desiredConfig = normalizeConfig(desiredConfigValue);
   if (
     request.action !== plan.sharedPreview.action ||
     request.currentHostProfile.hostId !== plan.hostId ||
@@ -349,7 +326,7 @@ export function createWakeflowMaintenanceExecutionIntent(
   return parseWakeflowMaintenanceExecutionIntent({
     artifactKind: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_ARTIFACT_KIND,
     schemaVersion: WAKEFLOW_MAINTENANCE_EXECUTION_INTENT_SCHEMA_VERSION,
-    operationId: operationIdValue,
+    operationId,
     desiredConfig: createWakeflowConfigDocumentValue(desiredConfig),
     currentHostProfile: request.currentHostProfile,
     hostProfiles: sortedProfiles(request.hostProfiles),
@@ -394,7 +371,7 @@ export function reconstructWakeflowMaintenanceExecutionFromIntent(
   intent: Readonly<WakeflowMaintenanceExecutionIntent>,
 ): Readonly<{
   readonly plan: Readonly<WakeflowMaintenanceExecutionPlan>;
-  readonly request: Readonly<ParsedWakeflowStaticMaterializationPreviewRequest>;
+  readonly request: Readonly<WakeflowStaticMaterializationPreviewRequest>;
   readonly completedSteps: number;
 }> {
   return Object.freeze({

@@ -15,6 +15,7 @@ import {
   executeTargetResultReviewInspectionRequest,
   type ResultReviewHostFacade,
 } from "../../../src/capabilities/result-review/service.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { encodeUtf8 } from "../../../src/foundation/text/utf8.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
@@ -110,7 +111,7 @@ export async function loadFixtureTaskPackage(
 ): Promise<Readonly<TaskPackage>> {
   return withFixtureDemandRoot(fixture, async (root) => {
     const located = await new DemandEventSourcingRepository(root).findTargetTaskPlannedEvent(
-      taskPackageId,
+      parseWakeflowDurableIdOfKind(taskPackageId, "task-package"),
     );
     if (located === null) throw new Error("Expected a planned TaskPackage fixture.");
     return located.event.data.taskPackage;

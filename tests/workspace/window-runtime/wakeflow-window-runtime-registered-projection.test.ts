@@ -1,5 +1,6 @@
 import { equal, throws } from "node:assert/strict";
 import { test } from "node:test";
+import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
 import { parseUtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import { claudeCodeWorkspaceHostResourceProfile } from "../../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWindowHostIdentityProfile } from "../../../src/hosts/codex/codex-window-host-identity-profile.js";
@@ -20,7 +21,7 @@ import { useDisposableDurability } from "../../support/disposable-durability.js"
 useDisposableDurability();
 
 test("registered projection只公开Binding引用与代际ID并保留root blocker", () => {
-  const config = createMinimalWakeflowConfig();
+  const config = parseWakeflowConfig(createMinimalWakeflowConfig());
   const unregisteredSet = compileWakeflowWindowRuntimeUnregisteredProjectionSet(
     config,
     codexWorkspaceHostResourceProfile,
@@ -52,7 +53,6 @@ test("registered projection只公开Binding引用与代际ID并保留root blocke
   );
   const target = compileWakeflowWindowRuntimeRegisteredProjectionEntry(
     codexWorkspaceHostResourceProfile,
-    codexWindowHostIdentityProfile,
     source.projection,
     binding,
   );
@@ -67,7 +67,6 @@ test("registered projection只公开Binding引用与代际ID并保留root blocke
     () =>
       compileWakeflowWindowRuntimeRegisteredProjectionEntry(
         claudeCodeWorkspaceHostResourceProfile,
-        codexWindowHostIdentityProfile,
         source.projection,
         binding,
       ),

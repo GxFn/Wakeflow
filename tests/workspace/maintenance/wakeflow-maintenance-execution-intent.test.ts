@@ -323,22 +323,16 @@ test("intent carries the optional writer stamp, round-trips it and reconstructs 
   );
   equal(Object.hasOwn(legacy, "writer"), false);
 
+  // 写者戳的文法在读盘时核对（创建时它是组合根注入的类型化值）。
   for (const writer of [
     { version: "v1", manifestDigest: WRITER.manifestDigest },
     { version: "1.2.0" },
     "1.2.0",
   ]) {
     throws(
-      () =>
-        createWakeflowMaintenanceExecutionIntent(
-          OPERATION_ID,
-          value.plan,
-          value.request,
-          value.config,
-          writer,
-        ),
+      () => parseWakeflowMaintenanceExecutionIntent({ ...JSON.parse(text), writer }),
       (error: unknown) =>
-        error instanceof WakeflowMaintenanceExecutionIntentError && error.reason === "input",
+        error instanceof WakeflowMaintenanceExecutionIntentError && error.reason === "schema",
     );
   }
   throws(

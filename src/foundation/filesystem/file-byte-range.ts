@@ -27,7 +27,7 @@ export interface FileByteRange {
 }
 
 /** 文件字节区间准入或算术失败分类。 */
-export type FileByteRangeErrorReason = "offset-range" | "length-range" | "end-overflow";
+export type FileByteRangeErrorReason = "offset-range" | "end-overflow";
 
 /**
  * 文件字节区间的稳定错误。

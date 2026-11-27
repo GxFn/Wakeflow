@@ -41,8 +41,6 @@ import {
 import {
   deriveManagedEvidencePublicationRecordTreePlan,
   type ManagedEvidencePublicationTransaction,
-  ManagedEvidencePublicationTransactionError,
-  parseManagedEvidencePublicationTransaction,
 } from "./managed-evidence-publication-transaction.js";
 import {
   ManagedEvidencePublicationTransactionStoreError,
@@ -105,17 +103,6 @@ const fail: Fail<ManagedEvidencePublicationStageMaterializationErrorReason> = fa
 );
 
 const MANIFEST_REF = parsePortableResourcePath(MANAGED_EVIDENCE_MANIFEST_FILE_NAME);
-
-function parseTransaction(value: unknown): Readonly<ManagedEvidencePublicationTransaction> {
-  try {
-    return parseManagedEvidencePublicationTransaction(value);
-  } catch (error: unknown) {
-    if (error instanceof ManagedEvidencePublicationTransactionError) {
-      fail("input", "$transaction", error);
-    }
-    throw error;
-  }
-}
 
 function mapStoreError(error: ManagedEvidencePublicationTransactionStoreError): never {
   if (error.reason === "root-scope") {
@@ -361,11 +348,10 @@ async function publishManifest(
 export async function materializeManagedEvidencePublicationStage(
   sourceRootValue: RootedDirectory | null,
   demandRootValue: RootedDirectory,
-  transactionValue: unknown,
+  transaction: Readonly<ManagedEvidencePublicationTransaction>,
   options: ManagedEvidencePublicationStageMaterializationOptions = {},
 ): Promise<Readonly<ManagedEvidencePublicationStageMaterializationResult>> {
   throwIfAborted(options.signal);
-  const transaction = parseTransaction(transactionValue);
   const stored = await loadExactJournal(demandRootValue, transaction, options.signal);
   const plan = deriveManagedEvidencePublicationRecordTreePlan(transaction);
   await ensureEvidenceRoot(demandRootValue, transaction, options.signal);

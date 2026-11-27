@@ -1,5 +1,8 @@
 import type { NextProjection } from "../../kernel/next-projection.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { parseJsonValue } from "../../foundation/data/json-value.js";
@@ -144,7 +147,11 @@ export async function loadPackage(
   requirementId: string,
 ): Promise<LoadedPackage | null> {
   try {
-    return await context.store.loadRequirement(requirementId, signalOptions(context.signal));
+    // 请求与计划里的需求身份是字符串：换成类型化身份在这里做一次（此前 Ledger 门面自己做）。
+    return await context.store.loadRequirement(
+      parseWakeflowDurableIdOfKind(requirementId, "requirement", "$requirementId"),
+      signalOptions(context.signal),
+    );
   } catch (error: unknown) {
     if (error instanceof LedgerAuthorityStoreError) {
       if (error.reason === "not-found") return null;
@@ -434,17 +441,17 @@ async function applyCreateLocked(
     at,
     plan.podId,
   );
-  const transactionInput = {
-    identity,
-    authority,
-    eventId: plan.eventId,
-    commitId: plan.commitId,
-    recordedAt: at,
-    expectedClaimStateDigest: plan.expectedClaimStateDigest,
-  };
+  let transaction: Readonly<DemandEventSourcingPublicationTransaction>;
   try {
-    // 发布服务自己重建事务；这里先过一遍编解码，把关系错误报成前置条件而不是 I/O。
-    createDemandEventSourcingPublicationTransaction(transactionInput);
+    // 事务只建一次：关系错误在这里报成前置条件而不是 I/O，发布服务直接用这份事务。
+    transaction = createDemandEventSourcingPublicationTransaction({
+      identity,
+      authority,
+      eventId: plan.eventId,
+      commitId: plan.commitId,
+      recordedAt: at,
+      expectedClaimStateDigest: plan.expectedClaimStateDigest,
+    });
   } catch (error: unknown) {
     if (error instanceof DemandEventSourcingPublicationTransactionError) {
       fail("precondition-failed", `transaction-${error.reason}`, "$plan", { cause: error });
@@ -456,7 +463,7 @@ async function applyCreateLocked(
     publication = await publishDemandFromPackage(
       context.root,
       context.store,
-      transactionInput,
+      transaction,
       signalOptions(context.signal),
     );
   } catch (error: unknown) {
@@ -491,7 +498,7 @@ async function pendingPublicationOf(context: DemandSliceContext, demandId: strin
   try {
     return await readPendingDemandPublication(
       context.root,
-      demandId,
+      parseDemandId(demandId, "$plan.demandId"),
       signalOptions(context.signal),
     );
   } catch (error: unknown) {

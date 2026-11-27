@@ -20,6 +20,7 @@ import { after, type TestContext, test } from "node:test";
 
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { parseWakeflowConfig } from "../../src/configuration/wakeflow-config.js";
 import { renderWakeflowConfig } from "../../src/configuration/wakeflow-config-document.js";
 import { WAKEFLOW_NODE_ENGINES } from "../../src/contracts/vocabulary/wakeflow-runtime-engines.js";
 import {
@@ -245,7 +246,7 @@ function workspaceFixture(t: TestContext): string {
   mkdirSync(path.join(workspace, "Test"), { recursive: true });
   writeFileSync(
     path.join(workspace, "wakeflow.config.json"),
-    renderWakeflowConfig(createMinimalWakeflowConfig()),
+    renderWakeflowConfig(parseWakeflowConfig(createMinimalWakeflowConfig())),
     { mode: 0o644 },
   );
   return workspace;

@@ -151,7 +151,6 @@ export interface CreateLedgerAuthorityRecordOptions {
 }
 
 export type LedgerAuthorityRecordErrorReason =
-  | "input"
   | "json"
   | "schema"
   | "identifier"

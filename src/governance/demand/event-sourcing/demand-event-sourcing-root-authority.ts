@@ -76,7 +76,6 @@ export interface LoadedDemandEventSourcingRootAuthority {
 }
 
 export type DemandEventSourcingRootAuthorityErrorReason =
-  | "input"
   | "inventory"
   | "identity"
   | "authority"

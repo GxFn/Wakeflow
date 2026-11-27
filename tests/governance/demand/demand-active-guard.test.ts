@@ -22,6 +22,7 @@ import {
   readDemandPodId,
 } from "../../../src/governance/demand/publication/demand-active-guard.js";
 import { publishDemandFromPackage } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-service.js";
+import { createDemandEventSourcingPublicationTransaction } from "../../../src/governance/demand/publication/demand-event-sourcing-publication-transaction.js";
 import {
   DEMAND_PUBLICATION_STAGES_ROOT_REF,
   DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF,
@@ -86,25 +87,33 @@ async function activeDemandWorkspace() {
     },
     { clock: () => CREATED_AT },
   );
-  await publishDemandFromPackage(workspaceRoot, ledgerStore, {
-    identity,
-    authority: createDemandAuthority(identity, {
-      authorityRefs: loaded.documents.map((document) =>
-        createLedgerAuthorityMemberReference(loaded, document.path),
+  await publishDemandFromPackage(
+    workspaceRoot,
+    ledgerStore,
+    createDemandEventSourcingPublicationTransaction({
+      identity,
+      authority: createDemandAuthority(identity, {
+        authorityRefs: loaded.documents.map((document) =>
+          createLedgerAuthorityMemberReference(loaded, document.path),
+        ),
+        testingDecision: {
+          mode: "controller-only",
+          summary: "聚焦测试",
+          environmentMemberRef: null,
+        },
+      }),
+      eventId: parseWakeflowDurableIdOfKind(
+        "demand-event_44444444-4444-4444-8444-444444444444",
+        "demand-event",
       ),
-      testingDecision: { mode: "controller-only", summary: "聚焦测试", environmentMemberRef: null },
+      commitId: parseWakeflowDurableIdOfKind(
+        "demand-event-commit_77777777-7777-4777-8777-777777777777",
+        "demand-event-commit",
+      ),
+      recordedAt: CREATED_AT,
+      expectedClaimStateDigest: claim.digest,
     }),
-    eventId: parseWakeflowDurableIdOfKind(
-      "demand-event_44444444-4444-4444-8444-444444444444",
-      "demand-event",
-    ),
-    commitId: parseWakeflowDurableIdOfKind(
-      "demand-event-commit_77777777-7777-4777-8777-777777777777",
-      "demand-event-commit",
-    ),
-    recordedAt: CREATED_AT,
-    expectedClaimStateDigest: claim.digest,
-  });
+  );
   return {
     workspaceRoot,
     ledgerPath,

@@ -48,7 +48,7 @@ export interface WakeflowMaintenancePublicHostFacade {
   ) => Promise<Readonly<WakeflowMaintenanceExecutionPlan>>;
   readonly apply: (
     root: RootedDirectory,
-    plan: unknown,
+    plan: Readonly<WakeflowMaintenanceExecutionPlan>,
     request: WakeflowStaticMaterializationPreviewRequest,
     options?: Readonly<WakeflowMaintenancePublicHostExecutionOptions>,
   ) => Promise<Readonly<WakeflowMaintenanceExecutionTransactionReceipt>>;

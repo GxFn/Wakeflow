@@ -10,12 +10,7 @@ import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
 import { requireCurrentUserId } from "../foundation/node/current-user.js";
 import { encodeUtf8 } from "../foundation/text/utf8.js";
-import {
-  computeWakeflowConfigDigest,
-  parseWakeflowConfig,
-  WakeflowConfigError,
-  type WakeflowConfigModel,
-} from "./wakeflow-config.js";
+import { computeWakeflowConfigDigest, type WakeflowConfigModel } from "./wakeflow-config.js";
 import {
   readWakeflowConfigAuthoritySnapshot,
   WAKEFLOW_CONFIG_AUTHORITY_FILE_MODE,
@@ -79,15 +74,6 @@ async function assertCurrentUserRoot(root: RootedDirectory, expectedUserId: bigi
   } catch (error: unknown) {
     if (error instanceof WakeflowConfigAuthorityPublicationError) throw error;
     fail("root-scope", "$root", error);
-  }
-}
-
-function parseModel(value: unknown): WakeflowConfigModel {
-  try {
-    return parseWakeflowConfig(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    fail("config", "$config", error);
   }
 }
 
@@ -194,16 +180,15 @@ function assertReadback(
  *
  * 只有 Foundation 已同步文件与父目录，且 Config Snapshot 回读同一物理节点和语义
  * 权威事实后，函数才返回成功。任意现存目标一律拒绝；本入口不提供确保存在、替换
- * 或隐式修复语义。
+ * 或隐式修复语义。模型是调用方已解析的类型化值。
  */
 export async function publishWakeflowConfigAuthority(
   root: RootedDirectory,
-  modelValue: unknown,
+  model: WakeflowConfigModel,
   { signal }: WakeflowConfigAuthorityPublicationOptions = {},
 ): Promise<Readonly<WakeflowConfigAuthorityPublicationReceipt>> {
   throwIfAborted(signal);
   const expectedUserId = requireCurrentUserId(() => fail("unsupported-platform", "$root"));
-  const model = parseModel(modelValue);
   const bytes = renderModelBytes(model);
   const expectedConfigDigest = computeModelDigest(model);
 

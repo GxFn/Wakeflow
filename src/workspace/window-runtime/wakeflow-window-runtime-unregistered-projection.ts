@@ -1,6 +1,7 @@
 import {
   parseWakeflowConfigPlacement,
   WakeflowConfigError,
+  type WakeflowConfigModel,
 } from "../../configuration/wakeflow-config.js";
 import { WAKEFLOW_SHA256_DIGEST_SCHEMA } from "../../contracts/generated/foundation/sha256-digest.generated.js";
 import {
@@ -33,7 +34,10 @@ import { type Fail, failWith, ModuleError } from "../../foundation/error/module-
 import type { PortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import { createRuntimeJsonSchemaValidator } from "../../foundation/schema/runtime-json-schema.js";
 import { encodeUtf8 } from "../../foundation/text/utf8.js";
-import type { WakeflowWorkspaceHostId } from "../workspace-host-resource-profile.js";
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
+} from "../workspace-host-resource-profile.js";
 import {
   compileWakeflowWindowRuntimeDesiredTopology,
   WakeflowWindowRuntimeDesiredTopologyError,
@@ -383,13 +387,13 @@ function projectionFor(
 }
 
 function entryFor(
-  profileValue: unknown,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
   projection: Readonly<WakeflowWindowRuntimeUnregisteredProjection>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionEntry> {
   const document = renderDeterministicJsonDocument(projection, "$windowRuntimeProjection");
   return Object.freeze({
     windowId: projection.windowId,
-    resourceRef: wakeflowWindowRuntimeProjectionRef(profileValue, projection.windowId),
+    resourceRef: wakeflowWindowRuntimeProjectionRef(profile, projection.windowId),
     projection,
     document,
     documentDigest: computeSha256Digest(encodeUtf8(document, "$windowRuntimeProjection")),
@@ -398,23 +402,23 @@ function entryFor(
 
 /** 从同一 Config/Host 的 desired topology 与空 identity source 生成全部未注册投影。 */
 export function compileWakeflowWindowRuntimeUnregisteredProjectionSet(
-  configValue: unknown,
-  profileValue: unknown,
+  config: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowWindowRuntimeUnregisteredProjectionSet> {
   let desired: ReturnType<typeof compileWakeflowWindowRuntimeDesiredTopology>;
   try {
-    desired = compileWakeflowWindowRuntimeDesiredTopology(configValue, profileValue);
+    desired = compileWakeflowWindowRuntimeDesiredTopology(config, profile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
       throw new WakeflowWindowRuntimeUnregisteredProjectionError(error.path);
     }
     throw error;
   }
-  const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profileValue);
+  const projectionRootRef = wakeflowWindowRuntimeProjectionRootRef(profile);
   const entries = Object.freeze(
     desired.windows.map((window) =>
       entryFor(
-        profileValue,
+        profile,
         projectionFor(desired.programId, desired.hostId, desired.desiredTopologyDigest, window),
       ),
     ),

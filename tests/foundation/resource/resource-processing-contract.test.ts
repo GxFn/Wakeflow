@@ -288,21 +288,14 @@ test("one operation admits exactly one recipe from the resource contract", () =>
     "operation",
     "$/recipe",
   );
-  expectResourceProcessingError(
-    () =>
-      admitWakeflowResourceOperation(mutableSnapshot, ["exclusive-create", "exact-source-replace"]),
-    "operation",
-    "$/recipe",
-  );
-
-  const container = {
+  const container = parseWakeflowResourceProcessingContract({
     kind: "directory-container",
     materializationRecipe: "materialize-directory",
     existingDirectoryPolicy: "observe-without-mode-change",
     collisionPolicy: "reject-non-directory",
     descendantAuthority: "separate-declaration-required",
     recoveryStrategy: "report-only",
-  };
+  });
   deepEqual(admitWakeflowResourceOperation(container, "materialize-directory"), {
     kind: "directory-materialization",
     recipe: "materialize-directory",

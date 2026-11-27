@@ -512,8 +512,6 @@ function desiredConfigFor(
 
 function mapPreviewError(error: unknown): never {
   if (error instanceof WakeflowMaintenanceExecutionPreviewError) {
-    if (error.reason === "input")
-      fail("invalid-request", "preview-input", "$request", { cause: error });
     fail("precondition-failed", error.reason, "$request", { cause: error });
   }
   if (error instanceof WakeflowStaticMaterializationPreviewError) {
@@ -521,8 +519,6 @@ function mapPreviewError(error: unknown): never {
       fail("root-invalid", "root-scope", "$request.root", { cause: error });
     if (error.reason === "inspection")
       fail("io-failure", "inspection", "$request.root", { cause: error });
-    if (error.reason === "config")
-      fail("precondition-failed", "config", "$request", { cause: error });
     fail("invalid-request", error.reason, "$request", { cause: error });
   }
   if (error instanceof WakeflowWindowLaunchIntentError) {

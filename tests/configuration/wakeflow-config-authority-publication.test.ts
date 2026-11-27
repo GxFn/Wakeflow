@@ -72,10 +72,9 @@ async function expectPublicationError(
 test("Config authority publication 持久创建0644文件并由Snapshot readback闭合", async () => {
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
-  const value = createMinimalWakeflowConfig();
+  const expectedModel = parseWakeflowConfig(createMinimalWakeflowConfig());
   try {
-    const receipt = await publishWakeflowConfigAuthority(root, value);
-    const expectedModel = parseWakeflowConfig(value);
+    const receipt = await publishWakeflowConfigAuthority(root, expectedModel);
     const expectedText = renderWakeflowConfig(expectedModel);
 
     equal(receipt.publication.publication, "created");
@@ -106,14 +105,13 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
   const fixture = createWorkspace();
   const root = await RootedDirectory.open(fixture.workspaceRoot);
   try {
-    const original = createMinimalWakeflowConfig();
-    await publishWakeflowConfigAuthority(root, original);
+    await publishWakeflowConfigAuthority(root, parseWakeflowConfig(createMinimalWakeflowConfig()));
     const before = readFileSync(fixture.configPath, "utf8");
     const changed = createMinimalWakeflowConfig();
     (changed.program as Record<string, unknown>).displayName = "Changed";
 
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(root, changed),
+      () => publishWakeflowConfigAuthority(root, parseWakeflowConfig(changed)),
       "target-exists",
     );
     equal(readFileSync(fixture.configPath, "utf8"), before);
@@ -129,7 +127,11 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
   const unknownRoot = await RootedDirectory.open(unknownFixture.workspaceRoot);
   try {
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(unknownRoot, createMinimalWakeflowConfig()),
+      () =>
+        publishWakeflowConfigAuthority(
+          unknownRoot,
+          parseWakeflowConfig(createMinimalWakeflowConfig()),
+        ),
       "target-exists",
     );
     equal(readFileSync(unknownFixture.configPath, "utf8"), "external-owner-bytes\n");
@@ -139,31 +141,14 @@ test("Config authority publication 是absent-only且不覆盖任何现存目标"
   }
 });
 
-test("Config authority publication 在非法、超限或取消输入下保持零effect", async () => {
-  const invalidFixture = createWorkspace();
-  const invalidRoot = await RootedDirectory.open(invalidFixture.workspaceRoot);
-  try {
-    await expectPublicationError(
-      () =>
-        publishWakeflowConfigAuthority(invalidRoot, {
-          ...createMinimalWakeflowConfig(),
-          kind: "WrongConfig",
-        }),
-      "config",
-    );
-    equal(existsSync(invalidFixture.configPath), false);
-  } finally {
-    await invalidRoot.close();
-    rmSync(invalidFixture.temporaryRoot, { recursive: true, force: true });
-  }
-
+test("Config authority publication 在位置不合、超限或取消时保持零effect", async () => {
   const placementFixture = createWorkspace();
   const placementRoot = await RootedDirectory.open(placementFixture.workspaceRoot);
   try {
     const value = createMinimalWakeflowConfig();
     (value.storage as Record<string, unknown>).ledgerRoot = ".wakeflow-active";
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(placementRoot, value),
+      () => publishWakeflowConfigAuthority(placementRoot, parseWakeflowConfig(value)),
       "placement",
     );
     equal(existsSync(placementFixture.configPath), false);
@@ -178,7 +163,7 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     const value = createMinimalWakeflowConfig();
     (value.program as Record<string, unknown>).description = "x".repeat(1024 * 1024);
     await expectPublicationError(
-      () => publishWakeflowConfigAuthority(capacityRoot, value),
+      () => publishWakeflowConfigAuthority(capacityRoot, parseWakeflowConfig(value)),
       "capacity",
     );
     equal(existsSync(capacityFixture.configPath), false);
@@ -194,9 +179,11 @@ test("Config authority publication 在非法、超限或取消输入下保持零
     controller.abort("private-abort-reason");
     await rejects(
       () =>
-        publishWakeflowConfigAuthority(abortedRoot, createMinimalWakeflowConfig(), {
-          signal: controller.signal,
-        }),
+        publishWakeflowConfigAuthority(
+          abortedRoot,
+          parseWakeflowConfig(createMinimalWakeflowConfig()),
+          { signal: controller.signal },
+        ),
       OperationAbortedError,
     );
     equal(existsSync(abortedFixture.configPath), false);

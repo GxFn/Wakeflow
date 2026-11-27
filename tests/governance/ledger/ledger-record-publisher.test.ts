@@ -304,11 +304,6 @@ test("rejects malformed records and members before touching the ledger", async (
     throw new Error("Expected two fixture members.");
   }
   await expectStoreError(
-    () => publishLedgerAuthorityRecord(root, { ...record, title: 1 }, MEMBERS, undefined),
-    "input",
-    "$record",
-  );
-  await expectStoreError(
     () => publishLedgerAuthorityRecord(root, record, null as never, undefined),
     "input",
     "$members",

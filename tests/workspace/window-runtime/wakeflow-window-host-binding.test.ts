@@ -87,7 +87,7 @@ test("Window Host Binding 保存私有 handle 并形成唯一确定性文档", (
     },
     codexWindowHostIdentityProfile,
   );
-  const document = renderWakeflowWindowHostBinding(binding, codexWindowHostIdentityProfile);
+  const document = renderWakeflowWindowHostBinding(binding);
   equal(document.includes(handle.value), true);
   equal(document.endsWith("\n"), true);
   deepEqual(
@@ -149,7 +149,7 @@ test("Window Host Binding 的 launch（1.3.0，G14）：握手时的启动事实
     hostVersion: "0.99.0",
   });
   deepEqual(Object.keys(binding.launch?.values ?? {}), ["effort", "model", "transport"]);
-  const document = renderWakeflowWindowHostBinding(binding, codexWindowHostIdentityProfile);
+  const document = renderWakeflowWindowHostBinding(binding);
   deepEqual(
     parseWakeflowWindowHostBindingDocument(document, codexWindowHostIdentityProfile),
     binding,
@@ -158,7 +158,7 @@ test("Window Host Binding 的 launch（1.3.0，G14）：握手时的启动事实
   // 1.3.0 之前写下的记录没有这个键：解析后也没有，重新渲染出的字节与原文件相同。
   const legacy = createWakeflowWindowHostBinding(base, codexWindowHostIdentityProfile);
   equal("launch" in legacy, false);
-  const legacyDocument = renderWakeflowWindowHostBinding(legacy, codexWindowHostIdentityProfile);
+  const legacyDocument = renderWakeflowWindowHostBinding(legacy);
   equal(legacyDocument.includes('"launch"'), false);
   deepEqual(
     parseWakeflowWindowHostBindingDocument(legacyDocument, codexWindowHostIdentityProfile),

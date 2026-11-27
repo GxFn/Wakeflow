@@ -42,11 +42,7 @@ export interface WakeflowManagedSupportResourceCatalog {
   readonly declarations: readonly Readonly<WakeflowWorkspaceResourceDeclaration>[];
 }
 
-export type WakeflowManagedSupportResourceCatalogErrorReason =
-  | "config"
-  | "profile"
-  | "topology"
-  | "declaration";
+export type WakeflowManagedSupportResourceCatalogErrorReason = "topology" | "declaration";
 
 /** 受管 Support 动态资源目录构建失败的稳定、脱敏错误。 */
 class WakeflowManagedSupportResourceCatalogError extends ModuleError<WakeflowManagedSupportResourceCatalogErrorReason> {

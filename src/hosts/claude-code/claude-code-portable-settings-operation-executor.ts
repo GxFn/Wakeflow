@@ -76,9 +76,6 @@ export interface ClaudeCodePortableSettingsOperationExecutionResult {
 }
 
 export type ClaudeCodePortableSettingsOperationExecutionErrorReason =
-  | "input"
-  | "config"
-  | "profile"
   | "operation"
   | "authority-changed"
   | "placement"

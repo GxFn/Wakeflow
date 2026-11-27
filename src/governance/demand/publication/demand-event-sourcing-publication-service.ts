@@ -1,7 +1,4 @@
-import {
-  parseWakeflowDurableIdOfKind,
-  WakeflowDurableIdError,
-} from "../../../contracts/identity/wakeflow-durable-id.js";
+import type { WakeflowDurableId } from "../../../contracts/identity/wakeflow-durable-id.js";
 import {
   DurableResourceEntrySettlementError,
   settleObservedResourceEntry,
@@ -49,11 +46,7 @@ import {
   retirePublicationFile,
   samePublicationTransaction,
 } from "./demand-event-sourcing-publication-storage.js";
-import {
-  createDemandEventSourcingPublicationTransaction,
-  type DemandEventSourcingPublicationTransaction,
-  DemandEventSourcingPublicationTransactionError,
-} from "./demand-event-sourcing-publication-transaction.js";
+import type { DemandEventSourcingPublicationTransaction } from "./demand-event-sourcing-publication-transaction.js";
 import {
   demandFinalPublicationMarkerRef,
   demandStagePublicationMarkerRef,
@@ -261,20 +254,11 @@ async function classifyPublicationAuthority(
 export async function publishDemandFromPackage(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
-  inputValue: unknown,
+  transaction: Readonly<DemandEventSourcingPublicationTransaction>,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   const signal = options?.signal;
-  let transaction: Readonly<DemandEventSourcingPublicationTransaction>;
   try {
-    try {
-      transaction = createDemandEventSourcingPublicationTransaction(inputValue);
-    } catch (error: unknown) {
-      if (error instanceof DemandEventSourcingPublicationTransactionError) {
-        fail("input", "$input");
-      }
-      throw error;
-    }
     try {
       await admitDemandAuthority(
         transaction.identity,
@@ -381,18 +365,14 @@ async function publicationResidueMayExist(
 /** 只读：这个 Demand 有没有一次还没收尾的创建；有就交回它的事务（调用方据此沿用原来的时间）。 */
 export async function readPendingDemandPublication(
   root: RootedDirectory,
-  demandIdValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationTransaction> | null> {
   const signal = options?.signal;
   try {
-    const demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
     throwIfAborted(signal);
     return (await readPendingPublication(root, demandId, signal, false))?.transaction ?? null;
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$demandId", "unchanged");
-    }
     rethrowWithPublicationAuthority(error, "unknown");
   }
 }
@@ -401,18 +381,13 @@ export async function readPendingDemandPublication(
 export async function recoverDemandPublication(
   root: RootedDirectory,
   ledgerStore: LedgerAuthorityStore,
-  demandIdValue: unknown,
+  demandId: WakeflowDurableId<"demand">,
   options?: { readonly signal?: AbortSignal },
 ): Promise<Readonly<DemandEventSourcingPublicationResult>> {
   const signal = options?.signal;
-  let demandId: ReturnType<typeof parseWakeflowDurableIdOfKind>;
   try {
-    demandId = parseWakeflowDurableIdOfKind(demandIdValue, "demand", "$demandId");
     throwIfAborted(signal);
   } catch (error: unknown) {
-    if (error instanceof WakeflowDurableIdError) {
-      fail("input", "$demandId", "unchanged");
-    }
     rethrowWithPublicationAuthority(error, "unchanged");
   }
 

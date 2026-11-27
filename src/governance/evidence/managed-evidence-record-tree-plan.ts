@@ -291,9 +291,9 @@ export function parseManagedEvidenceRecordTreePlan(
 
 /** 从完整Manifest编译一份零I/O、确定性的final record tree计划。 */
 export function planManagedEvidenceRecordTree(
-  manifestValue: unknown,
+  manifest: Readonly<ManagedEvidenceManifest>,
 ): Readonly<ManagedEvidenceRecordTreePlan> {
-  const basis = buildBasis(parseManifest(manifestValue));
+  const basis = buildBasis(manifest);
   return parseManagedEvidenceRecordTreePlan({
     ...basis,
     planDigest: computeCanonicalJsonSha256Digest(basis, "$plan"),

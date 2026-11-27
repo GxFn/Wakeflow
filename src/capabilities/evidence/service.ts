@@ -236,7 +236,7 @@ function mapApplicationError(error: unknown): never {
   if (error instanceof ManagedEvidencePublicationApplicationServiceError) {
     const cause = { cause: error, details: { authority: error.publicationAuthority } };
     if (error.reason === "aborted") fail("io-failure", "aborted", "$signal", cause);
-    if (error.reason === "input" || error.reason === "transaction") {
+    if (error.reason === "transaction") {
       fail("unexpected", error.reason, "$plan", cause);
     }
     if (error.reason === "config") {

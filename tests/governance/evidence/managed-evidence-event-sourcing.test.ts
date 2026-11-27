@@ -9,6 +9,7 @@ import {
   DemandEventSourcingDecisionError,
   decideDemandEventSourcingCommand,
   evolveDemandEventSourcingState,
+  parseDemandEventSourcingCommand,
 } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-decider.js";
 import {
   DemandEventSourcingEventError,
@@ -260,7 +261,7 @@ test("Event与Command严格闭合Manifest的Demand、时间和字段集合", () 
   );
   throws(
     () =>
-      decideDemandEventSourcingCommand(initial, {
+      parseDemandEventSourcingCommand({
         commandType: "evidence.record-managed-evidence",
         commandVersion: 1,
         eventId: EVENT_ID,

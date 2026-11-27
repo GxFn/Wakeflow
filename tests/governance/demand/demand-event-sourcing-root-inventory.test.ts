@@ -13,10 +13,15 @@ import path from "node:path";
 import { test } from "node:test";
 import { threadId } from "node:worker_threads";
 
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
+import {
+  type PortableResourcePath,
+  parsePortableResourcePath,
+} from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { demandEventSourcingSnapshotRef } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 import {
@@ -145,7 +150,7 @@ test("快照目录里 foundation 的原子暂存按写者分类：活写者 sour
     const address = issueDurableAtomicFileStageAddress(
       "create",
       demandEventSourcingSnapshotRef(parseDemandEventCommitSequence(1)),
-      `sha256:${"0".repeat(64)}`,
+      parseSha256Digest(`sha256:${"0".repeat(64)}`),
       0o600,
     );
     const stagePath = path.join(snapshotsDirectory, address.fileName);
@@ -216,8 +221,10 @@ const STAGE_DIRECTORY_CASES: readonly StageDirectoryCase[] = [
 ];
 
 for (const scenario of STAGE_DIRECTORY_CASES) {
-  const memberRef = `${scenario.directory.join("/")}/${scenario.member}`;
-  const otherRef = `${scenario.directory.join("/")}/${scenario.otherMember}`;
+  const memberRef = parsePortableResourcePath(`${scenario.directory.join("/")}/${scenario.member}`);
+  const otherRef = parsePortableResourcePath(
+    `${scenario.directory.join("/")}/${scenario.otherMember}`,
+  );
   const counted = scenario.name === "event-sourcing/index" ? 0 : 1;
 
   test(`${scenario.name}：死写者的单个暂存与成对的暂存都放行，不计数不删除；写者活着是 source-changed`, async (t) => {
@@ -230,14 +237,14 @@ for (const scenario of STAGE_DIRECTORY_CASES) {
       const single = issueDurableAtomicFileStageAddress(
         "create",
         otherRef,
-        `sha256:${"1".repeat(64)}`,
+        parseSha256Digest(`sha256:${"1".repeat(64)}`),
         0o600,
       );
       writeFileSync(path.join(directory, single.fileName), "{}", { mode: 0o600 });
       const paired = issueDurableAtomicFileStageAddress(
         "create",
         memberRef,
-        `sha256:${"2".repeat(64)}`,
+        parseSha256Digest(`sha256:${"2".repeat(64)}`),
         0o600,
       );
       writeFileSync(path.join(directory, paired.fileName), "{}", { mode: 0o600 });
@@ -267,11 +274,11 @@ for (const scenario of STAGE_DIRECTORY_CASES) {
       await prepareHealthyRoot(root, fixtureRoot);
       const directory = path.join(fixtureRoot, ...scenario.directory);
       const memberPath = path.join(directory, scenario.member);
-      const deadStage = (operation: "create" | "replace", ref: string) => {
+      const deadStage = (operation: "create" | "replace", ref: PortableResourcePath) => {
         const address = issueDurableAtomicFileStageAddress(
           operation,
           ref,
-          `sha256:${"3".repeat(64)}`,
+          parseSha256Digest(`sha256:${"3".repeat(64)}`),
           0o600,
         );
         releaseDurableAtomicFileStageAddress(address);
@@ -301,7 +308,7 @@ for (const scenario of STAGE_DIRECTORY_CASES) {
       const otherMode = issueDurableAtomicFileStageAddress(
         "create",
         memberRef,
-        `sha256:${"3".repeat(64)}`,
+        parseSha256Digest(`sha256:${"3".repeat(64)}`),
         0o640,
       );
       releaseDurableAtomicFileStageAddress(otherMode);

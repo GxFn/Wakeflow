@@ -119,9 +119,6 @@ export interface PlanClaudeCodePortableSettingsCompositionRequest {
 }
 
 export type ClaudeCodePortableSettingsCompositionErrorReason =
-  | "input"
-  | "config"
-  | "profile"
   | "placement"
   | "root-open"
   | "inspection"

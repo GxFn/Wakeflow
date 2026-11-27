@@ -240,27 +240,6 @@ test("managed text envelope rejects malformed, foreign, and behavioral input", (
     "$identity",
   );
 
-  let trapCalls = 0;
-  const targetProxy = new Proxy(
-    { ...TARGET },
-    {
-      get: () => {
-        trapCalls += 1;
-        return undefined;
-      },
-      ownKeys: () => {
-        trapCalls += 1;
-        return [];
-      },
-    },
-  );
-  expectEnvelopeError(
-    () => recomposeWakeflowManagedTextEnvelope(valid, targetProxy),
-    "input",
-    "$target",
-  );
-  equal(trapCalls, 0);
-
   const mutableSource = encodeUtf8("alias source");
   const recomposed = recomposeWakeflowManagedTextEnvelope(mutableSource, TARGET);
   mutableSource.fill(0);

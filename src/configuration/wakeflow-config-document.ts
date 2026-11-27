@@ -1,13 +1,12 @@
 import { renderDeterministicJsonDocument } from "../foundation/data/deterministic-json-document.js";
 import { type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
-import {
-  parseWakeflowConfig,
-  type WakeflowConfigModel,
-  type WakeflowConfigPod,
-  type WakeflowConfigProgram,
-  type WakeflowConfigRepository,
-  type WakeflowConfigSupportSurface,
-  type WakeflowConfigWindow,
+import type {
+  WakeflowConfigModel,
+  WakeflowConfigPod,
+  WakeflowConfigProgram,
+  WakeflowConfigRepository,
+  WakeflowConfigSupportSurface,
+  WakeflowConfigWindow,
 } from "./wakeflow-config.js";
 
 /**
@@ -211,13 +210,14 @@ function configRepresentation(model: WakeflowConfigModel) {
  * 创建与持久 Config 文档字段顺序一致的递归冻结 JSON 值。
  *
  * 该值供需要嵌入 Config 快照的私有恢复意图复用；它不携带文件路径、节点身份或
- * 写入授权，也不会保留调用方对象引用。
+ * 写入授权，也不会保留调用方对象引用。模型是 `parseWakeflowConfig` 签发的类型化值，不再复验；
+ * JSON 准入是序列化本身的一步。
  */
-export function createWakeflowConfigDocumentValue(value: unknown): JsonValue {
-  return parseJsonValue(configRepresentation(parseWakeflowConfig(value)), "$config");
+export function createWakeflowConfigDocumentValue(model: WakeflowConfigModel): JsonValue {
+  return parseJsonValue(configRepresentation(model), "$config");
 }
 
 /** 从严格 Config 领域模型生成唯一 deterministic pretty JSON 表示。 */
-export function renderWakeflowConfig(value: unknown): string {
-  return renderDeterministicJsonDocument(createWakeflowConfigDocumentValue(value), "$config");
+export function renderWakeflowConfig(model: WakeflowConfigModel): string {
+  return renderDeterministicJsonDocument(createWakeflowConfigDocumentValue(model), "$config");
 }

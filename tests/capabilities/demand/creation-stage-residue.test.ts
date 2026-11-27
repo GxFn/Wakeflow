@@ -10,6 +10,7 @@ import {
   releaseDurableAtomicFileStageAddress,
 } from "../../../src/foundation/filesystem/durable-atomic-file-stage-address.js";
 import { filesystemMutation } from "../../../src/foundation/filesystem/filesystem-mutation.js";
+import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedResourceParentHandle } from "../../../src/foundation/filesystem/rooted-resource-parent-handle.js";
 import {
   demandFinalRootRef,
@@ -158,7 +159,7 @@ function plantIndexStage(scenario: CreationCase, paired: boolean): void {
   const bytes = Buffer.from("{trunc");
   const address = issueDurableAtomicFileStageAddress(
     "create",
-    targetRef,
+    parsePortableResourcePath(targetRef),
     computeSha256Digest(bytes),
     0o600,
   );

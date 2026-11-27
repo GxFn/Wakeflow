@@ -447,7 +447,7 @@ async function appendLifecycleEvent(
 async function findEventReceipt(
   context: DemandSliceContext,
   handle: DemandHandle,
-  commitId: string,
+  commitId: WakeflowDurableId<"demand-event-commit">,
 ): Promise<EventReceipt> {
   let commit: Awaited<ReturnType<DemandEventSourcingRepository["findCommitById"]>>;
   try {
@@ -775,7 +775,7 @@ async function terminalEvent(
 ): Promise<Readonly<{ readonly receipt: EventReceipt; readonly committed: boolean }>> {
   if (handle.loaded.aggregate.state.lifecycle !== "active") {
     return Object.freeze({
-      receipt: await findEventReceipt(context, handle, plan.commitId),
+      receipt: await findEventReceipt(context, handle, commitIdOf(plan.commitId)),
       committed: false,
     });
   }
@@ -1746,7 +1746,7 @@ async function applyContinueLocked(
     event = appended.receipt;
     committed = appended.committed;
   } else {
-    event = await findEventReceipt(context, handle, plan.commitId);
+    event = await findEventReceipt(context, handle, commitIdOf(plan.commitId));
   }
   const packageState = await claimPackageForDemand(context, plan, plan.package, "reclaim");
   for (const member of plan.attached ?? []) {

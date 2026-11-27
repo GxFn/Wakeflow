@@ -436,15 +436,6 @@ export type DemandAggregateStateErrorReason =
   | "schema"
   | "identifier"
   | "digest"
-  | "task-package"
-  | "delivery-envelope"
-  | "delivery-outcome"
-  | "delivery-rearm"
-  | "target-result"
-  | "controller-review-decision"
-  | "controller-product-defect-remediation-authorization"
-  | "target-result-callback"
-  | "managed-evidence-manifest"
   | "relation"
   | "transition";
 

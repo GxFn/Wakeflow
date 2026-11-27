@@ -54,7 +54,7 @@ export interface WakeflowProgramInstructionBodyAuthority {
   readonly envelopeTarget: Readonly<WakeflowManagedTextEnvelopeTarget>;
 }
 
-export type WakeflowProgramInstructionBodyAuthorityErrorReason = "config" | "profile" | "text";
+export type WakeflowProgramInstructionBodyAuthorityErrorReason = "text";
 
 /** Program Instruction 正文权威准入失败的稳定、脱敏错误。 */
 export class WakeflowProgramInstructionBodyAuthorityError extends ModuleError<WakeflowProgramInstructionBodyAuthorityErrorReason> {

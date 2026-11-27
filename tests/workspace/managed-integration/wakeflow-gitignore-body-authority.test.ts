@@ -202,16 +202,4 @@ test("Gitignore authority escapes paths and classifies only exact outside rules"
     "authority",
     "$authority",
   );
-  let trapCalls = 0;
-  const proxy = new Proxy(
-    [codexWorkspaceHostResourceProfile, claudeCodeWorkspaceHostResourceProfile],
-    {
-      get: () => {
-        trapCalls += 1;
-        return undefined;
-      },
-    },
-  );
-  expectAuthorityError(() => createWakeflowGitignoreBodyAuthority(proxy), "input", "$profiles");
-  equal(trapCalls, 0);
 });

@@ -42,9 +42,7 @@ function mapInspectionError(
   if (afterCommit) fail("commit-uncertain", "$resourcePath");
   if (error.reason === "capacity") fail("capacity", "$target");
   if (
-    error.reason === "input" ||
     error.reason === "config" ||
-    error.reason === "profile" ||
     error.reason === "catalog" ||
     error.reason === "surface" ||
     error.reason === "authority"

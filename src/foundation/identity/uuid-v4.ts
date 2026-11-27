@@ -37,7 +37,6 @@ export type UuidV4Factory = () => string;
 /** UUIDv4 基础能力失败的稳定分类。 */
 export type UuidV4ErrorReason =
   | "format"
-  | "factory-type"
   | "factory-failure"
   | "factory-result"
   | "derivation-input";

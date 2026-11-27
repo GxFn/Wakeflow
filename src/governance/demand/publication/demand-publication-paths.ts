@@ -23,16 +23,24 @@ export const DEMAND_PUBLICATION_TRANSACTIONS_ROOT_REF = parsePortableResourcePat
   ".wakeflow-active/current/demand-publication/transactions",
 );
 
-function parseDemandId(value: unknown): WakeflowDurableId<"demand"> {
+/**
+ * Demand 身份在能力层的请求、计划与结果里一路是字符串（Schema 已按领域文法核过）；这些路径
+ * 词汇是它们换成类型化身份的地方，所以这一次解析留在这里。
+ */
+function parseDemandId(value: string): WakeflowDurableId<"demand"> {
   return parseWakeflowDurableIdOfKind(value, "demand", "$demandId");
 }
 
-export function demandFinalRootRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(`${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(value)}`);
+export function demandFinalRootRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${WAKEFLOW_ACTIVE_CURRENT_ROOT_REF}/${parseDemandId(demandId)}`,
+  );
 }
 
-export function demandPublicationStageRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(`${DEMAND_PUBLICATION_STAGES_ROOT_REF}/${parseDemandId(value)}`);
+export function demandPublicationStageRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${DEMAND_PUBLICATION_STAGES_ROOT_REF}/${parseDemandId(demandId)}`,
+  );
 }
 
 /** Demand 根目录内用于阻断正常事件溯源加载的发布标记。 */
@@ -40,13 +48,15 @@ export const DEMAND_PUBLICATION_MARKER_REF = parsePortableResourcePath(
   "transactions/publication.json",
 );
 
-export function demandFinalPublicationMarkerRef(value: unknown): PortableResourcePath {
-  return parsePortableResourcePath(`${demandFinalRootRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`);
+export function demandFinalPublicationMarkerRef(demandId: string): PortableResourcePath {
+  return parsePortableResourcePath(
+    `${demandFinalRootRef(demandId)}/${DEMAND_PUBLICATION_MARKER_REF}`,
+  );
 }
 
 /** 还没有改名生效时，同一份标记在暂存根里的位置。 */
-export function demandStagePublicationMarkerRef(value: unknown): PortableResourcePath {
+export function demandStagePublicationMarkerRef(demandId: string): PortableResourcePath {
   return parsePortableResourcePath(
-    `${demandPublicationStageRef(value)}/${DEMAND_PUBLICATION_MARKER_REF}`,
+    `${demandPublicationStageRef(demandId)}/${DEMAND_PUBLICATION_MARKER_REF}`,
   );
 }

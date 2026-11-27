@@ -10,12 +10,7 @@ import { type Fail, failWith, ModuleError } from "../error/module-error.js";
 import { createUuidV4, parseUuidV4, UuidV4Error } from "../identity/uuid-v4.js";
 import { observePidOwnerSync, type PidOwnedNodeEvidence } from "../node/process-instance.js";
 import { encodeUtf8 } from "../text/utf8.js";
-import {
-  type PortableResourcePath,
-  PortableResourcePathError,
-  parsePortableResourcePath,
-  splitPortableResourcePath,
-} from "./portable-resource-path.js";
+import { type PortableResourcePath, splitPortableResourcePath } from "./portable-resource-path.js";
 
 /**
  * Wakeflow Foundation / Filesystem：耐久原子文件发布的自描述暂存地址。
@@ -99,17 +94,13 @@ function parseOwnerInteger(value: string | undefined, allowZero: boolean, path: 
   return parsed;
 }
 
-/** 计算目标可移植引用的脱敏、稳定暂存路由摘要。 */
-export function computeDurableAtomicFileStageTargetDigest(value: unknown): Sha256Digest {
-  let resourcePath: PortableResourcePath;
-  try {
-    resourcePath = parsePortableResourcePath(value, "$resourcePath");
-  } catch (error: unknown) {
-    if (error instanceof PortableResourcePathError) {
-      fail("input", "$resourcePath", error);
-    }
-    throw error;
-  }
+/**
+ * 计算目标可移植引用的脱敏、稳定暂存路由摘要。路径是类型化的；保留前缀的名字不能是目标
+ * （领域规则，留下）。
+ */
+export function computeDurableAtomicFileStageTargetDigest(
+  resourcePath: PortableResourcePath,
+): Sha256Digest {
   const resourceName = splitPortableResourcePath(resourcePath).at(-1);
   if (resourceName === undefined || hasDurableAtomicFileStagePrefix(resourceName)) {
     fail("input", "$resourcePath");
@@ -118,8 +109,8 @@ export function computeDurableAtomicFileStageTargetDigest(value: unknown): Sha25
 }
 
 /** 判断名称是否占用 Wakeflow 原子暂存文件保留前缀；该结果不代表格式已经有效。 */
-export function hasDurableAtomicFileStagePrefix(value: unknown): boolean {
-  return typeof value === "string" && value.startsWith(STAGE_PREFIX);
+export function hasDurableAtomicFileStagePrefix(value: string): boolean {
+  return value.startsWith(STAGE_PREFIX);
 }
 
 /** 解析自描述原子暂存文件名；不授予清理权限。 */
@@ -155,23 +146,17 @@ export function parseDurableAtomicFileStageFileName(
   });
 }
 
-/** 为一次原子写入签发并登记进程内活动暂存地址。 */
+/**
+ * 为一次原子写入签发并登记进程内活动暂存地址。参数是类型化的；拼出的文件名再按文件名文法解析
+ * 一次，权限位越界在那里失败。
+ */
 export function issueDurableAtomicFileStageAddress(
-  operationValue: unknown,
-  resourcePathValue: unknown,
-  inputDigestValue: unknown,
-  modeValue: unknown,
+  operation: DurableAtomicFileStageOperation,
+  resourcePath: PortableResourcePath,
+  inputDigest: Sha256Digest,
+  mode: number,
 ): Readonly<DurableAtomicFileStageAddress> {
-  const operation = parseOperation(operationValue);
-  const targetResourcePathDigest = computeDurableAtomicFileStageTargetDigest(resourcePathValue);
-  let inputDigest: Sha256Digest;
-  try {
-    inputDigest = parseSha256Digest(inputDigestValue, "$inputDigest");
-  } catch (error: unknown) {
-    if (error instanceof Sha256Error) fail("digest", "$inputDigest", error);
-    throw error;
-  }
-  const mode = parseMode(modeValue);
+  const targetResourcePathDigest = computeDurableAtomicFileStageTargetDigest(resourcePath);
   let attempt: string;
   try {
     attempt = createUuidV4();

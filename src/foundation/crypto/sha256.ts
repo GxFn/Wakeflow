@@ -37,7 +37,7 @@ export type Sha256Digest = `sha256:${string}` & {
 };
 
 /** SHA-256 基础能力失败的稳定分类。 */
-export type Sha256ErrorReason = "input-type" | "hash-failure" | "digest-format";
+export type Sha256ErrorReason = "hash-failure" | "digest-format";
 
 /**
  * SHA-256 字节摘要与词法解析的稳定错误。

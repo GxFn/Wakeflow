@@ -22,10 +22,12 @@ import {
 import {
   parseRequirementLineageReference,
   RequirementLineageError,
+  type RequirementLineageReference,
 } from "../../../src/governance/demand/model/requirement-lineage.js";
 import {
   createLedgerAuthorityMemberReference,
   LedgerAuthorityStore,
+  parseLedgerAuthorityMemberReference,
 } from "../../../src/governance/ledger/ledger-authority-store.js";
 import { useDisposableDurability } from "../../support/disposable-durability.js";
 import { publishFixtureRequirement } from "../ledger/requirement-package.fixture.js";
@@ -57,11 +59,15 @@ const REQUIREMENT_LINEAGE = parseRequirementLineageReference({
 
 const POD_ID = "pod_99999999-9999-4999-8999-999999999999";
 
-function identityDraft(podId: unknown = POD_ID, source: unknown = REQUIREMENT_LINEAGE) {
+function identityDraft(
+  podId: string = POD_ID,
+  source: Readonly<RequirementLineageReference> = REQUIREMENT_LINEAGE,
+  title = "Demand Event Sourcing",
+) {
   return {
     programId: PROGRAM_ID,
     demandId: DEMAND_ID,
-    title: "Demand Event Sourcing",
+    title,
     goal: "以 immutable domain event 作为 Demand 可变状态唯一权威",
     completionDefinition: "删除 snapshot 后 replay 得到同一 state digest",
     demandType: "requirement" as const,
@@ -103,21 +109,16 @@ test("Demand identity binds exact requirement lineage and contains no legacy ent
 
 test("Demand identity draft is closed before the wall clock is read", () => {
   let clockCalls = 0;
+  // 标题是请求原文：非 NFC 文本在读时钟之前就被这一次解析拒绝。
   throws(
     () =>
-      createDemandIdentity(
-        identityDraft(undefined, {
-          ...REQUIREMENT_LINEAGE,
-          recordRef: "requirements/forged/record.json",
-        }),
-        {
-          clock: () => {
-            clockCalls += 1;
-            return CREATED_AT;
-          },
+      createDemandIdentity(identityDraft(undefined, undefined, "Café"), {
+        clock: () => {
+          clockCalls += 1;
+          return CREATED_AT;
         },
-      ),
-    (error: unknown) => error instanceof DemandIdentityError && error.reason === "source",
+      }),
+    (error: unknown) => error instanceof DemandIdentityError && error.reason === "text",
   );
   equal(clockCalls, 0);
 
@@ -187,11 +188,11 @@ test("mandatory Demand authority resolves complete package roles and rejects leg
     // 同一角色两个成员同样违反“恰好一个”：下游按角色 `.find` 不能在两个成员之间猜。
     const landing = refs.find((reference) => reference.role === "landing");
     if (landing === undefined) throw new Error("fixture must publish a landing member");
-    const duplicateLanding = {
+    const duplicateLanding = parseLedgerAuthorityMemberReference({
       ...landing,
       memberPath: landing.memberPath.replace(/landing\.md$/u, "landing-copy.md"),
       memberRef: landing.memberRef.replace(/landing\.md$/u, "landing-copy.md"),
-    };
+    });
     throws(
       () =>
         createDemandAuthority(identity, {
@@ -246,7 +247,7 @@ test("real-environment testing no longer binds a Ledger environment member", asy
           authorityRefs: refs,
           testingDecision: {
             ...authority.testingDecision,
-            environmentMemberRef: refs[0]?.memberRef,
+            environmentMemberRef: authority.authorityRefs[0].memberRef,
           },
         }),
       (error: unknown) => error instanceof DemandAuthorityError && error.reason === "testing",

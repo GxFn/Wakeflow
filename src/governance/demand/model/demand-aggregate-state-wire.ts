@@ -1358,6 +1358,9 @@ export function createInitialDemandAggregateState(
   });
 }
 
-export function computeDemandAggregateStateDigest(value: unknown): Sha256Digest {
-  return computeCanonicalJsonSha256Digest(parseDemandAggregateState(value));
+/** 状态是本编解码签发或读回的类型化值；规范 JSON 摘要自己做 JSON 准入。 */
+export function computeDemandAggregateStateDigest(
+  state: Readonly<DemandAggregateState>,
+): Sha256Digest {
+  return computeCanonicalJsonSha256Digest(state);
 }

@@ -9,6 +9,7 @@
  * 事件流里的信封与回调记录。
  */
 
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -59,9 +60,9 @@ const MAXIMUM_PERMIT_PROMPT_BYTES = parseByteCount(
 
 /** 许可 prompt 文件相对工作区根的路径：公共结果里的 `promptRef`，宿主助手据此从工作区根读文件。 */
 export function deliveryPermitPromptRef(
-  demandId: string,
+  demandId: WakeflowDurableId<"demand">,
   kind: DemandPermitPromptKind,
-  permitId: string,
+  permitId: WakeflowDurableId<"target-delivery">,
 ): PortableResourcePath {
   return parsePortableResourcePath(
     `${demandFinalRootRef(demandId)}/${demandPermitPromptRef(kind, permitId)}`,
@@ -72,7 +73,7 @@ export function deliveryPermitPromptRef(
 export async function materializeDeliveryPermitPrompt(
   demandRoot: RootedDirectory,
   kind: DemandPermitPromptKind,
-  permitId: string,
+  permitId: WakeflowDurableId<"target-delivery">,
   prompt: string,
   options: MaterializeDeliveryPermitPromptOptions = {},
 ): Promise<DeliveryPermitPromptDisposition> {

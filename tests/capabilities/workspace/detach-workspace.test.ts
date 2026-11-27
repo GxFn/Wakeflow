@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type TestContext, test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { executeCodexWakeflowMaintenance } from "../../../src/entrypoints/codex-wakeflow-maintenance.js";
 import { codexWorkspaceHostResourceProfile } from "../../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { isWakeflowError } from "../../../src/kernel/error.js";
@@ -36,7 +37,10 @@ function projectionPaths(fixture: DetachFixture): readonly string[] {
   return fixture.config.topology.windows.map((window) =>
     path.join(
       fixture.root,
-      wakeflowWindowRuntimeProjectionRef(codexWorkspaceHostResourceProfile, window.windowId),
+      wakeflowWindowRuntimeProjectionRef(
+        codexWorkspaceHostResourceProfile,
+        parseWakeflowDurableIdOfKind(window.windowId, "window"),
+      ),
     ),
   );
 }

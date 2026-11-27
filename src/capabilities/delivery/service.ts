@@ -3,7 +3,10 @@ import type {
   WakeflowConfigModel,
   WakeflowPresentationLanguage,
 } from "../../configuration/wakeflow-config.js";
-import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
+import {
+  parseWakeflowDurableIdOfKind,
+  type WakeflowDurableId,
+} from "../../contracts/identity/wakeflow-durable-id.js";
 import type { WakeflowErrorCode } from "../../contracts/vocabulary/wakeflow-error-code.js";
 import type { WakeflowHostId } from "../../contracts/vocabulary/wakeflow-host-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
@@ -80,6 +83,7 @@ import {
 import type {
   DemandCurrentDeliveryBase,
   DemandDeliveryOutcomeSummary,
+  DemandSupplementPackage,
   DemandTargetTaskState,
 } from "../../governance/demand/model/demand-aggregate-state.js";
 import { demandFinalRootRef } from "../../governance/demand/publication/demand-publication-paths.js";
@@ -756,9 +760,14 @@ function committedEvent(
   return Object.freeze({ stored, event });
 }
 
+/** 请求里的投递身份：Schema 已按领域文法核过，这里换成类型化身份（值进入的地方）。 */
+function requestDeliveryId(value: string): WakeflowDurableId<"target-delivery"> {
+  return parseWakeflowDurableIdOfKind(value, "target-delivery", "$request.deliveryId");
+}
+
 async function loadEnvelope(
   repository: DemandEventSourcingRepository,
-  deliveryId: string,
+  deliveryId: WakeflowDurableId<"target-delivery">,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DeliveryEnvelope>> {
   try {
@@ -1424,7 +1433,7 @@ interface PrepareSources {
 /** 一份并入的 supplement 需求包记录：按聚合里记下的谱系从 Ledger 读回，摘要不符即拒绝。 */
 async function loadSupplementRecord(
   context: SliceContext,
-  lineage: Readonly<{ readonly requirementId: string; readonly recordDigest: string }>,
+  lineage: Readonly<DemandSupplementPackage>,
 ): Promise<Readonly<DeliveryPromptSupplementRecord>> {
   let loaded: Awaited<ReturnType<LedgerAuthorityStore["loadRequirement"]>>;
   try {
@@ -1672,7 +1681,7 @@ function permitBody(
     permit: {
       prompt: outcome.envelope.portablePrompt,
       promptRef: deliveryPermitPromptRef(
-        envelope.demandId,
+        outcome.envelope.demandId,
         "delivery",
         outcome.envelope.deliveryId,
       ),
@@ -1748,7 +1757,11 @@ function callbackPermitBody(
     },
     permit: {
       prompt: outcome.prompt,
-      promptRef: deliveryPermitPromptRef(envelope.demandId, "callback", outcome.callbackId),
+      promptRef: deliveryPermitPromptRef(
+        outcome.commandResult.aggregate.demandId,
+        "callback",
+        outcome.callbackId,
+      ),
       promptDigest: outcome.promptDigest,
       hostAction: {
         effect: "send-prompt-to-window",
@@ -2284,7 +2297,11 @@ async function executeOutcome(
   const bound = await boundCommit(repository, binding, options.signal);
   if (bound !== null) {
     // 重放不要求投递仍是当前投递：目标可能已换到更新的信封，身份从被重放投递的信封取。
-    const replayedEnvelope = await loadEnvelope(repository, requested.deliveryId, options.signal);
+    const replayedEnvelope = await loadEnvelope(
+      repository,
+      requestDeliveryId(requested.deliveryId),
+      options.signal,
+    );
     const recorded = replayOutcome(context, replayedEnvelope, bound, binding);
     const replayed: OutcomeOutcome = Object.freeze({
       ...recorded,
@@ -2311,7 +2328,11 @@ async function executeOutcome(
   const target = deliveryTargetOf(context, input.deliveryId);
   assertFreshRevision(context, binding);
   const currentlyIndeterminate = assertOutcomeRecordable(target, input.claimDigest);
-  const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+  const envelope = await loadEnvelope(
+    repository,
+    requestDeliveryId(input.deliveryId),
+    options.signal,
+  );
   const route = await loadRoute(context, envelope.route.windowId);
   // 窗口已被换代就不能用新会话的记录给旧信封定处置（复审 D27，与 rearm 同一条规则）。
   if (route.binding.bindingId !== envelope.route.bindingId) {
@@ -2330,7 +2351,7 @@ async function executeOutcome(
       decision.blocker === "landing-evidence-missing" &&
       (await silenceExceededFor(
         repository,
-        { deliveryId: input.deliveryId, generation: target.currentDelivery.generation },
+        { deliveryId: envelope.deliveryId, generation: target.currentDelivery.generation },
         input.observedAt,
         options.signal,
       ))
@@ -2387,7 +2408,10 @@ async function releaseClaimFor(
 
 async function silenceExceededFor(
   repository: DemandEventSourcingRepository,
-  delivery: Readonly<{ readonly deliveryId: string; readonly generation: number }>,
+  delivery: Readonly<{
+    readonly deliveryId: WakeflowDurableId<"target-delivery">;
+    readonly generation: number;
+  }>,
   now: UtcInstant,
   signal: AbortSignal | undefined,
 ): Promise<boolean> {
@@ -2687,7 +2711,11 @@ async function executeRearm(
   }
   const currentOutcome: Readonly<DemandDeliveryOutcomeSummary> = target.currentDelivery.outcome;
   const current: Readonly<DemandCurrentDeliveryBase> = target.currentDelivery;
-  const envelope = await loadEnvelope(repository, input.deliveryId, options.signal);
+  const envelope = await loadEnvelope(
+    repository,
+    requestDeliveryId(input.deliveryId),
+    options.signal,
+  );
   const route = await loadRoute(context, envelope.route.windowId);
   // 与 prepare 同一前置：换代也是发出许可，取声明之前先核对本宿主资产（W16）。
   await assertHostAssetsCurrent(context, route, "$request.deliveryId");

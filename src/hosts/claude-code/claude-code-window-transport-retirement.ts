@@ -3,6 +3,7 @@ import {
   readWakeflowConfigAuthoritySnapshot,
   WakeflowConfigAuthoritySnapshotError,
 } from "../../configuration/wakeflow-config-authority-snapshot.js";
+import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durable-id.js";
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import type { JsonValue } from "../../foundation/data/json-value.js";
@@ -47,6 +48,7 @@ import {
 import {
   compileWakeflowWindowRuntimeProjectionExpectedEntries,
   WakeflowWindowRuntimeProjectionError,
+  type WakeflowWindowRuntimeProjectionExpectedEntry,
 } from "../../workspace/window-runtime/wakeflow-window-runtime-projection-inspection.js";
 import { wakeflowHostWindowLocatorsRootRef } from "../../workspace/workspace-host-runtime-paths.js";
 import { claudeCodeWindowHostIdentityProfile } from "./claude-code-window-host-identity-profile.js";
@@ -173,9 +175,10 @@ function unregisteredTargets(
       resourceProfile: profile,
       identityProfile: claudeCodeWindowHostIdentityProfile,
     };
-    return new Map(
+    // 按载荷里的字符串查找；值带着期望 Config 里的类型化 windowId。
+    return new Map<string, Readonly<WakeflowWindowRuntimeProjectionExpectedEntry>>(
       compileWakeflowWindowRuntimeProjectionExpectedEntries(inputs, { bindings: [] }).map(
-        (entry) => [entry.windowId, entry.target] as const,
+        (entry) => [entry.windowId, entry] as const,
       ),
     );
   } catch (error: unknown) {
@@ -274,7 +277,7 @@ export async function planClaudeCodeWindowTransportRetirement(
     const bindingId = bindings.find((binding) => binding.windowId === windowId)?.bindingId ?? null;
     const locatorPresent =
       (await existingNode(root, locatorRef(request.profile, windowId), "$locator")) !== null;
-    const target = targets.get(windowId);
+    const target = targets.get(windowId)?.target;
     if ((bindingId === null && !locatorPresent) || target === undefined) continue;
     operations.push({
       operationId: `${OPERATION_ID_PREFIX}${windowId}`,
@@ -332,9 +335,10 @@ async function unlinkExactly(
 }
 
 /** 操作身份与目标都从期望 Config 与选出的 profile 重算，与计划不一致即拒绝，不做任何效果。 */
-function admitOperation(
-  request: ExecuteWakeflowHostMaintenanceOperationRequest,
-): Readonly<{ readonly windowId: string; readonly target: ProjectionTarget }> {
+function admitOperation(request: ExecuteWakeflowHostMaintenanceOperationRequest): Readonly<{
+  readonly windowId: WakeflowDurableId<"window">;
+  readonly target: ProjectionTarget;
+}> {
   const { windowId } = parsePayload(request.operation.payload);
   if (
     request.operation.operationId !== `${OPERATION_ID_PREFIX}${windowId}` ||
@@ -342,14 +346,14 @@ function admitOperation(
   ) {
     fail("operation", "$operation");
   }
-  const target = unregisteredTargets(request.config, request.profile).get(windowId);
+  const entry = unregisteredTargets(request.config, request.profile).get(windowId);
   if (
-    target === undefined ||
-    targetDigest(windowId, target.documentDigest) !== request.operation.targetDigest
+    entry === undefined ||
+    targetDigest(windowId, entry.target.documentDigest) !== request.operation.targetDigest
   ) {
     fail("plan", "$operation.targetDigest");
   }
-  return Object.freeze({ windowId, target });
+  return Object.freeze({ windowId: entry.windowId, target: entry.target });
 }
 
 function mapExecutionError(error: unknown): never {
@@ -362,7 +366,7 @@ function mapExecutionError(error: unknown): never {
 async function retireUnderLock(
   root: RootedDirectory,
   request: ExecuteWakeflowHostMaintenanceOperationRequest,
-  windowId: string,
+  windowId: WakeflowDurableId<"window">,
   target: ProjectionTarget,
   bindings: readonly Readonly<WakeflowWindowHostBinding>[],
 ): Promise<"current" | "updated"> {

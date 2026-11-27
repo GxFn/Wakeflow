@@ -71,8 +71,8 @@ interface ObservedSignal {
 }
 
 /**
- * 真实的 AbortSignal（不是 Proxy，仍能通过基础层的 isAbortSignal 校验），
- * 只把实例上的 `aborted` 换成一个受控读数：`abortAfter` 次读取之后才变成已取消。
+ * 真实的 AbortSignal（不是 Proxy），只把实例上的 `aborted` 换成一个受控读数：
+ * `abortAfter` 次读取之后才变成已取消。
  */
 function observedSignal(abortAfter: number | null): ObservedSignal {
   const signal = new AbortController().signal;

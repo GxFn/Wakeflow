@@ -27,7 +27,7 @@ export interface WakeflowHostCapabilityLayoutAuthority {
   readonly authorityDigest: Sha256Digest;
 }
 
-export type WakeflowHostCapabilityLayoutAuthorityErrorReason = "profile" | "catalog";
+export type WakeflowHostCapabilityLayoutAuthorityErrorReason = "catalog";
 
 /** Host capability layout authority 编译失败的稳定、脱敏错误。 */
 export class WakeflowHostCapabilityLayoutAuthorityError extends ModuleError<WakeflowHostCapabilityLayoutAuthorityErrorReason> {

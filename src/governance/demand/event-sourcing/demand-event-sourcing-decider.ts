@@ -1534,12 +1534,9 @@ function decideCancelDemand(
 
 /** 根据当前状态对一条业务命令作出纯事件决策。 */
 export function decideDemandEventSourcingCommand(
-  stateValue: unknown,
-  commandValue: unknown,
+  state: Readonly<DemandAggregateState> | null,
+  command: Readonly<DemandEventSourcingCommand>,
 ): DecidedEvents {
-  const state = parseState(stateValue);
-  const command = parseDemandEventSourcingCommand(commandValue);
-
   if (command.commandType === "publication.publish-demand") {
     return decidePublishDemand(state, command);
   }

@@ -17,17 +17,8 @@ test("Markdown JSON string literal keeps external text inside one data span", ()
   equal(renderMarkdownJsonStringLiteral("简体中文"), '`"简体中文"`');
 });
 
-test("Markdown JSON string literal rejects coercion and non-canonical Unicode", () => {
-  let coercionCalls = 0;
-  const behavioralValue = {
-    toString() {
-      coercionCalls += 1;
-      return "forged";
-    },
-  };
+test("Markdown JSON string literal rejects non-canonical Unicode", () => {
   for (const [value, reason] of [
-    [123, "input"],
-    [behavioralValue, "input"],
     ["cafe\u0301", "unicode"],
     ["\ud800", "unicode"],
   ] as const) {
@@ -44,5 +35,4 @@ test("Markdown JSON string literal rejects coercion and non-canonical Unicode", 
       equal(caught.path, "$value");
     }
   }
-  equal(coercionCalls, 0);
 });

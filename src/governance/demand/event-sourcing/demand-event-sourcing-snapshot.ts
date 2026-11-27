@@ -87,8 +87,6 @@ export type DemandEventSourcingSnapshotErrorReason =
   | "position"
   | "digest"
   | "state"
-  | "aggregate"
-  | "commit"
   | "mismatch"
   | "representation";
 

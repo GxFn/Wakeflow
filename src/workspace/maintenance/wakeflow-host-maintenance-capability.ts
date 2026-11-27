@@ -56,11 +56,7 @@ export interface WakeflowHostMaintenanceCapability {
   ) => Promise<Readonly<WakeflowHostMaintenanceOperationReceipt>>;
 }
 
-export type WakeflowHostMaintenanceCapabilityErrorReason =
-  | "input"
-  | "host"
-  | "identity"
-  | "contribution";
+export type WakeflowHostMaintenanceCapabilityErrorReason = "contribution";
 
 /** 当前宿主 capability 准入失败的稳定、脱敏错误。 */
 export class WakeflowHostMaintenanceCapabilityError extends ModuleError<WakeflowHostMaintenanceCapabilityErrorReason> {

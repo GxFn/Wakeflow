@@ -4,10 +4,7 @@ import type { WakeflowResourceProcessingContract } from "../../src/foundation/re
 import { claudeCodeWorkspaceHostResourceProfile } from "../../src/hosts/claude-code/wakeflow-workspace-host-resource-profile.js";
 import { codexWorkspaceHostResourceProfile } from "../../src/hosts/codex/wakeflow-workspace-host-resource-profile.js";
 import { createWakeflowWorkspaceHostResourceCatalog } from "../../src/workspace/workspace-host-resource-catalog.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../../src/workspace/workspace-host-resource-profile.js";
+import { parseWakeflowWorkspaceHostResourceProfile } from "../../src/workspace/workspace-host-resource-profile.js";
 import type { WakeflowWorkspaceResourceNodePolicy } from "../../src/workspace/workspace-resource-declaration.js";
 
 function assertDeepFrozen(value: unknown): void {
@@ -109,14 +106,6 @@ test("Codex Host Resource Catalog contains only its static profile surfaces", ()
   );
   assertDeepFrozen(catalog);
   deepEqual(createWakeflowWorkspaceHostResourceCatalog(codexWorkspaceHostResourceProfile), catalog);
-
-  let invalidProfile: unknown;
-  try {
-    createWakeflowWorkspaceHostResourceCatalog({});
-  } catch (error: unknown) {
-    invalidProfile = error;
-  }
-  equal(invalidProfile instanceof WakeflowWorkspaceHostResourceProfileError, true);
 });
 
 test("optional Host resources are compiled from profile values without host branches", () => {

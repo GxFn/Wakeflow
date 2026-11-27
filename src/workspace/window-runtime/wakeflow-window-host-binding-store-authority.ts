@@ -1,20 +1,13 @@
+import type { WakeflowConfigModel } from "../../configuration/wakeflow-config.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
 import {
   admitWakeflowResourceOperation,
   WakeflowResourceProcessingContractError,
 } from "../../foundation/resource/resource-processing-contract.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostResourceProfile,
-  WakeflowWorkspaceHostResourceProfileError,
-} from "../workspace-host-resource-profile.js";
+import type { WakeflowWorkspaceHostResourceProfile } from "../workspace-host-resource-profile.js";
 import { createWakeflowWindowHostBindingResourceCatalog } from "./wakeflow-window-host-binding-resource-catalog.js";
 import type { WakeflowWindowHostBindingStoreAuthority } from "./wakeflow-window-host-binding-store.js";
-import {
-  parseWakeflowWindowHostIdentityProfile,
-  type WakeflowWindowHostIdentityProfile,
-  WakeflowWindowHostIdentityProfileError,
-} from "./wakeflow-window-host-identity-profile.js";
+import type { WakeflowWindowHostIdentityProfile } from "./wakeflow-window-host-identity-profile.js";
 import {
   compileWakeflowWindowRuntimeDesiredTopology,
   WakeflowWindowRuntimeDesiredTopologyError,
@@ -39,26 +32,16 @@ const fail: Fail<WakeflowWindowHostBindingStoreAuthorityErrorReason> = failWith(
   WakeflowWindowHostBindingStoreAuthorityError,
 );
 
-/** 从当前Config与Host profiles编译完整、零I/O的Binding Store读取权威。 */
+/**
+ * 从当前Config与Host profiles编译完整、零I/O的Binding Store读取权威。三者都是类型化的（Config
+ * 来自权威快照或请求入口的解析，profiles 在宿主模块加载时解析）；宿主是否支持窗口身份、两份
+ * profile 是否同一宿主仍在这里核对。
+ */
 export function compileWakeflowWindowHostBindingStoreAuthority(
-  configValue: unknown,
-  resourceProfileValue: unknown,
-  identityProfileValue: unknown,
+  config: WakeflowConfigModel,
+  resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>,
+  identityProfile: Readonly<WakeflowWindowHostIdentityProfile>,
 ): Readonly<WakeflowWindowHostBindingStoreAuthority> {
-  let resourceProfile: Readonly<WakeflowWorkspaceHostResourceProfile>;
-  let identityProfile: Readonly<WakeflowWindowHostIdentityProfile>;
-  try {
-    resourceProfile = parseWakeflowWorkspaceHostResourceProfile(resourceProfileValue);
-    identityProfile = parseWakeflowWindowHostIdentityProfile(identityProfileValue);
-  } catch (error: unknown) {
-    if (
-      error instanceof WakeflowWorkspaceHostResourceProfileError ||
-      error instanceof WakeflowWindowHostIdentityProfileError
-    ) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
   if (
     !resourceProfile.surfaces.windowIdentity ||
     resourceProfile.hostId !== identityProfile.hostId
@@ -67,7 +50,7 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   }
   let topology: ReturnType<typeof compileWakeflowWindowRuntimeDesiredTopology>;
   try {
-    topology = compileWakeflowWindowRuntimeDesiredTopology(configValue, resourceProfile);
+    topology = compileWakeflowWindowRuntimeDesiredTopology(config, resourceProfile);
   } catch (error: unknown) {
     if (error instanceof WakeflowWindowRuntimeDesiredTopologyError) {
       fail("topology", error.path, error);
@@ -81,14 +64,12 @@ export function compileWakeflowWindowHostBindingStoreAuthority(
   >[];
   try {
     bindingRefs = Object.freeze(
-      createWakeflowWindowHostBindingResourceCatalog(configValue, resourceProfile).map(
-        (declaration) => {
-          admitWakeflowResourceOperation(declaration.processing, "exclusive-create");
-          const ref = declaration.placement.relativePath;
-          if (ref === null) fail("resource", "$bindingCatalog");
-          return ref;
-        },
-      ),
+      createWakeflowWindowHostBindingResourceCatalog(config, resourceProfile).map((declaration) => {
+        admitWakeflowResourceOperation(declaration.processing, "exclusive-create");
+        const ref = declaration.placement.relativePath;
+        if (ref === null) fail("resource", "$bindingCatalog");
+        return ref;
+      }),
     );
   } catch (error: unknown) {
     if (

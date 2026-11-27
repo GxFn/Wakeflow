@@ -557,7 +557,7 @@ async function replaceConfig(context: PodSliceContext, desired: JsonValue): Prom
  */
 async function retireProjectionsQuietly(
   context: PodSliceContext,
-  windowIds: readonly string[],
+  windowIds: readonly WakeflowDurableId<"window">[],
 ): Promise<void> {
   if (windowIds.length === 0) return;
   for (const host of context.facade.hosts) {

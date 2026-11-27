@@ -3,6 +3,7 @@ import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parseSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import {
   issueDurableAtomicFileStageAddress,
   releaseDurableAtomicFileStageAddress,
@@ -41,7 +42,7 @@ test("已发布 Demand 的快照目录留着死写者的合法原子暂存时，
       const address = issueDurableAtomicFileStageAddress(
         "create",
         nextSnapshotRef,
-        `sha256:${"0".repeat(64)}`,
+        parseSha256Digest(`sha256:${"0".repeat(64)}`),
         0o600,
       );
       const snapshotsDirectory = path.join(root.absolutePath, "event-sourcing", "snapshots");

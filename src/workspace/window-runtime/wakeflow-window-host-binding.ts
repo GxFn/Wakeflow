@@ -39,7 +39,6 @@ import {
 } from "./wakeflow-window-host-binding-id.js";
 import {
   parseWakeflowWindowHostHandle,
-  parseWakeflowWindowHostIdentityProfile,
   type WakeflowWindowHostHandle,
   type WakeflowWindowHostIdentityProfile,
   WakeflowWindowHostIdentityProfileError,
@@ -177,17 +176,6 @@ function instant(value: unknown, path: string): UtcInstant {
   }
 }
 
-function identityProfile(value: unknown): Readonly<WakeflowWindowHostIdentityProfile> {
-  try {
-    return parseWakeflowWindowHostIdentityProfile(value);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWindowHostIdentityProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
-}
-
 function opaqueHandle(
   profile: Readonly<WakeflowWindowHostIdentityProfile>,
   value: WindowHostBindingWire["handle"],
@@ -202,10 +190,13 @@ function opaqueHandle(
   }
 }
 
-/** 对任意值执行Schema、当前宿主handle、类型化身份和审计时间准入。 */
+/**
+ * 对任意值执行Schema、当前宿主handle、类型化身份和审计时间准入。宿主画像是类型化的当前宿主常量；
+ * 记录里的宿主与它的关系在这里核对。
+ */
 export function parseWakeflowWindowHostBinding(
   value: unknown,
-  identityProfileValue: unknown,
+  profile: Readonly<WakeflowWindowHostIdentityProfile>,
 ): Readonly<WakeflowWindowHostBinding> {
   let json: JsonValue;
   try {
@@ -217,7 +208,6 @@ export function parseWakeflowWindowHostBinding(
   const validated = validateWire(json);
   if (!validated.ok) fail("schema", validated.path);
   const wire = validated.value;
-  const profile = identityProfile(identityProfileValue);
   if (wire.hostId !== profile.hostId) fail("profile", "$/hostId");
   const observedAt = instant(wire.source.observedAt, "$/source/observedAt");
   const registeredAt = instant(wire.registeredAt, "$/registeredAt");
@@ -240,10 +230,10 @@ export function parseWakeflowWindowHostBinding(
   });
 }
 
-/** 从已准入字段创建一份完整 Binding 记录。 */
+/** 从已准入字段创建一份完整 Binding 记录（编解码自己的一次构造解析）。 */
 export function createWakeflowWindowHostBinding(
   input: Readonly<CreateWakeflowWindowHostBindingInput>,
-  identityProfileValue: unknown,
+  identityProfile: Readonly<WakeflowWindowHostIdentityProfile>,
 ): Readonly<WakeflowWindowHostBinding> {
   return parseWakeflowWindowHostBinding(
     {
@@ -262,25 +252,24 @@ export function createWakeflowWindowHostBinding(
       ...(input.launch === undefined ? {} : { launch: input.launch }),
       registeredAt: input.registeredAt,
     },
-    identityProfileValue,
+    identityProfile,
   );
 }
 
-/** 渲染唯一确定性 JSON 文档；文件权限由 Binding store 固定为 0600。 */
+/**
+ * 渲染唯一确定性 JSON 文档；文件权限由 Binding store 固定为 0600。记录是本编解码签发的类型化值，
+ * 不再复验；读回时文档解析做完整准入与往返核对。
+ */
 export function renderWakeflowWindowHostBinding(
-  value: unknown,
-  identityProfileValue: unknown,
+  binding: Readonly<WakeflowWindowHostBinding>,
 ): string {
-  return renderDeterministicJsonDocument(
-    parseWakeflowWindowHostBinding(value, identityProfileValue),
-    "$windowHostBinding",
-  );
+  return renderDeterministicJsonDocument(binding, "$windowHostBinding");
 }
 
 /** 解析确定性 JSON 文档并拒绝任何等价但非规范字节。 */
 export function parseWakeflowWindowHostBindingDocument(
   text: unknown,
-  identityProfileValue: unknown,
+  identityProfile: Readonly<WakeflowWindowHostIdentityProfile>,
 ): Readonly<WakeflowWindowHostBinding> {
   let json: JsonValue;
   try {
@@ -291,7 +280,7 @@ export function parseWakeflowWindowHostBindingDocument(
     }
     throw error;
   }
-  const binding = parseWakeflowWindowHostBinding(json, identityProfileValue);
+  const binding = parseWakeflowWindowHostBinding(json, identityProfile);
   if (renderDeterministicJsonDocument(binding, "$windowHostBinding") !== text) {
     fail("representation", "$windowHostBinding");
   }

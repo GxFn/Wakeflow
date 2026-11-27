@@ -157,9 +157,11 @@ function temporaryDirectory(t: TestContext, prefix: string): string {
 function createWorkspace(t: TestContext, config: Record<string, unknown> | null): string {
   const workspace = temporaryDirectory(t, "wakeflow-claude-statusline-");
   if (config !== null) {
-    writeFileSync(path.join(workspace, "wakeflow.config.json"), renderWakeflowConfig(config), {
-      mode: 0o644,
-    });
+    writeFileSync(
+      path.join(workspace, "wakeflow.config.json"),
+      renderWakeflowConfig(parseWakeflowConfig(config)),
+      { mode: 0o644 },
+    );
   }
   const assetPath = path.join(workspace, ...CLAUDE_CODE_STATUSLINE_ASSET_REF.split("/"));
   mkdirSync(path.dirname(assetPath), { recursive: true, mode: 0o700 });

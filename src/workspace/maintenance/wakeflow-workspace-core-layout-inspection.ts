@@ -87,7 +87,6 @@ interface WakeflowWorkspaceCoreLayoutInspectionOptions {
 }
 
 export type WakeflowWorkspaceCoreLayoutInspectionErrorReason =
-  | "input"
   | "root-scope"
   | "capacity"
   | "source-changed"

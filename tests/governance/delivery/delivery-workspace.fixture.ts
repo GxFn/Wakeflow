@@ -12,6 +12,7 @@ import {
 } from "../../../src/capabilities/delivery/service.js";
 import { executeWindowBindingRequest } from "../../../src/capabilities/endpoint/service.js";
 import { parseWakeflowConfig } from "../../../src/configuration/wakeflow-config.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import { parseUtcInstant, type UtcInstant } from "../../../src/foundation/time/utc-instant.js";
 import {
@@ -127,7 +128,7 @@ export async function loadFixtureDeliveryOutcome(
 ): Promise<Readonly<DeliveryOutcome>> {
   return withFixtureDemandRoot(fixture, async (root) => {
     const located = await new DemandEventSourcingRepository(root).findDeliveryOutcomeRecordedEvents(
-      deliveryId,
+      parseWakeflowDurableIdOfKind(deliveryId, "target-delivery"),
     );
     const last = located.at(-1);
     if (last === undefined) throw new Error("Expected a recorded delivery outcome fixture.");
@@ -142,7 +143,7 @@ export async function loadFixtureDeliveryEnvelope(
 ): Promise<Readonly<DeliveryEnvelope>> {
   return withFixtureDemandRoot(fixture, async (root) => {
     const located = await new DemandEventSourcingRepository(root).findDeliveryPreparedEvent(
-      deliveryId,
+      parseWakeflowDurableIdOfKind(deliveryId, "target-delivery"),
     );
     if (located === null) throw new Error("Expected a prepared delivery envelope fixture.");
     return located.event.data.envelope;

@@ -1,7 +1,5 @@
 import {
   buildWakeflowConfigIndexes,
-  parseWakeflowConfig,
-  WakeflowConfigError,
   type WakeflowConfigIndexes,
   type WakeflowConfigModel,
   type WakeflowConfigPlacement,
@@ -11,10 +9,9 @@ import type { WakeflowDurableId } from "../../contracts/identity/wakeflow-durabl
 import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canonical-json-sha256.js";
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { type Fail, failWith, ModuleError } from "../../foundation/error/module-error.js";
-import {
-  parseWakeflowWorkspaceHostResourceProfile,
-  type WakeflowWorkspaceHostId,
-  WakeflowWorkspaceHostResourceProfileError,
+import type {
+  WakeflowWorkspaceHostId,
+  WakeflowWorkspaceHostResourceProfile,
 } from "../workspace-host-resource-profile.js";
 
 /**
@@ -62,11 +59,7 @@ export interface WakeflowWindowRuntimeDesiredTopology {
   readonly desiredTopologyDigest: Sha256Digest;
 }
 
-type WakeflowWindowRuntimeDesiredTopologyErrorReason =
-  | "config"
-  | "profile"
-  | "capacity"
-  | "reference";
+type WakeflowWindowRuntimeDesiredTopologyErrorReason = "capacity" | "reference";
 
 /** Window Runtime 期望拓扑编译失败的稳定、脱敏错误。 */
 export class WakeflowWindowRuntimeDesiredTopologyError extends ModuleError<WakeflowWindowRuntimeDesiredTopologyErrorReason> {
@@ -132,28 +125,12 @@ function desiredWindow(
 
 /**
  * 将严格 Config 与当前 Host Profile 编译为稳定排序的纯期望拓扑。
- * 不相关的语言、显示名称或宿主运行状态变化不会改变该拓扑摘要。
+ * 不相关的语言、显示名称或宿主运行状态变化不会改变该拓扑摘要。Config 与 Profile 是类型化的。
  */
 export function compileWakeflowWindowRuntimeDesiredTopology(
-  configValue: unknown,
-  profileValue: unknown,
+  model: WakeflowConfigModel,
+  profile: Readonly<WakeflowWorkspaceHostResourceProfile>,
 ): Readonly<WakeflowWindowRuntimeDesiredTopology> {
-  let model: WakeflowConfigModel;
-  try {
-    model = parseWakeflowConfig(configValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowConfigError) fail("config", error.path, error);
-    throw error;
-  }
-  let profile: ReturnType<typeof parseWakeflowWorkspaceHostResourceProfile>;
-  try {
-    profile = parseWakeflowWorkspaceHostResourceProfile(profileValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowWorkspaceHostResourceProfileError) {
-      fail("profile", error.path, error);
-    }
-    throw error;
-  }
   if (model.topology.windows.length > WAKEFLOW_WINDOW_RUNTIME_MAXIMUM_STATIC_WINDOWS) {
     fail("capacity", "$/topology/windows");
   }

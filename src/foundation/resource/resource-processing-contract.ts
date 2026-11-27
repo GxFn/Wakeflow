@@ -439,17 +439,22 @@ export type WakeflowResourceOperation =
       readonly recipe: "exact-directory-publish";
     };
 
+/** 一次操作选择的单一方案：资源变更方案或目录容器方案。 */
+export type WakeflowResourceOperationRecipe =
+  | WakeflowResourceMutationRecipe
+  | WakeflowDirectoryContainerRecipe;
+
 /**
  * 准入调用方已经明确选择的一项机械操作方案。
  *
- * 本函数不会替调用方选择操作方案，也不执行副作用。数组、复合字符串和资源合同
- * 未声明的方案都会被拒绝，从而保证一次操作只采用一种机械处理方式。
+ * 本函数不会替调用方选择操作方案，也不执行副作用。合同是声明编解码签发的类型化值，方案是
+ * 调用方写下的字面量，都不再复验；资源合同未声明的方案被拒绝，从而保证一次操作只采用一种
+ * 机械处理方式。
  */
 export function admitWakeflowResourceOperation(
-  contractValue: unknown,
-  recipeValue: unknown,
+  contract: Readonly<WakeflowResourceProcessingContract>,
+  recipeValue: WakeflowResourceOperationRecipe,
 ): Readonly<WakeflowResourceOperation> {
-  const contract = parseWakeflowResourceProcessingContract(contractValue);
   if (contract.kind === "directory-container") {
     if (recipeValue !== contract.materializationRecipe) {
       fail("operation", "$/recipe");
@@ -465,16 +470,18 @@ export function admitWakeflowResourceOperation(
       recipe: "materialize-directory",
     });
   }
-  const allowedRecipes: readonly WakeflowResourceMutationRecipe[] = contract.allowedMutationRecipes;
+  const allowedRecipes: readonly WakeflowResourceOperationRecipe[] =
+    contract.allowedMutationRecipes;
   if (
-    typeof recipeValue !== "string" ||
-    !allowedRecipes.includes(recipeValue as WakeflowResourceMutationRecipe)
+    recipeValue === "materialize-directory" ||
+    recipeValue === "exact-directory-publish" ||
+    !allowedRecipes.includes(recipeValue)
   ) {
     fail("operation", "$/recipe");
   }
   return Object.freeze({
     kind: "resource-mutation",
     role: contract.role,
-    recipe: recipeValue as WakeflowResourceMutationRecipe,
+    recipe: recipeValue,
   }) as Readonly<WakeflowResourceOperation>;
 }

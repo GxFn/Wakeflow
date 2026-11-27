@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { executeDemandContinuationRequest } from "../../../src/capabilities/demand/lifecycle.js";
 import type { TestReviewDecisionRequest } from "../../../src/capabilities/result-review/contract.js";
 import { executeTestReviewDecisionRequest } from "../../../src/capabilities/result-review/service.js";
+import { parseWakeflowDurableIdOfKind } from "../../../src/contracts/identity/wakeflow-durable-id.js";
 import { DemandEventSourcingRepository } from "../../../src/governance/demand/event-sourcing/demand-event-sourcing-repository.js";
 import { withFixtureDemandRoot } from "../../governance/delivery/delivery-workspace.fixture.js";
 import {
@@ -428,7 +429,9 @@ test("product-defect 失败步骤只允许 escalate；escalate{product-defect} �
           escalated.decision.targetReviewDecisionId,
         );
       }
-      const commit = await repository.findCommitById(escalated.commit.commitId);
+      const commit = await repository.findCommitById(
+        parseWakeflowDurableIdOfKind(escalated.commit.commitId, "demand-event-commit"),
+      );
       equal(commit?.events.length, 2);
       equal(commit?.events[0]?.eventType, "review.target-result-decided");
       equal(commit?.events[1]?.eventType, "review.product-defect-remediation-authorized");

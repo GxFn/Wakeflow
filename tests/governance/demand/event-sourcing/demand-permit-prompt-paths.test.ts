@@ -1,6 +1,7 @@
 import { deepEqual, equal, throws } from "node:assert/strict";
 import { test } from "node:test";
 
+import { parseWakeflowDurableIdOfKind } from "../../../../src/contracts/identity/wakeflow-durable-id.js";
 import {
   DEMAND_PERMIT_PROMPT_KINDS,
   DEMAND_PERMIT_PROMPTS_ROOT_REF,
@@ -11,7 +12,10 @@ import {
   parseDemandPermitPromptKind,
 } from "../../../../src/governance/demand/event-sourcing/demand-event-sourcing-paths.js";
 
-const PERMIT_ID = "target-delivery_12345678-1234-4123-8123-123456789abc";
+const PERMIT_ID = parseWakeflowDurableIdOfKind(
+  "target-delivery_12345678-1234-4123-8123-123456789abc",
+  "target-delivery",
+);
 
 function pathError(reason: string): (error: unknown) => boolean {
   return (error: unknown) =>
@@ -44,5 +48,4 @@ test("许可 prompt 文件固定在 artifacts/permits/<kind>/<target-delivery id
   ]) {
     throws(() => parseDemandPermitPromptFileName(bad), pathError("permit-prompt-file-name"));
   }
-  throws(() => demandPermitPromptRef("delivery", "demand_12345678-1234-4123-8123-123456789abc"));
 });

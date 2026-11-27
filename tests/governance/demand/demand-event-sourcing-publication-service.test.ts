@@ -31,6 +31,7 @@ import { DemandEventSourcingRepository } from "../../../src/governance/demand/ev
 import { DemandFileEventStore } from "../../../src/governance/demand/event-sourcing/demand-file-event-store.js";
 import {
   createDemandAuthority,
+  parseDemandAuthority,
   renderDemandAuthority,
 } from "../../../src/governance/demand/model/demand-authority.js";
 import {
@@ -157,7 +158,7 @@ async function cleanup(value: Awaited<ReturnType<typeof fixture>>) {
   rmSync(value.fixtureRoot, { recursive: true, force: true });
 }
 
-function publishInput(value: Awaited<ReturnType<typeof fixture>>) {
+function publishDraft(value: Awaited<ReturnType<typeof fixture>>) {
   return {
     identity: value.identity,
     authority: value.authority,
@@ -166,6 +167,11 @@ function publishInput(value: Awaited<ReturnType<typeof fixture>>) {
     recordedAt: CREATED_AT,
     expectedClaimStateDigest: value.claim.digest,
   };
+}
+
+/** 发布服务收已经建好的事务（能力层只建一次）。 */
+function publishInput(value: Awaited<ReturnType<typeof fixture>>) {
+  return createDemandEventSourcingPublicationTransaction(publishDraft(value));
 }
 
 function workspaceFile(value: Awaited<ReturnType<typeof fixture>>, ref: string) {
@@ -219,7 +225,7 @@ test("a stage that holds only the marker keeps its pod busy and recovers without
   const value = await fixture();
   try {
     await initializePublicationStorage(value.workspaceRoot, undefined);
-    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
+    const transaction = publishInput(value);
     // 标记是这次创建唯一落盘的记录（ADR-0031，5a 的 B 行）：根外面没有副本。
     const markerPath = writeStageMarker(
       value,
@@ -272,7 +278,7 @@ test("the same request replayed over its own interrupted stage completes it; a d
   const value = await fixture();
   try {
     await initializePublicationStorage(value.workspaceRoot, undefined);
-    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
+    const transaction = publishInput(value);
     const markerPath = writeStageMarker(
       value,
       renderDemandEventSourcingPublicationTransaction(transaction),
@@ -280,10 +286,14 @@ test("the same request replayed over its own interrupted stage completes it; a d
     // 另一份事务（提交标识不同）撞上同一个 Demand 的暂存：不是同一次创建，拒绝并且不动暂存。
     let caught: unknown;
     try {
-      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
-        ...publishInput(value),
-        commitId: COMMIT_ID.replace(/.$/u, COMMIT_ID.endsWith("0") ? "1" : "0"),
-      });
+      await publishDemandFromPackage(
+        value.workspaceRoot,
+        value.ledgerStore,
+        createDemandEventSourcingPublicationTransaction({
+          ...publishDraft(value),
+          commitId: COMMIT_ID.replace(/.$/u, COMMIT_ID.endsWith("0") ? "1" : "0"),
+        }),
+      );
     } catch (error: unknown) {
       caught = error;
     }
@@ -311,7 +321,7 @@ test("publication recovery 回收标记自己留下的 inactive 原子暂存，�
   const value = await fixture();
   try {
     await initializePublicationStorage(value.workspaceRoot, undefined);
-    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
+    const transaction = publishInput(value);
     mkdirSync(
       path.join(workspaceFile(value, demandPublicationStageRef(DEMAND_ID)), "transactions"),
       { recursive: true, mode: 0o700 },
@@ -383,7 +393,7 @@ test("published root marker is settled before normal authority load", async () =
   const value = await fixture();
   try {
     await initializePublicationStorage(value.workspaceRoot, undefined);
-    const transaction = createDemandEventSourcingPublicationTransaction(publishInput(value));
+    const transaction = publishInput(value);
     const text = renderDemandEventSourcingPublicationTransaction(transaction);
 
     const finalRef = demandFinalRootRef(DEMAND_ID);
@@ -524,18 +534,25 @@ test("publication refuses a claim state that drifted from the plan", async () =>
 test("unresolved Authority has no publication effects", async () => {
   const value = await fixture();
   try {
-    const badAuthority = {
-      ...value.authority,
-      authorityRefs: value.authority.authorityRefs.map((reference, index) =>
-        index === 0 ? { ...reference, memberDigest: `sha256:${"f".repeat(64)}` } : reference,
-      ),
-    };
+    const badAuthority = parseDemandAuthority(
+      {
+        ...value.authority,
+        authorityRefs: value.authority.authorityRefs.map((reference, index) =>
+          index === 0 ? { ...reference, memberDigest: `sha256:${"f".repeat(64)}` } : reference,
+        ),
+      },
+      value.identity,
+    );
     let caught: unknown;
     try {
-      await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
-        ...publishInput(value),
-        authority: badAuthority,
-      });
+      await publishDemandFromPackage(
+        value.workspaceRoot,
+        value.ledgerStore,
+        createDemandEventSourcingPublicationTransaction({
+          ...publishDraft(value),
+          authority: badAuthority,
+        }),
+      );
     } catch (error: unknown) {
       caught = error;
     }
@@ -606,25 +623,29 @@ test("publication apply refuses a pod that already has another active Demand", a
       },
       { clock: () => CREATED_AT },
     );
-    await publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, {
-      identity: otherIdentity,
-      authority: createDemandAuthority(otherIdentity, {
-        authorityRefs: other.documents.map((document) =>
-          createLedgerAuthorityMemberReference(other, document.path),
+    await publishDemandFromPackage(
+      value.workspaceRoot,
+      value.ledgerStore,
+      createDemandEventSourcingPublicationTransaction({
+        identity: otherIdentity,
+        authority: createDemandAuthority(otherIdentity, {
+          authorityRefs: other.documents.map((document) =>
+            createLedgerAuthorityMemberReference(other, document.path),
+          ),
+          testingDecision: value.authority.testingDecision,
+        }),
+        eventId: parseWakeflowDurableIdOfKind(
+          "demand-event_45454545-4545-4545-8545-454545454545",
+          "demand-event",
         ),
-        testingDecision: value.authority.testingDecision,
+        commitId: parseWakeflowDurableIdOfKind(
+          "demand-event-commit_78787878-7878-4878-8878-787878787878",
+          "demand-event-commit",
+        ),
+        recordedAt: CREATED_AT,
+        expectedClaimStateDigest: otherClaim.digest,
       }),
-      eventId: parseWakeflowDurableIdOfKind(
-        "demand-event_45454545-4545-4545-8545-454545454545",
-        "demand-event",
-      ),
-      commitId: parseWakeflowDurableIdOfKind(
-        "demand-event-commit_78787878-7878-4878-8878-787878787878",
-        "demand-event-commit",
-      ),
-      recordedAt: CREATED_AT,
-      expectedClaimStateDigest: otherClaim.digest,
-    });
+    );
 
     await rejects(
       publishDemandFromPackage(value.workspaceRoot, value.ledgerStore, publishInput(value)),

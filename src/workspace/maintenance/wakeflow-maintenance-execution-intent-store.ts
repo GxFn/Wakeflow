@@ -333,7 +333,7 @@ export async function readWakeflowMaintenanceExecutionIntentOrNull(
 export async function publishWakeflowMaintenanceExecutionIntent(
   root: RootedDirectory,
   context: Readonly<WakeflowMaintenanceGateContext>,
-  intentValue: unknown,
+  intent: Readonly<WakeflowMaintenanceExecutionIntent>,
 ): Promise<Readonly<WakeflowMaintenanceExecutionIntentSource>> {
   try {
     assertWakeflowMaintenanceGateContext(context, root);
@@ -343,17 +343,7 @@ export async function publishWakeflowMaintenanceExecutionIntent(
     }
     throw error;
   }
-  // `intentValue` 仍声明为 `unknown`（另一分区的测试直接调用，签名留到 A-spec 第 2 步），所以这里解析一次；
-  // 此前是"渲染时解析一次、再把渲染结果解析一次"。
-  let intent: Readonly<WakeflowMaintenanceExecutionIntent>;
-  try {
-    intent = parseWakeflowMaintenanceExecutionIntent(intentValue);
-  } catch (error: unknown) {
-    if (error instanceof WakeflowMaintenanceExecutionIntentError) {
-      fail("input", "$intent", error);
-    }
-    throw error;
-  }
+  // 意图是本编解码签发的类型化值（创建时已经构造即读回），不再复验；与门的操作标识的关系仍核对。
   const text = renderWakeflowMaintenanceExecutionIntent(intent);
   if (intent.operationId !== context.operationId) {
     fail("input", "$/operationId");

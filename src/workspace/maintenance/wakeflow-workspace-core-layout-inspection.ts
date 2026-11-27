@@ -191,14 +191,11 @@ function validPrivateDirectory(node: Readonly<FileNodeSnapshot>): boolean {
 
 async function optionalResource(
   root: RootedDirectory,
-  resourcePath: Parameters<RootedDirectory["inspectExistingResource"]>[0],
+  resourcePath: Parameters<RootedDirectory["inspectResourceOrNull"]>[0],
 ): Promise<Readonly<RootedResourceSnapshot> | null> {
   try {
-    return await root.inspectExistingResource(resourcePath, "$resourcePath");
+    return await root.inspectResourceOrNull(resourcePath, "$resourcePath");
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

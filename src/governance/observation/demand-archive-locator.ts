@@ -12,6 +12,7 @@ import {
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
@@ -415,10 +416,11 @@ export async function listArchivedDemandIds(
   signal: AbortSignal | undefined,
 ): Promise<readonly string[]> {
   try {
-    const listing = await readStableResourceDirectory(ledgerRoot, LEDGER_ARCHIVES_ROOT_REF, {
+    const listing = await readStableResourceDirectoryOrNull(ledgerRoot, LEDGER_ARCHIVES_ROOT_REF, {
       maximumEntries: MAXIMUM_ARCHIVED_DEMANDS,
       ...signalOptions(signal),
     });
+    if (listing === null) return Object.freeze([]);
     return Object.freeze(
       listing.entries
         .filter((entry) => entry.node.kind === "directory" && DEMAND_ID_PATTERN.test(entry.name))
@@ -427,7 +429,6 @@ export async function listArchivedDemandIds(
     );
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "not-found") return Object.freeze([]);
       fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
     }
     throw error;
@@ -520,19 +521,19 @@ export async function locateLatestDemandArchive(
   demandId: string,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<LocatedDemandArchiveSummary> | null> {
-  let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
+  let listing: Awaited<ReturnType<typeof readStableResourceDirectoryOrNull>>;
   try {
-    listing = await readStableResourceDirectory(ledgerRoot, demandArchivesRootRef(demandId), {
+    listing = await readStableResourceDirectoryOrNull(ledgerRoot, demandArchivesRootRef(demandId), {
       maximumEntries: MAXIMUM_ARCHIVES_PER_DEMAND,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return null;
     if (error instanceof StableDirectoryReadError) {
       fail("io-failure", `archive-list-${error.reason}`, "$archive", { cause: error });
     }
     throw error;
   }
+  if (listing === null) return null;
   const latest = listing.entries
     .filter((entry) => entry.node.kind === "directory" && ARCHIVE_NAME_PATTERN.test(entry.name))
     .map((entry) => entry.name)

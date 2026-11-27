@@ -27,10 +27,7 @@ import {
   type JsonValue,
   parseJsonValue,
 } from "../../foundation/data/json-value.js";
-import {
-  type PortableResourcePath,
-  parsePortableResourcePath,
-} from "../../foundation/filesystem/portable-resource-path.js";
+import { parsePortableResourcePath } from "../../foundation/filesystem/portable-resource-path.js";
 import {
   RootedDirectory,
   type RootedDirectoryDurability,
@@ -280,20 +277,6 @@ function podWindowIds(context: PodSliceContext, podId: string): readonly string[
 
 // ---- 事实加载 ----------------------------------------------------------------------
 
-/** 宿主运行时尚未物化（该宿主的制品还没初始化过本工作区）：该宿主没有绑定，不是读失败。 */
-async function bindingRootAbsent(
-  root: RootedDirectory,
-  bindingRootRef: PortableResourcePath,
-): Promise<boolean> {
-  try {
-    await root.inspectExistingResource(bindingRootRef, "$bindings");
-    return false;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return true;
-    throw error;
-  }
-}
-
 async function loadHostBindings(
   context: PodSliceContext,
   host: Readonly<PodHost>,
@@ -304,7 +287,9 @@ async function loadHostBindings(
       host.resourceProfile,
       host.identityProfile,
     );
-    if (await bindingRootAbsent(context.root, authority.bindingRootRef)) return Object.freeze([]);
+    // 宿主运行时尚未物化（该宿主的制品还没初始化过本工作区）：该宿主没有绑定，不是读失败。
+    if ((await context.root.inspectResourceOrNull(authority.bindingRootRef, "$bindings")) === null)
+      return Object.freeze([]);
     return (
       await inspectWakeflowWindowHostBindingInventory(
         context.root,

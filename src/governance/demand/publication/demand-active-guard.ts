@@ -17,10 +17,7 @@ import {
   RootedDirectory,
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
-import {
-  readStableResourceDirectory,
-  StableDirectoryReadError,
-} from "../../../foundation/filesystem/stable-directory-read.js";
+import { readStableResourceDirectoryOrNull } from "../../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../../foundation/filesystem/stable-file-read.js";
 import { OperationAbortedError } from "../../../foundation/node/abort-signal.js";
 import {
@@ -69,12 +66,8 @@ async function resourceExists(
   ref: ReturnType<typeof demandFinalRootRef>,
 ): Promise<boolean> {
   try {
-    await root.inspectExistingResource(ref);
-    return true;
+    return (await root.inspectResourceOrNull(ref)) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "demand-root-inspect", "$demandRoot", { cause: error });
     }
@@ -217,17 +210,11 @@ export async function readDemandPodId(
 }
 
 async function pendingEntries(root: RootedDirectory, ref: string, signal: AbortSignal | undefined) {
-  try {
-    return (
-      await readStableResourceDirectory(root, parsePortableResourcePath(ref), {
-        maximumEntries: 4096,
-        ...(signal === undefined ? {} : { signal }),
-      })
-    ).entries;
-  } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
-    throw error;
-  }
+  const listing = await readStableResourceDirectoryOrNull(root, parsePortableResourcePath(ref), {
+    maximumEntries: 4096,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  return listing?.entries ?? [];
 }
 
 /**

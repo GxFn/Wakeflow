@@ -200,13 +200,9 @@ async function resourcePresent(
   path: string,
 ): Promise<boolean> {
   try {
-    await root.inspectExistingResource(resourceRef, path);
-    return true;
+    return (await root.inspectResourceOrNull(resourceRef, path)) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError) {
-      if (error.reason === "resource-not-found") return false;
-      failWindowRuntimeProjection("input", "$root", error);
-    }
+    if (error instanceof RootedDirectoryError) failWindowRuntimeProjection("input", "$root", error);
     throw error;
   }
 }

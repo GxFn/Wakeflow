@@ -362,10 +362,11 @@ async function observeScaffold(
   expectedUserId: bigint,
 ): Promise<Readonly<WakeflowManagedSupportScaffoldObservation>> {
   try {
-    const resource = await supportRoot.inspectExistingResource(
+    const resource = await supportRoot.inspectResourceOrNull(
       relativePath,
       `$supportRoot/${relativePath}`,
     );
+    if (resource === null) return Object.freeze({ relativePath, status: "absent" as const });
     return Object.freeze({
       relativePath,
       status: scaffoldDirectoryCurrent(resource.node, expectedUserId)
@@ -373,9 +374,6 @@ async function observeScaffold(
         : ("conflict" as const),
     });
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return Object.freeze({ relativePath, status: "absent" as const });
-    }
     if (error instanceof RootedDirectoryError) {
       return Object.freeze({ relativePath, status: "conflict" as const });
     }

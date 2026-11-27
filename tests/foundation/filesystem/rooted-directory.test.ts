@@ -241,6 +241,29 @@ test("intermediate symlinks and non-directory ancestors fail closed", async () =
   }
 });
 
+test("inspectResourceOrNull returns null exactly where the throwing form reports resource-not-found", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-or-null-"));
+  const outside = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-or-null-outside-"));
+  writeFileSync(path.join(rootPath, "present"), "x");
+  symlinkSync(outside, path.join(rootPath, "alias"));
+  const rooted = await RootedDirectory.open(rootPath);
+  try {
+    const present = await rooted.inspectResourceOrNull(parsePortableResourcePath("present"));
+    equal(present?.node.kind, "file");
+    equal(await rooted.inspectResourceOrNull(parsePortableResourcePath("missing")), null);
+    equal(await rooted.inspectResourceOrNull(parsePortableResourcePath("missing/deeper")), null);
+    await expectRootedDirectoryError(
+      () => rooted.inspectResourceOrNull(parsePortableResourcePath("alias/missing"), "$.ref"),
+      "ancestor-symlink",
+      "$.ref",
+    );
+  } finally {
+    await rooted.close();
+    rmSync(rootPath, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 test("a final symlink is observed as a symlink and never followed", async () => {
   const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-root-final-link-"));
   const target = path.join(rootPath, "target");

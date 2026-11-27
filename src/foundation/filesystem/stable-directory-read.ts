@@ -603,6 +603,24 @@ export async function readStableResourceDirectory(
   return readStableDirectory(root, target, parsed);
 }
 
+/**
+ * 与 `readStableResourceDirectory` 相同的读取，只是目录不在时返回 `null`（1.4.5）："不在"恰好是那边抛出
+ * `not-found` 的情形，不更宽；其余失败照旧抛出同样的错误。抛出的形式要保留 `not-found` 的原因链（公共
+ * 错误投影读它），所以这里接住它。
+ */
+export async function readStableResourceDirectoryOrNull(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  options: StableDirectoryReadOptions,
+): Promise<Readonly<StableDirectoryReadResult<PortableResourcePath>> | null> {
+  try {
+    return await readStableResourceDirectory(root, resourcePath, options);
+  } catch (error: unknown) {
+    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return null;
+    throw error;
+  }
+}
+
 export interface StableDirectoryPageOptions extends StableDirectoryReadOptions {
   /** Exclusive UTF-16 name cursor; omit for the first page. */
   readonly afterName?: string;

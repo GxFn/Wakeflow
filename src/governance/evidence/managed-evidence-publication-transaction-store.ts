@@ -215,16 +215,12 @@ async function journalNodeOrNull(
   root: RootedDirectory,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (
-      await root.inspectExistingResource(
-        MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
-        "$transaction",
-      )
-    ).node;
+    const resource = await root.inspectResourceOrNull(
+      MANAGED_EVIDENCE_PUBLICATION_TRANSACTION_REF,
+      "$transaction",
+    );
+    return resource?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

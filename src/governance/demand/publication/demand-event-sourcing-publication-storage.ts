@@ -122,11 +122,8 @@ export async function publicationNodeOrNull(
   ref: PortableResourcePath,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(ref)).node;
+    return (await root.inspectResourceOrNull(ref))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }

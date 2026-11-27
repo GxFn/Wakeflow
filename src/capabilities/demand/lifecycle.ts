@@ -19,7 +19,10 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
 import { parseJsonValue, type JsonValue } from "../../foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  readDeterministicJsonFile,
+  readDeterministicJsonFileOrNull,
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   replaceFileAtomically,
@@ -304,7 +307,7 @@ async function settleReusedClaimState(
 
 async function readJournal(context: DemandSliceContext, demandId: string): Promise<Journal | null> {
   try {
-    const read = await readDeterministicJsonFile(
+    const read = await readDeterministicJsonFileOrNull(
       context.root,
       demandLifecycleJournalRef(demandId),
       {
@@ -312,6 +315,7 @@ async function readJournal(context: DemandSliceContext, demandId: string): Promi
         ...signalOptions(context.signal),
       },
     );
+    if (read === null) return null;
     const value = read.value;
     const kind =
       value !== null && typeof value === "object" && !Array.isArray(value)
@@ -320,9 +324,6 @@ async function readJournal(context: DemandSliceContext, demandId: string): Promi
     if (kind !== JOURNAL_KIND) fail("recovery-required", "journal-invalid", "$journal");
     return value as unknown as Journal;
   } catch (error: unknown) {
-    const reason =
-      typeof error === "object" && error !== null && "reason" in error ? error.reason : null;
-    if (reason === "not-found" || reason === "resource-not-found") return null;
     mapFoundationError(error, "journal-read", "$journal");
   }
 }
@@ -368,18 +369,16 @@ async function writeJournal(context: DemandSliceContext, journal: Journal): Prom
 async function deleteJournal(context: DemandSliceContext, demandId: string): Promise<void> {
   const ref = demandLifecycleJournalRef(demandId);
   try {
-    const current = await readDeterministicJsonFile(context.root, ref, {
+    const current = await readDeterministicJsonFileOrNull(context.root, ref, {
       maximumBytes: JOURNAL_MAXIMUM_BYTES,
       ...signalOptions(context.signal),
     });
+    if (current === null) return;
     await unlinkRegularFileExactly(context.root, ref, {
       expectedNode: current.node,
       ...signalOptions(context.signal),
     });
   } catch (error: unknown) {
-    const reason =
-      typeof error === "object" && error !== null && "reason" in error ? error.reason : null;
-    if (reason === "not-found" || reason === "resource-not-found") return;
     mapFoundationError(error, "journal-delete", "$journal");
   }
 }

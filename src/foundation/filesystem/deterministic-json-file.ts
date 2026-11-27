@@ -3,7 +3,11 @@ import type { JsonValue } from "../data/json-value.js";
 import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import type { StableFileReadOptions } from "./stable-file-read.js";
-import { readStrictTextFile, type StrictTextFileResult } from "./strict-text-file.js";
+import {
+  readStrictTextFile,
+  readStrictTextFileOrNull,
+  type StrictTextFileResult,
+} from "./strict-text-file.js";
 
 /**
  * Wakeflow Foundation / Filesystem：确定性格式化 JSON 文件读取。
@@ -28,7 +32,25 @@ export async function readDeterministicJsonFile(
   resourcePath: PortableResourcePath,
   options: StableFileReadOptions,
 ): Promise<Readonly<DeterministicJsonFileResult>> {
-  const strict = await readStrictTextFile(root, resourcePath, options);
+  return deterministicJsonResult(await readStrictTextFile(root, resourcePath, options));
+}
+
+/**
+ * 与 `readDeterministicJsonFile` 相同的读取，只是目标不在时返回 `null`（1.4.5）："不在"恰好是稳定读取
+ * 抛出 `not-found` 的情形；其余失败，包括文本与 JSON 形态失败，照旧抛出同样的错误。
+ */
+export async function readDeterministicJsonFileOrNull(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  options: StableFileReadOptions,
+): Promise<Readonly<DeterministicJsonFileResult> | null> {
+  const strict = await readStrictTextFileOrNull(root, resourcePath, options);
+  return strict === null ? null : deterministicJsonResult(strict);
+}
+
+function deterministicJsonResult(
+  strict: Readonly<StrictTextFileResult>,
+): Readonly<DeterministicJsonFileResult> {
   const value = parseDeterministicJsonDocument(strict.text, "$document");
   return Object.freeze({
     resourcePath: strict.resourcePath,

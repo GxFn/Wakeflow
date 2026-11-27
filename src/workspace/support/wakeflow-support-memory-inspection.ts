@@ -27,6 +27,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
@@ -388,10 +389,11 @@ async function readSource(
   readonly bytes: Uint8Array;
 }> | null> {
   try {
-    const read = await readStableFile(supportRoot, request.profile.instructionFileName, {
+    const read = await readStableFileOrNull(supportRoot, request.profile.instructionFileName, {
       maximumBytes: WAKEFLOW_SUPPORT_MEMORY_MAXIMUM_BYTES,
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
+    if (read === null) return null;
     if (
       read.node.kind !== "file" ||
       read.node.permissionBits !== WAKEFLOW_SUPPORT_MEMORY_FILE_MODE ||
@@ -412,7 +414,6 @@ async function readSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowSupportMemoryInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
       if (error.reason === "too-large") fail("capacity", "$source", error);
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);

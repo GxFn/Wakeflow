@@ -21,7 +21,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableFile,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
@@ -141,10 +141,11 @@ async function currentAsset(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StableFileSource> | null> {
   try {
-    const read = await readStableFile(root, asset.ref, {
+    const read = await readStableFileOrNull(root, asset.ref, {
       maximumBytes: ASSET_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
+    if (read === null) return null;
     return Object.freeze({
       resourcePath: read.resourcePath,
       node: read.node,
@@ -152,10 +153,7 @@ async function currentAsset(
       digest: read.digest,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
-      fail("read", "$asset", error);
-    }
+    if (error instanceof StableFileReadError) fail("read", "$asset", error);
     throw error;
   }
 }

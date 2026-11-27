@@ -15,7 +15,7 @@ import {
 import { parseJsonValue } from "../foundation/data/json-value.js";
 import {
   type DeterministicJsonFileResult,
-  readDeterministicJsonFile,
+  readDeterministicJsonFileOrNull,
 } from "../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
@@ -30,12 +30,12 @@ import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.j
 import type { PortableResourcePath } from "../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
-  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
 import {
-  readStrictTextFile,
+  readStrictTextFileOrNull,
   StrictTextFileError,
   type StrictTextFileResult,
 } from "../foundation/filesystem/strict-text-file.js";
@@ -392,16 +392,16 @@ async function readSource(
   signal: AbortSignal | undefined,
 ): Promise<RequirementClaimStateSource | null> {
   try {
-    const read = await readDeterministicJsonFile(root, ref, {
+    const read = await readDeterministicJsonFileOrNull(root, ref, {
       maximumBytes: STATE_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
+    if (read === null) return null;
     const state = parseRequirementClaimState(
       parseDeterministicJsonDocument(read.text, "$claimState"),
     );
     return Object.freeze({ state, digest: computeRequirementClaimStateDigest(state), read });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof StableFileReadError) {
       fail("io-failure", `claim-state-read-${error.reason}`, "$claimState", { cause: error });
     }
@@ -453,21 +453,19 @@ export async function listRequirementClaimStates(
   root: RootedDirectory,
   signal?: AbortSignal,
 ): Promise<Readonly<RequirementBoardListing>> {
-  let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
+  let listing: Awaited<ReturnType<typeof readStableResourceDirectoryOrNull>>;
   try {
-    listing = await readStableResourceDirectory(root, REQUIREMENT_BOARD_ROOT_REF, {
+    listing = await readStableResourceDirectoryOrNull(root, REQUIREMENT_BOARD_ROOT_REF, {
       maximumEntries: BOARD_MAXIMUM_ENTRIES,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
-      return Object.freeze({ states: Object.freeze([]), skipped: 0 });
-    }
     if (error instanceof StableDirectoryReadError) {
       fail("io-failure", `board-listing-${error.reason}`, "$board", { cause: error });
     }
     throw error;
   }
+  if (listing === null) return Object.freeze({ states: Object.freeze([]), skipped: 0 });
   const states: RequirementClaimState[] = [];
   let skipped = 0;
   const entries = [...listing.entries].sort((left, right) => left.name.localeCompare(right.name));
@@ -723,20 +721,17 @@ export async function publishRequirementBoardIndex(
   language?: RequirementBoardIndexLanguage,
 ): Promise<Sha256Digest> {
   await materializeRequirementBoardRoot(root, signal);
-  let current: Readonly<StrictTextFileResult> | null = null;
+  let current: Readonly<StrictTextFileResult> | null;
   try {
-    current = await readStrictTextFile(root, REQUIREMENT_BOARD_INDEX_REF, {
+    current = await readStrictTextFileOrNull(root, REQUIREMENT_BOARD_INDEX_REF, {
       maximumBytes: INDEX_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") {
-      current = null;
-    } else if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
+    if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
       fail("io-failure", `board-index-read-${error.reason}`, "$boardIndex", { cause: error });
-    } else {
-      throw error;
     }
+    throw error;
   }
   const document = renderRequirementBoardIndex(
     states,

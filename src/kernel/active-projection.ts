@@ -32,6 +32,7 @@ import {
 import { KernelFileLockError } from "../foundation/filesystem/kernel-file-lock.js";
 import {
   readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import {
@@ -40,6 +41,7 @@ import {
 } from "../foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
+  readStrictTextFileOrNull,
   StrictTextFileError,
 } from "../foundation/filesystem/strict-text-file.js";
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
@@ -137,16 +139,16 @@ async function inspectLayoutEntry(
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<ActiveLayoutEntryInspection>> {
   try {
-    const resource = await root.inspectExistingResource(resourcePath, "$activeLayout");
+    const resource = await root.inspectResourceOrNull(resourcePath, "$activeLayout");
+    if (resource === null) {
+      return Object.freeze({ resourcePath, status: "absent" as const, nodeDigest: null });
+    }
     return Object.freeze({
       resourcePath,
       status: privateDirectoryCurrent(resource.node) ? ("current" as const) : ("conflict" as const),
       nodeDigest: nodeDigest(resource.node),
     });
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return Object.freeze({ resourcePath, status: "absent" as const, nodeDigest: null });
-    }
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "active-layout-root-scope", "$root", { cause: error });
     }
@@ -212,9 +214,8 @@ async function existingLayoutDirectory(
   errorPath: string,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(resourcePath, errorPath)).node;
+    return (await root.inspectResourceOrNull(resourcePath, errorPath))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "active-layout-root-scope", "$root", { cause: error });
     }
@@ -994,10 +995,9 @@ function unsafe(
   });
 }
 
-/** 读失败的分类：缺失返回 `null`，中止与根作用域上抛，其余都是 unsafe 的原因。 */
-function classifyReadFailure(error: unknown): string | null {
+/** 读失败的分类：中止与根作用域上抛，其余都是 unsafe 的原因（缺失不是失败，读取返回 `null`）。 */
+function classifyReadFailure(error: unknown): string {
   if (error instanceof StableFileReadError) {
-    if (error.reason === "not-found") return null;
     if (error.reason === "root-scope") {
       fail("io-failure", "projection-root-scope", "$root", { cause: error });
     }
@@ -1024,15 +1024,16 @@ async function inspectTarget(
   targetDigest: Sha256Digest,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ActiveProjectionTargetInspection>> {
-  let read: Awaited<ReturnType<typeof readStrictTextFile>>;
+  let read: Awaited<ReturnType<typeof readStrictTextFileOrNull>>;
   try {
-    read = await readStrictTextFile(root, resourcePath, {
+    read = await readStrictTextFileOrNull(root, resourcePath, {
       maximumBytes: ACTIVE_PROJECTION_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    const reason = classifyReadFailure(error);
-    if (reason !== null) return unsafe(resourcePath, targetDigest, reason);
+    return unsafe(resourcePath, targetDigest, classifyReadFailure(error));
+  }
+  if (read === null) {
     return Object.freeze({
       resourcePath,
       status: "missing" as const,
@@ -1191,10 +1192,12 @@ async function listDemandProjectionDirectories(
   signal: AbortSignal | undefined,
 ): Promise<readonly string[]> {
   try {
-    const listing = await readStableResourceDirectory(root, WAKEFLOW_ACTIVE_PROJECTIONS_ROOT_REF, {
-      maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
-      ...signalOptions(signal),
-    });
+    const listing = await readStableResourceDirectoryOrNull(
+      root,
+      WAKEFLOW_ACTIVE_PROJECTIONS_ROOT_REF,
+      { maximumEntries: DIRECTORY_MAXIMUM_ENTRIES, ...signalOptions(signal) },
+    );
+    if (listing === null) return Object.freeze([]);
     return Object.freeze(
       listing.entries
         .filter(
@@ -1204,9 +1207,6 @@ async function listDemandProjectionDirectories(
         .sort(),
     );
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
-      return Object.freeze([]);
-    }
     if (error instanceof StableDirectoryReadError) {
       fail("io-failure", `projection-listing-${error.reason}`, "$projection", { cause: error });
     }
@@ -1325,11 +1325,8 @@ async function stageParentPresent(
     errorPath,
   );
   try {
-    await root.inspectExistingResource(parent, errorPath);
-    return true;
+    return (await root.inspectResourceOrNull(parent, errorPath)) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
-      return false;
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "projection-stage", errorPath, { cause: error });
     }

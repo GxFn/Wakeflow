@@ -18,10 +18,7 @@ import {
   type RootedDirectoryDurability,
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
-import {
-  readStableResourceDirectory,
-  StableDirectoryReadError,
-} from "../../foundation/filesystem/stable-directory-read.js";
+import { readStableResourceDirectoryOrNull } from "../../foundation/filesystem/stable-directory-read.js";
 import { OperationAbortedError, signalOptions } from "../../foundation/node/abort-signal.js";
 import { truncateToCodePoints } from "../../foundation/text/bounded-text.js";
 import type { UtcWallClock } from "../../foundation/time/wall-clock.js";
@@ -258,18 +255,6 @@ function failIfAborted(error: unknown): void {
 
 // ---- 上下文 ----------------------------------------------------------------------
 
-async function configFileAbsent(root: RootedDirectory): Promise<boolean> {
-  try {
-    await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
-    return false;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return true;
-    }
-    throw error;
-  }
-}
-
 /**
  * 配置快照；配置文件不在而 `wakeflow.detached.json` 在时以退役文件为只读来源（ADR-0024 终态），
  * 这样 status / verify 说得出"这里曾是 Wakeflow 工作区"，而不是报配置缺失。
@@ -279,7 +264,7 @@ async function detachedSnapshotOrNull(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowConfigAuthoritySnapshot> | null> {
-  if (!(await configFileAbsent(root))) return null;
+  if ((await root.inspectResourceOrNull(WAKEFLOW_CONFIG_FILE_REF, "$config")) !== null) return null;
   try {
     return await readWakeflowDetachedConfigSnapshot(root, signalOptions(signal));
   } catch (error: unknown) {
@@ -507,7 +492,7 @@ const NO_DEMAND_RECOVERIES: DemandRecoveries = new Map();
 /** 生命周期日志目录里每一份日志的 Demand；目录不在是空，读不出为 null。 */
 async function journalDemandIds(context: SliceContext): Promise<readonly string[] | null> {
   try {
-    const listing = await readStableResourceDirectory(
+    const listing = await readStableResourceDirectoryOrNull(
       context.root,
       DEMAND_LIFECYCLE_JOURNALS_ROOT_REF,
       {
@@ -515,12 +500,12 @@ async function journalDemandIds(context: SliceContext): Promise<readonly string[
         ...signalOptions(context.options.signal),
       },
     );
+    if (listing === null) return [];
     return listing.entries
       .map((entry) => JOURNAL_FILE_PATTERN.exec(entry.name)?.[1])
       .filter((demandId): demandId is string => demandId !== undefined)
       .sort();
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
     failIfAborted(error);
     return null;
   }

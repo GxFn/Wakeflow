@@ -211,11 +211,8 @@ export async function closeSliceContext(context: DemandSliceContext): Promise<vo
 /** Demand 活动根是否存在；不存在以外的检查失败是 io-failure。 */
 export async function demandRootExists(root: RootedDirectory, demandId: string): Promise<boolean> {
   try {
-    await root.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
-    return true;
+    return (await root.inspectResourceOrNull(demandFinalRootRef(demandId), "$demandRoot")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found")
-      return false;
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", `demand-root-${error.reason}`, "$demandRoot", { cause: error });
     }

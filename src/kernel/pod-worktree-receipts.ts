@@ -22,7 +22,7 @@ import {
   observeAbsoluteNode,
   readAbsoluteRegularFileText,
 } from "../foundation/filesystem/absolute-node-observation.js";
-import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
+import { readDeterministicJsonFileOrNull } from "../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -49,7 +49,7 @@ import {
   removeRootedDirectoryTree,
 } from "../foundation/filesystem/rooted-directory-tree-removal.js";
 import {
-  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../foundation/filesystem/stable-file-read.js";
@@ -600,10 +600,11 @@ export async function writePodWorktreeReceipt(
 
 async function readReceiptSource(root: RootedDirectory, ref: PortableResourcePath, signal: Signal) {
   try {
-    const read = await readDeterministicJsonFile(root, ref, {
+    const read = await readDeterministicJsonFileOrNull(root, ref, {
       maximumBytes: RECEIPT_MAXIMUM_BYTES,
       ...signal,
     });
+    if (read === null) return null;
     return Object.freeze({
       resourcePath: read.resourcePath,
       node: read.node,
@@ -612,8 +613,6 @@ async function readReceiptSource(root: RootedDirectory, ref: PortableResourcePat
       text: read.text,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") return null;
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (
       error instanceof StableFileReadError ||
       error instanceof DeterministicJsonDocumentError ||
@@ -662,21 +661,19 @@ export async function listPodWorktreeReceipts(
     `${podReceiptRootRef(hostId, podId)}/worktrees`,
     "$receipt",
   );
-  let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
+  let listing: Awaited<ReturnType<typeof readStableResourceDirectoryOrNull>>;
   try {
-    listing = await readStableResourceDirectory(root, directory, {
+    listing = await readStableResourceDirectoryOrNull(root, directory, {
       maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
       ...signalOptions(options.signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
-      return Object.freeze([]);
-    }
     if (error instanceof StableDirectoryReadError) {
       fail("io-failure", `receipt-listing-${error.reason}`, "$receipt", { cause: error });
     }
     throw error;
   }
+  if (listing === null) return Object.freeze([]);
   const receipts: Readonly<PodWorktreeReceipt>[] = [];
   for (const entry of listing.entries) {
     if (!entry.name.endsWith(".json")) continue;
@@ -755,10 +752,11 @@ export async function listPodReceiptDirectories(
   options: Signal = {},
 ): Promise<readonly string[]> {
   try {
-    const listing = await readStableResourceDirectory(root, hostPodReceiptsRootRef(hostId), {
+    const listing = await readStableResourceDirectoryOrNull(root, hostPodReceiptsRootRef(hostId), {
       maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
       ...signalOptions(options.signal),
     });
+    if (listing === null) return Object.freeze([]);
     return Object.freeze(
       listing.entries
         .filter((entry) => entry.node.kind === "directory" && isDurableIdOfKind(entry.name, "pod"))
@@ -766,9 +764,6 @@ export async function listPodReceiptDirectories(
         .sort(),
     );
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
-      return Object.freeze([]);
-    }
     if (error instanceof StableDirectoryReadError) {
       fail("io-failure", `receipt-listing-${error.reason}`, "$receipt", { cause: error });
     }

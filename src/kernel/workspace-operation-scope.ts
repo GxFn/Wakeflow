@@ -11,10 +11,7 @@ import {
   RootedReadWriteScopeError,
   type RootedReadWriteMode,
 } from "../foundation/filesystem/rooted-read-write-scope.js";
-import {
-  readStableResourceDirectory,
-  StableDirectoryReadError,
-} from "../foundation/filesystem/stable-directory-read.js";
+import { readStableResourceDirectoryOrNull } from "../foundation/filesystem/stable-directory-read.js";
 import { parseByteCount } from "../foundation/numeric/byte-count.js";
 import { fail, isWakeflowError } from "./error.js";
 import { OperationAbortedError, throwIfAborted } from "../foundation/node/abort-signal.js";
@@ -80,18 +77,13 @@ async function assertNoMaintenanceReservation(root: RootedDirectory): Promise<vo
     throw error;
   }
   if (busy) fail("concurrency-conflict", "maintenance-busy", "$workspace", { retryable: true });
-  try {
-    const entries = await readStableResourceDirectory(
-      root,
-      WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
-      { maximumEntries: 1024 },
-    );
-    if (entries.entries.length > 0)
-      fail("precondition-failed", "maintenance-recovery-required", "$workspace");
-  } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return;
-    throw error;
-  }
+  const entries = await readStableResourceDirectoryOrNull(
+    root,
+    WORKSPACE_MAINTENANCE_TRANSACTIONS_REF,
+    { maximumEntries: 1024 },
+  );
+  if (entries !== null && entries.entries.length > 0)
+    fail("precondition-failed", "maintenance-recovery-required", "$workspace");
 }
 
 async function prepareScope(

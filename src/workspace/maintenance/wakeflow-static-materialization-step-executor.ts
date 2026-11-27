@@ -432,12 +432,8 @@ async function executeSharedCoordinationLayout(
 
 async function requirementBoardRootExists(root: RootedDirectory): Promise<boolean> {
   try {
-    await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
-    return true;
+    return (await root.inspectResourceOrNull(REQUIREMENT_BOARD_ROOT_REF, "$board")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

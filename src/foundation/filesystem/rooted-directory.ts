@@ -446,6 +446,25 @@ export class RootedDirectory {
   }
 
   /**
+   * 与 `inspectExistingResource` 相同的检查，只是资源不在时返回 `null`（1.4.5）："不在"恰好是那边抛出
+   * `resource-not-found` 的情形，不更宽：符号链接祖先、别名、检查失败等照旧抛出同样的错误。经由
+   * `inspectExistingResource` 本身检查，所以它仍是检查资源的唯一入口（测试与故障注入只拦它一处）。
+   */
+  async inspectResourceOrNull(
+    resourcePath: PortableResourcePath,
+    errorPath?: string,
+  ): Promise<Readonly<RootedResourceSnapshot> | null> {
+    try {
+      return await this.inspectExistingResource(resourcePath, errorPath);
+    } catch (error: unknown) {
+      if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * 只在检查失败之后调用：从根往下逐级看中间目录，第一处不对的按它的种类报出来。都对就返回，由调用方
    * 抛出原来的错误。
    */

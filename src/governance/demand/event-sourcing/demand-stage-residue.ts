@@ -26,7 +26,7 @@ import {
   RootedDirectoryError,
 } from "../../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   type StableDirectoryEntry,
   StableDirectoryReadError,
 } from "../../../foundation/filesystem/stable-directory-read.js";
@@ -246,14 +246,13 @@ async function entriesOf(
   signal: AbortSignal | undefined,
 ): Promise<readonly Readonly<StableDirectoryEntry>[]> {
   try {
-    const listing = await readStableResourceDirectory(root, directory, {
+    const listing = await readStableResourceDirectoryOrNull(root, directory, {
       maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
       ...signalOptions(signal),
     });
-    return listing.entries;
+    return listing?.entries ?? [];
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "not-found") return [];
       throw new DemandStageResidueError(
         error.reason === "source-changed" ? "busy" : "directory",
         error,

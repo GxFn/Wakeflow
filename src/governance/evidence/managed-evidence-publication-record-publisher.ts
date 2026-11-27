@@ -210,11 +210,8 @@ async function nodeOrNull(
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(resourcePath, "$resource")).node;
+    return (await root.inspectResourceOrNull(resourcePath, "$resource"))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$demandRoot", error);
     throw error;
   }

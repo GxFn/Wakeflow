@@ -255,12 +255,8 @@ async function resourceExists(
   resourcePath: PortableResourcePath,
 ): Promise<boolean> {
   try {
-    await root.inspectExistingResource(resourcePath, "$source");
-    return true;
+    return (await root.inspectResourceOrNull(resourcePath, "$source")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }

@@ -1,6 +1,9 @@
 import type { Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../foundation/data/deterministic-json-document.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  type DeterministicJsonFileResult,
+  readDeterministicJsonFileOrNull,
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -53,7 +56,7 @@ export interface WakeflowWindowRuntimeProjectionDocumentInspection {
   readonly source: Readonly<StableFileSource> | null;
 }
 
-type CurrentDocument = Awaited<ReturnType<typeof readDeterministicJsonFile>>;
+type CurrentDocument = Readonly<DeterministicJsonFileResult>;
 
 function sourceOf(current: CurrentDocument): Readonly<StableFileSource> {
   return Object.freeze({
@@ -70,25 +73,18 @@ export async function inspectWakeflowWindowRuntimeProjectionDocument(
   target: Readonly<WakeflowWindowRuntimeProjectionDocumentTarget>,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionDocumentInspection>> {
-  let current: CurrentDocument;
+  let current: CurrentDocument | null;
   try {
-    current = await readDeterministicJsonFile(root, target.resourceRef, {
+    current = await readDeterministicJsonFileOrNull(root, target.resourceRef, {
       maximumBytes: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES,
       ...(signal === undefined ? {} : { signal }),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") {
-        return Object.freeze({
-          resourceRef: target.resourceRef,
-          status: "missing" as const,
-          currentDigest: null,
-          source: null,
-        });
-      }
-      if (error.reason === "root-scope" || error.reason === "input") {
-        fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
-      }
+    if (
+      error instanceof StableFileReadError &&
+      (error.reason === "root-scope" || error.reason === "input")
+    ) {
+      fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
     }
     if (
       error instanceof StableFileReadError ||
@@ -103,6 +99,14 @@ export async function inspectWakeflowWindowRuntimeProjectionDocument(
       });
     }
     throw error;
+  }
+  if (current === null) {
+    return Object.freeze({
+      resourceRef: target.resourceRef,
+      status: "missing" as const,
+      currentDigest: null,
+      source: null,
+    });
   }
   return Object.freeze({
     resourceRef: target.resourceRef,
@@ -119,22 +123,20 @@ export async function publishWakeflowWindowRuntimeProjectionDocument(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<WakeflowWindowRuntimeProjectionDocumentReceipt>> {
   const options = signal === undefined ? {} : { signal };
-  let current: CurrentDocument | null = null;
+  let current: CurrentDocument | null;
   try {
-    current = await readDeterministicJsonFile(root, target.resourceRef, {
+    current = await readDeterministicJsonFileOrNull(root, target.resourceRef, {
       maximumBytes: WAKEFLOW_WINDOW_RUNTIME_PROJECTION_MAXIMUM_BYTES,
       ...options,
     });
   } catch (error: unknown) {
-    if (!(error instanceof StableFileReadError && error.reason === "not-found")) {
-      if (error instanceof StableFileReadError) {
-        fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
-      }
-      if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
-        fail("io-failure", "projection-read-unsafe", "$projection", { cause: error });
-      }
-      throw error;
+    if (error instanceof StableFileReadError) {
+      fail("io-failure", `projection-read-${error.reason}`, "$projection", { cause: error });
     }
+    if (error instanceof StrictTextFileError || error instanceof DeterministicJsonDocumentError) {
+      fail("io-failure", "projection-read-unsafe", "$projection", { cause: error });
+    }
+    throw error;
   }
   const bytes = encodeUtf8(target.document, "$projection");
   let disposition: WakeflowWindowRuntimeProjectionDocumentReceipt["disposition"] = "current";

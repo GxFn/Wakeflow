@@ -3,10 +3,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  type RootedDirectory,
-  RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
   StableDirectoryReadError,
@@ -107,9 +104,8 @@ async function nodeKind(
   ref: PortableResourcePath,
 ): Promise<string | null> {
   try {
-    return (await workspaceRoot.inspectExistingResource(ref, "$demandRoot")).node.kind;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
+    return (await workspaceRoot.inspectResourceOrNull(ref, "$demandRoot"))?.node.kind ?? null;
+  } catch {
     return "unreadable";
   }
 }

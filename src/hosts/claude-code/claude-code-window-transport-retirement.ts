@@ -160,9 +160,8 @@ function locatorRef(
 /** 资源的节点快照；不存在为 null，其余读不稳的情况按 effect 失败。 */
 async function existingNode(root: RootedDirectory, ref: PortableResourcePath, path: string) {
   try {
-    return (await root.inspectExistingResource(ref, path)).node;
+    return (await root.inspectResourceOrNull(ref, path))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof RootedDirectoryError) fail("effect", path, error);
     throw error;
   }

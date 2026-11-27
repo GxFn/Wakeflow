@@ -13,17 +13,11 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
+import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
+import { readStableResourceDirectoryOrNull } from "../../foundation/filesystem/stable-directory-read.js";
 import {
-  type RootedDirectory,
-  RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
-import {
-  readStableResourceDirectory,
-  StableDirectoryReadError,
-} from "../../foundation/filesystem/stable-directory-read.js";
-import {
-  readStableFile,
   readStableFileDigest,
+  readStableFileOrNull,
   StableFileReadError,
 } from "../../foundation/filesystem/stable-file-read.js";
 import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
@@ -450,21 +444,15 @@ async function listActiveDemandIds(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<readonly string[]> {
-  try {
-    const listing = await readStableResourceDirectory(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, {
-      maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
-      ...signalOptions(signal),
-    });
-    return listing.entries
-      .filter(
-        (entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name),
-      )
-      .map((entry) => entry.name)
-      .sort();
-  } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") return [];
-    throw error;
-  }
+  const listing = await readStableResourceDirectoryOrNull(root, WAKEFLOW_ACTIVE_CURRENT_ROOT_REF, {
+    maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
+    ...signalOptions(signal),
+  });
+  if (listing === null) return [];
+  return listing.entries
+    .filter((entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
 }
 
 async function observeDemand(
@@ -524,21 +512,14 @@ async function observeClaims(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<ObservedClaims>> {
-  let names: readonly string[];
-  try {
-    const listing = await readStableResourceDirectory(root, WORK_CLAIMS_ROOT_REF, {
-      maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
-      ...signalOptions(signal),
-    });
-    names = listing.entries
-      .filter((entry) => entry.node.kind === "file")
-      .map((entry) => entry.name);
-  } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError && error.reason === "not-found") {
-      return Object.freeze({ claims: Object.freeze([]), unreadable: 0 });
-    }
-    throw error;
-  }
+  const listing = await readStableResourceDirectoryOrNull(root, WORK_CLAIMS_ROOT_REF, {
+    maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
+    ...signalOptions(signal),
+  });
+  if (listing === null) return Object.freeze({ claims: Object.freeze([]), unreadable: 0 });
+  const names = listing.entries
+    .filter((entry) => entry.node.kind === "file")
+    .map((entry) => entry.name);
   const claims: Readonly<WorkClaim>[] = [];
   let unreadable = 0;
   for (const name of [...names].sort()) {
@@ -560,20 +541,6 @@ async function observeClaims(
   return Object.freeze({ claims: Object.freeze(claims), unreadable });
 }
 
-/** 宿主运行时尚未物化（该宿主的制品还没初始化过本工作区）：该宿主没有绑定，不是读失败。 */
-async function bindingRootAbsent(
-  root: RootedDirectory,
-  bindingRootRef: PortableResourcePath,
-): Promise<boolean> {
-  try {
-    await root.inspectExistingResource(bindingRootRef, "$bindings");
-    return false;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return true;
-    throw error;
-  }
-}
-
 async function observeHostBindings(
   root: RootedDirectory,
   snapshot: Readonly<WakeflowConfigAuthoritySnapshot>,
@@ -586,7 +553,8 @@ async function observeHostBindings(
       host.resourceProfile,
       host.identityProfile,
     );
-    if (await bindingRootAbsent(root, authority.bindingRootRef)) {
+    // 宿主运行时尚未物化（该宿主的制品还没初始化过本工作区）：该宿主没有绑定，不是读失败。
+    if ((await root.inspectResourceOrNull(authority.bindingRootRef, "$bindings")) === null) {
       return Object.freeze({
         hostId: host.hostId,
         status: "observed" as const,
@@ -621,14 +589,11 @@ async function hookDirectoryState(
   root: RootedDirectory,
   hostId: WakeflowHostId,
 ): Promise<ObservedHostHooks["directory"]> {
-  try {
-    const node = (await root.inspectExistingResource(hostHookObservationsRootRef(hostId), "$hooks"))
-      .node;
-    return node.kind === "directory" && node.permissionBits === 0o700 ? "private" : "mode";
-  } catch (error: unknown) {
-    if (reasonOf(error) === "resource-not-found") return "absent";
-    throw error;
-  }
+  const resource = await root.inspectResourceOrNull(hostHookObservationsRootRef(hostId), "$hooks");
+  if (resource === null) return "absent";
+  return resource.node.kind === "directory" && resource.node.permissionBits === 0o700
+    ? "private"
+    : "mode";
 }
 
 /**
@@ -941,19 +906,17 @@ async function observeAssetFile(
     "$asset",
   );
   try {
-    const read = await readStableFile(root, ref, {
+    const read = await readStableFileOrNull(root, ref, {
       maximumBytes: ASSET_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
+    if (read === null) return Object.freeze({ status: "missing", issue: null });
     if (read.node.permissionBits !== 0o600) return Object.freeze({ status: "mode", issue: null });
     return Object.freeze({
       status: read.digest === asset.digest ? "current" : "drift",
       issue: null,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") {
-      return Object.freeze({ status: "missing", issue: null });
-    }
     const reason = reasonOf(error);
     if (reason === null || error instanceof OperationAbortedError) throw error;
     return Object.freeze({ status: "unavailable", issue: reason });
@@ -1007,10 +970,11 @@ async function observeSettingsEntry(
   signal: AbortSignal | undefined,
 ): Promise<SettingsEntryStatus> {
   try {
-    const read = await readStableFile(root, settings.path, {
+    const read = await readStableFileOrNull(root, settings.path, {
       maximumBytes: SETTINGS_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
+    if (read === null) return "missing";
     return settingsEntryStatusOf(
       settingsEntryOf(read.bytes, settings.key),
       read.node.permissionBits,
@@ -1019,7 +983,6 @@ async function observeSettingsEntry(
     );
   } catch (error: unknown) {
     if (error instanceof JsonValueError) return "unreadable";
-    if (error instanceof StableFileReadError && error.reason === "not-found") return "missing";
     const reason = reasonOf(error);
     if (reason === null || error instanceof OperationAbortedError) throw error;
     return "unreadable";

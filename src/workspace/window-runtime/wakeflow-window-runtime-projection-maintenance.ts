@@ -248,15 +248,16 @@ async function withCurrentProjectionEntries<Result>(
     wakeflowWindowRuntimeProjectionRootRef(inputs.resourceProfile),
     authority.bindingRootRef,
   ]) {
+    let present: boolean;
     try {
-      await root.inspectExistingResource(resourceRef, "$projectionRoot");
+      present = (await root.inspectResourceOrNull(resourceRef, "$projectionRoot")) !== null;
     } catch (error: unknown) {
       if (error instanceof RootedDirectoryError) {
-        if (error.reason === "resource-not-found") return operation({ kind: "runtime-missing" });
         failWindowRuntimeProjection("input", "$root", error);
       }
       throw error;
     }
+    if (!present) return operation({ kind: "runtime-missing" });
   }
   let first = true;
   const loadAuthority = async () => {
@@ -426,15 +427,12 @@ export async function ensureWakeflowWindowRuntimeSkeleton(
     wakeflowWindowHostBindingRootRef(resourceProfile),
     wakeflowWindowRuntimeProjectionRootRef(resourceProfile),
   ]) {
-    let present = true;
+    let present: boolean;
     try {
-      await rootValue.inspectExistingResource(resourceRef, "$skeleton");
+      present = (await rootValue.inspectResourceOrNull(resourceRef, "$skeleton")) !== null;
     } catch (error: unknown) {
       if (!(error instanceof RootedDirectoryError)) throw error;
-      if (error.reason !== "resource-not-found") {
-        failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`, error);
-      }
-      present = false;
+      failWindowRuntimeProjection("effect", `$skeleton/${resourceRef}`, error);
     }
     try {
       await materializeDirectoryPath(rootValue, resourceRef, {
@@ -524,16 +522,18 @@ export async function retireWakeflowWindowRuntimeProjections(
   let absent = 0;
   for (const windowId of request.windowIds) {
     const resourceRef = wakeflowWindowRuntimeProjectionRef(resourceProfile, windowId);
-    let node: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>["node"];
+    let resource: Awaited<ReturnType<RootedDirectory["inspectResourceOrNull"]>>;
     try {
-      node = (await rootValue.inspectExistingResource(resourceRef, "$projection")).node;
+      resource = await rootValue.inspectResourceOrNull(resourceRef, "$projection");
     } catch (error: unknown) {
       if (!(error instanceof RootedDirectoryError)) throw error;
-      if (error.reason !== "resource-not-found")
-        failWindowRuntimeProjection("effect", "$projection", error);
+      failWindowRuntimeProjection("effect", "$projection", error);
+    }
+    if (resource === null) {
       absent += 1;
       continue;
     }
+    const node = resource.node;
     try {
       await unlinkRegularFileExactly(rootValue, resourceRef, {
         expectedNode: node,

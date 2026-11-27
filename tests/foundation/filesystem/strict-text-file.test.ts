@@ -14,6 +14,7 @@ import {
 } from "../../../src/foundation/filesystem/stable-file-read.js";
 import {
   readStrictTextFile,
+  readStrictTextFileOrNull,
   StrictTextFileError,
   type StrictTextFileErrorReason,
 } from "../../../src/foundation/filesystem/strict-text-file.js";
@@ -81,6 +82,32 @@ test("strict UTF-8 text returns exact NFC/LF bytes and stable source facts", asy
     equal(result.node.kind, "file");
     equal(Object.keys(result).sort().join(","), "byteCount,digest,node,resourcePath,text");
     equal(Object.isFrozen(result), true);
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("readStrictTextFileOrNull returns null only for an absent file; text failures still throw", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-strict-or-null-"));
+  writeFileSync(path.join(rootPath, "present.txt"), "value\n");
+  writeFileSync(path.join(rootPath, "bom.txt"), Buffer.from("﻿value\n", "utf8"));
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const present = await readStrictTextFileOrNull(
+      root,
+      parsePortableResourcePath("present.txt"),
+      DEFAULT_OPTIONS,
+    );
+    equal(present?.text, "value\n");
+    equal(
+      await readStrictTextFileOrNull(root, parsePortableResourcePath("missing"), DEFAULT_OPTIONS),
+      null,
+    );
+    await expectStrictTextFileError(
+      () => readStrictTextFileOrNull(root, parsePortableResourcePath("bom.txt"), DEFAULT_OPTIONS),
+      "bom",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

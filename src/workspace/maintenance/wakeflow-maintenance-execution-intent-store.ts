@@ -268,11 +268,8 @@ async function resourceNodeOrNull(
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    return (await root.inspectExistingResource(resourcePath)).node;
+    return (await root.inspectResourceOrNull(resourcePath))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("source", "$intent", error);
     throw error;
   }

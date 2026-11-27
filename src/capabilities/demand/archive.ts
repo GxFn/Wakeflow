@@ -10,7 +10,7 @@ import { computeCanonicalJsonSha256Digest } from "../../foundation/crypto/canoni
 import { parseSha256Digest, type Sha256Digest } from "../../foundation/crypto/sha256.js";
 import { renderDeterministicJsonDocument } from "../../foundation/data/deterministic-json-document.js";
 import { type JsonValue, parseJsonValue } from "../../foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import { readDeterministicJsonFileOrNull } from "../../foundation/filesystem/deterministic-json-file.js";
 import { materializeDirectoryPath } from "../../foundation/filesystem/durable-directory-materialization.js";
 import { createDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-candidate.js";
 import { retireDirectoryTreeCandidateDurably } from "../../foundation/filesystem/durable-directory-tree-candidate-retirement.js";
@@ -21,12 +21,12 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../../foundation/filesystem/portable-resource-path.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../../foundation/filesystem/rooted-directory.js";
+import { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { removeRootedDirectoryTree } from "../../foundation/filesystem/rooted-directory-tree-removal.js";
-import { readStableResourceDirectory } from "../../foundation/filesystem/stable-directory-read.js";
+import {
+  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
+} from "../../foundation/filesystem/stable-directory-read.js";
 import { readStableFile } from "../../foundation/filesystem/stable-file-read.js";
 import { OperationAbortedError } from "../../foundation/node/abort-signal.js";
 import {
@@ -126,13 +126,6 @@ export function mapFoundationError(error: unknown, label: string, path: string):
 
 export function signalOptions(signal: AbortSignal | undefined): { readonly signal?: AbortSignal } {
   return signal === undefined ? {} : { signal };
-}
-
-function isNotFound(error: unknown): boolean {
-  return (
-    (error instanceof RootedDirectoryError && error.reason === "resource-not-found") ||
-    reasonOf(error) === "not-found"
-  );
 }
 
 export interface DemandRootSnapshot {
@@ -318,13 +311,14 @@ async function readArchiveManifest(
 ): Promise<DemandArchiveManifest | null> {
   const ref = parsePortableResourcePath(`${archiveRef}/${MANIFEST_FILE_NAME}`, "$archive");
   try {
-    const read = await readDeterministicJsonFile(ledgerRoot, ref, {
+    const read = await readDeterministicJsonFileOrNull(ledgerRoot, ref, {
       maximumBytes: MANIFEST_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
-    return parseArchiveManifest(read.value, `$archive/${MANIFEST_FILE_NAME}`);
+    return read === null
+      ? null
+      : parseArchiveManifest(read.value, `$archive/${MANIFEST_FILE_NAME}`);
   } catch (error: unknown) {
-    if (isNotFound(error)) return null;
     mapFoundationError(error, "archive-manifest-read", "$archive");
   }
 }
@@ -506,16 +500,16 @@ export async function findLatestDemandArchive(
   demandId: string,
   signal: AbortSignal | undefined,
 ): Promise<LocatedArchive | null> {
-  let listing: Awaited<ReturnType<typeof readStableResourceDirectory>>;
+  let listing: Awaited<ReturnType<typeof readStableResourceDirectoryOrNull>>;
   try {
-    listing = await readStableResourceDirectory(ledgerRoot, demandArchivesRootRef(demandId), {
+    listing = await readStableResourceDirectoryOrNull(ledgerRoot, demandArchivesRootRef(demandId), {
       maximumEntries: MAXIMUM_ARCHIVES_PER_DEMAND,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (isNotFound(error)) return null;
     mapFoundationError(error, "archive-list", "$archive");
   }
+  if (listing === null) return null;
   const names = listing.entries
     .filter((entry) => entry.node.kind === "directory" && ARCHIVE_NAME_PATTERN.test(entry.name))
     .map((entry) => entry.name)
@@ -574,10 +568,11 @@ async function demandRootExists(
   demandId: string,
 ): Promise<boolean> {
   try {
-    await workspaceRoot.inspectExistingResource(demandFinalRootRef(demandId), "$demandRoot");
-    return true;
+    return (
+      (await workspaceRoot.inspectResourceOrNull(demandFinalRootRef(demandId), "$demandRoot")) !==
+      null
+    );
   } catch (error: unknown) {
-    if (isNotFound(error)) return false;
     mapFoundationError(error, "demand-root-inspect", "$demandRoot");
   }
 }
@@ -900,14 +895,16 @@ export async function retireDemandRoot(
   signal: AbortSignal | undefined,
   options: Readonly<RetireDemandRootOptions> = {},
 ): Promise<"retired" | "absent"> {
-  let observation: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
+  let observation: Awaited<ReturnType<RootedDirectory["inspectResourceOrNull"]>>;
   try {
-    observation = await workspaceRoot.inspectExistingResource(
+    observation = await workspaceRoot.inspectResourceOrNull(
       demandFinalRootRef(demandId),
       "$demandRoot",
     );
   } catch (error: unknown) {
-    if (!isNotFound(error)) mapFoundationError(error, "demand-root-inspect", "$demandRoot");
+    mapFoundationError(error, "demand-root-inspect", "$demandRoot");
+  }
+  if (observation === null) {
     await settleRetiredDemandRoot(workspaceRoot, demandId, signal);
     return "absent";
   }

@@ -297,18 +297,16 @@ export async function inspectWorkClaim(
   assertRoot(root);
   const windowId = parseId(windowIdValue, "window", "$windowId");
   const ref = workClaimRef(windowId);
-  let node: Readonly<FileNodeSnapshot>;
+  let node: Readonly<FileNodeSnapshot> | null;
   try {
-    node = (await root.inspectExistingResource(ref, "$claim")).node;
+    node = (await root.inspectResourceOrNull(ref, "$claim"))?.node ?? null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return Object.freeze({ status: "absent" as const, claim: null, node: null });
-    }
     if (error instanceof RootedDirectoryError) {
       fail("root-invalid", "claim-layout", "$claim", { cause: error });
     }
     throw error;
   }
+  if (node === null) return Object.freeze({ status: "absent" as const, claim: null, node: null });
   assertNode(node, "file", "$claim");
   let text: string;
   try {

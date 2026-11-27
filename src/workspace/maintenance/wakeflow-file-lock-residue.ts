@@ -54,16 +54,6 @@ const FILE_REFS = Object.freeze([
   ]),
 ]);
 
-/** `resourcePath` 上的节点；不在（连同它的某一级父目录不在）时是 null。 */
-async function nodeOrNull(root: RootedDirectory, resourcePath: PortableResourcePath) {
-  try {
-    return (await root.inspectExistingResource(resourcePath, "$residue")).node;
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
-    throw error;
-  }
-}
-
 /**
  * 删掉文件锁版本留下的锁目录与锁文件。尽力而为：哪一步删不掉就停在那里，记号还在，下一次维护接着做；
  * 清完之后每次维护只多一次查看。调用方持有维护的门。
@@ -75,10 +65,11 @@ export async function retireWakeflowFileLockResidue(
   const removeTree = (resourcePath: PortableResourcePath) =>
     removeRootedDirectoryTree(root, resourcePath, { missing: "ignore", ...signalOptions(signal) });
   try {
-    if ((await nodeOrNull(root, MARKER_REF)) === null) return;
+    if ((await root.inspectResourceOrNull(MARKER_REF, "$residue")) === null) return;
     for (const directory of DIRECTORY_REFS) await removeTree(directory);
     for (const file of FILE_REFS) {
-      const node = await nodeOrNull(root, file);
+      // 不在（连同它的某一级父目录不在）时是 null。
+      const node = (await root.inspectResourceOrNull(file, "$residue"))?.node;
       if (node?.kind !== "file") continue;
       await unlinkRegularFileExactly(root, file, { expectedNode: node, ...signalOptions(signal) });
     }

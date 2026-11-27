@@ -11,7 +11,7 @@ import type { PortableResourcePath } from "../../foundation/filesystem/portable-
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
-  readStrictTextFile,
+  readStrictTextFileOrNull,
   StrictTextFileError,
   type StrictTextFileResult,
 } from "../../foundation/filesystem/strict-text-file.js";
@@ -181,16 +181,12 @@ async function readPageOrNull(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StrictTextFileResult> | null> {
   try {
-    return await readStrictTextFile(ledgerRoot, resourcePath, {
+    return await readStrictTextFileOrNull(ledgerRoot, resourcePath, {
       maximumBytes: parseByteCount(maximumBytes, "$page.maximumBytes"),
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
-      fail("io-failure", `reading-page-read-${error.reason}`, "$ledger", { cause: error });
-    }
-    if (error instanceof StrictTextFileError) {
+    if (error instanceof StableFileReadError || error instanceof StrictTextFileError) {
       fail("io-failure", `reading-page-read-${error.reason}`, "$ledger", { cause: error });
     }
     throw error;

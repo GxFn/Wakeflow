@@ -47,7 +47,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableFile,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
@@ -296,19 +296,17 @@ async function currentSettings(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<CurrentSettings | null> {
-  let read: Awaited<ReturnType<typeof readStableFile>>;
+  let read: Awaited<ReturnType<typeof readStableFileOrNull>>;
   try {
-    read = await readStableFile(root, CLAUDE_CODE_LOCAL_SETTINGS_REF, {
+    read = await readStableFileOrNull(root, CLAUDE_CODE_LOCAL_SETTINGS_REF, {
       maximumBytes: SETTINGS_MAXIMUM_BYTES,
       ...signalOptions(signal),
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
-      fail("settings-unreadable", "$settings", error);
-    }
+    if (error instanceof StableFileReadError) fail("settings-unreadable", "$settings", error);
     throw error;
   }
+  if (read === null) return null;
   return Object.freeze({
     source: Object.freeze({
       resourcePath: read.resourcePath,

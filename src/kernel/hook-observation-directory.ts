@@ -7,10 +7,7 @@ import {
   type PortableResourcePath,
   parsePortableResourcePath,
 } from "../foundation/filesystem/portable-resource-path.js";
-import {
-  RootedDirectory,
-  RootedDirectoryError,
-} from "../foundation/filesystem/rooted-directory.js";
+import { RootedDirectory } from "../foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectoryPage,
   readStableRootDirectoryPage,
@@ -124,13 +121,8 @@ export async function visitHostHookDirectory(
   const signal = options.signal === undefined ? {} : { signal: options.signal };
   const order = options.order ?? "ascending";
   const rootRef = hostHookObservationsRootRef(hostId);
-  let parent: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
-  try {
-    parent = await root.inspectExistingResource(rootRef, "$hooks");
-  } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return;
-    throw error;
-  }
+  const parent = await root.inspectResourceOrNull(rootRef, "$hooks");
+  if (parent === null) return;
   const scoped = await RootedDirectory.open(parent.physicalPath, "$hooks");
   const fromWorkspaceRoot = (
     entry: Readonly<StableDirectoryEntry>,

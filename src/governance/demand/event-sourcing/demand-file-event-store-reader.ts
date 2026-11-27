@@ -429,16 +429,14 @@ export async function readDemandFileEventCommitOrNull(
   signal: AbortSignal | undefined,
   admittedLinkCounts: readonly bigint[] = [1n],
 ): Promise<Readonly<LoadedDemandFileEventCommit> | null> {
-  let resource: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
+  let resource: Awaited<ReturnType<RootedDirectory["inspectResourceOrNull"]>>;
   try {
-    resource = await root.inspectExistingResource(ref);
+    resource = await root.inspectResourceOrNull(ref);
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return null;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
+  if (resource === null) return null;
   return readDemandFileEventCommit(root, ref, resource.node, signal, "$commit", admittedLinkCounts);
 }
 

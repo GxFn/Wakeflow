@@ -111,12 +111,8 @@ function mapReplacementContractError(error: WakeflowConfigAuthorityReplacementEr
 
 async function configResourceExists(root: RootedDirectory): Promise<boolean> {
   try {
-    await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
-    return true;
+    return (await root.inspectResourceOrNull(WAKEFLOW_CONFIG_FILE_REF, "$config")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

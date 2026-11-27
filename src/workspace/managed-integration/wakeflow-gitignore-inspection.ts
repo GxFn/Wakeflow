@@ -13,6 +13,7 @@ import {
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
   readStableFile,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileSource,
 } from "../../foundation/filesystem/stable-file-read.js";
@@ -204,10 +205,11 @@ async function readSource(
   readonly bytes: Uint8Array;
 }> | null> {
   try {
-    const read = await readStableFile(root, WAKEFLOW_GITIGNORE_REF, {
+    const read = await readStableFileOrNull(root, WAKEFLOW_GITIGNORE_REF, {
       maximumBytes: WAKEFLOW_GITIGNORE_MAXIMUM_BYTES,
       ...(signal === undefined ? {} : { signal }),
     });
+    if (read === null) return null;
     if (
       read.node.kind !== "file" ||
       read.node.permissionBits !== 0o644 ||
@@ -228,7 +230,6 @@ async function readSource(
   } catch (error: unknown) {
     if (error instanceof WakeflowGitignoreInspectionError) throw error;
     if (error instanceof StableFileReadError) {
-      if (error.reason === "not-found") return null;
       if (error.reason === "symlink" || error.reason === "not-file") {
         fail("source-policy", "$source", error);
       }

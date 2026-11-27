@@ -165,12 +165,8 @@ export interface WakeflowStaticMaterializationPreviewOptions {
 
 async function configResourceExists(root: RootedDirectory): Promise<boolean> {
   try {
-    await root.inspectExistingResource(WAKEFLOW_CONFIG_FILE_REF, "$config");
-    return true;
+    return (await root.inspectResourceOrNull(WAKEFLOW_CONFIG_FILE_REF, "$config")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
@@ -899,12 +895,8 @@ async function inspectExternalInstructions(
 
 async function requirementBoardRootAbsent(root: RootedDirectory): Promise<boolean> {
   try {
-    await root.inspectExistingResource(REQUIREMENT_BOARD_ROOT_REF, "$board");
-    return false;
+    return (await root.inspectResourceOrNull(REQUIREMENT_BOARD_ROOT_REF, "$board")) === null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return true;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }
@@ -1835,15 +1827,13 @@ async function projectionFileExists(
   windowId: string,
 ): Promise<boolean> {
   try {
-    await root.inspectExistingResource(
-      wakeflowWindowRuntimeProjectionRef(profile, windowId),
-      "$projection",
+    return (
+      (await root.inspectResourceOrNull(
+        wakeflowWindowRuntimeProjectionRef(profile, windowId),
+        "$projection",
+      )) !== null
     );
-    return true;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

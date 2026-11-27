@@ -7,7 +7,10 @@ import {
   renderDeterministicJsonDocument,
 } from "../foundation/data/deterministic-json-document.js";
 import { type JsonObject, type JsonValue, parseJsonValue } from "../foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../foundation/filesystem/deterministic-json-file.js";
+import {
+  readDeterministicJsonFile,
+  readDeterministicJsonFileOrNull,
+} from "../foundation/filesystem/deterministic-json-file.js";
 import {
   type DurableAtomicFileStageAddress,
   DurableAtomicFileStageAddressError,
@@ -848,13 +851,7 @@ async function earlierLayoutRecordRef(
     legacyHostHookObservationRef(record),
     shardedHostHookRef(record.hostId, hostHookObservationFileName(record)),
   ]) {
-    try {
-      await root.inspectExistingResource(earlierRef, "$record");
-      return earlierRef;
-    } catch (error: unknown) {
-      if (!(error instanceof RootedDirectoryError) || error.reason !== "resource-not-found")
-        throw error;
-    }
+    if ((await root.inspectResourceOrNull(earlierRef, "$record")) !== null) return earlierRef;
   }
   return null;
 }
@@ -875,16 +872,14 @@ export async function writeHostHookObservation(
   const resourceRef =
     (await earlierLayoutRecordRef(root, record)) ??
     partitionedHostHookRef(record.hostId, hostHookObservationFileName(record));
-  try {
-    const existing = await readDeterministicJsonFile(root, resourceRef, {
-      maximumBytes: RECORD_MAXIMUM_BYTES,
-      ...signal,
-    });
-    if (!sameObservationDocument(existing.value, document))
+  const present = await readDeterministicJsonFileOrNull(root, resourceRef, {
+    maximumBytes: RECORD_MAXIMUM_BYTES,
+    ...signal,
+  });
+  if (present !== null) {
+    if (!sameObservationDocument(present.value, document))
       fail("precondition-failed", "observation-conflict", "$observation");
     return Object.freeze({ record, resourceRef, disposition: "current" });
-  } catch (error: unknown) {
-    if (!(error instanceof StableFileReadError) || error.reason !== "not-found") throw error;
   }
   await materializeHostHookDirectory(root, resourceRef, signal);
   let disposition: "created" | "current" = "created";
@@ -925,8 +920,8 @@ interface ObservationCandidate {
 const VANISHED = Symbol("vanished");
 
 /**
- * 判定候选读取失败是否因为文件已经消失：`not-found` 直接成立；`expectation-changed` 再看一眼
- * 路径，节点已不在也成立（列举到读取之间被修剪）。中止一律上抛。
+ * 判定候选读取失败是否因为文件已经消失（`not-found` 不是失败，读取直接返回 `null`）：
+ * `expectation-changed` 再看一眼路径，节点已不在也成立（列举到读取之间被修剪）。中止一律上抛。
  */
 async function candidateVanished(
   root: RootedDirectory,
@@ -935,15 +930,10 @@ async function candidateVanished(
 ): Promise<boolean> {
   if (error instanceof OperationAbortedError) throw error;
   if (!(error instanceof StableFileReadError)) return false;
-  if (error.reason === "not-found") return true;
   if (error.reason !== "expectation-changed") return false;
   try {
-    await root.inspectExistingResource(candidate.entry.resourcePath, "$candidate");
-    return false;
-  } catch (inspection: unknown) {
-    if (inspection instanceof RootedDirectoryError && inspection.reason === "resource-not-found") {
-      return true;
-    }
+    return (await root.inspectResourceOrNull(candidate.entry.resourcePath, "$candidate")) === null;
+  } catch {
     return false;
   }
 }
@@ -964,12 +954,12 @@ async function readCandidateRecord(
     // 在已经核对过的目录里读它列出来的记录：按句柄读，不再逐条核对路径（1.4.3，open-items B15）。
     const read =
       readRoot === root
-        ? await readDeterministicJsonFile(root, candidate.entry.resourcePath, {
+        ? await readDeterministicJsonFileOrNull(root, candidate.entry.resourcePath, {
             maximumBytes: RECORD_MAXIMUM_BYTES,
             expectedNode: candidate.entry.node,
             ...signal,
           })
-        : await readDeterministicJsonFile(
+        : await readDeterministicJsonFileOrNull(
             readRoot,
             parsePortableResourcePath(candidate.entry.name),
             {
@@ -979,6 +969,7 @@ async function readCandidateRecord(
               ...signal,
             },
           );
+    if (read === null) return VANISHED;
     record = parseHostHookObservation(parseDeterministicJsonDocument(read.text, "$record"));
   } catch (error: unknown) {
     return (await candidateVanished(root, candidate, error)) ? VANISHED : null;
@@ -1420,10 +1411,11 @@ export async function readHostHookObservationRecord(
   const record: Readonly<HostHookObservation> = found;
   for (const ref of recordRefs(record)) {
     try {
-      const read = await readDeterministicJsonFile(root, ref, {
+      const read = await readDeterministicJsonFileOrNull(root, ref, {
         maximumBytes: RECORD_MAXIMUM_BYTES,
         ...signal,
       });
+      if (read === null) continue;
       const parsed = parseHostHookObservation(parseDeterministicJsonDocument(read.text, "$record"));
       if (parsed.recordId !== recordId || parsed.hostId !== hostId) return null;
       return Object.freeze({
@@ -1433,7 +1425,7 @@ export async function readHostHookObservationRecord(
       });
     } catch (error: unknown) {
       if (error instanceof OperationAbortedError) throw error;
-      if (!(error instanceof StableFileReadError) || error.reason !== "not-found") return null;
+      return null;
     }
   }
   return null;

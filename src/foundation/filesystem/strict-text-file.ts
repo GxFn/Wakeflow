@@ -3,7 +3,9 @@ import type { PortableResourcePath } from "./portable-resource-path.js";
 import type { RootedDirectory } from "./rooted-directory.js";
 import {
   readStableFile,
+  readStableFileOrNull,
   type StableFileReadOptions,
+  type StableFileReadResult,
   type StableFileSource,
 } from "./stable-file-read.js";
 
@@ -95,7 +97,23 @@ export async function readStrictTextFile(
   resourcePath: PortableResourcePath,
   options: StableFileReadOptions,
 ): Promise<Readonly<StrictTextFileResult>> {
-  const stable = await readStableFile(root, resourcePath, options);
+  return strictTextResult(await readStableFile(root, resourcePath, options));
+}
+
+/**
+ * 与 `readStrictTextFile` 相同的读取，只是目标不在时返回 `null`（1.4.5）："不在"恰好是稳定读取抛出
+ * `not-found` 的情形；其余失败，包括文本形态失败，照旧抛出同样的错误。
+ */
+export async function readStrictTextFileOrNull(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  options: StableFileReadOptions,
+): Promise<Readonly<StrictTextFileResult> | null> {
+  const stable = await readStableFileOrNull(root, resourcePath, options);
+  return stable === null ? null : strictTextResult(stable);
+}
+
+function strictTextResult(stable: Readonly<StableFileReadResult>): Readonly<StrictTextFileResult> {
   const text = decodeStrictUtf8(stable.bytes);
   assertStrictText(text);
   return Object.freeze({

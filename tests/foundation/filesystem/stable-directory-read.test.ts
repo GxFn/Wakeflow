@@ -11,6 +11,7 @@ import {
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
   readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   readStableResourceDirectoryPage,
   readStableRootDirectory,
   readStableRootDirectoryPage,
@@ -220,6 +221,38 @@ test("missing, file, symlink, and forged directory targets fail distinctly", asy
         "$resourcePath",
       );
     }
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("readStableResourceDirectoryOrNull returns null only where the throwing form reports not-found", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-dir-or-null-"));
+  mkdirSync(path.join(rootPath, "target"));
+  writeFileSync(path.join(rootPath, "target", "entry"), "value");
+  writeFileSync(path.join(rootPath, "file"), "value");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const options = { maximumEntries: 10 };
+    const present = await readStableResourceDirectoryOrNull(
+      root,
+      parsePortableResourcePath("target"),
+      options,
+    );
+    deepEqual(
+      present?.entries.map((entry) => entry.name),
+      ["entry"],
+    );
+    equal(
+      await readStableResourceDirectoryOrNull(root, parsePortableResourcePath("missing"), options),
+      null,
+    );
+    await expectStableDirectoryReadError(
+      () => readStableResourceDirectoryOrNull(root, parsePortableResourcePath("file"), options),
+      "not-directory",
+      "$resourcePath",
+    );
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

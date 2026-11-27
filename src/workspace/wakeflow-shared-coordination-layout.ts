@@ -170,13 +170,11 @@ async function optionalDirectory(
   const ref = declaration.placement.relativePath;
   if (ref === null) fail("authority", "$declarations");
   try {
-    const observation = await root.inspectExistingResource(ref, "$layout");
+    const observation = await root.inspectResourceOrNull(ref, "$layout");
+    if (observation === null) return false;
     assertDirectory(observation.node, `$layout/${ref}`);
     return true;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof WakeflowSharedCoordinationLayoutError) throw error;
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;

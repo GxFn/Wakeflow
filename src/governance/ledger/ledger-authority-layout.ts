@@ -96,10 +96,21 @@ async function inspectEntry(
   policy: Readonly<LedgerAuthorityLayoutEntryPolicy>,
 ): Promise<Readonly<LedgerAuthorityLayoutEntryInspection>> {
   try {
-    const resource = await root.inspectExistingResource(
+    const resource = await root.inspectResourceOrNull(
       policy.resourcePath,
       `$layout/${policy.resourcePath}`,
     );
+    if (resource === null) {
+      return Object.freeze({
+        resourcePath: policy.resourcePath,
+        expectedMode: policy.mode,
+        status: "absent" as const,
+        observedKind: null,
+        observedMode: null,
+        deviceId: null,
+        inodeId: null,
+      });
+    }
     const userId = currentUserIdOrNull();
     const current =
       resource.node.kind === "directory" &&
@@ -115,17 +126,6 @@ async function inspectEntry(
       inodeId: resource.node.inodeId.toString(),
     });
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return Object.freeze({
-        resourcePath: policy.resourcePath,
-        expectedMode: policy.mode,
-        status: "absent" as const,
-        observedKind: null,
-        observedMode: null,
-        deviceId: null,
-        inodeId: null,
-      });
-    }
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root", error);
     throw error;
   }

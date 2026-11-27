@@ -195,11 +195,11 @@ async function optionalDirectory(
   resourcePath: PortableResourcePath,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    const resource = await root.inspectExistingResource(resourcePath);
+    const resource = await root.inspectResourceOrNull(resourcePath);
+    if (resource === null) return null;
     assertPrivateDirectory(resource.node, `$layout/${resourcePath}`);
     return resource.node;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof WakeflowHostCapabilityLayoutMaterializationError) {
       throw error;
     }

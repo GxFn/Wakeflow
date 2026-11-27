@@ -7,7 +7,10 @@ import { test } from "node:test";
 import { computeSha256Digest } from "../../../src/foundation/crypto/sha256.js";
 import { DeterministicJsonDocumentError } from "../../../src/foundation/data/deterministic-json-document.js";
 import { type JsonObject, parseJsonValue } from "../../../src/foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../../../src/foundation/filesystem/deterministic-json-file.js";
+import {
+  readDeterministicJsonFile,
+  readDeterministicJsonFileOrNull,
+} from "../../../src/foundation/filesystem/deterministic-json-file.js";
 import { parsePortableResourcePath } from "../../../src/foundation/filesystem/portable-resource-path.js";
 import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-directory.js";
 import {
@@ -139,6 +142,38 @@ test("syntax, JSON value, and strict text failures retain their owning layers", 
       if (!(caught instanceof ErrorType)) throw new Error("Unexpected error owner.");
       equal((caught as { reason: string }).reason, reason);
     }
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("readDeterministicJsonFileOrNull returns null only for an absent file; JSON failures still throw", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-deterministic-or-null-"));
+  writeFileSync(path.join(rootPath, "present"), "{}\n");
+  writeFileSync(path.join(rootPath, "syntax"), "{broken}\n");
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const present = await readDeterministicJsonFileOrNull(
+      root,
+      parsePortableResourcePath("present"),
+      OPTIONS,
+    );
+    equal(present?.text, "{}\n");
+    equal(
+      await readDeterministicJsonFileOrNull(root, parsePortableResourcePath("missing"), OPTIONS),
+      null,
+    );
+    let caught: unknown;
+    try {
+      await readDeterministicJsonFileOrNull(root, parsePortableResourcePath("syntax"), OPTIONS);
+    } catch (error: unknown) {
+      caught = error;
+    }
+    if (!(caught instanceof DeterministicJsonDocumentError)) {
+      throw new Error("Expected DeterministicJsonDocumentError.");
+    }
+    equal(caught.reason, "json-syntax");
   } finally {
     await root.close();
     rmSync(rootPath, { recursive: true, force: true });

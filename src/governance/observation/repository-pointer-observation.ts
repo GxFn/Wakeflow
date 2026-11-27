@@ -10,12 +10,12 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import { StableFileReadError } from "../../foundation/filesystem/stable-file-read.js";
 import {
-  readStrictTextFile,
+  readStrictTextFileOrNull,
   StrictTextFileError,
 } from "../../foundation/filesystem/strict-text-file.js";
 import { parseByteCount } from "../../foundation/numeric/byte-count.js";
@@ -131,12 +131,15 @@ async function readPointer(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<PointerRead>> {
   try {
-    const read = await readStrictTextFile(root, ref, { maximumBytes, ...signalOptions(signal) });
+    const read = await readStrictTextFileOrNull(root, ref, {
+      maximumBytes,
+      ...signalOptions(signal),
+    });
+    if (read === null) return Object.freeze({ text: null, outcome: "missing" as const });
     return Object.freeze({ text: read.text.replace(/\n$/u, ""), outcome: "read" as const });
   } catch (error: unknown) {
     if (error instanceof StableFileReadError) {
-      const outcome = error.reason === "not-found" ? ("missing" as const) : ("unreadable" as const);
-      return Object.freeze({ text: null, outcome });
+      return Object.freeze({ text: null, outcome: "unreadable" as const });
     }
     if (error instanceof StrictTextFileError) {
       return Object.freeze({ text: null, outcome: "malformed" as const });
@@ -174,10 +177,11 @@ async function directoryEntries(
   signal: AbortSignal | undefined,
 ): Promise<Readonly<DirectoryRead>> {
   try {
-    const listing = await readStableResourceDirectory(root, ref, {
+    const listing = await readStableResourceDirectoryOrNull(root, ref, {
       maximumEntries: DIRECTORY_MAXIMUM_ENTRIES,
       ...signalOptions(signal),
     });
+    if (listing === null) return Object.freeze({ entries: null, unreadable: false });
     return Object.freeze({
       entries: listing.entries.map((entry) =>
         Object.freeze({
@@ -190,7 +194,7 @@ async function directoryEntries(
     });
   } catch (error: unknown) {
     if (error instanceof StableDirectoryReadError) {
-      return Object.freeze({ entries: null, unreadable: error.reason !== "not-found" });
+      return Object.freeze({ entries: null, unreadable: true });
     }
     throw error;
   }

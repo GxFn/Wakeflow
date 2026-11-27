@@ -5,7 +5,10 @@ import {
   renderDeterministicJsonDocument,
 } from "../../foundation/data/deterministic-json-document.js";
 import { type JsonObject, parseJsonValue } from "../../foundation/data/json-value.js";
-import { readDeterministicJsonFile } from "../../foundation/filesystem/deterministic-json-file.js";
+import {
+  type DeterministicJsonFileResult,
+  readDeterministicJsonFileOrNull,
+} from "../../foundation/filesystem/deterministic-json-file.js";
 import {
   createFileAtomically,
   DurableAtomicFileWriteError,
@@ -198,7 +201,7 @@ function renderWindowLocatorRecord(record: Readonly<WindowLocatorRecord>): strin
 
 interface LocatorSource {
   readonly record: Readonly<WindowLocatorRecord>;
-  readonly read: Awaited<ReturnType<typeof readDeterministicJsonFile>>;
+  readonly read: Readonly<DeterministicJsonFileResult>;
 }
 
 async function readLocatorSource(
@@ -209,10 +212,11 @@ async function readLocatorSource(
   signal: AbortSignal | undefined,
 ): Promise<LocatorSource | null> {
   try {
-    const read = await readDeterministicJsonFile(root, windowLocatorRef(hostId, windowId), {
+    const read = await readDeterministicJsonFileOrNull(root, windowLocatorRef(hostId, windowId), {
       maximumBytes: LOCATOR_MAXIMUM_BYTES,
       ...(signal === undefined ? {} : { signal }),
     });
+    if (read === null) return null;
     return {
       record: parseWindowLocatorRecord(
         parseDeterministicJsonDocument(read.text, "$locator"),
@@ -222,7 +226,6 @@ async function readLocatorSource(
       read,
     };
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof StableFileReadError) {
       fail("io-failure", `locator-read-${error.reason}`, "$locator", { cause: error });
     }

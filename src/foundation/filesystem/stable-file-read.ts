@@ -478,6 +478,24 @@ export async function readStableFile(
   });
 }
 
+/**
+ * 与 `readStableFile` 相同的读取，只是目标不在时返回 `null`（1.4.5）："不在"恰好是那边抛出 `not-found`
+ * 的情形，不更宽；其余失败照旧抛出同样的错误。抛出的形式要保留 `not-found` 的原因链（公共错误投影读它），
+ * 所以这里接住它，而不是在两处构造点各自返回。
+ */
+export async function readStableFileOrNull(
+  root: RootedDirectory,
+  resourcePath: PortableResourcePath,
+  options: StableFileReadOptions,
+): Promise<Readonly<StableFileReadResult> | null> {
+  try {
+    return await readStableFile(root, resourcePath, options);
+  } catch (error: unknown) {
+    if (error instanceof StableFileReadError && error.reason === "not-found") return null;
+    throw error;
+  }
+}
+
 /** 流式读取并散列普通文件，不分配与完整文件等大的连续 Buffer。 */
 export async function readStableFileDigest(
   root: RootedDirectory,

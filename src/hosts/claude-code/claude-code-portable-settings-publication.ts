@@ -254,11 +254,11 @@ async function directoryNodeOrNull(
   root: RootedDirectory,
 ): Promise<Readonly<FileNodeSnapshot> | null> {
   try {
-    const resource = await root.inspectExistingResource(CLAUDE_CODE_SETTINGS_DIRECTORY_REF);
+    const resource = await root.inspectResourceOrNull(CLAUDE_CODE_SETTINGS_DIRECTORY_REF);
+    if (resource === null) return null;
     assertDirectoryNode(resource.node);
     return resource.node;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof ClaudeCodePortableSettingsPublicationError) throw error;
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
@@ -269,14 +269,14 @@ async function sourceOrNull(
   root: RootedDirectory,
   signal: AbortSignal | undefined,
 ): Promise<Readonly<StableFileReadResult> | null> {
-  let resource: Awaited<ReturnType<RootedDirectory["inspectExistingResource"]>>;
+  let resource: Awaited<ReturnType<RootedDirectory["inspectResourceOrNull"]>>;
   try {
-    resource = await root.inspectExistingResource(CLAUDE_CODE_PORTABLE_SETTINGS_REF);
+    resource = await root.inspectResourceOrNull(CLAUDE_CODE_PORTABLE_SETTINGS_REF);
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") return null;
     if (error instanceof RootedDirectoryError) fail("root-scope", "$root");
     throw error;
   }
+  if (resource === null) return null;
   assertSourceNode(resource.node);
   try {
     return await readStableFile(root, CLAUDE_CODE_PORTABLE_SETTINGS_REF, {

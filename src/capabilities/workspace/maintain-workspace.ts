@@ -43,7 +43,7 @@ import {
   RootedDirectoryError,
 } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableResourceDirectory,
+  readStableResourceDirectoryOrNull,
   StableDirectoryReadError,
 } from "../../foundation/filesystem/stable-directory-read.js";
 import {
@@ -1017,12 +1017,8 @@ async function resourceExists(
   resourcePath: PortableResourcePath,
 ): Promise<boolean> {
   try {
-    await context.root.inspectExistingResource(resourcePath, "$request.root");
-    return true;
+    return (await context.root.inspectResourceOrNull(resourcePath, "$request.root")) !== null;
   } catch (error: unknown) {
-    if (error instanceof RootedDirectoryError && error.reason === "resource-not-found") {
-      return false;
-    }
     if (error instanceof RootedDirectoryError) {
       fail("io-failure", "inspection", "$request.root", { cause: error });
     }
@@ -1107,7 +1103,7 @@ async function activeDemandDirectoryNames(
   context: SliceContext,
 ): Promise<readonly string[] | "unavailable"> {
   try {
-    const listing = await readStableResourceDirectory(
+    const listing = await readStableResourceDirectoryOrNull(
       context.root,
       WAKEFLOW_ACTIVE_CURRENT_ROOT_REF,
       {
@@ -1115,6 +1111,7 @@ async function activeDemandDirectoryNames(
         ...context.options,
       },
     );
+    if (listing === null) return Object.freeze([]);
     return listing.entries
       .filter(
         (entry) => entry.node.kind === "directory" && DEMAND_DIRECTORY_PATTERN.test(entry.name),
@@ -1122,10 +1119,7 @@ async function activeDemandDirectoryNames(
       .map((entry) => entry.name)
       .sort();
   } catch (error: unknown) {
-    if (error instanceof StableDirectoryReadError) {
-      if (error.reason === "not-found") return Object.freeze([]);
-      return "unavailable";
-    }
+    if (error instanceof StableDirectoryReadError) return "unavailable";
     throw error;
   }
 }

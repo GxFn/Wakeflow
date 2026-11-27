@@ -24,7 +24,7 @@ import {
 } from "../../foundation/filesystem/portable-resource-path.js";
 import type { RootedDirectory } from "../../foundation/filesystem/rooted-directory.js";
 import {
-  readStableFile,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileReadResult,
 } from "../../foundation/filesystem/stable-file-read.js";
@@ -125,12 +125,11 @@ async function readCurrentPermitPrompt(
   signal: Readonly<{ readonly signal?: AbortSignal }>,
 ): Promise<Readonly<StableFileReadResult> | null> {
   try {
-    return await readStableFile(demandRoot, ref, {
+    return await readStableFileOrNull(demandRoot, ref, {
       maximumBytes: MAXIMUM_PERMIT_PROMPT_BYTES,
       ...signal,
     });
   } catch (error: unknown) {
-    if (error instanceof StableFileReadError && error.reason === "not-found") return null;
     if (error instanceof StableFileReadError) {
       fail("io-failure", `permit-read-${error.reason}`, "$permit", { cause: error });
     }

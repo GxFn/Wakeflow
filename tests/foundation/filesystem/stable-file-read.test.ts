@@ -13,6 +13,7 @@ import { RootedDirectory } from "../../../src/foundation/filesystem/rooted-direc
 import {
   readStableFile,
   readStableFileDigest,
+  readStableFileOrNull,
   StableFileReadError,
   type StableFileReadErrorReason,
   type StableFileReadOptions,
@@ -272,6 +273,32 @@ test("missing and forged resource paths map to stable read errors", async () => 
           maximumBytes: parseByteCount(1024),
         }),
       "input",
+      "$resourcePath",
+    );
+  } finally {
+    await root.close();
+    rmSync(rootPath, { recursive: true, force: true });
+  }
+});
+
+test("readStableFileOrNull returns null only where readStableFile reports not-found", async () => {
+  const rootPath = mkdtempSync(path.join(os.tmpdir(), "wakeflow-stable-or-null-"));
+  writeFileSync(path.join(rootPath, "present"), "present\n");
+  mkdirSync(path.join(rootPath, "directory"));
+  const root = await RootedDirectory.open(rootPath);
+  try {
+    const maximumBytes = parseByteCount(1024);
+    const present = await readStableFileOrNull(root, parsePortableResourcePath("present"), {
+      maximumBytes,
+    });
+    deepEqual(Buffer.from(present?.bytes ?? []), Buffer.from("present\n"));
+    equal(
+      await readStableFileOrNull(root, parsePortableResourcePath("missing"), { maximumBytes }),
+      null,
+    );
+    await expectStableFileReadError(
+      () => readStableFileOrNull(root, parsePortableResourcePath("directory"), { maximumBytes }),
+      "not-file",
       "$resourcePath",
     );
   } finally {

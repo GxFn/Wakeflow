@@ -7043,3 +7043,13 @@ T1+T2 的门绿（§13.206）后按计划 §4 开始 1.2。`npm run wf -- releas
 - **验证。** 第 0 档：`wf verify quick --changed`，207 个改动文件选中 271 个测试文件，1,511/1,511，回执 `.build/verification/` 下最新一份；`tsc`、`lint`、`check:unused`、`refusals:check`、`git diff --check` 通过。没有重建制品，没有过门：这一版全部做完过一次门。
 
 **结论：批 1 完成，净减 802 行；下一批是"不存在是返回值"。**
+
+### 13.298 1.4.5 批 2："不存在"是返回值，不是异常（2026-11-26）
+
+- **改了什么。** 基础层给探测、读、列目录各添一个"不存在即 `null`"的入口：`RootedDirectory#inspectResourceOrNull`、`readStableFileOrNull`、`readStrictTextFileOrNull`、`readDeterministicJsonFileOrNull`、`readStableResourceDirectoryOrNull`。"不存在"恰好是抛出形式报 not-found 原因的那一种情形，不更宽。上面各层 84 处调用改用它们，接住 not-found 再变回 `null` 的分支删掉，5 个只做这件事的本地包装删掉。提交 `8bcb7aa0`：`src` 55 个文件 +408 / −508（净减 100 行），`tests` 5 个文件 +146 / −1（只添了新入口的用例，已有测试没有改）。机械改动由 Opus 子代理做，我定规则、读了基础层与四个调用点的差异。
+- **比预计少。** 清点时数到 27 个 `…OrNull` / `…Exists` 包装，实际只有 5 个可以整个删掉：其余二十来个除了"不存在"还把别的失败翻成本模块的错误，那是批 4 的事，这一批只让它们改调新入口。五个入口都是接住抛出形式的包装而不是在构造点返回：探测有两个测试靠拦 `inspectExistingResource` 计数，读与列目录的抛出形式要保留 not-found 的原因链（公开细节投影读它）。
+- **没有动的。** "不存在"比 not-found 更宽的（任何根目录错误都算缺席的几处）、失败时把 not-found 当原因带出去的（四个 `revalidateSource` 与窗口运行时首次发布）、判断的不是基础原语的。抛出形式的探测在基础层之上还有 22 处调用（16 个文件），对它们来说缺席就是错误，留着。
+- **对外。** 没有变化：`refusals:check` 189 个原因不变。
+- **验证。** 第 0 档 `wf verify quick --changed`：281 个测试文件，1,571/1,571，回执 `.build/verification/run-qJwj3x/receipt.json`（子代理发起，`passed`、`inputsUnchanged`，之后树没有再改）；`tsc`、`check:architecture`、`check:unused`、`format:check`、`git diff --check` 通过。没有重建制品，没有过门。
+
+**结论：批 2 完成，净减 100 行；两批合计 `src` 净减 902 行。下一批是私有节点的策略只有一处判断。**
